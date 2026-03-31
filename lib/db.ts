@@ -37,12 +37,17 @@ export const syncUserProfile = async (user: User) => {
             isAnonymous: user.isAnonymous
         });
     } else {
-        // Update last active and sync profile info if it changed
+        // Update profile. If the user is now permanent (not anonymous), 
+        // prioritize their new auth displayName.
+        const existingData = userSnap.data();
+        const newDisplayName = !user.isAnonymous ? (user.displayName || existingData.displayName) : existingData.displayName;
+
         await updateDoc(userRef, {
             lastActive: serverTimestamp(),
-            displayName: user.displayName || userSnap.data().displayName,
-            photoURL: user.photoURL || userSnap.data().photoURL,
-            isAnonymous: user.isAnonymous
+            displayName: newDisplayName,
+            photoURL: user.photoURL || existingData.photoURL,
+            isAnonymous: user.isAnonymous,
+            email: user.email || existingData.email
         });
     }
 };
