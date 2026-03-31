@@ -5,7 +5,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { logOut, linkAnonymousToGoogle } from "@/lib/auth";
 import { onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { uploadProfilePicture } from "@/lib/db";
+import { uploadProfilePicture, updateProfilePictureBase64 } from "@/lib/db";
 import { Camera, Shield, Zap, Clock, Calendar, LogOut, ChevronRight, Mail } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import { AuthRequired } from "@/components/auth-required";
 import Cropper from "react-easy-crop";
 
 export default function ProfilePage() {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const [userData, setUserData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
@@ -27,7 +27,12 @@ export default function ProfilePage() {
     const [showCropper, setShowCropper] = useState(false);
 
     useEffect(() => {
-        if (!user) return;
+        if (authLoading) return;
+
+        if (!user) {
+            setLoading(false);
+            return;
+        }
 
         setLoading(true);
         const unsub = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
@@ -38,7 +43,7 @@ export default function ProfilePage() {
         });
 
         return () => unsub();
-    }, [user]);
+    }, [user, authLoading]);
 
     const handleConnectGoogle = async () => {
         if (!user) return;
@@ -63,22 +68,19 @@ export default function ProfilePage() {
         setCroppedAreaPixels(croppedAreaPixels);
     };
 
-    const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<Blob | null> => {
+    const getCroppedImgBase64 = async (imageSrc: string, pixelCrop: any): Promise<string | null> => {
         const image = new Image();
-        // Only trigger CORS preflight for remote URLs
         if (!imageSrc.startsWith('blob:') && !imageSrc.startsWith('data:')) {
             image.crossOrigin = "anonymous";
         }
-
         image.src = imageSrc;
 
         try {
             await new Promise((resolve, reject) => {
                 image.onload = resolve;
-                image.onerror = (e) => reject(new Error("Failed to load image for cropping. Ensure CORS is enabled if this is a remote URL."));
+                image.onerror = reject;
             });
         } catch (err) {
-            console.error(err);
             return null;
         }
 
@@ -86,8 +88,9 @@ export default function ProfilePage() {
         const ctx = canvas.getContext("2d");
         if (!ctx) return null;
 
-        canvas.width = pixelCrop.width;
-        canvas.height = pixelCrop.height;
+        // Resize for Base64 efficiency (150x150 is plenty for an avatar)
+        canvas.width = 150;
+        canvas.height = 150;
 
         ctx.drawImage(
             image,
@@ -97,13 +100,12 @@ export default function ProfilePage() {
             pixelCrop.height,
             0,
             0,
-            pixelCrop.width,
-            pixelCrop.height
+            150,
+            150
         );
 
-        return new Promise((resolve) => {
-            canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.9);
-        });
+        // High compression (0.6) to keep text small
+        return canvas.toDataURL("image/jpeg", 0.6);
     };
 
     const handleUploadCropped = async () => {
@@ -111,28 +113,28 @@ export default function ProfilePage() {
 
         try {
             toast.loading("Forging your new identity...", { id: "upload" });
-            const croppedBlob = await getCroppedImg(image, croppedAreaPixels);
-            if (!croppedBlob) throw new Error("Failed to crop image");
+            const base64Image = await getCroppedImgBase64(image, croppedAreaPixels);
 
-            const croppedFile = new File([croppedBlob], "profile.jpg", { type: "image/jpeg" });
-            await uploadProfilePicture(user.uid, croppedFile);
+            if (!base64Image) throw new Error("Failed to process image");
+
+            await updateProfilePictureBase64(user.uid, base64Image);
 
             toast.success("Identity updated!", { id: "upload" });
             setShowCropper(false);
 
-            // Clean up
             if (image.startsWith('blob:')) {
                 URL.revokeObjectURL(image);
             }
             setImage(null);
         } catch (error) {
             console.error("Crop error:", error);
-            toast.error("Failed to update picture. Make sure the image service is ready.", { id: "upload" });
+            toast.error("Failed to update picture.", { id: "upload" });
         }
     };
 
     const handleSignOut = async () => {
         try {
+            localStorage.setItem("manual-sign-out", "true");
             await logOut();
             toast.success("Signed out successfully.");
         } catch (error) {
@@ -140,7 +142,7 @@ export default function ProfilePage() {
         }
     };
 
-    if (!user || loading) {
+    if (authLoading || (user && loading)) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-zinc-950">
                 <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
@@ -148,7 +150,7 @@ export default function ProfilePage() {
         );
     }
 
-    if (user.isAnonymous) {
+    if (!user) {
         return (
             <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-sky-500/10 rounded-full blur-[120px] pointer-events-none" />
@@ -233,17 +235,23 @@ export default function ProfilePage() {
 
                 {/* Connect Account Alert if Anonymous */}
                 {user.isAnonymous && (
-                    <div className="w-full max-w-md p-6 bg-amber-500/5 border border-amber-500/10 rounded-[2rem] flex flex-col items-center text-center animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-500">
-                        <Shield className="w-8 h-8 text-amber-500 mb-4" />
-                        <h3 className="text-sm font-black text-white uppercase italic mb-2 tracking-tight">Identity Locked</h3>
-                        <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest mb-6 leading-relaxed">
-                            Connect with Google to save your focus sessions permanently.
-                        </p>
+                    <div className="w-full max-w-2xl p-6 bg-amber-500/5 border border-amber-500/10 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 mb-12 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-500">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center">
+                                <Shield className="w-6 h-6 text-amber-500" />
+                            </div>
+                            <div className="text-left">
+                                <h3 className="text-sm font-black text-white uppercase italic tracking-tight">Temporary Session</h3>
+                                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-relaxed">
+                                    Connect with Google to save your focus sessions permanently.
+                                </p>
+                            </div>
+                        </div>
                         <Button
                             onClick={handleConnectGoogle}
-                            className="w-full h-12 rounded-xl bg-amber-500 text-black hover:bg-amber-400 font-black uppercase tracking-widest shadow-lg shadow-amber-500/20"
+                            className="h-12 px-8 rounded-xl bg-amber-500 text-black hover:bg-amber-400 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-amber-500/20 whitespace-nowrap"
                         >
-                            Connect with Google
+                            Connect Google
                         </Button>
                     </div>
                 )}

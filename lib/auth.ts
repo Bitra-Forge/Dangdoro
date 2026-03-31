@@ -12,8 +12,13 @@ import {
 import { syncUserProfile } from "./db";
 
 // Automatically signs in anonymously if no user exists.
-// AuthProvider will call this.
+// AuthProvider or components can call this.
 export const signInGuest = async () => {
+    // If we're already signed in anonymously, just return the user
+    if (auth.currentUser && auth.currentUser.isAnonymous) {
+        return auth.currentUser;
+    }
+
     try {
         const userCredential = await signInAnonymously(auth);
         return userCredential.user;

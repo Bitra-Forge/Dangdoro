@@ -67,6 +67,9 @@ export default function SettingsPage() {
 
     const handleSignOut = async () => {
         try {
+            if (typeof window !== "undefined") {
+                localStorage.setItem("manual-sign-out", "true");
+            }
             await logOut();
             toast.success("Signed out safely.");
         } catch (error: any) {
@@ -150,50 +153,66 @@ export default function SettingsPage() {
                     </div>
 
                     {/* Account Center Section */}
-                    {user && (
-                        <div className="bg-zinc-900/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100">
-                            <div className="flex items-center gap-3 mb-8">
-                                <Shield className="w-6 h-6 text-sky-400" />
-                                <h2 className="text-xl font-black text-white uppercase italic tracking-tighter">Account Center</h2>
-                            </div>
-
-                            <div className="space-y-4 mb-8">
-                                <div className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-2xl">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-xl bg-zinc-950 flex items-center justify-center border border-white/10">
-                                            <Mail className="w-4 h-4 text-zinc-500" />
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Email Address</span>
-                                            <span className="text-sm font-bold text-white truncate max-w-[200px]">{user.email || "No email linked (Guest)"}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-2xl">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-xl bg-zinc-950 flex items-center justify-center border border-white/10">
-                                            <LogIn className="w-4 h-4 text-zinc-500" />
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Auth Method</span>
-                                            <span className="text-sm font-black text-white uppercase italic tracking-tighter italic">
-                                                {user.providerData[0]?.providerId || "Anonymous Guest"}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <Button
-                                onClick={handleSignOut}
-                                variant="outline"
-                                className="w-full h-14 rounded-2xl border-white/5 bg-zinc-950/50 text-zinc-400 hover:text-white hover:bg-white/10 transition-all font-black uppercase tracking-widest"
-                            >
-                                <LogOut className="mr-2 h-4 w-4" /> Terminate Session
-                            </Button>
+                    <div className="bg-zinc-900/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100">
+                        <div className="flex items-center gap-3 mb-8">
+                            <Shield className="w-6 h-6 text-sky-400" />
+                            <h2 className="text-xl font-black text-white uppercase italic tracking-tighter">
+                                {user ? "Account Center" : "Session Engine"}
+                            </h2>
                         </div>
-                    )}
+
+                        {user ? (
+                            <>
+                                <div className="space-y-4 mb-8">
+                                    <div className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-2xl">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-xl bg-zinc-950 flex items-center justify-center border border-white/10">
+                                                <Mail className="w-4 h-4 text-zinc-500" />
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Email Address</span>
+                                                <span className="text-sm font-bold text-white truncate max-w-[200px]">{user.email || "No email linked (Guest)"}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-2xl">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-xl bg-zinc-950 flex items-center justify-center border border-white/10">
+                                                <LogIn className="w-4 h-4 text-zinc-500" />
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Auth Method</span>
+                                                <span className="text-sm font-black text-white uppercase italic tracking-tighter italic">
+                                                    {user.providerData[0]?.providerId || "Anonymous Guest"}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <Button
+                                    onClick={handleSignOut}
+                                    variant="outline"
+                                    className="w-full h-14 rounded-2xl border-white/5 bg-zinc-950/50 text-zinc-400 hover:text-white hover:bg-white/10 transition-all font-black uppercase tracking-widest"
+                                >
+                                    <LogOut className="mr-2 h-4 w-4" /> Terminate Session
+                                </Button>
+                            </>
+                        ) : (
+                            <div className="text-center py-4">
+                                <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-8 leading-relaxed">
+                                    Your session is offline. Connect to synchronize your focus protocols.
+                                </p>
+                                <Button
+                                    onClick={() => window.location.href = "/login"}
+                                    className="w-full h-14 rounded-2xl bg-white text-black hover:bg-zinc-200 transition-all font-black uppercase tracking-widest shadow-xl shadow-white/5"
+                                >
+                                    <LogIn className="mr-2 h-4 w-4" /> Initialize Sign In
+                                </Button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </main>
         </div>

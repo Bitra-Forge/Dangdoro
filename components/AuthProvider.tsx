@@ -25,19 +25,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             if (currentUser) {
+                // Clear manual sign out flag on successful login
+                if (typeof window !== "undefined") {
+                    localStorage.removeItem("manual-sign-out");
+                }
                 // Sync user profile to Firestore
                 await syncUserProfile(currentUser);
                 setUser(currentUser);
                 setLoading(false);
             } else {
-                // Automatically sign in as an anonymous user if no user is found
-                try {
-                    await signInGuest();
-                } catch (error) {
-                    console.error("Failed to sign in anonymously.", error);
-                    setUser(null);
-                    setLoading(false);
-                }
+                // If no user, just set to null. 
+                // We stop auto-signing in as guest to prevent "Account Spam"
+                // But we still need to set loading to false to allow pages to render!
+                setUser(null);
+                setLoading(false);
             }
         });
 

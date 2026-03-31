@@ -18,6 +18,7 @@ import {
     Cell
 } from "recharts";
 import { AuthRequired } from "@/components/auth-required";
+import { Button } from "@/components/ui/button";
 
 interface SessionData {
     id: string;
@@ -35,9 +36,16 @@ export default function StatsPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (user) {
-            const fetchData = async () => {
-                setLoading(true);
+        if (authLoading) return;
+
+        if (!user) {
+            setLoading(false);
+            return;
+        }
+
+        const fetchData = async () => {
+            setLoading(true);
+            try {
                 const history = await getSessionHistory(user.uid) as SessionData[];
                 setSessions(history);
 
@@ -67,11 +75,14 @@ export default function StatsPage() {
                 });
 
                 setChartData(last7Days);
+            } catch (error) {
+                console.error("Error fetching stats:", error);
+            } finally {
                 setLoading(false);
-            };
-            fetchData();
-        }
-    }, [user]);
+            }
+        };
+        fetchData();
+    }, [user, authLoading]);
 
     if (authLoading || (user && loading)) {
         return (
@@ -81,14 +92,14 @@ export default function StatsPage() {
         );
     }
 
-    if (user?.isAnonymous) {
+    if (!user) {
         return (
             <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-500/10 rounded-full blur-[120px] pointer-events-none" />
                 <main className="relative z-10 flex flex-col items-center justify-center pt-24 pb-32 px-4 w-full flex-1">
                     <AuthRequired
-                        title="Insights Restricted"
-                        description="To visualize your long-term focus intensity and progress, you need a verified account."
+                        title="Insights Locked"
+                        description="Sign in with Google to visualize your focus intensity and secure your long-term progress records."
                     />
                 </main>
             </div>
@@ -189,23 +200,25 @@ export default function StatsPage() {
                     </div>
                 </div>
 
-                {!loading && sessions.length > 0 && (
-                    <div className="w-full max-w-4xl mt-12 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {sessions.slice(0, 4).map((session) => (
-                            <div key={session.id} className="flex items-center justify-between p-4 bg-zinc-900/40 border border-white/5 rounded-2xl group hover:border-white/10 transition-all">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-zinc-500 group-hover:text-purple-400 transition-colors">
-                                        <Clock className="w-4 h-4" />
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-black text-white uppercase italic tracking-tighter">{session.duration}m Focus</p>
-                                        <p className="text-[8px] text-zinc-600 font-black uppercase tracking-widest">
-                                            {session.completedAt?.seconds ? format(new Date(session.completedAt.seconds * 1000), "MMM d, p") : "Just now"}
-                                        </p>
-                                    </div>
-                                </div>
+                {user && user.isAnonymous && (
+                    <div className="w-full max-w-4xl mt-16 p-6 bg-purple-500/5 border border-purple-500/10 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-700">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center">
+                                <TrendingUp className="w-6 h-6 text-purple-400" />
                             </div>
-                        ))}
+                            <div className="text-left">
+                                <h3 className="text-sm font-black text-white uppercase italic tracking-tight">Persistence Protocol</h3>
+                                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-relaxed">
+                                    Guest stats are temporary. Connect with Google to secure your focus history permanently.
+                                </p>
+                            </div>
+                        </div>
+                        <Button
+                            onClick={() => window.location.href = "/profile"}
+                            className="h-12 px-8 rounded-xl bg-purple-500 text-white hover:bg-purple-400 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-purple-500/20 whitespace-nowrap"
+                        >
+                            Secure History
+                        </Button>
                     </div>
                 )}
             </main>

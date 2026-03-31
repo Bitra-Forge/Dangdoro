@@ -40,22 +40,35 @@ export function TimerCard() {
   const [editSecs, setEditSecs] = useState("");
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.uid) return;
 
-    const unsub = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.settings) {
-          const { focusTime, breakTime, longBreakTime } = data.settings;
-          if (focusTime) setInitialTime("focus", focusTime * 60);
-          if (breakTime) setInitialTime("break", breakTime * 60);
-          if (longBreakTime) setInitialTime("long-break", longBreakTime * 60);
+    let unsub: () => void;
+    try {
+      unsub = onSnapshot(
+        doc(db, "users", user.uid),
+        (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.settings) {
+              const { focusTime, breakTime, longBreakTime } = data.settings;
+              if (focusTime) setInitialTime("focus", focusTime * 60);
+              if (breakTime) setInitialTime("break", breakTime * 60);
+              if (longBreakTime) setInitialTime("long-break", longBreakTime * 60);
+            }
+          }
+        },
+        (error) => {
+          console.error("TimerCard Firestore error:", error);
         }
-      }
-    });
+      );
+    } catch (err) {
+      console.error("Failed to setup TimerCard listener:", err);
+    }
 
-    return () => unsub();
-  }, [user, setInitialTime]);
+    return () => {
+      if (unsub) unsub();
+    };
+  }, [user?.uid, setInitialTime]);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;

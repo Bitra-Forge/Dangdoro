@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/AuthProvider";
 import { AuthRequired } from "@/components/auth-required";
+import { Button } from "@/components/ui/button";
 
 export default function LeaderboardPage() {
     const { user, loading: authLoading } = useAuth();
@@ -31,14 +32,14 @@ export default function LeaderboardPage() {
         );
     }
 
-    if (user?.isAnonymous) {
+    if (!user) {
         return (
             <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-amber-500/10 rounded-full blur-[120px] pointer-events-none" />
                 <main className="relative z-10 flex flex-col items-center justify-center pt-24 pb-32 px-4 w-full flex-1">
                     <AuthRequired
-                        title="Ranks Hidden"
-                        description="Join the global focus elite. Connect your account to see the full leaderboard and claim your spot."
+                        title="Board Locked"
+                        description="Sign in with Google to see how you rank against the focus masters."
                     />
                 </main>
             </div>
@@ -64,6 +65,28 @@ export default function LeaderboardPage() {
                         Top contributors to the focus engine
                     </p>
                 </header>
+
+                {user && user.isAnonymous && (
+                    <div className="w-full max-w-3xl mb-8 p-6 bg-amber-500/5 border border-amber-500/10 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-300">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center">
+                                <Trophy className="w-6 h-6 text-amber-500" />
+                            </div>
+                            <div className="text-left">
+                                <h3 className="text-sm font-black text-white uppercase italic tracking-tight">Guest Presence Detected</h3>
+                                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-relaxed">
+                                    You're currently a guest master. Connect to Google to claim your official spot on the high ranks.
+                                </p>
+                            </div>
+                        </div>
+                        <Button
+                            onClick={() => window.location.href = "/profile"}
+                            className="h-12 px-8 rounded-xl bg-amber-500 text-black hover:bg-amber-400 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-amber-500/20 whitespace-nowrap"
+                        >
+                            Claim Identity
+                        </Button>
+                    </div>
+                )}
 
                 <div className="w-full max-w-3xl bg-zinc-900/40 backdrop-blur-3xl border border-white/10 rounded-[3rem] p-6 md:p-12 shadow-2xl overflow-hidden">
                     {loading ? (

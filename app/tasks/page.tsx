@@ -7,9 +7,10 @@ import { addTask, subscribeToTasks, toggleTask, deleteTask } from "@/lib/db";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { AuthRequired } from "@/components/auth-required";
+import { Button } from "@/components/ui/button";
 
 export default function TasksPage() {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const [tasks, setTasks] = useState<any[]>([]);
     const [newTaskTitle, setNewTaskTitle] = useState("");
     const [isAdding, setIsAdding] = useState(false);
@@ -48,14 +49,22 @@ export default function TasksPage() {
         if (success) toast.success("Task deleted.");
         else toast.error("Failed to delete task.");
     };
-    if (!user || user.isAnonymous) {
+    if (authLoading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-zinc-950">
+                <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+            </div>
+        );
+    }
+
+    if (!user) {
         return (
             <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none" />
                 <main className="relative z-10 flex flex-col items-center justify-center pt-24 pb-32 px-4 w-full flex-1">
                     <AuthRequired
                         title="Arsenal Locked"
-                        description="Your tasks and forge progress require a permanent identity. Connect with Google to secure your workflow."
+                        description="Your tasks and forge progress require an identity. Sign in with Google to secure your workflow permanently."
                     />
                 </main>
             </div>
@@ -140,6 +149,24 @@ export default function TasksPage() {
                         )}
                     </div>
                 </div>
+
+                {user.isAnonymous && (
+                    <div className="w-full max-w-2xl mt-8 p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl flex items-center justify-between gap-4 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-500">
+                        <div className="flex items-center gap-3">
+                            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-relaxed">
+                                Guest tasks are stored locally. Sign in to sync your arsenal across all devices.
+                            </p>
+                        </div>
+                        <Button
+                            variant="ghost"
+                            onClick={() => window.location.href = "/profile"}
+                            className="text-emerald-500 hover:text-emerald-400 font-black uppercase tracking-widest text-[10px] h-auto p-0"
+                        >
+                            Sync Now
+                        </Button>
+                    </div>
+                )}
             </main>
         </div>
     );

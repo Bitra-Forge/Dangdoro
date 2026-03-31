@@ -162,35 +162,55 @@ export const deleteTask = async (taskId: string) => {
 };
 
 export const subscribeToTasks = (userId: string, callback: (tasks: any[]) => void) => {
-    // Optimized: Filter by userId on the server
-    const q = query(
-        collection(db, "tasks"),
-        where("userId", "==", userId),
-        orderBy("createdAt", "desc")
-    );
+    if (!userId) return () => { };
 
-    return onSnapshot(q, (snapshot) => {
-        const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        callback(tasks);
-    }, (error) => {
-        if (error.code === 'failed-precondition') {
-            // Usually means an index is required. 
-            // We'll fallback to client-side filtering if it fails for now to avoid breaking the UI.
-            console.warn("Firestore index required for optimized query. Falling back to client-side filter.");
-            const fallbackQ = query(
-                collection(db, "tasks"),
-                orderBy("createdAt", "desc")
-            );
-            onSnapshot(fallbackQ, (fallbackSnap) => {
-                const tasks = fallbackSnap.docs
-                    .map(doc => ({ id: doc.id, ...doc.data() }))
-                    .filter((t: any) => t.userId === userId);
-                callback(tasks);
-            });
-        } else {
-            console.error("Error subscribing to tasks:", error);
-        }
-    });
+    let activeUnsubscribe: (() => void) | null = null;
+    let isCancelled = false;
+
+    const setupListener = () => {
+        const q = query(
+            collection(db, "tasks"),
+            where("userId", "==", userId),
+            orderBy("createdAt", "desc")
+        );
+
+        activeUnsubscribe = onSnapshot(q, (snapshot) => {
+            if (isCancelled) return;
+            const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            callback(tasks);
+        }, (error) => {
+            if (isCancelled) return;
+
+            if (error.code === 'failed-precondition') {
+                console.warn("Firestore index required for optimized query. Falling back to client-side filter.");
+                if (activeUnsubscribe) activeUnsubscribe();
+
+                const fallbackQ = query(
+                    collection(db, "tasks"),
+                    orderBy("createdAt", "desc")
+                );
+
+                activeUnsubscribe = onSnapshot(fallbackQ, (fallbackSnap) => {
+                    if (isCancelled) return;
+                    const tasks = fallbackSnap.docs
+                        .map(doc => ({ id: doc.id, ...doc.data() }))
+                        .filter((t: any) => t.userId === userId);
+                    callback(tasks);
+                }, (err) => {
+                    if (!isCancelled) console.error("Fallback subscriber error:", err);
+                });
+            } else {
+                console.error("Error subscribing to tasks:", error);
+            }
+        });
+    };
+
+    setupListener();
+
+    return () => {
+        isCancelled = true;
+        if (activeUnsubscribe) activeUnsubscribe();
+    };
 };
 
 /**
@@ -235,6 +255,19 @@ export const uploadProfilePicture = async (userId: string, file: File | Blob) =>
     } catch (error) {
         console.error("Firebase Storage Upload Error:", error);
         throw error;
+    }
+};
+
+export const updateProfilePictureBase64 = async (userId: string, base64Data: string) => {
+    try {
+        const userRef = doc(db, "users", userId);
+        await updateDoc(userRef, { photoURL: base64Data });
+        // NOTE: We skip updateProfile(auth.currentUser) because Firebase Auth 
+        // has a strict character limit on photoURL that Base64 usually exceeds.
+        return true;
+    } catch (error) {
+        console.error("Error updating profile picture with Base64:", error);
+        return false;
     }
 };
 
