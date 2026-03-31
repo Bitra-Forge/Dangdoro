@@ -5,8 +5,11 @@ import { Trophy, Zap, Clock, Medal } from "lucide-react";
 import { getLeaderboard } from "@/lib/db";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/components/AuthProvider";
+import { AuthRequired } from "@/components/auth-required";
 
 export default function LeaderboardPage() {
+    const { user, loading: authLoading } = useAuth();
     const [players, setPlayers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -19,6 +22,28 @@ export default function LeaderboardPage() {
         };
         fetchTops();
     }, []);
+
+    if (authLoading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-zinc-950">
+                <div className="w-12 h-12 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
+            </div>
+        );
+    }
+
+    if (user?.isAnonymous) {
+        return (
+            <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-amber-500/10 rounded-full blur-[120px] pointer-events-none" />
+                <main className="relative z-10 flex flex-col items-center justify-center pt-24 pb-32 px-4 w-full flex-1">
+                    <AuthRequired
+                        title="Ranks Hidden"
+                        description="Join the global focus elite. Connect your account to see the full leaderboard and claim your spot."
+                    />
+                </main>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">

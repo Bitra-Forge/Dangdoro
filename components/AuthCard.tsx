@@ -8,12 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { LogIn, LogOut } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-export function AuthCard() {
+export function AuthCard({ redirect }: { redirect?: string }) {
     const { user, loading } = useAuth();
+    const router = useRouter();
     const [stats, setStats] = useState<{ totalPomodoros: number } | null>(null);
 
     useEffect(() => {
@@ -29,16 +31,17 @@ export function AuthCard() {
     const handleGoogleAuth = async () => {
         try {
             if (user && user.isAnonymous) {
-                // Link their anonymous session to a Google account
                 await linkAnonymousToGoogle(user);
                 toast.success("Account successfully linked!");
             } else {
-                // Standard Sign-in (just in case they logged out completely)
                 await signInWithGoogle();
-                toast.success("Signed in successfully!");
+                toast.success("Welcome back!");
+            }
+            if (redirect) {
+                router.push(redirect);
             }
         } catch (error: any) {
-            toast.error(error.message || "Authentication failed. Please try again.");
+            toast.error(error.message || "Authentication failed.");
         }
     };
 
@@ -51,68 +54,67 @@ export function AuthCard() {
         }
     };
 
-    const handleTestPomodoro = async () => {
-        if (!user) return;
-        const success = await savePomodoroSession(user.uid, 25);
-        if (success) {
-            toast.success("Test Pomodoro Saved! Check your stats.");
-        } else {
-            toast.error("Failed to save test session.");
-        }
-    };
-
     if (loading) {
         return (
-            <Card className="w-full max-w-sm border-zinc-800 bg-zinc-900 animate-pulse">
-                <CardHeader>
-                    <div className="h-6 w-1/2 bg-zinc-800 rounded mb-2"></div>
-                </CardHeader>
-                <CardContent>
-                    <div className="h-10 w-full bg-zinc-800 rounded"></div>
-                </CardContent>
-            </Card>
+            <div className="w-full bg-zinc-900 shadow-2xl rounded-[2rem] p-8 animate-pulse border border-white/5">
+                <div className="h-4 w-1/3 bg-white/5 rounded mb-4" />
+                <div className="h-12 w-full bg-white/5 rounded" />
+            </div>
         );
     }
 
     return (
-        <Card className="w-full max-w-sm border-zinc-800 bg-zinc-900/50">
-            <CardHeader>
-                <CardTitle>Your Account</CardTitle>
-                <CardDescription className="text-zinc-400">
+        <div className="w-full bg-zinc-900/40 backdrop-blur-3xl border border-white/10 shadow-[0_32px_128px_-16px_rgba(0,0,0,0.5)] rounded-[3rem] p-10 flex flex-col items-center relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-sky-500/10 blur-[64px] rounded-full" />
+
+            <div className="relative z-10 w-full">
+                <h2 className="text-xl font-black text-white uppercase italic tracking-tighter mb-2">
+                    {user && !user.isAnonymous ? "Hero Profile" : "Secure Sign In"}
+                </h2>
+                <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-8">
                     {user && !user.isAnonymous
-                        ? "You are logged in securely."
-                        : "Guest mode. Sign in to save your Pomodoros permanently!"}
-                </CardDescription>
-                {stats && (
-                    <div className="mt-2 inline-flex items-center rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs font-semibold text-zinc-100 border border-zinc-700">
-                        🍅 {stats.totalPomodoros} Pomodoros Completed
-                    </div>
-                )}
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
+                        ? "Your legend is securely stored."
+                        : "Sign in with Google to continue."}
+                </p>
+
                 {user && !user.isAnonymous ? (
-                    <div className="flex flex-col gap-4">
-                        <p className="text-sm font-medium text-white">{user.email || user.displayName || "Authenticated User"}</p>
-                        <Button variant="destructive" onClick={handleSignOut} className="w-full">
-                            <LogOut className="mr-2 h-4 w-4" />
-                            Sign Out
-                        </Button>
-                        <Button variant="outline" onClick={handleTestPomodoro} className="w-full border-zinc-700 hover:bg-zinc-800">
-                            ⚡ Test Complete Pomodoro (25m)
+                    <div className="space-y-6">
+                        <div className="p-4 bg-white/5 border border-white/10 rounded-2xl">
+                            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Authenticated via Google</p>
+                            <p className="text-sm font-bold text-white truncate">{user.email || "Focus Master"}</p>
+                        </div>
+                        <Button
+                            variant="outline"
+                            onClick={handleSignOut}
+                            className="w-full h-14 rounded-2xl border-white/5 bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 transition-all font-black uppercase tracking-widest"
+                        >
+                            <LogOut className="mr-2 h-4 w-4" /> Sign Out
                         </Button>
                     </div>
                 ) : (
-                    <div className="flex flex-col gap-4">
-                        <Button onClick={handleGoogleAuth} className="w-full bg-white text-black hover:bg-zinc-200">
-                            <LogIn className="mr-2 h-4 w-4" />
-                            Sign in with Google
-                        </Button>
-                        <Button variant="outline" onClick={handleTestPomodoro} className="w-full border-zinc-700 hover:bg-zinc-800">
-                            ⚡ Test Complete Pomodoro (Guest)
+                    <div className="space-y-6">
+                        <div className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-2xl">
+                            <p className="text-[10px] font-black text-amber-500/60 uppercase tracking-widest mb-1">Temporary Session</p>
+                            <p className="text-xs font-bold text-zinc-400">Your stats will be lost if you clear your browser data. Connect now to avoid reset.</p>
+                        </div>
+                        <Button
+                            onClick={handleGoogleAuth}
+                            className="w-full h-14 rounded-2xl bg-white text-black hover:bg-zinc-200 transition-all font-black uppercase tracking-widest shadow-xl hover:scale-[1.02]"
+                        >
+                            <LogIn className="mr-2 h-4 w-4" /> Sign in with Google
                         </Button>
                     </div>
                 )}
-            </CardContent>
-        </Card>
+
+                {stats && (
+                    <div className="mt-10 pt-8 border-t border-white/5 flex items-center justify-between">
+                        <span className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em]">Current Score</span>
+                        <span className="text-lg font-black text-white italic tracking-tighter">
+                            {stats.totalPomodoros} <span className="text-sky-500 text-[10px]">SESSIONS</span>
+                        </span>
+                    </div>
+                )}
+            </div>
+        </div>
     );
 }

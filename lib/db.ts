@@ -12,10 +12,12 @@ import {
     increment,
     updateDoc,
     deleteDoc,
-    onSnapshot
+    onSnapshot,
+    where
 } from "firebase/firestore";
-import { db } from "./firebase";
-import { User } from "firebase/auth";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage, auth } from "./firebase";
+import { User, updateProfile } from "firebase/auth";
 
 /**
  * Syncs user authentication data with the Firestore 'users' collection.
@@ -39,18 +41,35 @@ export const syncUserProfile = async (user: User) => {
             isAnonymous: user.isAnonymous
         });
     } else {
-        // Update profile. If the user is now permanent (not anonymous), 
-        // prioritize their new auth displayName.
         const existingData = userSnap.data();
-        const newDisplayName = !user.isAnonymous ? (user.displayName || existingData.displayName) : existingData.displayName;
 
-        await updateDoc(userRef, {
+        const updateData: any = {
             lastActive: serverTimestamp(),
-            displayName: newDisplayName,
-            photoURL: user.photoURL || existingData.photoURL,
             isAnonymous: user.isAnonymous,
-            email: user.email || existingData.email
-        });
+            email: user.email || existingData.email,
+        };
+
+        if (!user.isAnonymous) {
+            // Find data in providerDetails for more reliability
+            const provider = user.providerData[0];
+            const nameFromProvider = provider?.displayName;
+            const photoFromProvider = provider?.photoURL;
+
+            // Priority: New Auth data > Provider data > Existing Firestore data
+            // We specifically want to overwrite "Guest Master" if we have a real name
+            const currentName = user.displayName || nameFromProvider || existingData.displayName;
+
+            if (currentName && currentName !== "Guest Master") {
+                updateData.displayName = currentName;
+            } else if (!existingData.displayName || existingData.displayName === "Guest Master") {
+                // If it's still default or null, try to use whatever we have, even if it's "Focus Hero"
+                updateData.displayName = currentName || "Focus Hero";
+            }
+
+            updateData.photoURL = user.photoURL || photoFromProvider || existingData.photoURL;
+        }
+
+        await updateDoc(userRef, updateData);
     }
 };
 
@@ -143,17 +162,34 @@ export const deleteTask = async (taskId: string) => {
 };
 
 export const subscribeToTasks = (userId: string, callback: (tasks: any[]) => void) => {
+    // Optimized: Filter by userId on the server
     const q = query(
         collection(db, "tasks"),
+        where("userId", "==", userId),
         orderBy("createdAt", "desc")
     );
-    // Filter by userId locally or use a proper Firestore index/filter
-    // For simplicity with anonymous users, we might need a composite index if we filter by userId
+
     return onSnapshot(q, (snapshot) => {
-        const tasks = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
-            .filter((t: any) => t.userId === userId);
+        const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         callback(tasks);
+    }, (error) => {
+        if (error.code === 'failed-precondition') {
+            // Usually means an index is required. 
+            // We'll fallback to client-side filtering if it fails for now to avoid breaking the UI.
+            console.warn("Firestore index required for optimized query. Falling back to client-side filter.");
+            const fallbackQ = query(
+                collection(db, "tasks"),
+                orderBy("createdAt", "desc")
+            );
+            onSnapshot(fallbackQ, (fallbackSnap) => {
+                const tasks = fallbackSnap.docs
+                    .map(doc => ({ id: doc.id, ...doc.data() }))
+                    .filter((t: any) => t.userId === userId);
+                callback(tasks);
+            });
+        } else {
+            console.error("Error subscribing to tasks:", error);
+        }
     });
 };
 
@@ -171,4 +207,44 @@ export const getSessionHistory = async (userId: string, limitCount: number = 20)
     return snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter((s: any) => s.userId === userId);
+};
+
+/**
+ * Profile Picture Upload
+ */
+export const uploadProfilePicture = async (userId: string, file: File | Blob) => {
+    try {
+        const storageRef = ref(storage, `profiles/${userId}`);
+
+        // Use metadata to ensure correct content type and avoid some pre-check issues
+        console.log("Starting upload to Firebase Storage...");
+        const snapshot = await uploadBytes(storageRef, file, {
+            contentType: "image/jpeg"
+        });
+
+        console.log("Upload finished. Fetching download URL...");
+        const photoURL = await getDownloadURL(snapshot.ref);
+
+        const userRef = doc(db, "users", userId);
+        await updateDoc(userRef, { photoURL });
+
+        if (auth.currentUser) {
+            await updateProfile(auth.currentUser, { photoURL });
+        }
+        return photoURL;
+    } catch (error) {
+        console.error("Firebase Storage Upload Error:", error);
+        throw error;
+    }
+};
+
+export const updateUserSettings = async (userId: string, settings: any) => {
+    try {
+        const userRef = doc(db, "users", userId);
+        await updateDoc(userRef, { settings });
+        return true;
+    } catch (error) {
+        console.error("Error updating settings:", error);
+        return false;
+    }
 };

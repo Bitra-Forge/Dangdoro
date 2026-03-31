@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/AuthProvider";
 import { savePomodoroSession } from "@/lib/db";
 import { toast } from "sonner";
+import { onSnapshot, doc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 export function TimerCard() {
   const {
@@ -36,6 +38,24 @@ export function TimerCard() {
   const [editHours, setEditHours] = useState("");
   const [editMins, setEditMins] = useState("");
   const [editSecs, setEditSecs] = useState("");
+
+  useEffect(() => {
+    if (!user) return;
+
+    const unsub = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.settings) {
+          const { focusTime, breakTime, longBreakTime } = data.settings;
+          if (focusTime) setInitialTime("focus", focusTime * 60);
+          if (breakTime) setInitialTime("break", breakTime * 60);
+          if (longBreakTime) setInitialTime("long-break", longBreakTime * 60);
+        }
+      }
+    });
+
+    return () => unsub();
+  }, [user, setInitialTime]);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;

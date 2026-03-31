@@ -1,34 +1,135 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { User, LogOut, Mail, Shield, Zap, Clock, Calendar } from "lucide-react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import { logOut } from "@/lib/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { logOut, linkAnonymousToGoogle } from "@/lib/auth";
+import { onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { uploadProfilePicture } from "@/lib/db";
+import { Camera, Shield, Zap, Clock, Calendar, LogOut, ChevronRight, Mail } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { AuthRequired } from "@/components/auth-required";
+import Cropper from "react-easy-crop";
 
 export default function ProfilePage() {
     const { user } = useAuth();
     const [userData, setUserData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
+    // Cropping State
+    const [image, setImage] = useState<string | null>(null);
+    const [crop, setCrop] = useState({ x: 0, y: 0 });
+    const [zoom, setZoom] = useState(1);
+    const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+    const [showCropper, setShowCropper] = useState(false);
+
     useEffect(() => {
-        if (user) {
-            const fetchProfile = async () => {
-                setLoading(true);
-                const userDoc = await getDoc(doc(db, "users", user.uid));
-                if (userDoc.exists()) {
-                    setUserData(userDoc.data());
-                }
-                setLoading(false);
-            };
-            fetchProfile();
-        }
+        if (!user) return;
+
+        setLoading(true);
+        const unsub = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
+            if (docSnap.exists()) {
+                setUserData(docSnap.data());
+            }
+            setLoading(false);
+        });
+
+        return () => unsub();
     }, [user]);
+
+    const handleConnectGoogle = async () => {
+        if (!user) return;
+        try {
+            await linkAnonymousToGoogle(user);
+            toast.success("Account successfully connected!");
+        } catch (error: any) {
+            toast.error(error.message || "Failed to connect.");
+        }
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !user) return;
+
+        const objectUrl = URL.createObjectURL(file);
+        setImage(objectUrl);
+        setShowCropper(true);
+    };
+
+    const onCropComplete = (croppedArea: any, croppedAreaPixels: any) => {
+        setCroppedAreaPixels(croppedAreaPixels);
+    };
+
+    const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<Blob | null> => {
+        const image = new Image();
+        // Only trigger CORS preflight for remote URLs
+        if (!imageSrc.startsWith('blob:') && !imageSrc.startsWith('data:')) {
+            image.crossOrigin = "anonymous";
+        }
+
+        image.src = imageSrc;
+
+        try {
+            await new Promise((resolve, reject) => {
+                image.onload = resolve;
+                image.onerror = (e) => reject(new Error("Failed to load image for cropping. Ensure CORS is enabled if this is a remote URL."));
+            });
+        } catch (err) {
+            console.error(err);
+            return null;
+        }
+
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return null;
+
+        canvas.width = pixelCrop.width;
+        canvas.height = pixelCrop.height;
+
+        ctx.drawImage(
+            image,
+            pixelCrop.x,
+            pixelCrop.y,
+            pixelCrop.width,
+            pixelCrop.height,
+            0,
+            0,
+            pixelCrop.width,
+            pixelCrop.height
+        );
+
+        return new Promise((resolve) => {
+            canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.9);
+        });
+    };
+
+    const handleUploadCropped = async () => {
+        if (!image || !croppedAreaPixels || !user) return;
+
+        try {
+            toast.loading("Forging your new identity...", { id: "upload" });
+            const croppedBlob = await getCroppedImg(image, croppedAreaPixels);
+            if (!croppedBlob) throw new Error("Failed to crop image");
+
+            const croppedFile = new File([croppedBlob], "profile.jpg", { type: "image/jpeg" });
+            await uploadProfilePicture(user.uid, croppedFile);
+
+            toast.success("Identity updated!", { id: "upload" });
+            setShowCropper(false);
+
+            // Clean up
+            if (image.startsWith('blob:')) {
+                URL.revokeObjectURL(image);
+            }
+            setImage(null);
+        } catch (error) {
+            console.error("Crop error:", error);
+            toast.error("Failed to update picture. Make sure the image service is ready.", { id: "upload" });
+        }
+    };
 
     const handleSignOut = async () => {
         try {
@@ -47,89 +148,141 @@ export default function ProfilePage() {
         );
     }
 
+    if (user.isAnonymous) {
+        return (
+            <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-sky-500/10 rounded-full blur-[120px] pointer-events-none" />
+                <main className="relative z-10 flex flex-col items-center justify-center pt-24 pb-32 px-4 w-full flex-1">
+                    <AuthRequired
+                        title="Identity Locked"
+                        description="Your focus stats and records are temporary. Connect with Google to establish your permanent legacy."
+                    />
+                </main>
+            </div>
+        );
+    }
     return (
         <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-sky-500/10 rounded-full blur-[120px] pointer-events-none" />
 
             <main className="relative z-10 flex flex-col items-center pt-24 pb-32 px-4 w-full flex-1">
-                <div className="w-full max-w-4xl flex flex-col items-center">
-                    <div className="relative group">
-                        <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-                        <Avatar className="w-32 h-32 border-4 border-white/10 p-1 relative z-10 shadow-2xl">
-                            <AvatarImage src={user.photoURL || "https://github.com/shadcn.png"} />
-                            <AvatarFallback className="bg-zinc-900 text-3xl font-black">{userData?.displayName?.slice(0, 2) || "G"}</AvatarFallback>
-                        </Avatar>
-                    </div>
-
-                    <h1 className="mt-8 text-4xl font-black text-white tracking-tighter uppercase italic drop-shadow-lg">
-                        {userData?.displayName || "Guest Master"}
-                    </h1>
-                    <p className="text-zinc-500 font-bold uppercase tracking-[0.3em] text-xs mt-2 flex items-center gap-2">
-                        {user.isAnonymous ? (
-                            <>
-                                <Shield className="w-3 h-3 text-amber-500" /> Anonymous Account
-                            </>
-                        ) : (
-                            <>
-                                <Shield className="w-3 h-3 text-emerald-500" /> Verified Focus Hero
-                            </>
-                        )}
-                    </p>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mt-16 mb-12">
-                        <div className="bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 flex flex-col items-center text-center shadow-xl group hover:bg-white/5 transition-all">
-                            <Zap className="w-8 h-8 text-amber-400 mb-4 group-hover:scale-110 transition-transform" />
-                            <span className="text-4xl font-black text-white">{userData?.totalPomodoros || 0}</span>
-                            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mt-1">Sessions Completed</span>
-                        </div>
-                        <div className="bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 flex flex-col items-center text-center shadow-xl group hover:bg-white/5 transition-all">
-                            <Clock className="w-8 h-8 text-sky-400 mb-4 group-hover:scale-110 transition-transform" />
-                            <span className="text-4xl font-black text-white">{userData?.totalMinutes || 0}</span>
-                            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mt-1">Focus Minutes</span>
-                        </div>
-                        <div className="bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 flex flex-col items-center text-center shadow-xl group hover:bg-white/5 transition-all">
-                            <Calendar className="w-8 h-8 text-purple-400 mb-4 group-hover:scale-110 transition-transform" />
-                            <span className="text-sm font-black text-white mt-4 uppercase italic">
-                                {userData?.createdAt?.seconds ? format(new Date(userData.createdAt.seconds * 1000), "MMM yyyy") : "Join Date"}
-                            </span>
-                            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mt-1">Member Since</span>
-                        </div>
-                    </div>
-
-                    <div className="w-full space-y-4 max-w-2xl">
-                        <div className="bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-xl">
-                            <h2 className="text-xl font-black text-white uppercase italic tracking-tighter mb-8">Account Details</h2>
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-2xl">
-                                    <div className="flex items-center gap-3">
-                                        <Mail className="w-5 h-5 text-zinc-500" />
-                                        <span className="font-bold text-zinc-300">Email</span>
-                                    </div>
-                                    <span className="text-zinc-500 font-bold">{user.email || "No Email (Guest)"}</span>
-                                </div>
-                                <div className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-2xl">
-                                    <div className="flex items-center gap-3">
-                                        <Shield className="w-5 h-5 text-zinc-500" />
-                                        <span className="font-bold text-zinc-300">Auth Method</span>
-                                    </div>
-                                    <span className="text-zinc-500 font-bold uppercase tracking-widest text-[10px]">
-                                        {user.providerData[0]?.providerId || "anonymous"}
-                                    </span>
-                                </div>
+                {/* Profile Header */}
+                <div className="flex flex-col items-center mb-16 animate-in fade-in slide-in-from-bottom-8 duration-1000">
+                    <div className="relative group mb-8">
+                        <div className="absolute -inset-4 bg-gradient-to-r from-sky-500/20 to-purple-500/20 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                        <Avatar className="w-32 h-32 border-4 border-white/10 shadow-2xl relative z-10 overflow-visible">
+                            <div className="absolute inset-0 rounded-full overflow-hidden">
+                                <AvatarImage src={userData?.photoURL || user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`} className="object-cover w-full h-full" />
+                                <AvatarFallback className="bg-zinc-900 font-black text-2xl text-white">
+                                    {user.displayName?.charAt(0) || "F"}
+                                </AvatarFallback>
                             </div>
 
-                            {!user.isAnonymous && (
-                                <Button
-                                    onClick={handleSignOut}
-                                    variant="outline"
-                                    className="w-full mt-8 h-14 rounded-2xl border-destructive/20 bg-destructive/5 text-destructive hover:bg-destructive/10 transition-all font-black uppercase tracking-widest"
-                                >
-                                    <LogOut className="mr-2 w-5 h-5" /> Sign Out
-                                </Button>
+                            {/* Upload Overlay */}
+                            <label className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer rounded-full z-20">
+                                <Camera className="w-8 h-8 text-white" />
+                                <input
+                                    type="file"
+                                    className="hidden"
+                                    accept="image/*"
+                                    onChange={handleFileChange}
+                                    onClick={(e) => (e.target as any).value = null} // Allow re-selecting same file
+                                />
+                            </label>
+                        </Avatar>
+
+                        <div className="absolute -bottom-2 -right-2 bg-zinc-950 border border-white/10 p-2 rounded-xl shadow-xl z-20">
+                            {user.isAnonymous ? (
+                                <Zap className="w-4 h-4 text-amber-500" />
+                            ) : (
+                                <Shield className="w-4 h-4 text-emerald-500" />
                             )}
                         </div>
                     </div>
+
+                    <h1 className="text-4xl font-black text-white tracking-tighter uppercase italic drop-shadow-lg">
+                        {userData?.displayName || "Guest Master"}
+                    </h1>
                 </div>
+
+                <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-3 gap-6 mb-12 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
+                    <div className="bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 flex flex-col items-center text-center shadow-xl group hover:bg-white/5 transition-all">
+                        <Zap className="w-8 h-8 text-amber-400 mb-4 group-hover:scale-110 transition-transform" />
+                        <span className="text-3xl font-black text-white mt-4 italic tracking-tighter">
+                            {userData?.totalPomodoros || 0}
+                        </span>
+                        <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mt-1">Sessions Completed</span>
+                    </div>
+
+                    <div className="bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 flex flex-col items-center text-center shadow-xl group hover:bg-white/5 transition-all">
+                        <Clock className="w-8 h-8 text-sky-400 mb-4 group-hover:scale-110 transition-transform" />
+                        <span className="text-3xl font-black text-white mt-4 italic tracking-tighter">
+                            {userData?.totalMinutes || 0}
+                        </span>
+                        <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mt-1">Focus Minutes</span>
+                    </div>
+
+                    <div className="bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 flex flex-col items-center text-center shadow-xl group hover:bg-white/5 transition-all">
+                        <Calendar className="w-8 h-8 text-purple-400 mb-4 group-hover:scale-110 transition-transform" />
+                        <span className="text-sm font-black text-white mt-4 uppercase italic">
+                            {userData?.createdAt?.seconds ? format(new Date(userData.createdAt.seconds * 1000), "MMM yyyy") : "Join Date"}
+                        </span>
+                        <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mt-1">Member Since</span>
+                    </div>
+                </div>
+
+                {/* Connect Account Alert if Anonymous */}
+                {user.isAnonymous && (
+                    <div className="w-full max-w-md p-6 bg-amber-500/5 border border-amber-500/10 rounded-[2rem] flex flex-col items-center text-center animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-500">
+                        <Shield className="w-8 h-8 text-amber-500 mb-4" />
+                        <h3 className="text-sm font-black text-white uppercase italic mb-2 tracking-tight">Identity Locked</h3>
+                        <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest mb-6 leading-relaxed">
+                            Connect with Google to save your focus sessions permanently.
+                        </p>
+                        <Button
+                            onClick={handleConnectGoogle}
+                            className="w-full h-12 rounded-xl bg-amber-500 text-black hover:bg-amber-400 font-black uppercase tracking-widest shadow-lg shadow-amber-500/20"
+                        >
+                            Connect with Google
+                        </Button>
+                    </div>
+                )}
+
+                {/* Cropping Modal */}
+                {showCropper && image && (
+                    <div className="fixed inset-0 z-[100] bg-zinc-950/90 backdrop-blur-xl flex items-center justify-center p-4">
+                        <div className="w-full max-w-xl aspect-square bg-zinc-900 border border-white/10 rounded-[3rem] overflow-hidden relative shadow-2xl">
+                            <div className="absolute inset-0 pb-20">
+                                <Cropper
+                                    image={image}
+                                    crop={crop}
+                                    zoom={zoom}
+                                    aspect={1}
+                                    onCropChange={setCrop}
+                                    onCropComplete={onCropComplete}
+                                    onZoomChange={setZoom}
+                                    cropShape="round"
+                                    showGrid={false}
+                                />
+                            </div>
+                            <div className="absolute bottom-0 left-0 right-0 p-6 bg-zinc-900/80 backdrop-blur-md flex items-center justify-between border-t border-white/5">
+                                <Button
+                                    variant="ghost"
+                                    onClick={() => setShowCropper(false)}
+                                    className="text-zinc-500 hover:text-white uppercase font-black text-xs tracking-widest"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={handleUploadCropped}
+                                    className="bg-white text-black hover:bg-zinc-200 font-black uppercase text-xs tracking-widest px-8 rounded-xl"
+                                >
+                                    Confirm Adjustment
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </main>
         </div>
     );
