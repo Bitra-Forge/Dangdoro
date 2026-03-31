@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Play, Pause, RotateCcw, Droplets, Check, X, ChevronUp, ChevronDown } from "lucide-react";
+import { Play, Pause, RotateCcw, Check, X, ChevronUp, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTimerStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -133,18 +133,21 @@ export function TimerCard() {
             
             {isEditing ? (
                 <div className="flex flex-col items-center gap-8">
-                  <div className="flex items-center gap-4 text-primary font-noto-serif">
+                  <div className="flex items-center gap-4 text-primary font-sans">
                     {/* Hours */}
                     <div className="flex flex-col items-center gap-2">
                         <Button variant="ghost" size="icon" onClick={() => adjustValue("h", 1)} className="hover:bg-primary/5"><ChevronUp /></Button>
                         <input
                             type="text"
                             value={editHours}
+                            placeholder="00"
+                            onFocus={(e) => e.target.select()}
+                            onKeyDown={(e) => e.key === "Enter" && handleEditSubmit()}
                             onChange={(e) => {
                                 const val = e.target.value.replace(/\D/g, "").slice(0, 2);
                                 setEditHours(val);
                             }}
-                            className="text-6xl md:text-8xl font-bold tracking-tighter bg-transparent w-20 md:w-32 text-center outline-none border-b-2 border-primary/10 focus:border-primary/40 transition-all font-noto-serif"
+                            className="text-6xl md:text-8xl font-bold tracking-tighter bg-transparent w-20 md:w-32 text-center outline-none border-b-2 border-primary/10 focus:border-primary/40 transition-all font-mono"
                         />
                         <Button variant="ghost" size="icon" onClick={() => adjustValue("h", -1)} className="hover:bg-primary/5"><ChevronDown /></Button>
                     </div>
@@ -156,11 +159,14 @@ export function TimerCard() {
                             type="text"
                             autoFocus
                             value={editMins}
+                            placeholder="00"
+                            onFocus={(e) => e.target.select()}
+                            onKeyDown={(e) => e.key === "Enter" && handleEditSubmit()}
                             onChange={(e) => {
                                 const val = e.target.value.replace(/\D/g, "").slice(0, 2);
                                 setEditMins(val);
                             }}
-                            className="text-6xl md:text-8xl font-bold tracking-tighter bg-transparent w-full max-w-[5rem] md:max-w-[8rem] text-center outline-none border-b-2 border-primary/10 focus:border-primary/40 transition-all font-noto-serif"
+                            className="text-6xl md:text-8xl font-bold tracking-tighter bg-transparent w-20 md:w-32 text-center outline-none border-b-2 border-primary/10 focus:border-primary/40 transition-all font-mono"
                         />
                         <Button variant="ghost" size="icon" onClick={() => adjustValue("m", -1)} className="hover:bg-primary/5"><ChevronDown /></Button>
                     </div>
@@ -171,11 +177,14 @@ export function TimerCard() {
                         <input
                             type="text"
                             value={editSecs}
+                            placeholder="00"
+                            onFocus={(e) => e.target.select()}
+                            onKeyDown={(e) => e.key === "Enter" && handleEditSubmit()}
                             onChange={(e) => {
                                 const val = e.target.value.replace(/\D/g, "").slice(0, 2);
                                 setEditSecs(val);
                             }}
-                            className="text-6xl md:text-8xl font-bold tracking-tighter bg-transparent w-full max-w-[5rem] md:max-w-[8rem] text-center outline-none border-b-2 border-primary/10 focus:border-primary/40 transition-all font-noto-serif"
+                            className="text-6xl md:text-8xl font-bold tracking-tighter bg-transparent w-20 md:w-32 text-center outline-none border-b-2 border-primary/10 focus:border-primary/40 transition-all font-mono"
                         />
                         <Button variant="ghost" size="icon" onClick={() => adjustValue("s", -1)} className="hover:bg-primary/5"><ChevronDown /></Button>
                     </div>
@@ -198,7 +207,7 @@ export function TimerCard() {
                     className={cn(
                         "text-[9rem] md:text-[13rem] font-bold tracking-tighter leading-none select-none drop-shadow-sm cursor-pointer",
                         "bg-gradient-to-b from-primary/95 to-primary/60 bg-clip-text text-transparent",
-                        "font-noto-serif transition-opacity duration-500"
+                        "font-sans transition-opacity duration-500"
                     )}
                 >
                     {formatTime(timeLeft)}
@@ -240,12 +249,7 @@ export function TimerCard() {
       </div>
 
 
-      {/* Quote Section */}
-      <div className="max-w-md text-center pt-8">
-        <p className="italic text-lg text-muted-foreground font-noto-serif leading-relaxed opacity-60 hover:opacity-100 transition-opacity duration-700">
-          "Quiet your mind, and the soul will speak."
-        </p>
-      </div>
+      {/* Removing Quote Section to restore old design */}
     </div>
   );
 }

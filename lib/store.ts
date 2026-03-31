@@ -46,11 +46,11 @@ export const useTimerStore = create<TimerState>((set, get) => ({
     }
   },
   setMode: (mode) => {
-    const { initialFocusTime, initialBreakTime, initialLongBreakTime } = get();
+    const { initialFocusTime, initialBreakTime, initialLongBreakTime, isActive } = get();
     set({
       mode,
-      isActive: false,
       timeLeft: mode === "focus" ? initialFocusTime : mode === "break" ? initialBreakTime : initialLongBreakTime,
+      // isActive stays the same as before
     });
   },
   setTime: (seconds) => set({ timeLeft: seconds }),
