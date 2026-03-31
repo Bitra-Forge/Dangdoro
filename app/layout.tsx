@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Noto_Serif } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";   // Sonner toast
 import { AuthProvider } from "@/components/AuthProvider";
+import { Navigation } from "@/components/navigation";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,6 +41,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-zinc-950 text-white">
         <AuthProvider>
           {children}
+          <Navigation />
           <Toaster position="top-center" richColors closeButton />
         </AuthProvider>
       </body>

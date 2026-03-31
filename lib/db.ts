@@ -10,7 +10,9 @@ import {
     getDocs,
     serverTimestamp,
     increment,
-    updateDoc
+    updateDoc,
+    deleteDoc,
+    onSnapshot
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { User } from "firebase/auth";
@@ -96,4 +98,77 @@ export const getLeaderboard = async (limitCount: number = 10) => {
         id: doc.id,
         ...doc.data()
     }));
+};
+
+/**
+ * Task CRUD Operations
+ */
+
+export const addTask = async (userId: string, title: string, pomodoros: number = 1) => {
+    try {
+        await addDoc(collection(db, "tasks"), {
+            userId,
+            title,
+            estimatedPomodoros: pomodoros,
+            completedPomodoros: 0,
+            completed: false,
+            createdAt: serverTimestamp(),
+        });
+        return true;
+    } catch (error) {
+        console.error("Error adding task:", error);
+        return false;
+    }
+};
+
+export const toggleTask = async (taskId: string, completed: boolean) => {
+    try {
+        const taskRef = doc(db, "tasks", taskId);
+        await updateDoc(taskRef, { completed });
+        return true;
+    } catch (error) {
+        console.error("Error toggling task:", error);
+        return false;
+    }
+};
+
+export const deleteTask = async (taskId: string) => {
+    try {
+        await deleteDoc(doc(db, "tasks", taskId));
+        return true;
+    } catch (error) {
+        console.error("Error deleting task:", error);
+        return false;
+    }
+};
+
+export const subscribeToTasks = (userId: string, callback: (tasks: any[]) => void) => {
+    const q = query(
+        collection(db, "tasks"),
+        orderBy("createdAt", "desc")
+    );
+    // Filter by userId locally or use a proper Firestore index/filter
+    // For simplicity with anonymous users, we might need a composite index if we filter by userId
+    return onSnapshot(q, (snapshot) => {
+        const tasks = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .filter((t: any) => t.userId === userId);
+        callback(tasks);
+    });
+};
+
+/**
+ * Stats and Sessions
+ */
+
+export const getSessionHistory = async (userId: string, limitCount: number = 20) => {
+    const q = query(
+        collection(db, "sessions"),
+        orderBy("completedAt", "desc"),
+        limit(limitCount)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((s: any) => s.userId === userId);
 };

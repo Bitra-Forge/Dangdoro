@@ -1,5 +1,4 @@
 import { TimerCard } from "@/components/timer-card";
-import { Header } from "@/components/header";
 
 export default function Home() {
   return (
@@ -8,9 +7,9 @@ export default function Home() {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-sky-500/15 rounded-full blur-[120px] pointer-events-none" />
 
       {/* Skipping Login: Show the header/website directly */}
-      <Header />
 
-      <main className="relative z-10 flex flex-col items-center justify-center pt-32 pb-16 px-4 w-full flex-1">
+
+      <main className="relative z-10 flex flex-col items-center justify-center pt-24 pb-32 px-4 w-full flex-1">
         <header className="flex flex-col items-center gap-4 text-center mb-12">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(56,189,248,0.4)]">
@@ -27,7 +26,7 @@ export default function Home() {
         </header>
 
         <div className="w-full max-w-4xl flex items-center justify-center">
-            <TimerCard />
+          <TimerCard />
         </div>
       </main>
     </div>
