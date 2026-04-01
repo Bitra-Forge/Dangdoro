@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";   // Sonner toast
 import { AuthProvider } from "@/components/AuthProvider";
 import { Navigation } from "@/components/navigation";
+import { TimerTicker } from "@/components/TimerTicker";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -41,6 +42,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-zinc-950 text-white">
         <AuthProvider>
           {children}
+          <TimerTicker />
           <Navigation />
           <Toaster position="top-center" richColors closeButton />
         </AuthProvider>
