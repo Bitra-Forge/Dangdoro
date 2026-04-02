@@ -1,7 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { Settings, Bell, Clock, Palette, LogOut, Shield, Mail, LogIn, ChevronRight, Minus, Plus, Zap } from "lucide-react";
+import React, { useEffect, useState, useCallback } from "react";
+import {
+    Bell, Clock, Palette, LogOut, Shield, Mail, LogIn,
+    Zap, Minus, Plus, RotateCcw, Save, CheckCircle2
+} from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { logOut } from "@/lib/auth";
 import { onSnapshot, doc } from "firebase/firestore";
@@ -10,21 +13,35 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { updateUserSettings } from "@/lib/db";
 
+const DEFAULT_SETTINGS = {
+    focusTime: 25,
+    breakTime: 5,
+    longBreakTime: 15,
+    adjustmentAmount: 1,
+    notifications: true,
+    sound: true
+};
+
+function settingsEqual(a: typeof DEFAULT_SETTINGS, b: typeof DEFAULT_SETTINGS) {
+    return (
+        a.focusTime === b.focusTime &&
+        a.breakTime === b.breakTime &&
+        a.longBreakTime === b.longBreakTime &&
+        a.adjustmentAmount === b.adjustmentAmount &&
+        a.notifications === b.notifications &&
+        a.sound === b.sound
+    );
+}
+
 export default function SettingsPage() {
     const { user, loading: authLoading, openAuthVault } = useAuth();
     const [userData, setUserData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
-    const [settings, setSettings] = useState({
-        focusTime: 25,
-        breakTime: 5,
-        longBreakTime: 15,
-        adjustmentAmount: 1,
-        notifications: true,
-        sound: true
-    });
+    // Saved settings from DB — used as baseline for diff detection
+    const [savedSettings, setSavedSettings] = useState({ ...DEFAULT_SETTINGS });
 
-    const [hasChanges, setHasChanges] = useState(false);
+    const [settings, setSettings] = useState({ ...DEFAULT_SETTINGS });
     const [saving, setSaving] = useState(false);
     const [inputValues, setInputValues] = useState<Record<string, string>>({
         focusTime: "25",
@@ -32,6 +49,9 @@ export default function SettingsPage() {
         longBreakTime: "15",
         adjustmentAmount: "1"
     });
+
+    // Derived: has changes only when settings differ from savedSettings
+    const hasChanges = !settingsEqual(settings, savedSettings);
 
     useEffect(() => {
         if (!user) {
@@ -44,12 +64,14 @@ export default function SettingsPage() {
                 const data = docSnap.data();
                 setUserData(data);
                 if (data.settings) {
-                    setSettings(prev => ({ ...prev, ...data.settings }));
+                    const merged = { ...DEFAULT_SETTINGS, ...data.settings };
+                    setSavedSettings(merged);
+                    setSettings(merged);
                     setInputValues({
-                        focusTime: String(data.settings.focusTime ?? 25),
-                        breakTime: String(data.settings.breakTime ?? 5),
-                        longBreakTime: String(data.settings.longBreakTime ?? 15),
-                        adjustmentAmount: String(data.settings.adjustmentAmount ?? 1)
+                        focusTime: String(merged.focusTime),
+                        breakTime: String(merged.breakTime),
+                        longBreakTime: String(merged.longBreakTime),
+                        adjustmentAmount: String(merged.adjustmentAmount)
                     });
                 }
             }
@@ -59,10 +81,19 @@ export default function SettingsPage() {
         return () => unsub();
     }, [user]);
 
-    const handleUpdateSetting = (key: string, value: any) => {
+    const handleUpdateSetting = useCallback((key: string, value: any) => {
         setSettings(prev => ({ ...prev, [key]: value }));
         setInputValues(prev => ({ ...prev, [key]: String(value) }));
-        setHasChanges(true);
+    }, []);
+
+    const handleRestoreDefaults = () => {
+        setSettings({ ...DEFAULT_SETTINGS });
+        setInputValues({
+            focusTime: String(DEFAULT_SETTINGS.focusTime),
+            breakTime: String(DEFAULT_SETTINGS.breakTime),
+            longBreakTime: String(DEFAULT_SETTINGS.longBreakTime),
+            adjustmentAmount: String(DEFAULT_SETTINGS.adjustmentAmount)
+        });
     };
 
     const handleSaveSettings = async () => {
@@ -72,7 +103,7 @@ export default function SettingsPage() {
         const success = await updateUserSettings(user.uid, settings);
         if (success) {
             toast.success("Settings saved successfully");
-            setHasChanges(false);
+            setSavedSettings({ ...settings });
         } else {
             toast.error("Failed to save settings");
         }
@@ -99,62 +130,113 @@ export default function SettingsPage() {
         );
     }
 
+    const timerFields = [
+        { label: "Focus Duration", key: "focusTime", icon: Zap, accent: "text-amber-400", border: "border-amber-500/20", glow: "shadow-amber-500/10", bg: "bg-amber-500/10" },
+        { label: "Short Break", key: "breakTime", icon: Clock, accent: "text-sky-400", border: "border-sky-500/20", glow: "shadow-sky-500/10", bg: "bg-sky-500/10" },
+        { label: "Long Break", key: "longBreakTime", icon: Clock, accent: "text-purple-400", border: "border-purple-500/20", glow: "shadow-purple-500/10", bg: "bg-purple-500/10" },
+        { label: "Adjustment Step", key: "adjustmentAmount", icon: Zap, accent: "text-rose-400", border: "border-rose-500/20", glow: "shadow-rose-500/10", bg: "bg-rose-500/10" }
+    ];
+
     return (
         <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-zinc-500/10 rounded-full blur-[120px] pointer-events-none" />
+            {/* Ambient glow */}
+            <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-sky-500/5 rounded-full blur-[140px] pointer-events-none" />
+            <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-purple-500/5 rounded-full blur-[120px] pointer-events-none" />
 
             <main className="relative z-10 flex flex-col items-center pt-24 pb-32 px-4 w-full flex-1">
-                <header className="flex flex-col items-center gap-4 text-center mb-12 w-full max-w-2xl relative">
-                    <div className="flex items-center gap-2 mb-2 text-zinc-400 font-black uppercase text-[10px] tracking-[0.4em]">
+                {/* Header */}
+                <header className="w-full max-w-2xl mb-10">
+                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] mb-3">
                         Configuration Engine
-                    </div>
-                    <div className="flex flex-col md:flex-row md:items-center justify-between w-full gap-6 px-4">
-                        <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-white uppercase italic leading-none drop-shadow-lg">
-                            Tailor Your Flow
+                    </p>
+                    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
+                        <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-white uppercase italic leading-none">
+                            Tailor Your<br />
+                            <span className="text-sky-400">Flow</span>
                         </h1>
 
-                        {hasChanges && (
-                            <Button
-                                onClick={handleSaveSettings}
-                                disabled={saving}
-                                className="bg-sky-500 text-black hover:bg-sky-400 font-black uppercase tracking-widest text-[10px] px-8 h-12 rounded-xl shadow-xl shadow-sky-500/20 animate-in fade-in zoom-in duration-300 transition-all active:scale-95"
+                        {/* Action buttons — always visible, disabled when no changes */}
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={handleRestoreDefaults}
+                                title="Restore Defaults"
+                                className="flex items-center gap-2 px-4 h-10 rounded-xl border border-white/5 bg-zinc-900/60 text-zinc-500 hover:text-white hover:bg-white/5 hover:border-white/10 transition-all text-[10px] font-black uppercase tracking-widest"
                             >
-                                {saving ? "Saving..." : "Save Changes"}
-                            </Button>
-                        )}
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Defaults</span>
+                            </button>
+
+                            <button
+                                onClick={handleSaveSettings}
+                                disabled={!hasChanges || saving}
+                                className={`flex items-center gap-2 px-6 h-10 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all duration-300 ${hasChanges
+                                        ? "bg-sky-500 text-black hover:bg-sky-400 shadow-lg shadow-sky-500/25 active:scale-95"
+                                        : "bg-zinc-900/60 text-zinc-600 border border-white/5 cursor-not-allowed"
+                                    }`}
+                            >
+                                {saving ? (
+                                    <>
+                                        <div className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                                        Saving
+                                    </>
+                                ) : hasChanges ? (
+                                    <>
+                                        <Save className="w-3.5 h-3.5" />
+                                        Save Changes
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        Saved
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
+
+                    {/* Change indicator */}
+                    <div className={`mt-4 h-[2px] rounded-full transition-all duration-500 ${hasChanges ? "bg-gradient-to-r from-sky-500 to-purple-500 opacity-100" : "bg-white/5 opacity-0"}`} />
                 </header>
 
-                <div className="w-full max-w-2xl space-y-8">
+                <div className="w-full max-w-2xl space-y-6">
                     {/* Timer Configuration */}
-                    <div className="bg-zinc-900/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-700">
-                        <div className="flex items-center gap-3 mb-8">
-                            <Clock className="w-6 h-6 text-sky-400" />
-                            <h2 className="text-xl font-black text-white uppercase italic tracking-tighter">Timer Protocols</h2>
+                    <section className="bg-zinc-900/40 backdrop-blur-3xl border border-white/[0.06] rounded-3xl overflow-hidden shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        {/* Section header */}
+                        <div className="flex items-center gap-3 px-8 py-5 border-b border-white/[0.06]">
+                            <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center">
+                                <Clock className="w-4 h-4 text-sky-400" />
+                            </div>
+                            <div>
+                                <h2 className="text-sm font-black text-white uppercase italic tracking-tighter">Timer Protocols</h2>
+                                <p className="text-[10px] text-zinc-500 font-medium">Configure your session durations</p>
+                            </div>
                         </div>
 
-                        <div className="space-y-4">
-                            {[
-                                { label: "Focus Duration", key: "focusTime", icon: Zap, color: "text-amber-500" },
-                                { label: "Short Break", key: "breakTime", icon: Clock, color: "text-sky-500" },
-                                { label: "Long Break", key: "longBreakTime", icon: Clock, color: "text-purple-500" },
-                                { label: "Adjustment Step", key: "adjustmentAmount", icon: Zap, color: "text-rose-500" }
-                            ].map((item) => (
-                                <div key={item.key} className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-2xl group hover:bg-white/10 transition-all">
+                        <div className="p-6 space-y-3">
+                            {timerFields.map((item) => (
+                                <div
+                                    key={item.key}
+                                    className={`flex items-center justify-between p-4 rounded-2xl border transition-all group
+                                        bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.05] hover:border-white/10`}
+                                >
                                     <div className="flex items-center gap-4">
-                                        <div className={`w-10 h-10 rounded-xl bg-zinc-950 flex items-center justify-center border border-white/10 ${item.color}`}>
-                                            <item.icon className="w-4 h-4" />
+                                        <div className={`w-9 h-9 rounded-xl ${item.bg} border ${item.border} flex items-center justify-center flex-shrink-0 shadow-md ${item.glow}`}>
+                                            <item.icon className={`w-4 h-4 ${item.accent}`} />
                                         </div>
-                                        <span className="font-bold text-zinc-300 group-hover:text-white transition-colors">{item.label}</span>
+                                        <span className="text-sm font-bold text-zinc-300 group-hover:text-white transition-colors">
+                                            {item.label}
+                                        </span>
                                     </div>
-                                    <div className="flex items-center gap-2 bg-zinc-950/50 p-2 rounded-xl border border-white/5">
+
+                                    {/* Stepper */}
+                                    <div className="flex items-center gap-1 bg-zinc-950/60 px-2 py-1.5 rounded-xl border border-white/[0.06]">
                                         <button
-                                            onClick={() => handleUpdateSetting(item.key, Math.max(1, (settings as any)[item.key] - 1))}
-                                            className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-white transition-colors"
+                                            onClick={() => handleUpdateSetting(item.key, Math.max(1, (settings as any)[item.key] - (settings as any).adjustmentAmount))}
+                                            className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/10 transition-all active:scale-90"
                                         >
-                                            <Minus className="w-4 h-4" />
+                                            <Minus className="w-3.5 h-3.5" />
                                         </button>
-                                        <div className="flex items-center">
+                                        <div className="flex items-center gap-0.5 w-16 justify-center">
                                             <input
                                                 type="text"
                                                 inputMode="numeric"
@@ -162,7 +244,6 @@ export default function SettingsPage() {
                                                 onChange={(e) => {
                                                     const raw = e.target.value.replace(/[^0-9]/g, '');
                                                     setInputValues(prev => ({ ...prev, [item.key]: raw }));
-                                                    setHasChanges(true);
                                                 }}
                                                 onBlur={() => {
                                                     const val = parseInt(inputValues[item.key], 10);
@@ -174,92 +255,94 @@ export default function SettingsPage() {
                                                         handleUpdateSetting(item.key, val);
                                                     }
                                                 }}
-                                                className="w-12 text-center font-black text-white italic bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 focus:border-none"
+                                                className="w-10 text-center font-black text-white italic bg-transparent border-none outline-none text-sm"
                                             />
-                                            <span className="text-white font-black italic">m</span>
+                                            <span className={`text-xs font-black italic ${item.accent}`}>m</span>
                                         </div>
                                         <button
-                                            onClick={() => handleUpdateSetting(item.key, Math.min(120, (settings as any)[item.key] + 1))}
-                                            className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-white transition-colors"
+                                            onClick={() => handleUpdateSetting(item.key, Math.min(120, (settings as any)[item.key] + (settings as any).adjustmentAmount))}
+                                            className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/10 transition-all active:scale-90"
                                         >
-                                            <Plus className="w-4 h-4" />
+                                            <Plus className="w-3.5 h-3.5" />
                                         </button>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                    </div>
+                    </section>
 
-                    {/* Account Center Section */}
-                    <div className="bg-zinc-900/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100">
-                        <div className="flex items-center gap-3 mb-8">
-                            <Shield className="w-6 h-6 text-sky-400" />
-                            <h2 className="text-xl font-black text-white uppercase italic tracking-tighter">
-                                {user ? "Account Center" : "Session Engine"}
-                            </h2>
+                    {/* Account Center */}
+                    <section className="bg-zinc-900/40 backdrop-blur-3xl border border-white/[0.06] rounded-3xl overflow-hidden shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100">
+                        <div className="flex items-center gap-3 px-8 py-5 border-b border-white/[0.06]">
+                            <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center">
+                                <Shield className="w-4 h-4 text-sky-400" />
+                            </div>
+                            <div>
+                                <h2 className="text-sm font-black text-white uppercase italic tracking-tighter">
+                                    {user ? "Account Center" : "Session Engine"}
+                                </h2>
+                                <p className="text-[10px] text-zinc-500 font-medium">Manage your identity and session</p>
+                            </div>
                         </div>
 
-                        {user ? (
-                            <>
-                                <div className="space-y-4 mb-8">
-                                    <div className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-2xl">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-xl bg-zinc-950 flex items-center justify-center border border-white/10">
+                        <div className="p-6">
+                            {user ? (
+                                <>
+                                    <div className="space-y-3 mb-5">
+                                        <div className="flex items-center gap-4 p-4 bg-white/[0.02] border border-white/[0.06] rounded-2xl">
+                                            <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-white/10 flex items-center justify-center flex-shrink-0">
                                                 <Mail className="w-4 h-4 text-zinc-500" />
                                             </div>
-                                            <div className="flex flex-col">
+                                            <div className="flex flex-col min-w-0">
                                                 <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Email Address</span>
-                                                <span className="text-sm font-bold text-white truncate max-w-[200px]">{user.email || "No email linked (Guest)"}</span>
+                                                <span className="text-sm font-bold text-white truncate">{user.email || "No email linked — Guest Session"}</span>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    <div className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-2xl">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-xl bg-zinc-950 flex items-center justify-center border border-white/10">
+                                        <div className="flex items-center gap-4 p-4 bg-white/[0.02] border border-white/[0.06] rounded-2xl">
+                                            <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-white/10 flex items-center justify-center flex-shrink-0">
                                                 <LogIn className="w-4 h-4 text-zinc-500" />
                                             </div>
                                             <div className="flex flex-col">
                                                 <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Auth Method</span>
-                                                <span className="text-sm font-black text-white uppercase italic tracking-tighter italic">
+                                                <span className="text-sm font-black text-white uppercase italic tracking-tighter">
                                                     {user.providerData[0]?.providerId || "Anonymous Guest"}
                                                 </span>
                                             </div>
                                         </div>
                                     </div>
+
+                                    <Button
+                                        onClick={user.isAnonymous ? openAuthVault : handleSignOut}
+                                        variant="outline"
+                                        className="w-full h-12 rounded-2xl border-white/[0.06] bg-zinc-950/50 text-zinc-400 hover:text-white hover:bg-white/[0.05] hover:border-white/10 transition-all font-black uppercase tracking-widest text-xs"
+                                    >
+                                        {user.isAnonymous ? (
+                                            <>
+                                                <LogIn className="mr-2 h-4 w-4" /> Sign In / Establish Identity
+                                            </>
+                                        ) : (
+                                            <>
+                                                <LogOut className="mr-2 h-4 w-4" /> Terminate Session
+                                            </>
+                                        )}
+                                    </Button>
+                                </>
+                            ) : (
+                                <div className="text-center py-4">
+                                    <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-6 leading-relaxed">
+                                        Your session is offline. Connect to synchronize your focus protocols.
+                                    </p>
+                                    <Button
+                                        onClick={openAuthVault}
+                                        className="w-full h-12 rounded-2xl bg-white text-black hover:bg-zinc-200 transition-all font-black uppercase tracking-widest shadow-xl shadow-white/5 text-xs"
+                                    >
+                                        <LogIn className="mr-2 h-4 w-4" /> Initialize Sign In
+                                    </Button>
                                 </div>
-
-                                <Button
-                                    onClick={user.isAnonymous ? openAuthVault : handleSignOut}
-                                    variant="outline"
-                                    className="w-full h-14 rounded-2xl border-white/5 bg-zinc-950/50 text-zinc-400 hover:text-white hover:bg-white/10 transition-all font-black uppercase tracking-widest"
-                                >
-                                    {user.isAnonymous ? (
-                                        <>
-                                            <LogIn className="mr-2 h-4 w-4" /> Sign In / Establish Identity
-                                        </>
-                                    ) : (
-                                        <>
-                                            <LogOut className="mr-2 h-4 w-4" /> Terminate Session
-                                        </>
-                                    )}
-                                </Button>
-
-                            </>
-                        ) : (
-                            <div className="text-center py-4">
-                                <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-8 leading-relaxed">
-                                    Your session is offline. Connect to synchronize your focus protocols.
-                                </p>
-                                <Button
-                                    onClick={openAuthVault}
-                                    className="w-full h-14 rounded-2xl bg-white text-black hover:bg-zinc-200 transition-all font-black uppercase tracking-widest shadow-xl shadow-white/5"
-                                >
-                                    <LogIn className="mr-2 h-4 w-4" /> Initialize Sign In
-                                </Button>
-                            </div>
-                        )}
-                    </div>
+                            )}
+                        </div>
+                    </section>
                 </div>
             </main>
         </div>
