@@ -21,8 +21,8 @@ export default function Home() {
   const backgroundImage = useTimerStore((state) => state.backgroundImage);
 
   return (
-    <div className={`flex flex-col flex-1 bg-zinc-950 min-h-screen relative overflow-hidden ${spaceGrotesk.variable} font-sans`} 
-         style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
+    <div className={`flex flex-col flex-1 bg-zinc-950 min-h-screen relative overflow-hidden ${spaceGrotesk.variable} font-sans`}
+      style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
       {/* Immersive Background */}
       <div className="absolute inset-0 z-0 select-none pointer-events-none transition-all duration-1000">
         <Image
@@ -30,6 +30,7 @@ export default function Home() {
           src={`/Backgrounds/${backgroundImage}`}
           alt="Background"
           fill
+          sizes="100vw"
           priority
           className="object-cover opacity-100 transition-all duration-1000 animate-in fade-in fill-mode-forwards"
         />

@@ -20,6 +20,13 @@ import {
 import { AuthRequired } from "@/components/auth-required";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import dynamic from "next/dynamic";
+
+// Disable SSR for the chart to avoid dimension warnings during hydration
+const ChartContainer = dynamic(
+    () => import("recharts").then((mod) => mod.ResponsiveContainer),
+    { ssr: false }
+);
 
 type TimeRange = "week" | "month" | "year";
 
@@ -40,6 +47,11 @@ export default function StatsPage() {
     const [yearData, setYearData] = useState<any[]>([]);
     const [timeRange, setTimeRange] = useState<TimeRange>("week");
     const [loading, setLoading] = useState(true);
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     useEffect(() => {
         if (authLoading) return;
@@ -100,7 +112,7 @@ export default function StatsPage() {
                 history.forEach(session => {
                     if (session.completedAt) {
                         const sessionDate = new Date(session.completedAt.seconds * 1000);
-                        
+
                         // Week data
                         const dayMatch = last7Days.find(d => isSameDay(d.fullDate, startOfDay(sessionDate)));
                         if (dayMatch) {
@@ -227,8 +239,8 @@ export default function StatsPage() {
                         </div>
                     </div>
 
-                    <div className="h-80 w-full mt-4">
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div className="h-80 min-h-[320px] w-full mt-4 relative">
+                        <ChartContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={1}>
                             <BarChart data={timeRange === "week" ? weekData : timeRange === "month" ? monthData : yearData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
                                 <XAxis
@@ -274,7 +286,7 @@ export default function StatsPage() {
                                     ))}
                                 </Bar>
                             </BarChart>
-                        </ResponsiveContainer>
+                        </ChartContainer>
                     </div>
                 </div>
 
