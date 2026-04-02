@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { Avatar as AvatarPrimitive } from "radix-ui"
+import Image from "next/image"
 
 import { cn } from "@/lib/utils"
 
@@ -27,11 +28,40 @@ function Avatar({
 
 function AvatarImage({
   className,
+  src,
+  alt = "Avatar",
   ...props
-}: React.ComponentProps<typeof AvatarPrimitive.Image>) {
+}: React.ComponentProps<typeof AvatarPrimitive.Image> & { alt?: string }) {
+  // Use Next.js Image for remote URLs to benefit from caching and optimization
+  const isRemoteUrl = src && typeof src === "string" && (
+    src.startsWith("http://") || src.startsWith("https://")
+  );
+  // Check if it's a base64 data URL
+  const isBase64 = src && typeof src === "string" && src.startsWith("data:");
+
+  if (isRemoteUrl && !isBase64) {
+    return (
+      <AvatarPrimitive.Image asChild {...props}>
+        <Image
+          data-slot="avatar-image"
+          src={src}
+          alt={alt}
+          width={96}
+          height={96}
+          className={cn(
+            "aspect-square size-full rounded-full object-cover",
+            className
+          )}
+          unoptimized={src.includes("api.dicebear.com")} // SVGs don't need optimization
+        />
+      </AvatarPrimitive.Image>
+    )
+  }
+
   return (
     <AvatarPrimitive.Image
       data-slot="avatar-image"
+      src={src}
       className={cn(
         "aspect-square size-full rounded-full object-cover",
         className

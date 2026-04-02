@@ -26,6 +26,11 @@ export default function SettingsPage() {
 
     const [hasChanges, setHasChanges] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [inputValues, setInputValues] = useState<Record<string, string>>({
+        focusTime: "25",
+        breakTime: "5",
+        longBreakTime: "15"
+    });
 
     useEffect(() => {
         if (!user) {
@@ -39,6 +44,11 @@ export default function SettingsPage() {
                 setUserData(data);
                 if (data.settings) {
                     setSettings(prev => ({ ...prev, ...data.settings }));
+                    setInputValues({
+                        focusTime: String(data.settings.focusTime ?? 25),
+                        breakTime: String(data.settings.breakTime ?? 5),
+                        longBreakTime: String(data.settings.longBreakTime ?? 15)
+                    });
                 }
             }
             setLoading(false);
@@ -49,6 +59,7 @@ export default function SettingsPage() {
 
     const handleUpdateSetting = (key: string, value: any) => {
         setSettings(prev => ({ ...prev, [key]: value }));
+        setInputValues(prev => ({ ...prev, [key]: String(value) }));
         setHasChanges(true);
     };
 
@@ -134,16 +145,39 @@ export default function SettingsPage() {
                                         </div>
                                         <span className="font-bold text-zinc-300 group-hover:text-white transition-colors">{item.label}</span>
                                     </div>
-                                    <div className="flex items-center gap-4 bg-zinc-950/50 p-2 rounded-xl border border-white/5">
+                                    <div className="flex items-center gap-2 bg-zinc-950/50 p-2 rounded-xl border border-white/5">
                                         <button
                                             onClick={() => handleUpdateSetting(item.key, Math.max(1, (settings as any)[item.key] - 1))}
                                             className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-white transition-colors"
                                         >
                                             <Minus className="w-4 h-4" />
                                         </button>
-                                        <span className="w-8 text-center font-black text-white italic">{(settings as any)[item.key]}m</span>
+                                        <div className="flex items-center">
+                                            <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                value={inputValues[item.key] ?? (settings as any)[item.key]}
+                                                onChange={(e) => {
+                                                    const raw = e.target.value.replace(/[^0-9]/g, '');
+                                                    setInputValues(prev => ({ ...prev, [item.key]: raw }));
+                                                    setHasChanges(true);
+                                                }}
+                                                onBlur={() => {
+                                                    const val = parseInt(inputValues[item.key], 10);
+                                                    if (isNaN(val) || val < 1) {
+                                                        handleUpdateSetting(item.key, 1);
+                                                    } else if (val > 120) {
+                                                        handleUpdateSetting(item.key, 120);
+                                                    } else {
+                                                        handleUpdateSetting(item.key, val);
+                                                    }
+                                                }}
+                                                className="w-12 text-center font-black text-white italic bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 focus:border-none"
+                                            />
+                                            <span className="text-white font-black italic">m</span>
+                                        </div>
                                         <button
-                                            onClick={() => handleUpdateSetting(item.key, Math.min(60, (settings as any)[item.key] + 1))}
+                                            onClick={() => handleUpdateSetting(item.key, Math.min(120, (settings as any)[item.key] + 1))}
                                             className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-white transition-colors"
                                         >
                                             <Plus className="w-4 h-4" />
