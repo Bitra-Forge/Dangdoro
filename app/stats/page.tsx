@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BarChart3, TrendingUp, Zap, Clock } from "lucide-react";
+import { BarChart3, TrendingUp, Zap, Clock, Calendar } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { getSessionHistory } from "@/lib/db";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { format, startOfDay, subDays, isSameDay } from "date-fns";
+import { format, startOfDay, subDays, isSameDay, subMonths, startOfMonth, isSameMonth } from "date-fns";
 import {
     BarChart,
     Bar,
@@ -19,6 +19,9 @@ import {
 } from "recharts";
 import { AuthRequired } from "@/components/auth-required";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+type TimeRange = "week" | "month" | "year";
 
 interface SessionData {
     id: string;
@@ -32,7 +35,10 @@ export default function StatsPage() {
     const { user, loading: authLoading } = useAuth();
     const [sessions, setSessions] = useState<SessionData[]>([]);
     const [userStats, setUserStats] = useState<any>(null);
-    const [chartData, setChartData] = useState<any[]>([]);
+    const [weekData, setWeekData] = useState<any[]>([]);
+    const [monthData, setMonthData] = useState<any[]>([]);
+    const [yearData, setYearData] = useState<any[]>([]);
+    const [timeRange, setTimeRange] = useState<TimeRange>("week");
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -60,7 +66,7 @@ export default function StatsPage() {
                     setUserStats(userDoc.data());
                 }
 
-                // Process data for chart (last 7 days)
+                // Process data for week chart (last 7 days)
                 const last7Days = Array.from({ length: 7 }).map((_, i) => {
                     const date = subDays(new Date(), 6 - i);
                     return {
@@ -70,17 +76,53 @@ export default function StatsPage() {
                     };
                 });
 
+                // Process data for month chart (last 30 days)
+                const last30Days = Array.from({ length: 30 }).map((_, i) => {
+                    const date = subDays(new Date(), 29 - i);
+                    return {
+                        date: format(date, "d"),
+                        fullDate: startOfDay(date),
+                        minutes: 0,
+                    };
+                });
+
+                // Process data for year chart (last 12 months)
+                const last12Months = Array.from({ length: 12 }).map((_, i) => {
+                    const date = subMonths(new Date(), 11 - i);
+                    return {
+                        date: format(date, "MMM"),
+                        fullDate: startOfMonth(date),
+                        minutes: 0,
+                    };
+                });
+
                 history.forEach(session => {
                     if (session.completedAt) {
                         const sessionDate = new Date(session.completedAt.seconds * 1000);
+                        
+                        // Week data
                         const dayMatch = last7Days.find(d => isSameDay(d.fullDate, startOfDay(sessionDate)));
                         if (dayMatch) {
                             dayMatch.minutes += session.duration || 0;
                         }
+
+                        // Month data
+                        const monthDayMatch = last30Days.find(d => isSameDay(d.fullDate, startOfDay(sessionDate)));
+                        if (monthDayMatch) {
+                            monthDayMatch.minutes += session.duration || 0;
+                        }
+
+                        // Year data
+                        const monthMatch = last12Months.find(d => isSameMonth(d.fullDate, sessionDate));
+                        if (monthMatch) {
+                            monthMatch.minutes += session.duration || 0;
+                        }
                     }
                 });
 
-                setChartData(last7Days);
+                setWeekData(last7Days);
+                setMonthData(last30Days);
+                setYearData(last12Months);
             } catch (error) {
                 console.error("Error fetching stats:", error);
             } finally {
@@ -149,17 +191,44 @@ export default function StatsPage() {
                 </div>
 
                 <div className="w-full max-w-4xl bg-zinc-900/40 backdrop-blur-3xl border border-white/10 rounded-[3rem] p-8 md:p-12 shadow-2xl">
-                    <div className="flex items-center justify-between mb-8">
-                        <h2 className="text-xl font-black text-white uppercase italic tracking-tighter">7-Day Focus Intensity</h2>
-                        <div className="flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-full">
-                            <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
-                            <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Live Feed</span>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                        <h2 className="text-xl font-black text-white uppercase italic tracking-tighter">
+                            {timeRange === "week" && "7-Day Focus Intensity"}
+                            {timeRange === "month" && "30-Day Focus Intensity"}
+                            {timeRange === "year" && "12-Month Focus Intensity"}
+                        </h2>
+                        <div className="flex items-center gap-2">
+                            {/* Time Range Tabs */}
+                            <div className="flex items-center bg-zinc-950/50 p-1 rounded-xl border border-white/5">
+                                {[
+                                    { id: "week", label: "Week" },
+                                    { id: "month", label: "Month" },
+                                    { id: "year", label: "Year" }
+                                ].map((tab) => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setTimeRange(tab.id as TimeRange)}
+                                        className={cn(
+                                            "px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all",
+                                            timeRange === tab.id
+                                                ? "bg-purple-500 text-white"
+                                                : "text-zinc-500 hover:text-white"
+                                        )}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-2 px-3 py-2 bg-white/5 border border-white/10 rounded-xl">
+                                <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
+                                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Live</span>
+                            </div>
                         </div>
                     </div>
 
                     <div className="h-80 w-full mt-4">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={chartData}>
+                            <BarChart data={timeRange === "week" ? weekData : timeRange === "month" ? monthData : yearData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
                                 <XAxis
                                     dataKey="date"
@@ -167,6 +236,7 @@ export default function StatsPage() {
                                     tickLine={false}
                                     tick={{ fill: '#71717a', fontSize: 10, fontWeight: 900 }}
                                     dy={10}
+                                    interval={timeRange === "month" ? 4 : 0}
                                 />
                                 <YAxis
                                     hide
@@ -191,9 +261,9 @@ export default function StatsPage() {
                                 <Bar
                                     dataKey="minutes"
                                     radius={[8, 8, 8, 8]}
-                                    barSize={40}
+                                    barSize={timeRange === "month" ? 12 : timeRange === "year" ? 30 : 40}
                                 >
-                                    {chartData.map((entry, index) => (
+                                    {(timeRange === "week" ? weekData : timeRange === "month" ? monthData : yearData).map((entry, index) => (
                                         <Cell
                                             key={`cell-${index}`}
                                             fill={entry.minutes > 0 ? "rgb(168, 85, 247)" : "rgba(168, 85, 247, 0.1)"}
