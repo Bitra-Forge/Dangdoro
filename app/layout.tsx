@@ -49,7 +49,9 @@ export default function RootLayout({
         <AuthProvider>
           {children}
           <TimerTicker />
+          <SoundEngine />
           <GlobalAuthModal />
+
 
           {/* Main Navigation Hub */}
           <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center px-4 w-full justify-center pointer-events-none">
