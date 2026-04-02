@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Play, Pause, RotateCcw, Check, X, ChevronUp, ChevronDown, Settings, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTimerStore } from "@/lib/store";
@@ -23,6 +24,7 @@ export function TimerCard() {
   } = useTimerStore();
 
   const { user } = useAuth();
+  const router = useRouter();
 
   const initialFocusTime = useTimerStore((state) => state.initialFocusTime);
   const initialBreakTime = useTimerStore((state) => state.initialBreakTime);
@@ -196,33 +198,33 @@ export function TimerCard() {
             </div>
           ) : (
             <>
-            <div className="flex items-center gap-4 md:gap-8 group/display">
-              <button
-                onClick={() => incrementTime(-adjustmentAmount * 60)}
-                className="opacity-0 group-hover/display:opacity-30 hover:!opacity-100 transition-all duration-300 transform hover:scale-110 active:scale-90 text-white"
-              >
-                <Minus className="w-6 h-6 md:w-8 md:h-8" strokeWidth={2} />
-              </button>
+              <div className="flex items-center gap-4 md:gap-8 group/display">
+                <button
+                  onClick={() => incrementTime(-adjustmentAmount * 60)}
+                  className="opacity-0 group-hover/display:opacity-30 hover:!opacity-100 transition-all duration-300 transform hover:scale-110 active:scale-90 text-white"
+                >
+                  <Minus className="w-6 h-6 md:w-8 md:h-8" strokeWidth={2} />
+                </button>
 
-              <h1
-                onClick={startEditing}
-                title="Click to edit"
-                className={cn(
-                  "text-[6rem] md:text-[8rem] font-black leading-none select-none drop-shadow-2xl cursor-pointer",
-                  "bg-gradient-to-br from-white via-white/90 to-white/60 bg-clip-text text-transparent",
-                  "font-sans transition-all duration-700 mx-2"
-                )}
-              >
-                {formatTime(timeLeft)}
-              </h1>
+                <h1
+                  onClick={startEditing}
+                  title="Click to edit"
+                  className={cn(
+                    "text-[6rem] md:text-[8rem] font-black leading-none select-none drop-shadow-2xl cursor-pointer",
+                    "bg-gradient-to-br from-white via-white/90 to-white/60 bg-clip-text text-transparent",
+                    "font-sans transition-all duration-700 mx-2"
+                  )}
+                >
+                  {formatTime(timeLeft)}
+                </h1>
 
-              <button
-                onClick={() => incrementTime(adjustmentAmount * 60)}
-                className="opacity-0 group-hover/display:opacity-30 hover:!opacity-100 transition-all duration-300 transform hover:scale-110 active:scale-90 text-white"
-              >
-                <Plus className="w-6 h-6 md:w-8 md:h-8" strokeWidth={2} />
-              </button>
-            </div>
+                <button
+                  onClick={() => incrementTime(adjustmentAmount * 60)}
+                  className="opacity-0 group-hover/display:opacity-30 hover:!opacity-100 transition-all duration-300 transform hover:scale-110 active:scale-90 text-white"
+                >
+                  <Plus className="w-6 h-6 md:w-8 md:h-8" strokeWidth={2} />
+                </button>
+              </div>
 
               {/* Progress Bar */}
               {isActive && (
@@ -291,7 +293,7 @@ export function TimerCard() {
                   variant="ghost"
                   size="icon"
                   className="h-14 w-14 rounded-full text-white/60 hover:text-white hover:bg-white/5 transition-all duration-300"
-                  onClick={() => (window.location.href = "/settings")}
+                  onClick={() => router.push("/settings")}
                 >
                   <Settings className="w-6 h-6" />
                 </Button>

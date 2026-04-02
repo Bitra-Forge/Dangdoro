@@ -49,11 +49,11 @@ export const useTimerStore = create<TimerState>()(
 
         const now = Date.now();
         const drift = now - lastUpdate;
-        
+
         // Only update if at least 1 second has passed
         if (drift >= 1000) {
           const secondsToSubtract = Math.floor(drift / 1000);
-          set({ 
+          set({
             timeLeft: Math.max(0, timeLeft - secondsToSubtract),
             lastUpdate: lastUpdate + (secondsToSubtract * 1000) // Keep the fractional drift
           });
@@ -71,12 +71,24 @@ export const useTimerStore = create<TimerState>()(
       setTime: (seconds) => set({ timeLeft: seconds }),
       incrementTime: (seconds) => set((state) => ({ timeLeft: Math.max(0, state.timeLeft + seconds) })),
       setInitialTime: (mode, seconds) => {
-        if (mode === "focus") set({ initialFocusTime: seconds });
-        else if (mode === "break") set({ initialBreakTime: seconds });
-        else if (mode === "long-break") set({ initialLongBreakTime: seconds });
+        const { initialFocusTime, initialBreakTime, initialLongBreakTime, mode: currentMode, isActive } = get();
 
-        if (get().mode === mode) {
-          set({ timeLeft: seconds, isActive: false, lastUpdate: null });
+        // Update the initial time for the specified mode
+        if (mode === "focus") {
+          if (initialFocusTime === seconds) return; // No change
+          set({ initialFocusTime: seconds });
+        } else if (mode === "break") {
+          if (initialBreakTime === seconds) return; // No change
+          set({ initialBreakTime: seconds });
+        } else if (mode === "long-break") {
+          if (initialLongBreakTime === seconds) return; // No change
+          set({ initialLongBreakTime: seconds });
+        }
+
+        // Only update current timeLeft if we are in that mode AND the timer is NOT running
+        // This prevents the timer from resetting when navigating back to the home page
+        if (currentMode === mode && !isActive) {
+          set({ timeLeft: seconds, lastUpdate: null });
         }
       },
     }),
