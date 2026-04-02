@@ -68,6 +68,26 @@ export function TimerCard() {
     };
   }, [user?.uid, setInitialTime]);
 
+  // Update browser tab title with timer
+  useEffect(() => {
+    const modeLabels = {
+      focus: "Focus",
+      break: "Break",
+      "long-break": "Long Break"
+    };
+
+    if (isActive) {
+      document.title = `${formatTime(timeLeft)} - ${modeLabels[mode]} | Dangdoro`;
+    } else {
+      document.title = "Dangdoro";
+    }
+
+    // Cleanup: reset title when component unmounts
+    return () => {
+      document.title = "Dangdoro";
+    };
+  }, [timeLeft, isActive, mode]);
+
   const formatTime = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
