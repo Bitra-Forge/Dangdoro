@@ -66,13 +66,6 @@ export function SoundPanel() {
               <div
                 key={sound.id}
                 onClick={() => toggleSound(sound.id)}
-                onWheel={(e) => {
-                  if (!isActive) return;
-                  e.stopPropagation();
-                  const delta = e.deltaY > 0 ? -5 : 5;
-                  const newVolume = Math.min(100, Math.max(0, currentVolume + delta));
-                  setSoundVolume(sound.id, newVolume);
-                }}
                 className="flex flex-col items-center group cursor-pointer relative py-2 select-none"
               >
                 {/* Name Label Above */}
@@ -86,16 +79,25 @@ export function SoundPanel() {
                 {/* Icon in Middle */}
                 <div 
                   className={cn(
-                    "transition-all duration-500 flex items-center justify-center mb-4 relative",
+                    "transition-all duration-700 ease-out flex items-center justify-center mb-4 relative",
                     isActive 
-                      ? "text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.8)] scale-110" 
+                      ? "text-white scale-110" 
                       : "text-zinc-500 group-hover:text-zinc-300"
                   )}
                 >
-                  <Icon className="w-6 h-6" />
+                  {/* Soft radial glow */}
                   {isActive && (
-                    <div className="absolute inset-0 bg-white/20 blur-xl rounded-full scale-150 animate-pulse" />
+                    <div 
+                      className="absolute w-24 h-24 -translate-x-1/2 -translate-y-1/2 left-1/2 top-1/2 pointer-events-none"
+                      style={{
+                        background: "radial-gradient(circle, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 30%, rgba(255,255,255,0) 70%)",
+                      }}
+                    />
                   )}
+                  <Icon className={cn(
+                    "w-6 h-6 relative z-10 transition-all duration-500",
+                    isActive && "drop-shadow-[0_0_12px_rgba(255,255,255,0.6)]"
+                  )} />
                 </div>
 
                 {/* Slider below */}
