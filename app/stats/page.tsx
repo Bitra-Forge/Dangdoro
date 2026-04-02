@@ -81,6 +81,7 @@ export default function StatsPage() {
                     const date = subDays(new Date(), 29 - i);
                     return {
                         date: format(date, "d"),
+                        tooltipLabel: format(date, "d MMM"),
                         fullDate: startOfDay(date),
                         minutes: 0,
                     };
@@ -246,9 +247,10 @@ export default function StatsPage() {
                                     cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 12 }}
                                     content={({ active, payload }) => {
                                         if (active && payload && payload.length) {
+                                            const label = payload[0].payload.tooltipLabel || payload[0].payload.date;
                                             return (
                                                 <div className="bg-zinc-900/90 backdrop-blur-xl border border-white/10 p-3 rounded-2xl shadow-2xl">
-                                                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">{payload[0].payload.date}</p>
+                                                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">{label}</p>
                                                     <p className="text-lg font-black text-white italic tracking-tighter">
                                                         {payload[0].value} <span className="text-purple-500 text-[10px]">MINS</span>
                                                     </p>
