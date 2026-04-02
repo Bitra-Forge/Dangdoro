@@ -19,6 +19,7 @@ export default function SettingsPage() {
         focusTime: 25,
         breakTime: 5,
         longBreakTime: 15,
+        adjustmentAmount: 1,
         notifications: true,
         sound: true
     });
@@ -123,7 +124,8 @@ export default function SettingsPage() {
                             {[
                                 { label: "Focus Duration", key: "focusTime", icon: Zap, color: "text-amber-500" },
                                 { label: "Short Break", key: "breakTime", icon: Clock, color: "text-sky-500" },
-                                { label: "Long Break", key: "longBreakTime", icon: Clock, color: "text-purple-500" }
+                                { label: "Long Break", key: "longBreakTime", icon: Clock, color: "text-purple-500" },
+                                { label: "Adjustment Step", key: "adjustmentAmount", icon: Zap, color: "text-rose-500" }
                             ].map((item) => (
                                 <div key={item.key} className="flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-2xl group hover:bg-white/10 transition-all">
                                     <div className="flex items-center gap-4">

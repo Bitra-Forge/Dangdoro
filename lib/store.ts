@@ -11,8 +11,6 @@ interface TimerState {
 
   lastUpdate: number | null;
 
-  isTransparent: boolean;
-
   // Actions
   start: () => void;
   pause: () => void;
@@ -20,8 +18,8 @@ interface TimerState {
   tick: () => void;
   setMode: (mode: "focus" | "break" | "long-break") => void;
   setTime: (seconds: number) => void;
+  incrementTime: (seconds: number) => void;
   setInitialTime: (mode: "focus" | "break" | "long-break", seconds: number) => void;
-  setTransparent: (val: boolean) => void;
 }
 
 export const useTimerStore = create<TimerState>()(
@@ -34,7 +32,6 @@ export const useTimerStore = create<TimerState>()(
       initialBreakTime: 5 * 60,
       initialLongBreakTime: 15 * 60,
       lastUpdate: null,
-      isTransparent: false,
 
       start: () => set({ isActive: true, lastUpdate: Date.now() }),
       pause: () => set({ isActive: false, lastUpdate: null }),
@@ -72,6 +69,7 @@ export const useTimerStore = create<TimerState>()(
         });
       },
       setTime: (seconds) => set({ timeLeft: seconds }),
+      incrementTime: (seconds) => set((state) => ({ timeLeft: Math.max(0, state.timeLeft + seconds) })),
       setInitialTime: (mode, seconds) => {
         if (mode === "focus") set({ initialFocusTime: seconds });
         else if (mode === "break") set({ initialBreakTime: seconds });
@@ -81,7 +79,6 @@ export const useTimerStore = create<TimerState>()(
           set({ timeLeft: seconds, isActive: false, lastUpdate: null });
         }
       },
-      setTransparent: (val) => set({ isTransparent: val })
     }),
     {
       name: "dangdoro-timer-storage",

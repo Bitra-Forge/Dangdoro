@@ -1,5 +1,6 @@
 "use client";
 
+import { Space_Grotesk } from "next/font/google";
 import { TimerCard } from "@/components/timer-card";
 import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -7,7 +8,13 @@ import { LogIn, Zap } from "lucide-react";
 import { signInGuest } from "@/lib/auth";
 import { toast } from "sonner";
 import Image from "next/image";
-import bgImage from "@/components/Backgrounds/2.jpg";
+import bgImage from "@/components/Backgrounds/BG25.png";
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-space-grotesk",
+  weight: ["300", "400", "500", "600", "700"],
+});
 
 export default function Home() {
   const { user, loading } = useAuth();
@@ -23,7 +30,8 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
+    <div className={`flex flex-col flex-1 bg-zinc-950 min-h-screen relative overflow-hidden ${spaceGrotesk.variable} font-sans`} 
+         style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
       {/* Immersive Background */}
       <div className="absolute inset-0 z-0 select-none pointer-events-none">
         <Image
@@ -71,4 +79,3 @@ export default function Home() {
     </div>
   );
 }
-
