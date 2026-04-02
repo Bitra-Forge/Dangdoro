@@ -242,7 +242,7 @@ export default function StatsPage() {
                     <div className="h-[420px] min-h-[420px] w-full mt-4 relative group/chart">
                         {mounted && (
                             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                                <AreaChart data={chartData} key={timeRange}>
+                                <AreaChart data={chartData} key={timeRange} margin={{ top: 5, right: 20, left: 20, bottom: 10 }}>
                                     <defs>
                                         <linearGradient id="colorMinutes" x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
@@ -257,6 +257,7 @@ export default function StatsPage() {
                                         tick={{ fill: '#71717a', fontSize: 10, fontWeight: 900 }}
                                         dy={10}
                                         interval={timeRange === "month" ? 4 : 0}
+                                        minTickGap={timeRange === "year" ? 0 : 5}
                                     />
                                     <YAxis
                                         hide
