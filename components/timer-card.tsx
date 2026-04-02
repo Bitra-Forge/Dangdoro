@@ -35,6 +35,12 @@ export function TimerCard() {
   const [editMins, setEditMins] = useState("");
   const [editSecs, setEditSecs] = useState("");
   const [adjustmentAmount, setAdjustmentAmount] = useState(1); // in minutes
+  const [hasHydrated, setHasHydrated] = useState(false);
+
+  // Hydration guard: only render on client after storage is loaded
+  useEffect(() => {
+    setHasHydrated(true);
+  }, []);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -131,6 +137,16 @@ export function TimerCard() {
     if (type === "m") setEditMins(p => fn(p, delta, 59));
     if (type === "s") setEditSecs(p => fn(p, delta, 59));
   };
+
+  // Prevent flicker by not rendering until hydration is complete
+  if (!hasHydrated) {
+    return (
+      <div className="flex flex-col items-center justify-center space-y-8 animate-in fade-in transition-all duration-1000 relative z-10 opacity-0">
+        {/* Placeholder to reserve space and prevent layout shift */}
+        <div className="h-[200px]" />
+      </div>
+    );
+  }
 
   return (
     <div className="group/timer flex flex-col items-center justify-center space-y-8 animate-in fade-in transition-all duration-1000 relative z-10">

@@ -5,7 +5,7 @@ interface TimerState {
   timeLeft: number; // Current mode's tracking time
   isActive: boolean;
   mode: "focus" | "break" | "long-break";
-  
+
   // Per-mode progress persistence
   focusTimeLeft: number;
   breakTimeLeft: number;
@@ -27,6 +27,7 @@ interface TimerState {
   setTime: (seconds: number) => void;
   incrementTime: (seconds: number) => void;
   setInitialTime: (mode: "focus" | "break" | "long-break", seconds: number) => void;
+  resetToDefaults: () => void;
 }
 
 export const useTimerStore = create<TimerState>()(
@@ -35,11 +36,11 @@ export const useTimerStore = create<TimerState>()(
       timeLeft: 25 * 60,
       isActive: false,
       mode: "focus",
-      
+
       focusTimeLeft: 25 * 60,
       breakTimeLeft: 5 * 60,
       longBreakTimeLeft: 15 * 60,
-      
+
       initialFocusTime: 25 * 60,
       initialBreakTime: 5 * 60,
       initialLongBreakTime: 15 * 60,
@@ -50,15 +51,15 @@ export const useTimerStore = create<TimerState>()(
       reset: () => {
         const { mode, initialFocusTime, initialBreakTime, initialLongBreakTime } = get();
         const initial = mode === "focus" ? initialFocusTime : mode === "break" ? initialBreakTime : initialLongBreakTime;
-        
+
         set({
           isActive: false,
           lastUpdate: null,
           timeLeft: initial,
           // Sync the per-mode progress on reset too
-          ...(mode === "focus" ? { focusTimeLeft: initial } : 
-             mode === "break" ? { breakTimeLeft: initial } : 
-             { longBreakTimeLeft: initial })
+          ...(mode === "focus" ? { focusTimeLeft: initial } :
+            mode === "break" ? { breakTimeLeft: initial } :
+              { longBreakTimeLeft: initial })
         });
       },
       tick: () => {
@@ -71,20 +72,20 @@ export const useTimerStore = create<TimerState>()(
         if (drift >= 1000) {
           const secondsToSubtract = Math.floor(drift / 1000);
           const newTime = Math.max(0, timeLeft - secondsToSubtract);
-          
+
           set({
             timeLeft: newTime,
             lastUpdate: lastUpdate + (secondsToSubtract * 1000),
             // Update the underlying mode-specific time
-            ...(mode === "focus" ? { focusTimeLeft: newTime } : 
-               mode === "break" ? { breakTimeLeft: newTime } : 
-               { longBreakTimeLeft: newTime })
+            ...(mode === "focus" ? { focusTimeLeft: newTime } :
+              mode === "break" ? { breakTimeLeft: newTime } :
+                { longBreakTimeLeft: newTime })
           });
         }
       },
       setMode: (newMode) => {
         const { mode: oldMode, timeLeft, focusTimeLeft, breakTimeLeft, longBreakTimeLeft } = get();
-        
+
         // Save current progress to old mode
         const updates: any = {};
         if (oldMode === "focus") updates.focusTimeLeft = timeLeft;
@@ -107,21 +108,21 @@ export const useTimerStore = create<TimerState>()(
       },
       setTime: (seconds) => {
         const { mode } = get();
-        set({ 
+        set({
           timeLeft: seconds,
-          ...(mode === "focus" ? { focusTimeLeft: seconds } : 
-             mode === "break" ? { breakTimeLeft: seconds } : 
-             { longBreakTimeLeft: seconds })
+          ...(mode === "focus" ? { focusTimeLeft: seconds } :
+            mode === "break" ? { breakTimeLeft: seconds } :
+              { longBreakTimeLeft: seconds })
         });
       },
       incrementTime: (seconds) => {
         const { mode, timeLeft } = get();
         const newTime = Math.max(0, timeLeft + seconds);
-        set({ 
+        set({
           timeLeft: newTime,
-          ...(mode === "focus" ? { focusTimeLeft: newTime } : 
-             mode === "break" ? { breakTimeLeft: newTime } : 
-             { longBreakTimeLeft: newTime })
+          ...(mode === "focus" ? { focusTimeLeft: newTime } :
+            mode === "break" ? { breakTimeLeft: newTime } :
+              { longBreakTimeLeft: newTime })
         });
       },
       setInitialTime: (mode, seconds) => {
@@ -147,6 +148,22 @@ export const useTimerStore = create<TimerState>()(
         }
 
         set(updates);
+      },
+      resetToDefaults: () => {
+        set({
+          timeLeft: 25 * 60,
+          isActive: false,
+          mode: "focus",
+
+          focusTimeLeft: 25 * 60,
+          breakTimeLeft: 5 * 60,
+          longBreakTimeLeft: 15 * 60,
+
+          initialFocusTime: 25 * 60,
+          initialBreakTime: 5 * 60,
+          initialLongBreakTime: 15 * 60,
+          lastUpdate: null,
+        });
       },
     }),
 

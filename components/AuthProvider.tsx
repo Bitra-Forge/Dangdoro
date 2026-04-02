@@ -39,8 +39,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 setUser(currentUser);
                 setLoading(false);
             } else {
-                // RESET TIMER: Ensure no session leaks after sign-out
-                useTimerStore.getState().reset();
+                // RESET TIMER & SETTINGS: Ensure no session leaks after sign-out
+                useTimerStore.getState().resetToDefaults();
 
                 // ZERO FRICTION: Automatically sign in as a guest, 
                 // UNLESS the user just manually signed out.
