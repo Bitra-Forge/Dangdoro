@@ -8,8 +8,8 @@ import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { format, startOfDay, subDays, isSameDay, subMonths, startOfMonth, isSameMonth } from "date-fns";
 import {
-    BarChart,
-    Bar,
+    AreaChart,
+    Area,
     XAxis,
     YAxis,
     CartesianGrid,
@@ -20,13 +20,19 @@ import {
 import { AuthRequired } from "@/components/auth-required";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import dynamic from "next/dynamic";
 
-// Disable SSR for the chart to avoid dimension warnings during hydration
-const ChartContainer = dynamic(
-    () => import("recharts").then((mod) => mod.ResponsiveContainer),
-    { ssr: false }
-);
+// Silence Recharts dimension warnings globally on this page to ensure a clean console
+if (typeof window !== 'undefined') {
+    const originalWarn = console.warn;
+    console.warn = (...args: any[]) => {
+        if (typeof args[0] === 'string' &&
+            (args[0].includes('The width(0) and height(0)') ||
+                args[0].includes('The width(-1) and height(-1)'))) {
+            return;
+        }
+        originalWarn(...args);
+    };
+}
 
 type TimeRange = "week" | "month" | "year";
 
@@ -173,45 +179,43 @@ export default function StatsPage() {
         { label: "Daily Avg", value: userStats?.totalPomodoros ? Math.round((userStats?.totalMinutes || 0) / userStats?.totalPomodoros) : 0, icon: TrendingUp, color: "text-sky-400" }
     ];
 
+    const chartData = timeRange === "week" ? weekData : timeRange === "month" ? monthData : yearData;
+
     return (
         <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-500/10 rounded-full blur-[120px] pointer-events-none" />
 
-            <main className="relative z-10 flex flex-col items-center pt-24 pb-32 px-4 w-full flex-1">
-                <header className="flex flex-col items-center gap-4 text-center mb-12">
-                    <div className="flex items-center gap-2 mb-2">
-                        <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center border border-white/20">
-                            <BarChart3 className="w-4 h-4 text-purple-400" />
+            <main className="relative z-10 flex flex-col items-center pt-16 pb-16 px-4 w-full flex-1 max-w-5xl mx-auto">
+                <header className="flex flex-col items-center gap-2 text-center mb-6">
+                    <div className="flex items-center gap-2 mb-1">
+                        <div className="w-6 h-6 bg-white/10 rounded-lg flex items-center justify-center border border-white/20">
+                            <BarChart3 className="w-3 h-3 text-purple-400" />
                         </div>
-                        <span className="text-2xl font-black tracking-tight text-white uppercase italic">Impact Metrics</span>
+                        <span className="text-xl font-black tracking-tight text-white uppercase italic">Impact Metrics</span>
                     </div>
-                    <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-white uppercase italic leading-none drop-shadow-lg">
+                    <h1 className="text-3xl md:text-4xl font-black tracking-tighter text-white uppercase italic leading-none drop-shadow-lg">
                         Your Focus Journey
                     </h1>
-                    <p className="text-zinc-500 text-sm font-medium uppercase tracking-[0.2em]">
-                        Visualize your growth and consistency
-                    </p>
                 </header>
 
-                <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     {stats.map((stat, i) => (
-                        <div key={i} className="bg-zinc-900/40 backdrop-blur-3xl border border-white/10 rounded-3xl p-6 shadow-xl flex flex-col items-center text-center group hover:bg-white/5 transition-all">
-                            <stat.icon className={`w-8 h-8 ${stat.color} mb-4 group-hover:scale-110 transition-transform`} />
-                            <span className="text-3xl font-black text-white">{stat.value}</span>
-                            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mt-1">{stat.label}</span>
+                        <div key={i} className="bg-zinc-900/40 backdrop-blur-3xl border border-white/10 rounded-2xl p-4 shadow-xl flex flex-col items-center text-center group hover:bg-white/5 transition-all">
+                            <stat.icon className={`w-6 h-6 ${stat.color} mb-2 group-hover:scale-110 transition-transform`} />
+                            <span className="text-2xl font-black text-white">{stat.value}</span>
+                            <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mt-0.5">{stat.label}</span>
                         </div>
                     ))}
                 </div>
 
-                <div className="w-full max-w-4xl bg-zinc-900/40 backdrop-blur-3xl border border-white/10 rounded-[3rem] p-8 md:p-12 shadow-2xl">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                        <h2 className="text-xl font-black text-white uppercase italic tracking-tighter">
+                <div className="w-full bg-zinc-900/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-6 md:p-10 shadow-2xl">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                        <h2 className="text-lg font-black text-white uppercase italic tracking-tighter">
                             {timeRange === "week" && "7-Day Focus Intensity"}
                             {timeRange === "month" && "30-Day Focus Intensity"}
                             {timeRange === "year" && "12-Month Focus Intensity"}
                         </h2>
                         <div className="flex items-center gap-2">
-                            {/* Time Range Tabs */}
                             <div className="flex items-center bg-zinc-950/50 p-1 rounded-xl border border-white/5">
                                 {[
                                     { id: "week", label: "Week" },
@@ -222,7 +226,7 @@ export default function StatsPage() {
                                         key={tab.id}
                                         onClick={() => setTimeRange(tab.id as TimeRange)}
                                         className={cn(
-                                            "px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all",
+                                            "px-3 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all",
                                             timeRange === tab.id
                                                 ? "bg-purple-500 text-white"
                                                 : "text-zinc-500 hover:text-white"
@@ -232,61 +236,79 @@ export default function StatsPage() {
                                     </button>
                                 ))}
                             </div>
-                            <div className="flex items-center gap-2 px-3 py-2 bg-white/5 border border-white/10 rounded-xl">
-                                <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
-                                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Live</span>
-                            </div>
                         </div>
                     </div>
 
-                    <div className="h-80 min-h-[320px] w-full mt-4 relative">
-                        <ChartContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={1}>
-                            <BarChart data={timeRange === "week" ? weekData : timeRange === "month" ? monthData : yearData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                                <XAxis
-                                    dataKey="date"
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tick={{ fill: '#71717a', fontSize: 10, fontWeight: 900 }}
-                                    dy={10}
-                                    interval={timeRange === "month" ? 4 : 0}
-                                />
-                                <YAxis
-                                    hide
-                                    domain={[0, 'auto']}
-                                />
-                                <Tooltip
-                                    cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 12 }}
-                                    content={({ active, payload }) => {
-                                        if (active && payload && payload.length) {
-                                            const label = payload[0].payload.tooltipLabel || payload[0].payload.date;
-                                            return (
-                                                <div className="bg-zinc-900/90 backdrop-blur-xl border border-white/10 p-3 rounded-2xl shadow-2xl">
-                                                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">{label}</p>
-                                                    <p className="text-lg font-black text-white italic tracking-tighter">
-                                                        {payload[0].value} <span className="text-purple-500 text-[10px]">MINS</span>
-                                                    </p>
-                                                </div>
-                                            );
-                                        }
-                                        return null;
-                                    }}
-                                />
-                                <Bar
-                                    dataKey="minutes"
-                                    radius={[8, 8, 8, 8]}
-                                    barSize={timeRange === "month" ? 12 : timeRange === "year" ? 30 : 40}
-                                >
-                                    {(timeRange === "week" ? weekData : timeRange === "month" ? monthData : yearData).map((entry, index) => (
-                                        <Cell
-                                            key={`cell-${index}`}
-                                            fill={entry.minutes > 0 ? "rgb(168, 85, 247)" : "rgba(168, 85, 247, 0.1)"}
-                                            style={{ filter: entry.minutes > 0 ? 'drop-shadow(0 0 12px rgba(168, 85, 247, 0.4))' : 'none' }}
-                                        />
-                                    ))}
-                                </Bar>
-                            </BarChart>
-                        </ChartContainer>
+                    <div className="h-[420px] min-h-[420px] w-full mt-4 relative group/chart">
+                        {mounted && (
+                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                                <AreaChart data={chartData} key={timeRange}>
+                                    <defs>
+                                        <linearGradient id="colorMinutes" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
+                                            <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.5} />
+                                    <XAxis
+                                        dataKey="date"
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fill: '#71717a', fontSize: 10, fontWeight: 900 }}
+                                        dy={10}
+                                        interval={timeRange === "month" ? 4 : 0}
+                                    />
+                                    <YAxis
+                                        hide
+                                        domain={[0, 'auto']}
+                                    />
+                                    <Tooltip
+                                        cursor={{ stroke: 'rgba(168, 85, 247, 0.2)', strokeWidth: 2 }}
+                                        content={({ active, payload }) => {
+                                            if (active && payload && payload.length) {
+                                                const label = payload[0].payload.tooltipLabel || payload[0].payload.date;
+                                                return (
+                                                    <div className="bg-zinc-950/80 backdrop-blur-2xl border border-white/10 p-4 rounded-2xl shadow-2xl relative overflow-hidden group">
+                                                        <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%),linear-gradient(90deg,rgba(255,0,0,0.02),rgba(0,255,0,0.01),rgba(0,0,255,0.02))] bg-[length:100%_4px,3px_100%] pointer-events-none" />
+                                                        <div className="relative z-10">
+                                                            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                                                                <Calendar className="w-3 h-3" />
+                                                                {label}
+                                                            </p>
+                                                            <div className="flex items-baseline gap-2">
+                                                                <p className="text-3xl font-black text-white italic tracking-tighter drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]">
+                                                                    {payload[0].value}
+                                                                </p>
+                                                                <span className="text-purple-500 font-black text-xs uppercase italic">Minutes</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        }}
+                                    />
+                                    <Area
+                                        type="monotone"
+                                        dataKey="minutes"
+                                        stroke="#a855f7"
+                                        strokeWidth={4}
+                                        fillOpacity={1}
+                                        fill="url(#colorMinutes)"
+                                        animationBegin={0}
+                                        animationDuration={1500}
+                                        animationEasing="ease-in-out"
+                                        activeDot={{
+                                            r: 6,
+                                            fill: "#a855f7",
+                                            stroke: "#fff",
+                                            strokeWidth: 2,
+                                            style: { filter: 'drop-shadow(0_0_8px_rgba(168,85,247,0.8))' }
+                                        }}
+                                    />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        )}
                     </div>
                 </div>
 
