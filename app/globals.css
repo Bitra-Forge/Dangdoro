@@ -49,18 +49,57 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 
   @keyframes scan {
-    0% { transform: translateY(-100%); opacity: 0; }
-    50% { opacity: 1; }
-    100% { transform: translateY(400%); opacity: 0; }
+    0% {
+      transform: translateY(-100%);
+      opacity: 0;
+    }
+
+    50% {
+      opacity: 1;
+    }
+
+    100% {
+      transform: translateY(400%);
+      opacity: 0;
+    }
+  }
+
+  @keyframes float {
+
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+
+  @keyframes pulse-slow {
+
+    0%,
+    100% {
+      opacity: 0.2;
+      transform: scale(1);
+    }
+
+    50% {
+      opacity: 0.4;
+      transform: scale(1.05);
+    }
   }
 }
 
 :root {
-  --background: oklch(0.1 0 0); /* Pure Black */
-  --foreground: oklch(0.98 0 0); /* White */
+  --background: oklch(0.1 0 0);
+  /* Pure Black */
+  --foreground: oklch(0.98 0 0);
+  /* White */
   --card: oklch(0.15 0 0 / 0.8);
   --card-foreground: oklch(0.98 0 0);
-  --primary: oklch(0.7 0.2 230); /* Vibrant Sky Blue */
+  --primary: oklch(0.7 0.2 230);
+  /* Vibrant Sky Blue */
   --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.2 0 0);
   --secondary-foreground: oklch(0.9 0 0);
@@ -88,14 +127,24 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+
   html {
     @apply font-sans;
   }
 
   .animate-scan {
     animation: scan 4s linear infinite;
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-pulse-slow {
+    animation: pulse-slow 8s ease-in-out infinite;
   }
 }
