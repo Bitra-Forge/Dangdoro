@@ -13,7 +13,8 @@ import {
     updateDoc,
     deleteDoc,
     onSnapshot,
-    where
+    where,
+    writeBatch
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage, auth } from "./firebase";
@@ -162,16 +163,28 @@ export const getLeaderboard = async (limitCount: number = 10) => {
  * Task CRUD Operations
  */
 
-export const addTask = async (userId: string, title: string, pomodoros: number = 1) => {
+export type TaskPriority = "urgent" | "high" | "normal" | "natural";
+
+export const addTask = async (
+    userId: string,
+    title: string,
+    groupId: string | null = null,
+    priority: TaskPriority = "natural",
+    pomodoros: number = 1,
+    durationMinutes: number | null = null,
+    notes: string = ""
+) => {
     try {
-        // Lazy Sync: Ensure profile exists before adding task
         if (auth.currentUser && auth.currentUser.uid === userId) {
             await syncUserProfile(auth.currentUser);
         }
-
         await addDoc(collection(db, "tasks"), {
             userId,
+            groupId,
             title,
+            notes,
+            priority,
+            durationMinutes,
             estimatedPomodoros: pomodoros,
             completedPomodoros: 0,
             completed: false,
@@ -182,6 +195,136 @@ export const addTask = async (userId: string, title: string, pomodoros: number =
         console.error("Error adding task:", error);
         return false;
     }
+};
+
+/**
+ * Task Group CRUD Operations
+ */
+
+export const addGroup = async (userId: string, name: string, x = 40, y = 140, w = 300, h = 400) => {
+    try {
+        const ref = await addDoc(collection(db, "taskGroups"), {
+            userId,
+            name,
+            positionX: x,
+            positionY: y,
+            width: w,
+            height: h,
+            createdAt: serverTimestamp(),
+        });
+        return ref.id;
+    } catch (error) {
+        console.error("Error adding group:", error);
+        return null;
+    }
+};
+
+export const renameGroup = async (groupId: string, name: string) => {
+    try {
+        await updateDoc(doc(db, "taskGroups", groupId), { name });
+        return true;
+    } catch (error) {
+        console.error("Error renaming group:", error);
+        return false;
+    }
+};
+
+export const deleteGroup = async (groupId: string, userId: string) => {
+    try {
+        const batch = writeBatch(db);
+        // Delete all tasks in the group
+        const tasksQ = query(
+            collection(db, "tasks"),
+            where("groupId", "==", groupId),
+            where("userId", "==", userId)
+        );
+        const tasksSnap = await getDocs(tasksQ);
+        tasksSnap.docs.forEach(d => batch.delete(d.ref));
+        // Delete the group itself
+        batch.delete(doc(db, "taskGroups", groupId));
+        await batch.commit();
+        return true;
+    } catch (error) {
+        console.error("Error deleting group:", error);
+        return false;
+    }
+};
+
+export const updateGroupPosition = async (groupId: string, x: number, y: number) => {
+    try {
+        await updateDoc(doc(db, "taskGroups", groupId), { positionX: x, positionY: y });
+        return true;
+    } catch (error) {
+        console.error("Error updating group position:", error);
+        return false;
+    }
+};
+
+export const updateGroupDimensions = async (groupId: string, w: number, h: number) => {
+    try {
+        await updateDoc(doc(db, "taskGroups", groupId), { width: w, height: h });
+        return true;
+    } catch (error) {
+        console.error("Error updating group dimensions:", error);
+        return false;
+    }
+};
+
+export const moveTaskToGroup = async (taskId: string, newGroupId: string | null) => {
+    try {
+        await updateDoc(doc(db, "tasks", taskId), { groupId: newGroupId });
+        return true;
+    } catch (error) {
+        console.error("Error moving task:", error);
+        return false;
+    }
+};
+
+export const updateTaskPriority = async (taskId: string, priority: TaskPriority) => {
+    try {
+        await updateDoc(doc(db, "tasks", taskId), { priority });
+        return true;
+    } catch (error) {
+        console.error("Error updating task priority:", error);
+        return false;
+    }
+};
+
+export const updateTaskField = async (taskId: string, fields: { title?: string; durationMinutes?: number | null; notes?: string }) => {
+    try {
+        await updateDoc(doc(db, "tasks", taskId), fields);
+        return true;
+    } catch (error) {
+        console.error("Error updating task:", error);
+        return false;
+    }
+};
+
+export const subscribeToGroups = (userId: string, callback: (groups: any[]) => void) => {
+    if (!userId) return () => { };
+
+    let activeUnsub: (() => void) | null = null;
+    let isCancelled = false;
+
+    const q = query(
+        collection(db, "taskGroups"),
+        where("userId", "==", userId),
+        orderBy("createdAt", "asc")
+    );
+
+    activeUnsub = onSnapshot(q, (snap) => {
+        if (isCancelled) return;
+        callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => {
+        if (!isCancelled) {
+            console.error("Error subscribing to groups:", error);
+        }
+    });
+
+    return () => {
+        isCancelled = true;
+        if (activeUnsub) activeUnsub();
+    };
 };
 
 export const toggleTask = async (taskId: string, completed: boolean) => {
@@ -223,27 +366,7 @@ export const subscribeToTasks = (userId: string, callback: (tasks: any[]) => voi
             const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             callback(tasks);
         }, (error) => {
-            if (isCancelled) return;
-
-            if (error.code === 'failed-precondition') {
-                console.warn("Firestore index required for optimized query. Falling back to client-side filter.");
-                if (activeUnsubscribe) activeUnsubscribe();
-
-                const fallbackQ = query(
-                    collection(db, "tasks"),
-                    orderBy("createdAt", "desc")
-                );
-
-                activeUnsubscribe = onSnapshot(fallbackQ, (fallbackSnap) => {
-                    if (isCancelled) return;
-                    const tasks = fallbackSnap.docs
-                        .map(doc => ({ id: doc.id, ...doc.data() }))
-                        .filter((t: any) => t.userId === userId);
-                    callback(tasks);
-                }, (err) => {
-                    if (!isCancelled) console.error("Fallback subscriber error:", err);
-                });
-            } else {
+            if (!isCancelled) {
                 console.error("Error subscribing to tasks:", error);
             }
         });

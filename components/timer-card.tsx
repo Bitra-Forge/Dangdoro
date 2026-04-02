@@ -20,7 +20,9 @@ export function TimerCard() {
     reset,
     setMode,
     setInitialTime,
-    incrementTime
+    incrementTime,
+    activeTaskLabel,
+    clearTask,
   } = useTimerStore();
 
   const { user } = useAuth();
@@ -54,9 +56,12 @@ export function TimerCard() {
             const data = docSnap.data();
             if (data.settings) {
               const { focusTime, breakTime, longBreakTime, adjustmentAmount: adj } = data.settings;
-              if (focusTime) setInitialTime("focus", focusTime * 60);
-              if (breakTime) setInitialTime("break", breakTime * 60);
-              if (longBreakTime) setInitialTime("long-break", longBreakTime * 60);
+              // If we have an active task loaded, don't let default settings override it immediately
+              if (!activeTaskLabel) {
+                if (focusTime) setInitialTime("focus", focusTime * 60);
+                if (breakTime) setInitialTime("break", breakTime * 60);
+                if (longBreakTime) setInitialTime("long-break", longBreakTime * 60);
+              }
               if (adj) setAdjustmentAmount(adj);
             }
           }
@@ -287,8 +292,6 @@ export function TimerCard() {
                 </span>
               </div>
 
-
-
               <div className={cn(
                 "flex items-center gap-4 mt-8 transition-all duration-500",
                 isActive && "opacity-0 group-hover/timer:opacity-100"
@@ -343,6 +346,6 @@ export function TimerCard() {
           )}
         </div>
       </div>
-    </div>
+    </div >
   );
 }

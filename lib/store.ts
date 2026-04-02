@@ -18,6 +18,14 @@ interface TimerState {
 
   lastUpdate: number | null;
 
+  // Active task from task page
+  activeTaskId: string | null;
+  activeTaskLabel: string | null;
+  activeTaskNotes: string | null;
+  activeTaskPriority: string | null; // using string to avoid circular dependency
+  loadTask: (id: string, label: string, durationSeconds: number, priority: string, notes: string) => void;
+  clearTask: () => void;
+
   // Actions
   start: () => void;
   pause: () => void;
@@ -34,7 +42,7 @@ interface TimerState {
   setIsBgPanelOpen: (open: boolean) => void;
   isSoundPanelOpen: boolean;
   setIsSoundPanelOpen: (open: boolean) => void;
-  activeSounds: Record<string, number>; // soundId -> volume (0-100)
+  activeSounds: Record<string, number>;
   toggleSound: (soundId: string) => void;
   setSoundVolume: (soundId: string, volume: number) => void;
 }
@@ -59,6 +67,27 @@ export const useTimerStore = create<TimerState>()(
       lastUpdate: null,
 
       backgroundImage: "BG25.png", // Default background
+
+      activeTaskId: null,
+      activeTaskLabel: null,
+      activeTaskNotes: null,
+      activeTaskPriority: null,
+
+      loadTask: (id, label, durationSeconds, priority, notes) => {
+        set({
+          mode: "focus",
+          timeLeft: durationSeconds,
+          focusTimeLeft: durationSeconds,
+          initialFocusTime: durationSeconds,
+          isActive: false,
+          lastUpdate: null,
+          activeTaskId: id,
+          activeTaskLabel: label,
+          activeTaskNotes: notes,
+          activeTaskPriority: priority,
+        });
+      },
+      clearTask: () => set({ activeTaskId: null, activeTaskLabel: null, activeTaskNotes: null, activeTaskPriority: null }),
 
       start: () => set({ isActive: true, lastUpdate: Date.now() }),
       pause: () => set({ isActive: false, lastUpdate: null }),

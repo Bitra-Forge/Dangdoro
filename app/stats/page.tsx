@@ -21,18 +21,7 @@ import { AuthRequired } from "@/components/auth-required";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-// Silence Recharts dimension warnings globally on this page to ensure a clean console
-if (typeof window !== 'undefined') {
-    const originalWarn = console.warn;
-    console.warn = (...args: any[]) => {
-        if (typeof args[0] === 'string' &&
-            (args[0].includes('The width(0) and height(0)') ||
-                args[0].includes('The width(-1) and height(-1)'))) {
-            return;
-        }
-        originalWarn(...args);
-    };
-}
+
 
 type TimeRange = "week" | "month" | "year";
 
