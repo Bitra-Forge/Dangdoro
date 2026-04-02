@@ -29,7 +29,8 @@ export default function SettingsPage() {
     const [inputValues, setInputValues] = useState<Record<string, string>>({
         focusTime: "25",
         breakTime: "5",
-        longBreakTime: "15"
+        longBreakTime: "15",
+        adjustmentAmount: "1"
     });
 
     useEffect(() => {
@@ -47,7 +48,8 @@ export default function SettingsPage() {
                     setInputValues({
                         focusTime: String(data.settings.focusTime ?? 25),
                         breakTime: String(data.settings.breakTime ?? 5),
-                        longBreakTime: String(data.settings.longBreakTime ?? 15)
+                        longBreakTime: String(data.settings.longBreakTime ?? 15),
+                        adjustmentAmount: String(data.settings.adjustmentAmount ?? 1)
                     });
                 }
             }

@@ -198,12 +198,12 @@ export function TimerCard() {
             </div>
           ) : (
             <>
-              <div className="flex items-center gap-4 md:gap-8 group/display">
+              <div className="flex items-center gap-6 md:gap-10 justify-center">
                 <button
                   onClick={() => incrementTime(-adjustmentAmount * 60)}
-                  className="opacity-0 group-hover/display:opacity-30 hover:!opacity-100 transition-all duration-300 transform hover:scale-110 active:scale-90 text-white"
+                  className="opacity-0 group-hover/timer:opacity-100 transition-all duration-300 transform hover:scale-110 active:scale-90 text-white"
                 >
-                  <Minus className="w-6 h-6 md:w-8 md:h-8" strokeWidth={2} />
+                  <Minus className="w-5 h-5 md:w-6 md:h-6" strokeWidth={2.5} />
                 </button>
 
                 <h1
@@ -220,33 +220,38 @@ export function TimerCard() {
 
                 <button
                   onClick={() => incrementTime(adjustmentAmount * 60)}
-                  className="opacity-0 group-hover/display:opacity-30 hover:!opacity-100 transition-all duration-300 transform hover:scale-110 active:scale-90 text-white"
+                  className="opacity-0 group-hover/timer:opacity-100 transition-all duration-300 transform hover:scale-110 active:scale-90 text-white"
                 >
-                  <Plus className="w-6 h-6 md:w-8 md:h-8" strokeWidth={2} />
+                  <Plus className="w-5 h-5 md:w-6 md:h-6" strokeWidth={2.5} />
                 </button>
               </div>
 
-              {/* Progress Bar */}
-              {isActive && (
-                <div className="flex items-center gap-4 w-[320px] mt-2 mb-2 group/progress">
-                  <div className="flex-1 h-[2px] bg-white/5 rounded-full relative transition-all duration-1000">
-                    <div
-                      className={cn(
-                        "absolute left-0 top-0 h-full transition-all duration-1000 ease-linear rounded-full",
-                        mode === "focus" && "shadow-[0_0_10px_rgba(56,189,248,1),0_0_20px_rgba(56,189,248,0.6)] bg-sky-400",
-                        mode === "break" && "shadow-[0_0_10px_rgba(52,211,153,1),0_0_20px_rgba(52,211,153,0.6)] bg-emerald-400",
-                        mode === "long-break" && "shadow-[0_0_10px_rgba(192,132,252,1),0_0_20px_rgba(192,132,252,0.6)] bg-purple-400"
-                      )}
-                      style={{
-                        width: `${Math.min(100, Math.max(0, (1 - (timeLeft / (mode === "focus" ? initialFocusTime : mode === "break" ? initialBreakTime : initialLongBreakTime))) * 100))}%`
-                      }}
-                    />
-                  </div>
-                  <span className="text-[10px] font-black text-white tracking-widest uppercase tabular-nums">
-                    {Math.round(Math.min(100, Math.max(0, (1 - (timeLeft / (mode === "focus" ? initialFocusTime : mode === "break" ? initialBreakTime : initialLongBreakTime))) * 100)))}%
-                  </span>
+
+              {/* Progress Bar Section */}
+              <div className="flex items-center gap-4 w-[320px] mt-2 mb-2 group/progress">
+                <div className="flex-1 h-[2px] bg-white/5 rounded-full relative transition-all duration-1000">
+                  <div
+                    className={cn(
+                      "absolute left-0 top-0 h-full transition-all duration-1000 ease-linear rounded-full",
+                      !isActive && "opacity-0 group-hover/timer:opacity-100",
+                      mode === "focus" && "shadow-[0_0_10px_rgba(56,189,248,1),0_0_20px_rgba(56,189,248,0.6)] bg-sky-400",
+                      mode === "break" && "shadow-[0_0_10px_rgba(52,211,153,1),0_0_20px_rgba(52,211,153,0.6)] bg-emerald-400",
+                      mode === "long-break" && "shadow-[0_0_10px_rgba(192,132,252,1),0_0_20px_rgba(192,132,252,0.6)] bg-purple-400"
+                    )}
+                    style={{
+                      width: `${Math.min(100, Math.max(0, (1 - (timeLeft / (mode === "focus" ? initialFocusTime : mode === "break" ? initialBreakTime : initialLongBreakTime))) * 100))}%`
+                    }}
+                  />
                 </div>
-              )}
+                <span className={cn(
+                  "text-[10px] font-black text-white tracking-widest uppercase tabular-nums transition-opacity duration-300",
+                  !isActive && "opacity-0 group-hover/timer:opacity-100"
+                )}>
+                  {Math.round(Math.min(100, Math.max(0, (1 - (timeLeft / (mode === "focus" ? initialFocusTime : mode === "break" ? initialBreakTime : initialLongBreakTime))) * 100)))}%
+                </span>
+              </div>
+
+
 
               <div className={cn(
                 "flex items-center gap-4 mt-8 transition-all duration-500",

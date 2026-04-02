@@ -35,17 +35,6 @@ export default function Home() {
       </div>
 
       <main className="relative z-10 flex flex-col items-center justify-center pt-24 pb-32 px-4 w-full flex-1">
-        <header className="flex flex-col items-center gap-4 text-center mb-12">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(56,189,248,0.4)]">
-              <div className="w-4 h-4 bg-sky-500 rounded-sm" />
-            </div>
-            <span className="text-2xl font-black tracking-tight text-white uppercase italic">Dangdoro</span>
-          </div>
-          <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-white uppercase italic leading-none drop-shadow-lg">
-            Focus. Compete. Win.
-          </h1>
-        </header>
 
         <div className="w-full max-w-4xl flex items-center justify-center animate-in fade-in duration-700">
           <TimerCard />
