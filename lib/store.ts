@@ -32,7 +32,14 @@ interface TimerState {
   setBackgroundImage: (image: string) => void;
   isBgPanelOpen: boolean;
   setIsBgPanelOpen: (open: boolean) => void;
+  isSoundPanelOpen: boolean;
+  setIsSoundPanelOpen: (open: boolean) => void;
+  activeSounds: Record<string, number>; // soundId -> volume (0-100)
+  toggleSound: (soundId: string) => void;
+  setSoundVolume: (soundId: string, volume: number) => void;
 }
+
+
 
 
 export const useTimerStore = create<TimerState>()(
@@ -174,8 +181,29 @@ export const useTimerStore = create<TimerState>()(
       },
       setBackgroundImage: (image: string) => set({ backgroundImage: image }),
       isBgPanelOpen: false,
-      setIsBgPanelOpen: (open: boolean) => set({ isBgPanelOpen: open }),
+      setIsBgPanelOpen: (open: boolean) => set({ isBgPanelOpen: open, isSoundPanelOpen: open ? false : get().isSoundPanelOpen }),
+      isSoundPanelOpen: false,
+      setIsSoundPanelOpen: (open: boolean) => set({ isSoundPanelOpen: open, isBgPanelOpen: open ? false : get().isBgPanelOpen }),
+      activeSounds: {},
+      toggleSound: (soundId: string) => {
+        const { activeSounds } = get();
+        const newSounds = { ...activeSounds };
+        if (newSounds[soundId] !== undefined) {
+          delete newSounds[soundId];
+        } else {
+          newSounds[soundId] = 50; // Default volume for new active sound
+        }
+        set({ activeSounds: newSounds });
+      },
+      setSoundVolume: (soundId: string, volume: number) => {
+        const { activeSounds } = get();
+        if (activeSounds[soundId] !== undefined) {
+          set({ activeSounds: { ...activeSounds, [soundId]: volume } });
+        }
+      },
     }),
+
+
 
 
 
