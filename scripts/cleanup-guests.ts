@@ -45,28 +45,38 @@ async function cleanupAnonymousUsers() {
             for (const userRecord of listUsersResult.users) {
                 // We only target anonymous users (no providers)
                 if (userRecord.providerData.length === 0) {
-                    const uid = userRecord.uid;
-                    console.log(`🧹 Cleaning up guest: ${uid}`);
+                    const lastSignIn = userRecord.metadata.lastSignInTime;
+                    const lastSignInDate = new Date(lastSignIn || userRecord.metadata.creationTime);
+                    const now = new Date();
+                    const hoursSinceLastActive = (now.getTime() - lastSignInDate.getTime()) / (1000 * 60 * 60);
 
-                    // A. Delete Firestore Profile
-                    await db.collection('users').doc(uid).delete();
+                    // Only delete if inactive for more than 24 hours
+                    if (hoursSinceLastActive >= 24) {
+                        const uid = userRecord.uid;
+                        console.log(`🧹 Cleaning up guest: ${uid} (Inactive for ${hoursSinceLastActive.toFixed(1)}h)`);
 
-                    // B. Delete associated Tasks
-                    const tasksSnapshot = await db.collection('tasks').where('userId', '==', uid).get();
-                    const taskBatch = db.batch();
-                    tasksSnapshot.docs.forEach(doc => taskBatch.delete(doc.ref));
-                    await taskBatch.commit();
+                        // A. Delete Firestore Profile
+                        await db.collection('users').doc(uid).delete();
 
-                    // C. Delete associated Sessions
-                    const sessionsSnapshot = await db.collection('sessions').where('userId', '==', uid).get();
-                    const sessionBatch = db.batch();
-                    sessionsSnapshot.docs.forEach(doc => sessionBatch.delete(doc.ref));
-                    await sessionBatch.commit();
+                        // B. Delete associated Tasks
+                        const tasksSnapshot = await db.collection('tasks').where('userId', '==', uid).get();
+                        const taskBatch = db.batch();
+                        tasksSnapshot.docs.forEach(doc => taskBatch.delete(doc.ref));
+                        await taskBatch.commit();
 
-                    // D. Delete from Auth
-                    await auth.deleteUser(uid);
+                        // C. Delete associated Sessions
+                        const sessionsSnapshot = await db.collection('sessions').where('userId', '==', uid).get();
+                        const sessionBatch = db.batch();
+                        sessionsSnapshot.docs.forEach(doc => sessionBatch.delete(doc.ref));
+                        await sessionBatch.commit();
 
-                    deletedCount++;
+                        // D. Delete from Auth
+                        await auth.deleteUser(uid);
+
+                        deletedCount++;
+                    } else {
+                        console.log(`⏭️ Skipping active guest: ${userRecord.uid} (Last active ${hoursSinceLastActive.toFixed(1)}h ago)`);
+                    }
                 }
             }
             nextPageToken = listUsersResult.pageToken;
