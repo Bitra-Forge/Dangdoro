@@ -232,7 +232,7 @@ export default function LeaderboardPage() {
                         </div>
 
                         {/* OTHER NEIGHBORS LIST */}
-                        <div className="w-full max-w-4xl space-y-4">
+                        <div className="w-full max-w-4xl space-y-4 mt-10">
                             <div className="flex items-center gap-6 justify-center mb-8 w-full">
                                 <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-zinc-800 to-transparent shadow-[0_0_10px_rgba(255,255,255,0.05)]" />
                                 <h3 className="text-zinc-500 font-sans text-[12px] font-black tracking-[0.5em] uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.15)]">
@@ -269,11 +269,18 @@ export default function LeaderboardPage() {
 
                                         <div className="flex items-center gap-12 pr-4 text-right">
                                             <div className="flex flex-col">
-                                                <div className="flex items-center gap-2 justify-end">
-                                                    <Clock className="w-3 h-3 text-zinc-700" />
-                                                    <span className="text-sm font-bold text-zinc-400 group-hover:text-white">
-                                                        {Math.floor(player.totalMinutes / 60) > 0 ? `${Math.floor(player.totalMinutes / 60)}h ${player.totalMinutes % 60}m` : `${player.totalMinutes}m`}
-                                                    </span>
+                                                <div className="flex items-center gap-1.5 justify-end">
+                                                    <div className="flex items-baseline gap-1">
+                                                        {Math.floor(player.totalMinutes / 60) > 0 && (
+                                                            <span className="text-sm font-sans font-bold text-white leading-none">
+                                                                {Math.floor(player.totalMinutes / 60)}h
+                                                            </span>
+                                                        )}
+                                                        <span className="text-sm font-sans font-bold text-[#C9B037] leading-none">
+                                                            {player.totalMinutes % 60}m
+                                                        </span>
+                                                    </div>
+                                                    <Clock className="w-3.5 h-3.5 text-[#C9B037]/70" />
                                                 </div>
                                             </div>
                                             <div className="flex flex-col">

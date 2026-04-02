@@ -148,6 +148,7 @@ export const getLeaderboard = async (limitCount: number = 10) => {
     const usersRef = collection(db, "users");
     const q = query(
         usersRef,
+        orderBy("totalMinutes", "desc"),
         orderBy("totalPomodoros", "desc"),
         limit(limitCount)
     );
