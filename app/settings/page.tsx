@@ -131,8 +131,8 @@ export default function SettingsPage() {
     }
 
     const timerFields = [
-        { label: "Focus Duration", key: "focusTime", icon: Zap, accent: "text-amber-400", border: "border-amber-500/20", glow: "shadow-amber-500/10", bg: "bg-amber-500/10" },
-        { label: "Short Break", key: "breakTime", icon: Clock, accent: "text-sky-400", border: "border-sky-500/20", glow: "shadow-sky-500/10", bg: "bg-sky-500/10" },
+        { label: "Focus Duration", key: "focusTime", icon: Zap, accent: "text-blue-400", border: "border-blue-500/20", glow: "shadow-blue-500/10", bg: "bg-blue-500/10" },
+        { label: "Short Break", key: "breakTime", icon: Clock, accent: "text-green-400", border: "border-green-500/20", glow: "shadow-green-500/10", bg: "bg-green-500/10" },
         { label: "Long Break", key: "longBreakTime", icon: Clock, accent: "text-purple-400", border: "border-purple-500/20", glow: "shadow-purple-500/10", bg: "bg-purple-500/10" },
         { label: "Adjustment Step", key: "adjustmentAmount", icon: Zap, accent: "text-rose-400", border: "border-rose-500/20", glow: "shadow-rose-500/10", bg: "bg-rose-500/10" }
     ];
@@ -170,8 +170,8 @@ export default function SettingsPage() {
                                 onClick={handleSaveSettings}
                                 disabled={!hasChanges || saving}
                                 className={`flex items-center gap-2 px-6 h-10 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all duration-300 ${hasChanges
-                                        ? "bg-sky-500 text-black hover:bg-sky-400 shadow-lg shadow-sky-500/25 active:scale-95"
-                                        : "bg-zinc-900/60 text-zinc-600 border border-white/5 cursor-not-allowed"
+                                    ? "bg-sky-500 text-black hover:bg-sky-400 shadow-lg shadow-sky-500/25 active:scale-95"
+                                    : "bg-zinc-900/60 text-zinc-600 border border-white/5 cursor-not-allowed"
                                     }`}
                             >
                                 {saving ? (
@@ -223,7 +223,7 @@ export default function SettingsPage() {
                                         <div className={`w-9 h-9 rounded-xl ${item.bg} border ${item.border} flex items-center justify-center flex-shrink-0 shadow-md ${item.glow}`}>
                                             <item.icon className={`w-4 h-4 ${item.accent}`} />
                                         </div>
-                                        <span className="text-sm font-bold text-zinc-300 group-hover:text-white transition-colors">
+                                        <span className="text-base font-bold text-zinc-300 group-hover:text-white transition-colors">
                                             {item.label}
                                         </span>
                                     </div>
@@ -255,9 +255,9 @@ export default function SettingsPage() {
                                                         handleUpdateSetting(item.key, val);
                                                     }
                                                 }}
-                                                className="w-10 text-center font-black text-white italic bg-transparent border-none outline-none text-sm"
+                                                className="w-12 text-center font-black text-white italic bg-transparent border-none outline-none text-lg"
                                             />
-                                            <span className={`text-xs font-black italic ${item.accent}`}>m</span>
+                                            <span className={`text-sm font-black italic ${item.accent}`}>m</span>
                                         </div>
                                         <button
                                             onClick={() => handleUpdateSetting(item.key, Math.min(120, (settings as any)[item.key] + (settings as any).adjustmentAmount))}
