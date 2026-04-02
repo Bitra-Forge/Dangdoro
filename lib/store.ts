@@ -2,9 +2,16 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 interface TimerState {
-  timeLeft: number; // in seconds
+  timeLeft: number; // Current mode's tracking time
   isActive: boolean;
   mode: "focus" | "break" | "long-break";
+  
+  // Per-mode progress persistence
+  focusTimeLeft: number;
+  breakTimeLeft: number;
+  longBreakTimeLeft: number;
+
+  // Initial settings
   initialFocusTime: number;
   initialBreakTime: number;
   initialLongBreakTime: number;
@@ -28,6 +35,11 @@ export const useTimerStore = create<TimerState>()(
       timeLeft: 25 * 60,
       isActive: false,
       mode: "focus",
+      
+      focusTimeLeft: 25 * 60,
+      breakTimeLeft: 5 * 60,
+      longBreakTimeLeft: 15 * 60,
+      
       initialFocusTime: 25 * 60,
       initialBreakTime: 5 * 60,
       initialLongBreakTime: 15 * 60,
@@ -37,61 +49,107 @@ export const useTimerStore = create<TimerState>()(
       pause: () => set({ isActive: false, lastUpdate: null }),
       reset: () => {
         const { mode, initialFocusTime, initialBreakTime, initialLongBreakTime } = get();
+        const initial = mode === "focus" ? initialFocusTime : mode === "break" ? initialBreakTime : initialLongBreakTime;
+        
         set({
           isActive: false,
           lastUpdate: null,
-          timeLeft: mode === "focus" ? initialFocusTime : mode === "break" ? initialBreakTime : initialLongBreakTime,
+          timeLeft: initial,
+          // Sync the per-mode progress on reset too
+          ...(mode === "focus" ? { focusTimeLeft: initial } : 
+             mode === "break" ? { breakTimeLeft: initial } : 
+             { longBreakTimeLeft: initial })
         });
       },
       tick: () => {
-        const { timeLeft, isActive, lastUpdate } = get();
+        const { timeLeft, isActive, lastUpdate, mode } = get();
         if (!isActive || !lastUpdate) return;
 
         const now = Date.now();
         const drift = now - lastUpdate;
 
-        // Only update if at least 1 second has passed
         if (drift >= 1000) {
           const secondsToSubtract = Math.floor(drift / 1000);
+          const newTime = Math.max(0, timeLeft - secondsToSubtract);
+          
           set({
-            timeLeft: Math.max(0, timeLeft - secondsToSubtract),
-            lastUpdate: lastUpdate + (secondsToSubtract * 1000) // Keep the fractional drift
+            timeLeft: newTime,
+            lastUpdate: lastUpdate + (secondsToSubtract * 1000),
+            // Update the underlying mode-specific time
+            ...(mode === "focus" ? { focusTimeLeft: newTime } : 
+               mode === "break" ? { breakTimeLeft: newTime } : 
+               { longBreakTimeLeft: newTime })
           });
         }
       },
-      setMode: (mode) => {
-        const { initialFocusTime, initialBreakTime, initialLongBreakTime } = get();
+      setMode: (newMode) => {
+        const { mode: oldMode, timeLeft, focusTimeLeft, breakTimeLeft, longBreakTimeLeft } = get();
+        
+        // Save current progress to old mode
+        const updates: any = {};
+        if (oldMode === "focus") updates.focusTimeLeft = timeLeft;
+        if (oldMode === "break") updates.breakTimeLeft = timeLeft;
+        if (oldMode === "long-break") updates.longBreakTimeLeft = timeLeft;
+
+        // Load progress for new mode
+        let nextTimeLeft = updates.focusTimeLeft || focusTimeLeft; // Fallback if just updated
+        if (newMode === "focus") nextTimeLeft = (updates.focusTimeLeft !== undefined ? updates.focusTimeLeft : focusTimeLeft);
+        if (newMode === "break") nextTimeLeft = (updates.breakTimeLeft !== undefined ? updates.breakTimeLeft : breakTimeLeft);
+        if (newMode === "long-break") nextTimeLeft = (updates.longBreakTimeLeft !== undefined ? updates.longBreakTimeLeft : longBreakTimeLeft);
+
         set({
-          mode,
-          lastUpdate: null, // Reset tracking on mode change
-          timeLeft: mode === "focus" ? initialFocusTime : mode === "break" ? initialBreakTime : initialLongBreakTime,
-          isActive: false // Stop on mode change
+          ...updates,
+          mode: newMode,
+          timeLeft: nextTimeLeft,
+          lastUpdate: null,
+          isActive: false
         });
       },
-      setTime: (seconds) => set({ timeLeft: seconds }),
-      incrementTime: (seconds) => set((state) => ({ timeLeft: Math.max(0, state.timeLeft + seconds) })),
+      setTime: (seconds) => {
+        const { mode } = get();
+        set({ 
+          timeLeft: seconds,
+          ...(mode === "focus" ? { focusTimeLeft: seconds } : 
+             mode === "break" ? { breakTimeLeft: seconds } : 
+             { longBreakTimeLeft: seconds })
+        });
+      },
+      incrementTime: (seconds) => {
+        const { mode, timeLeft } = get();
+        const newTime = Math.max(0, timeLeft + seconds);
+        set({ 
+          timeLeft: newTime,
+          ...(mode === "focus" ? { focusTimeLeft: newTime } : 
+             mode === "break" ? { breakTimeLeft: newTime } : 
+             { longBreakTimeLeft: newTime })
+        });
+      },
       setInitialTime: (mode, seconds) => {
-        const { initialFocusTime, initialBreakTime, initialLongBreakTime, mode: currentMode, isActive } = get();
+        const { mode: currentMode, isActive, initialFocusTime, initialBreakTime, initialLongBreakTime, focusTimeLeft, breakTimeLeft, longBreakTimeLeft } = get();
 
-        // Update the initial time for the specified mode
+        const updates: any = {};
         if (mode === "focus") {
-          if (initialFocusTime === seconds) return; // No change
-          set({ initialFocusTime: seconds });
+          updates.initialFocusTime = seconds;
+          // Only update current progress if it was at the old initial (reset state)
+          if (focusTimeLeft === initialFocusTime) updates.focusTimeLeft = seconds;
         } else if (mode === "break") {
-          if (initialBreakTime === seconds) return; // No change
-          set({ initialBreakTime: seconds });
+          updates.initialBreakTime = seconds;
+          if (breakTimeLeft === initialBreakTime) updates.breakTimeLeft = seconds;
         } else if (mode === "long-break") {
-          if (initialLongBreakTime === seconds) return; // No change
-          set({ initialLongBreakTime: seconds });
+          updates.initialLongBreakTime = seconds;
+          if (longBreakTimeLeft === initialLongBreakTime) updates.longBreakTimeLeft = seconds;
         }
 
-        // Only update current timeLeft if we are in that mode AND the timer is NOT running
-        // This prevents the timer from resetting when navigating back to the home page
+        // Sync main timeLeft if we are currently in this mode and not active
         if (currentMode === mode && !isActive) {
-          set({ timeLeft: seconds, lastUpdate: null });
+          updates.timeLeft = seconds;
+          updates.lastUpdate = null;
         }
+
+        set(updates);
       },
     }),
+
     {
       name: "dangdoro-timer-storage",
     }
