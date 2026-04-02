@@ -24,52 +24,86 @@ import { User, updateProfile } from "firebase/auth";
  * This ensures every user (including anonymous ones) has a profile document.
  */
 export const syncUserProfile = async (user: User) => {
-    const userRef = doc(db, "users", user.uid);
-    const userSnap = await getDoc(userRef);
+    try {
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
 
-    if (!userSnap.exists()) {
-        // Initial profile creation
-        await setDoc(userRef, {
-            uid: user.uid,
-            displayName: user.displayName || (user.isAnonymous ? "Guest Master" : "Focus Hero"),
-            photoURL: user.photoURL || null,
-            email: user.email || null,
-            totalPomodoros: 0,
-            totalMinutes: 0,
-            lastActive: serverTimestamp(),
-            createdAt: serverTimestamp(),
-            isAnonymous: user.isAnonymous
-        });
-    } else {
-        const existingData = userSnap.data();
+        if (!userSnap.exists()) {
+            console.log(`syncUserProfile: Creating new Firestore profile for: ${user.uid}`);
+            // Generate a unique signature for guests (e.g., Guest #8F2A)
+            const signature = user.uid.slice(0, 4).toUpperCase();
+            const finalName = user.isAnonymous ? `Guest #${signature}` : "Focus Hero";
 
-        const updateData: any = {
-            lastActive: serverTimestamp(),
-            isAnonymous: user.isAnonymous,
-            email: user.email || existingData.email,
-        };
+            // Initial profile creation
+            await setDoc(userRef, {
+                uid: user.uid,
+                displayName: user.displayName || finalName,
+                photoURL: user.photoURL || null,
+                email: user.email || null,
+                totalPomodoros: 0,
+                totalMinutes: 0,
+                lastActive: serverTimestamp(),
+                createdAt: serverTimestamp(),
+                isAnonymous: user.isAnonymous
+            });
 
-        if (!user.isAnonymous) {
-            // Find data in providerDetails for more reliability
-            const provider = user.providerData[0];
-            const nameFromProvider = provider?.displayName;
-            const photoFromProvider = provider?.photoURL;
+            // Sync the name BACK to the Auth user so the Header sees it immediately
+            const nameToSync = user.displayName || finalName;
+            if (user.displayName !== nameToSync) {
+                console.log(`syncUserProfile: Syncing name "${nameToSync}" back to Auth user profile.`);
+                await updateProfile(user, { displayName: nameToSync });
+            }
+        } else {
+            console.log(`syncUserProfile: Updating existing profile for: ${user.uid}`);
+            const existingData = userSnap.data();
 
-            // Priority: New Auth data > Provider data > Existing Firestore data
-            // We specifically want to overwrite "Guest Master" if we have a real name
-            const currentName = user.displayName || nameFromProvider || existingData.displayName;
+            const updateData: any = {
+                lastActive: serverTimestamp(),
+                isAnonymous: user.isAnonymous,
+                email: user.email || existingData.email,
+            };
 
-            if (currentName && currentName !== "Guest Master") {
-                updateData.displayName = currentName;
-            } else if (!existingData.displayName || existingData.displayName === "Guest Master") {
-                // If it's still default or null, try to use whatever we have, even if it's "Focus Hero"
-                updateData.displayName = currentName || "Focus Hero";
+            // If user is NOT anonymous (Google/Email), we update their profile info from the provider
+            if (!user.isAnonymous) {
+                // ... (Verified user logic)
+                const provider = user.providerData[0];
+                const nameFromProvider = provider?.displayName;
+                const photoFromProvider = provider?.photoURL;
+
+                const currentName = user.displayName || nameFromProvider || existingData.displayName;
+
+                if (currentName && !currentName.startsWith("Guest #")) {
+                    updateData.displayName = currentName;
+                } else if (!existingData.displayName || existingData.displayName.startsWith("Guest #")) {
+                    updateData.displayName = currentName || "Focus Hero";
+                }
+
+                // PHOTO SYNC PRIORITY: Firestore > Auth > Provider.
+                // This ensures manual uploads in our app aren't overwritten by Google.
+                updateData.photoURL = existingData.photoURL || user.photoURL || photoFromProvider;
+            } else {
+                // For Anonymous users
+                let finalName = existingData.displayName;
+                if (!finalName || finalName === "Guest Master") {
+                    const signature = user.uid.slice(0, 4).toUpperCase();
+                    finalName = `Guest #${signature}`;
+                    updateData.displayName = finalName;
+                }
+
+                // Sync the name BACK to the Auth user so the Header/Sidebar can see it!
+                if (user.displayName !== finalName) {
+                    await updateProfile(user, { displayName: finalName });
+                }
+
+                // Preserve custom avatar if set
+                updateData.photoURL = existingData.photoURL || user.photoURL || null;
             }
 
-            updateData.photoURL = user.photoURL || photoFromProvider || existingData.photoURL;
+            await updateDoc(userRef, updateData);
         }
-
-        await updateDoc(userRef, updateData);
+    } catch (error) {
+        console.error("❌ syncUserProfile FAILED:", error);
+        throw error;
     }
 };
 
@@ -78,6 +112,11 @@ export const syncUserProfile = async (user: User) => {
  */
 export const savePomodoroSession = async (userId: string, durationMinutes: number = 25) => {
     try {
+        // Lazy Sync: Ensure profile exists before saving session
+        if (auth.currentUser && auth.currentUser.uid === userId) {
+            await syncUserProfile(auth.currentUser);
+        }
+
         // 1. Add session record
         await addDoc(collection(db, "sessions"), {
             userId,
@@ -125,6 +164,11 @@ export const getLeaderboard = async (limitCount: number = 10) => {
 
 export const addTask = async (userId: string, title: string, pomodoros: number = 1) => {
     try {
+        // Lazy Sync: Ensure profile exists before adding task
+        if (auth.currentUser && auth.currentUser.uid === userId) {
+            await syncUserProfile(auth.currentUser);
+        }
+
         await addDoc(collection(db, "tasks"), {
             userId,
             title,

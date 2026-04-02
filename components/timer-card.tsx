@@ -251,7 +251,23 @@ export function TimerCard() {
                 isActive && "opacity-0 group-hover/timer:opacity-100"
               )}>
                 <Button
-                  onClick={isActive ? pause : start}
+                  onClick={async () => {
+                    if (isActive) {
+                      pause();
+                    } else {
+                      let currentUser = user;
+                      if (!currentUser) {
+                        const { signInGuest } = await import("@/lib/auth");
+                        currentUser = await signInGuest();
+                      }
+
+                      if (currentUser && currentUser.isAnonymous) {
+                        const { syncUserProfile } = await import("@/lib/db");
+                        syncUserProfile(currentUser);
+                      }
+                      start();
+                    }
+                  }}
                   className={cn(
                     "h-14 px-12 rounded-full text-lg font-bold transition-all duration-300",
                     "bg-white text-black hover:bg-zinc-200"

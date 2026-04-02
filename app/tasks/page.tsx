@@ -16,12 +16,25 @@ export default function TasksPage() {
     const [isAdding, setIsAdding] = useState(false);
 
     useEffect(() => {
-        if (user) {
+        if (!user) return;
+
+        const syncAndSubscribe = async () => {
+            // Lazy Sync: Ensure guest identity is established
+            if (user.isAnonymous) {
+                const { syncUserProfile } = await import("@/lib/db");
+                await syncUserProfile(user);
+            }
+
             const unsubscribe = subscribeToTasks(user.uid, (fetchedTasks) => {
                 setTasks(fetchedTasks || []);
             });
-            return () => unsubscribe();
-        }
+            return unsubscribe;
+        };
+
+        let unsubscribe: (() => void) | undefined;
+        syncAndSubscribe().then(unsub => { unsubscribe = unsub; });
+
+        return () => { if (unsubscribe) unsubscribe(); };
     }, [user]);
 
     const handleAddTask = async (e: React.FormEvent) => {

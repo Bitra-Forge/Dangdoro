@@ -46,6 +46,12 @@ export default function StatsPage() {
         const fetchData = async () => {
             setLoading(true);
             try {
+                // Lazy Sync: Ensure guest profile exists so we can fetch their stats
+                if (user.isAnonymous) {
+                    const { syncUserProfile } = await import("@/lib/db");
+                    await syncUserProfile(user);
+                }
+
                 const history = await getSessionHistory(user.uid) as SessionData[];
                 setSessions(history);
 
@@ -92,14 +98,14 @@ export default function StatsPage() {
         );
     }
 
-    if (!user) {
+    if (!user || user.isAnonymous) {
         return (
             <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-500/10 rounded-full blur-[120px] pointer-events-none" />
                 <main className="relative z-10 flex flex-col items-center justify-center pt-24 pb-32 px-4 w-full flex-1">
                     <AuthRequired
                         title="Insights Locked"
-                        description="Sign in with Google to visualize your focus intensity and secure your long-term progress records."
+                        description="Sign in to your account to visualize your focus intensity and secure your long-term progress records. Guest data is temporary."
                     />
                 </main>
             </div>

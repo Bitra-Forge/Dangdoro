@@ -34,15 +34,29 @@ export default function ProfilePage() {
             return;
         }
 
-        setLoading(true);
-        const unsub = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
-            if (docSnap.exists()) {
-                setUserData(docSnap.data());
-            }
-            setLoading(false);
-        });
+        const fetchData = async () => {
+            setLoading(true);
 
-        return () => unsub();
+            // Lazy Sync: Ensure guest profile exists before listening to it
+            if (user.isAnonymous) {
+                const { syncUserProfile } = await import("@/lib/db");
+                await syncUserProfile(user);
+            }
+
+            const unsub = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
+                if (docSnap.exists()) {
+                    setUserData(docSnap.data());
+                }
+                setLoading(false);
+            });
+
+            return unsub;
+        };
+
+        let unsubscribe: (() => void) | undefined;
+        fetchData().then(unsub => { unsubscribe = unsub; });
+
+        return () => { if (unsubscribe) unsubscribe(); };
     }, [user, authLoading]);
 
     const handleConnectGoogle = async () => {

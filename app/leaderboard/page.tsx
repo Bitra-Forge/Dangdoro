@@ -16,13 +16,22 @@ export default function LeaderboardPage() {
 
     useEffect(() => {
         const fetchTops = async () => {
+            if (authLoading) return;
+
             setLoading(true);
+
+            // Lazy Sync: Ensure guest profile exists so they can see themselves if they rank
+            if (user && user.isAnonymous) {
+                const { syncUserProfile } = await import("@/lib/db");
+                await syncUserProfile(user);
+            }
+
             const tops = await getLeaderboard(20);
             setPlayers(tops);
             setLoading(false);
         };
         fetchTops();
-    }, []);
+    }, [user, authLoading]);
 
     if (authLoading) {
         return (
@@ -32,14 +41,14 @@ export default function LeaderboardPage() {
         );
     }
 
-    if (!user) {
+    if (!user || user.isAnonymous) {
         return (
             <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-amber-500/10 rounded-full blur-[120px] pointer-events-none" />
                 <main className="relative z-10 flex flex-col items-center justify-center pt-24 pb-32 px-4 w-full flex-1">
                     <AuthRequired
                         title="Board Locked"
-                        description="Sign in with Google to see how you rank against the focus masters."
+                        description="Sign in to your account to see how you rank against the focus masters. Guests are not tracked on the leaderboard."
                     />
                 </main>
             </div>

@@ -7,7 +7,12 @@ import {
     signOut,
     User,
     AuthError,
-    signInWithCredential
+    signInWithCredential,
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword,
+    linkWithCredential,
+    EmailAuthProvider,
+    updateProfile
 } from "firebase/auth";
 import { syncUserProfile } from "./db";
 
@@ -20,10 +25,18 @@ export const signInGuest = async () => {
     }
 
     try {
+        console.log("signInGuest: Initiating fresh anonymous sign-in...");
         const userCredential = await signInAnonymously(auth);
+        console.log("signInGuest: Successfully started fresh session:", userCredential.user.uid);
         return userCredential.user;
-    } catch (error) {
-        console.error("Error signing in anonymously", error);
+    } catch (error: any) {
+        if (error.code === 'auth/operation-not-allowed') {
+            console.error("❌ CRITICAL: Anonymous authentication is NOT enabled in your Firebase Console.");
+        } else {
+            console.error("❌ Error during guest sign-in:", error);
+            // If the current session is invalid/deleted, force a sign-out so we can try again next time
+            await signOut(auth).catch(() => { });
+        }
         throw error;
     }
 };
@@ -68,9 +81,69 @@ export const linkAnonymousToGoogle = async (user: User) => {
 
 export const logOut = async () => {
     try {
+        if (typeof window !== "undefined") {
+            localStorage.setItem("manual-sign-out", "true");
+        }
         await signOut(auth);
     } catch (error) {
         console.error("Error signing out", error);
+        throw error;
+    }
+};
+
+// Email/Password Authentication
+export const signUpWithEmail = async (email: string, pass: string, displayName: string) => {
+    try {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+        // Set initial profile name
+        await updateProfile(userCredential.user, { displayName });
+        await syncUserProfile(userCredential.user);
+        return userCredential.user;
+    } catch (error: any) {
+        if (error.code === "auth/operation-not-allowed") {
+            console.error("❌ CRITICAL: Email/Password authentication is NOT enabled in your Firebase Console.");
+        }
+        console.error("Error signing up with email", error);
+        throw error;
+    }
+};
+
+export const signInWithEmail = async (email: string, pass: string) => {
+    try {
+        const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+        await syncUserProfile(userCredential.user);
+        return userCredential.user;
+    } catch (error: any) {
+        if (error.code === "auth/operation-not-allowed") {
+            console.error("❌ CRITICAL: Email/Password authentication is NOT enabled in your Firebase Console.");
+        }
+        console.error("Error signing in with email", error);
+        throw error;
+    }
+};
+
+export const linkAnonymousToEmail = async (user: User, email: string, pass: string, displayName: string) => {
+    if (!user.isAnonymous) {
+        throw new Error("User is already permanently authenticated.");
+    }
+    const credential = EmailAuthProvider.credential(email, pass);
+    try {
+        const result = await linkWithCredential(user, credential);
+        // Update to chosen name
+        await updateProfile(result.user, { displayName });
+        await syncUserProfile(result.user);
+        return result.user;
+    } catch (error: any) {
+        if (error.code === "auth/operation-not-allowed") {
+            console.error("❌ CRITICAL: Email/Password authentication is NOT enabled in your Firebase Console.");
+        }
+        if (error.code === "auth/email-already-in-use") {
+            // Already an account with this email? Allow signing into it (this will lose the anon data, but that's standard)
+            const result = await signInWithEmailAndPassword(auth, email, pass);
+            await syncUserProfile(result.user);
+            return result.user;
+        }
+        console.error("Error linking with email", error);
         throw error;
     }
 };

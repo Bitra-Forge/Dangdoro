@@ -32,7 +32,7 @@ export function AuthRequired({ title, description }: AuthRequiredProps) {
                 onClick={() => router.push(`/login?redirect=${encodeURIComponent(pathname)}`)}
                 className="h-16 px-10 rounded-2xl bg-white text-black hover:bg-zinc-200 transition-all font-black uppercase tracking-widest shadow-[0_20px_50px_rgba(255,255,255,0.1)] hover:scale-[1.05] active:scale-95"
             >
-                <LogIn className="mr-2 w-5 h-5" /> Enter with Google
+                <LogIn className="mr-2 w-5 h-5" /> Open My Vault
             </Button>
 
             <p className="mt-8 text-[10px] font-black text-zinc-600 uppercase tracking-[0.3em]">
