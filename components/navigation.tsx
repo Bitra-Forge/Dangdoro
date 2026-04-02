@@ -18,8 +18,9 @@ export function Navigation() {
     const pathname = usePathname();
 
     return (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50">
+        <div>
             <nav className="flex items-center gap-2 p-2 bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl">
+
                 {navLinks.map((link) => {
                     const Icon = link.icon;
                     const isActive = pathname === link.href;

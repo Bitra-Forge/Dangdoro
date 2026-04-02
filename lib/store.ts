@@ -28,7 +28,12 @@ interface TimerState {
   incrementTime: (seconds: number) => void;
   setInitialTime: (mode: "focus" | "break" | "long-break", seconds: number) => void;
   resetToDefaults: () => void;
+  backgroundImage: string;
+  setBackgroundImage: (image: string) => void;
+  isBgPanelOpen: boolean;
+  setIsBgPanelOpen: (open: boolean) => void;
 }
+
 
 export const useTimerStore = create<TimerState>()(
   persist(
@@ -45,6 +50,8 @@ export const useTimerStore = create<TimerState>()(
       initialBreakTime: 5 * 60,
       initialLongBreakTime: 15 * 60,
       lastUpdate: null,
+
+      backgroundImage: "BG25.png", // Default background
 
       start: () => set({ isActive: true, lastUpdate: Date.now() }),
       pause: () => set({ isActive: false, lastUpdate: null }),
@@ -165,7 +172,12 @@ export const useTimerStore = create<TimerState>()(
           lastUpdate: null,
         });
       },
+      setBackgroundImage: (image: string) => set({ backgroundImage: image }),
+      isBgPanelOpen: false,
+      setIsBgPanelOpen: (open: boolean) => set({ isBgPanelOpen: open }),
     }),
+
+
 
     {
       name: "dangdoro-timer-storage",

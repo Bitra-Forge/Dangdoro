@@ -4,6 +4,9 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";   // Sonner toast
 import { AuthProvider } from "@/components/AuthProvider";
 import { Navigation } from "@/components/navigation";
+import { QuickActionsNav } from "@/components/quick-actions-nav";
+import { BackgroundPanel } from "../components/background-panel";
+
 import { TimerTicker } from "@/components/TimerTicker";
 
 const figtree = Figtree({
@@ -44,7 +47,17 @@ export default function RootLayout({
         <AuthProvider>
           {children}
           <TimerTicker />
-          <Navigation />
+
+          {/* Main Navigation Hub */}
+          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center px-4 w-full justify-center pointer-events-none">
+            <div className="flex items-center gap-4 pointer-events-auto relative px-1">
+              <BackgroundPanel />
+              <QuickActionsNav />
+              <Navigation />
+            </div>
+          </div>
+
+
           <Toaster position="top-center" richColors closeButton />
         </AuthProvider>
       </body>
