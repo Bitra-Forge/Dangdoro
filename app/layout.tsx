@@ -3,13 +3,11 @@ import { Figtree, Geist_Mono, Noto_Serif } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";   // Sonner toast
 import { AuthProvider } from "@/components/AuthProvider";
-import { Navigation } from "@/components/navigation";
-import { QuickActionsNav } from "@/components/quick-actions-nav";
-import { BackgroundPanel } from "@/components/background-panel";
-import { SoundPanel } from "@/components/sound-panel";
 import { SoundEngine } from "@/components/SoundEngine";
 import { TimerTicker } from "@/components/TimerTicker";
 import { GlobalAuthModal } from "@/components/GlobalAuthModal";
+import { NavigationHub } from "@/components/navigation-hub";
+
 
 const figtree = Figtree({
   variable: "--font-sans",
@@ -52,16 +50,8 @@ export default function RootLayout({
           <SoundEngine />
           <GlobalAuthModal />
 
+          <NavigationHub />
 
-          {/* Main Navigation Hub */}
-          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center px-4 w-full justify-center pointer-events-none">
-            <div className="flex items-center gap-4 pointer-events-auto relative px-1">
-              <BackgroundPanel />
-              <SoundPanel />
-              <QuickActionsNav />
-              <Navigation />
-            </div>
-          </div>
 
 
 
