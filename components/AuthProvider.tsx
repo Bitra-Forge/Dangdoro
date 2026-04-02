@@ -10,11 +10,17 @@ import { useTimerStore } from "@/lib/store";
 interface AuthContextType {
     user: User | null;
     loading: boolean;
+    isAuthModalOpen: boolean;
+    openAuthVault: () => void;
+    closeAuthVault: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
     user: null,
     loading: true,
+    isAuthModalOpen: false,
+    openAuthVault: () => { },
+    closeAuthVault: () => { },
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -22,6 +28,10 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+    const openAuthVault = () => setIsAuthModalOpen(true);
+    const closeAuthVault = () => setIsAuthModalOpen(false);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -76,7 +86,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     return (
-        <AuthContext.Provider value={{ user, loading }}>
+        <AuthContext.Provider value={{ user, loading, isAuthModalOpen, openAuthVault, closeAuthVault }}>
             {children}
         </AuthContext.Provider>
     );

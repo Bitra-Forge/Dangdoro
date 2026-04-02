@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { updateUserSettings } from "@/lib/db";
 
 export default function SettingsPage() {
-    const { user, loading: authLoading } = useAuth();
+    const { user, loading: authLoading, openAuthVault } = useAuth();
     const [userData, setUserData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
@@ -230,12 +230,21 @@ export default function SettingsPage() {
                                 </div>
 
                                 <Button
-                                    onClick={handleSignOut}
+                                    onClick={user.isAnonymous ? openAuthVault : handleSignOut}
                                     variant="outline"
                                     className="w-full h-14 rounded-2xl border-white/5 bg-zinc-950/50 text-zinc-400 hover:text-white hover:bg-white/10 transition-all font-black uppercase tracking-widest"
                                 >
-                                    <LogOut className="mr-2 h-4 w-4" /> Terminate Session
+                                    {user.isAnonymous ? (
+                                        <>
+                                            <LogIn className="mr-2 h-4 w-4" /> Sign In / Establish Identity
+                                        </>
+                                    ) : (
+                                        <>
+                                            <LogOut className="mr-2 h-4 w-4" /> Terminate Session
+                                        </>
+                                    )}
                                 </Button>
+
                             </>
                         ) : (
                             <div className="text-center py-4">
@@ -243,7 +252,7 @@ export default function SettingsPage() {
                                     Your session is offline. Connect to synchronize your focus protocols.
                                 </p>
                                 <Button
-                                    onClick={() => window.location.href = "/login"}
+                                    onClick={openAuthVault}
                                     className="w-full h-14 rounded-2xl bg-white text-black hover:bg-zinc-200 transition-all font-black uppercase tracking-widest shadow-xl shadow-white/5"
                                 >
                                     <LogIn className="mr-2 h-4 w-4" /> Initialize Sign In

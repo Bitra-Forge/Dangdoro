@@ -3,7 +3,8 @@
 import React from "react";
 import { LogIn, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
+import { useAuth } from "@/components/AuthProvider";
 
 interface AuthRequiredProps {
     title: string;
@@ -11,7 +12,7 @@ interface AuthRequiredProps {
 }
 
 export function AuthRequired({ title, description }: AuthRequiredProps) {
-    const router = useRouter();
+    const { openAuthVault } = useAuth();
     const pathname = usePathname();
 
     return (
@@ -29,7 +30,7 @@ export function AuthRequired({ title, description }: AuthRequiredProps) {
             </p>
 
             <Button
-                onClick={() => router.push(`/login?redirect=${encodeURIComponent(pathname)}`)}
+                onClick={openAuthVault}
                 className="h-16 px-10 rounded-2xl bg-white text-black hover:bg-zinc-200 transition-all font-black uppercase tracking-widest shadow-[0_20px_50px_rgba(255,255,255,0.1)] hover:scale-[1.05] active:scale-95"
             >
                 <LogIn className="mr-2 w-5 h-5" /> Open My Vault

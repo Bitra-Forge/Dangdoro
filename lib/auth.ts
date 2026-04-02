@@ -122,28 +122,27 @@ export const signInWithEmail = async (email: string, pass: string) => {
     }
 };
 
-export const linkAnonymousToEmail = async (user: User, email: string, pass: string, displayName: string) => {
+export const linkAnonymousToEmail = async (user: User, email: string, pass: string, displayName?: string) => {
     if (!user.isAnonymous) {
         throw new Error("User is already permanently authenticated.");
     }
     const credential = EmailAuthProvider.credential(email, pass);
     try {
         const result = await linkWithCredential(user, credential);
-        // Update to chosen name
-        await updateProfile(result.user, { displayName });
+        // Only update name if it was explicitly provided (Sign Up flow)
+        if (displayName) {
+            await updateProfile(result.user, { displayName });
+        }
         await syncUserProfile(result.user);
         return result.user;
     } catch (error: any) {
         if (error.code === "auth/operation-not-allowed") {
             console.error("❌ CRITICAL: Email/Password authentication is NOT enabled in your Firebase Console.");
         }
-        if (error.code === "auth/email-already-in-use") {
-            // Already an account with this email? Allow signing into it (this will lose the anon data, but that's standard)
-            const result = await signInWithEmailAndPassword(auth, email, pass);
-            await syncUserProfile(result.user);
-            return result.user;
-        }
-        console.error("Error linking with email", error);
+        // Let the caller handle "email-already-in-use" to show a specific warning
+        console.error("Error linking with email:", error.code, error.message);
         throw error;
     }
 };
+
+

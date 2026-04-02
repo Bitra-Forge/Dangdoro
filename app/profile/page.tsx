@@ -2,20 +2,38 @@
 
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import { logOut, linkAnonymousToGoogle } from "@/lib/auth";
+import { cn } from "@/lib/utils";
+
+import { logOut, linkAnonymousToGoogle, linkAnonymousToEmail } from "@/lib/auth";
+import { mapAuthError } from "@/lib/error-codes";
 import { onSnapshot, doc } from "firebase/firestore";
+
 import { db } from "@/lib/firebase";
 import { uploadProfilePicture, updateProfilePictureBase64 } from "@/lib/db";
-import { Camera, Shield, Zap, Clock, Calendar, LogOut, ChevronRight, Mail } from "lucide-react";
+import { Camera, Shield, Zap, Clock, Calendar, LogOut, ChevronRight, Mail, Eye, EyeOff, Lock, Globe, UserPlus, ArrowLeft } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
+
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { AuthRequired } from "@/components/auth-required";
+import { AuthCard } from "@/components/AuthCard";
+
 import Cropper from "react-easy-crop";
 
 export default function ProfilePage() {
-    const { user, loading: authLoading } = useAuth();
+    const { user, loading: authLoading, openAuthVault } = useAuth();
     const [userData, setUserData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
@@ -59,15 +77,6 @@ export default function ProfilePage() {
         return () => { if (unsubscribe) unsubscribe(); };
     }, [user, authLoading]);
 
-    const handleConnectGoogle = async () => {
-        if (!user) return;
-        try {
-            await linkAnonymousToGoogle(user);
-            toast.success("Account successfully connected!");
-        } catch (error: any) {
-            toast.error(error.message || "Failed to connect.");
-        }
-    };
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -189,22 +198,27 @@ export default function ProfilePage() {
                         <Avatar className="w-32 h-32 border-4 border-white/10 shadow-2xl relative z-10 overflow-visible">
                             <div className="absolute inset-0 rounded-full overflow-hidden">
                                 <AvatarImage src={userData?.photoURL || user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`} className="object-cover w-full h-full" />
+
                                 <AvatarFallback className="bg-zinc-900 font-black text-2xl text-white">
                                     {user.displayName?.charAt(0) || "F"}
                                 </AvatarFallback>
                             </div>
 
-                            {/* Upload Overlay */}
-                            <label className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer rounded-full z-20">
-                                <Camera className="w-8 h-8 text-white" />
-                                <input
-                                    type="file"
-                                    className="hidden"
-                                    accept="image/*"
-                                    onChange={handleFileChange}
-                                    onClick={(e) => (e.target as any).value = null} // Allow re-selecting same file
-                                />
-                            </label>
+
+                            {/* Upload Overlay - Only for permanent accounts */}
+                            {!user.isAnonymous && (
+                                <label className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer rounded-full z-20">
+                                    <Camera className="w-8 h-8 text-white" />
+                                    <input
+                                        type="file"
+                                        className="hidden"
+                                        accept="image/*"
+                                        onChange={handleFileChange}
+                                        onClick={(e) => (e.target as any).value = null} // Allow re-selecting same file
+                                    />
+                                </label>
+                            )}
+
                         </Avatar>
 
                         <div className="absolute -bottom-2 -right-2 bg-zinc-950 border border-white/10 p-2 rounded-xl shadow-xl z-20">
@@ -214,6 +228,8 @@ export default function ProfilePage() {
                                 <Shield className="w-4 h-4 text-emerald-500" />
                             )}
                         </div>
+
+
                     </div>
 
                     <h1 className="text-4xl font-black text-white tracking-tighter uppercase italic drop-shadow-lg">
@@ -257,16 +273,19 @@ export default function ProfilePage() {
                             <div className="text-left">
                                 <h3 className="text-sm font-black text-white uppercase italic tracking-tight">Temporary Session</h3>
                                 <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-relaxed">
-                                    Connect with Google to save your focus sessions permanently.
+                                    Connect your account to save your focus sessions permanently.
                                 </p>
                             </div>
                         </div>
-                        <Button
-                            onClick={handleConnectGoogle}
-                            className="h-12 px-8 rounded-xl bg-amber-500 text-black hover:bg-amber-400 font-black uppercase tracking-widest text-[10px] shadow-lg shadow-amber-500/20 whitespace-nowrap"
-                        >
-                            Connect Google
-                        </Button>
+                        <div className="flex">
+                            <Button
+                                onClick={openAuthVault}
+                                className="h-14 px-8 rounded-2xl bg-sky-500 text-white hover:bg-sky-400 font-black uppercase tracking-widest text-xs shadow-[0_0_20px_rgba(14,165,233,0.3)] whitespace-nowrap flex items-center gap-3 active:scale-[0.98] transition-all"
+                            >
+                                <Zap className="w-4 h-4 fill-current" />
+                                Forge Identity
+                            </Button>
+                        </div>
                     </div>
                 )}
 
