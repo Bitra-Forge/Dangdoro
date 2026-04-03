@@ -13,6 +13,9 @@ const backgrounds = [
   "2.jpg",
   "3.jpg",
   "4.jpg",
+  "City_1.jpg",
+  "Seoul_1.jpg",
+  "Seoul_2.jpg",
 ];
 
 export function BackgroundPanel() {

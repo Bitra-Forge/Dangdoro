@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Play, Pause, RotateCcw, Check, X, ChevronUp, ChevronDown, Settings, Minus, Plus } from "lucide-react";
+import { Play, Pause, RotateCcw, Check, X, ChevronUp, ChevronDown, Settings, Minus, Plus, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTimerStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,8 @@ export function TimerCard() {
     incrementTime,
     activeTaskLabel,
     clearTask,
+    isNavFocusMode,
+    toggleNavFocusMode,
   } = useTimerStore();
 
   const { user } = useAuth();
@@ -331,6 +333,21 @@ export function TimerCard() {
                   className="h-14 w-14 rounded-full text-white/60 hover:text-white hover:bg-white/5 transition-all duration-300"
                 >
                   <RotateCcw className="w-6 h-6" />
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleNavFocusMode}
+                  title={isNavFocusMode ? "Disable Focus Mode (show nav)" : "Enable Focus Mode (hide nav)"}
+                  className={cn(
+                    "h-10 w-10 rounded-full transition-all duration-300",
+                    isNavFocusMode
+                      ? "text-white bg-white/15 hover:bg-white/20"
+                      : "text-white/50 hover:text-white hover:bg-white/5"
+                  )}
+                >
+                  {isNavFocusMode ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                 </Button>
 
                 <Button

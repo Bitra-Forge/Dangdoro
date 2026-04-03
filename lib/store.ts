@@ -42,6 +42,9 @@ interface TimerState {
   setIsBgPanelOpen: (open: boolean) => void;
   isSoundPanelOpen: boolean;
   setIsSoundPanelOpen: (open: boolean) => void;
+  isNavFocusMode: boolean;
+  setIsNavFocusMode: (enabled: boolean) => void;
+  toggleNavFocusMode: () => void;
   activeSounds: Record<string, number>;
   toggleSound: (soundId: string) => void;
   setSoundVolume: (soundId: string, volume: number) => void;
@@ -213,6 +216,9 @@ export const useTimerStore = create<TimerState>()(
       setIsBgPanelOpen: (open: boolean) => set({ isBgPanelOpen: open, isSoundPanelOpen: open ? false : get().isSoundPanelOpen }),
       isSoundPanelOpen: false,
       setIsSoundPanelOpen: (open: boolean) => set({ isSoundPanelOpen: open, isBgPanelOpen: open ? false : get().isBgPanelOpen }),
+      isNavFocusMode: false,
+      setIsNavFocusMode: (enabled: boolean) => set({ isNavFocusMode: enabled }),
+      toggleNavFocusMode: () => set((state) => ({ isNavFocusMode: !state.isNavFocusMode })),
       activeSounds: {},
       toggleSound: (soundId: string) => {
         const { activeSounds } = get();
