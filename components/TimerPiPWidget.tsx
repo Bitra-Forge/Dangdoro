@@ -476,7 +476,7 @@ export function TimerPiPWidget() {
 
   // Hooks
   const { position, isDragging, handleMouseDown, handleTouchStart } = useDraggable(widgetRef);
-  const { openPiP } = useDocumentPiP();
+  const { openPiP, closePiP } = useDocumentPiP();
 
   // Check if Document PiP is supported (Chrome/Edge only)
   const supportsDocumentPiP = isDocumentPiPSupported();
@@ -491,13 +491,15 @@ export function TimerPiPWidget() {
   const hasActiveTimer = isActive || timeLeft < initialTime;
   const shouldShow = !isOnTimerPage && hasActiveTimer && !isDismissed;
 
-  // Auto-open Document PiP when user switches to another tab (Chrome/Edge only)
+  // Auto-open/close Document PiP based on tab visibility (Chrome/Edge only)
+  // - Open PiP when user leaves the app tab
+  // - Close PiP when user returns to the app tab
   useEffect(() => {
     if (!supportsDocumentPiP) return;
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        // User switched to another tab - auto-open PiP if timer is active
+        // User left the app tab - open PiP if timer is active
         const state = useTimerStore.getState();
         const currentInitialTime = state.mode === "focus" 
           ? state.initialFocusTime 
@@ -509,6 +511,9 @@ export function TimerPiPWidget() {
         if (hasTimer) {
           openPiP({ skipIfOpen: true });
         }
+      } else {
+        // User returned to the app tab - close PiP
+        closePiP();
       }
     };
 
@@ -516,7 +521,7 @@ export function TimerPiPWidget() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [supportsDocumentPiP, openPiP]);
+  }, [supportsDocumentPiP, openPiP, closePiP]);
 
   // Reset dismissed when returning to timer page
   useEffect(() => {
