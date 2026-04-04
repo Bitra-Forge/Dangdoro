@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useTimerStore } from "@/lib/store";
 import Image from "next/image";
-import { Play, Pause, ExternalLink, GripHorizontal } from "lucide-react";
+import { Play, Pause, ExternalLink, GripHorizontal, MonitorPlay } from "lucide-react";
 import Link from "next/link";
 
 const modeLabels = {
@@ -33,12 +33,19 @@ const formatTime = (seconds: number) => {
 export function TimerPiPWidget() {
   const pathname = usePathname();
   const [isDismissed, setIsDismissed] = useState(false);
+  const [isPiPActive, setIsPiPActive] = useState(false);
   
   // Dragging state
-  const [position, setPosition] = useState({ x: 24, y: 24 }); // bottom-right offset
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const dragRef = useRef<{ startX: number; startY: number; initialX: number; initialY: number } | null>(null);
+  const dragOffset = useRef({ x: 0, y: 0 });
   const widgetRef = useRef<HTMLDivElement>(null);
+  
+  // PiP refs
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const pipWindowRef = useRef<PictureInPictureWindow | null>(null);
+  const animationFrameRef = useRef<number>(0);
 
   const timeLeft = useTimerStore((state) => state.timeLeft);
   const isActive = useTimerStore((state) => state.isActive);
@@ -50,101 +57,202 @@ export function TimerPiPWidget() {
   const start = useTimerStore((state) => state.start);
   const pause = useTimerStore((state) => state.pause);
 
-  // Show widget when NOT on the home page or pip page and timer is active
+  // Initialize position
+  useEffect(() => {
+    if (position === null && typeof window !== "undefined") {
+      setPosition({
+        x: window.innerWidth - 280,
+        y: window.innerHeight - 220
+      });
+    }
+  }, [position]);
+
   const isOnTimerPage = pathname === "/" || pathname === "/pip";
   const shouldShow = !isOnTimerPage && isActive && !isDismissed;
 
-  // Reset dismissed state when returning to timer page
   useEffect(() => {
     if (isOnTimerPage && isDismissed) {
       setIsDismissed(false);
     }
   }, [isOnTimerPage, isDismissed]);
 
-  // Handle dragging
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-    dragRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      initialX: position.x,
-      initialY: position.y,
-    };
-  };
+  // Draw timer on canvas for PiP
+  const drawCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    const touch = e.touches[0];
-    setIsDragging(true);
-    dragRef.current = {
-      startX: touch.clientX,
-      startY: touch.clientY,
-      initialX: position.x,
-      initialY: position.y,
+    const state = useTimerStore.getState();
+    const currentTimeLeft = state.timeLeft;
+    const currentMode = state.mode;
+    const currentIsActive = state.isActive;
+
+    // Background
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, "#18181b");
+    gradient.addColorStop(1, "#09090b");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Mode color
+    const modeColor = currentMode === "focus" ? "#10b981" : currentMode === "break" ? "#0ea5e9" : "#8b5cf6";
+    
+    // Glowing circle
+    ctx.beginPath();
+    ctx.arc(canvas.width / 2, canvas.height / 2 - 10, 80, 0, Math.PI * 2);
+    ctx.strokeStyle = modeColor;
+    ctx.lineWidth = 4;
+    ctx.shadowColor = modeColor;
+    ctx.shadowBlur = 20;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Timer text
+    ctx.font = "bold 48px system-ui, sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(formatTime(currentTimeLeft), canvas.width / 2, canvas.height / 2 - 10);
+
+    // Mode label
+    ctx.font = "bold 14px system-ui, sans-serif";
+    ctx.fillStyle = modeColor;
+    ctx.fillText(modeLabels[currentMode].toUpperCase(), canvas.width / 2, canvas.height / 2 + 50);
+
+    // Status indicator
+    ctx.beginPath();
+    ctx.arc(canvas.width / 2, canvas.height / 2 + 80, 6, 0, Math.PI * 2);
+    ctx.fillStyle = currentIsActive ? modeColor : "#71717a";
+    ctx.fill();
+
+    // Status text
+    ctx.font = "12px system-ui, sans-serif";
+    ctx.fillStyle = "#a1a1aa";
+    ctx.fillText(currentIsActive ? "Running" : "Paused", canvas.width / 2, canvas.height / 2 + 105);
+
+    // Continue animation
+    if (isPiPActive) {
+      animationFrameRef.current = requestAnimationFrame(drawCanvas);
+    }
+  }, [isPiPActive]);
+
+  // Start Picture-in-Picture
+  const startPiP = useCallback(async () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    
+    if (!video || !canvas || !document.pictureInPictureEnabled) {
+      alert("Picture-in-Picture is not supported in your browser. Try Chrome or Edge.");
+      return;
+    }
+
+    try {
+      // Set up canvas stream
+      const stream = canvas.captureStream(30);
+      video.srcObject = stream;
+      await video.play();
+
+      // Enter PiP
+      pipWindowRef.current = await video.requestPictureInPicture();
+      setIsPiPActive(true);
+
+      // Start drawing
+      drawCanvas();
+
+      // Handle PiP close
+      video.addEventListener("leavepictureinpicture", () => {
+        setIsPiPActive(false);
+        cancelAnimationFrame(animationFrameRef.current);
+        pipWindowRef.current = null;
+      });
+
+    } catch (error) {
+      console.error("Failed to start PiP:", error);
+    }
+  }, [drawCanvas]);
+
+  // Keep drawing while PiP is active
+  useEffect(() => {
+    if (isPiPActive) {
+      drawCanvas();
+    }
+    return () => cancelAnimationFrame(animationFrameRef.current);
+  }, [isPiPActive, drawCanvas, timeLeft, mode, isActive]);
+
+  // Auto-start PiP when leaving tab
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && isActive && !isPiPActive && document.pictureInPictureEnabled) {
+        startPiP();
+      }
     };
-  };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [isActive, isPiPActive, startPiP]);
+
+  // Dragging handlers
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!widgetRef.current) return;
+    
+    const rect = widgetRef.current.getBoundingClientRect();
+    dragOffset.current = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+    setIsDragging(true);
+  }, []);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    e.stopPropagation();
+    
+    if (!widgetRef.current) return;
+    
+    const touch = e.touches[0];
+    const rect = widgetRef.current.getBoundingClientRect();
+    dragOffset.current = {
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top
+    };
+    setIsDragging(true);
+  }, []);
 
   useEffect(() => {
+    if (!isDragging) return;
+
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging || !dragRef.current) return;
-      
-      const deltaX = dragRef.current.startX - e.clientX;
-      const deltaY = dragRef.current.startY - e.clientY;
-      
-      const newX = Math.max(0, Math.min(window.innerWidth - 280, dragRef.current.initialX + deltaX));
-      const newY = Math.max(0, Math.min(window.innerHeight - 200, dragRef.current.initialY + deltaY));
-      
+      const newX = Math.max(0, Math.min(window.innerWidth - 260, e.clientX - dragOffset.current.x));
+      const newY = Math.max(0, Math.min(window.innerHeight - 180, e.clientY - dragOffset.current.y));
       setPosition({ x: newX, y: newY });
     };
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (!isDragging || !dragRef.current) return;
-      
+      e.preventDefault();
       const touch = e.touches[0];
-      const deltaX = dragRef.current.startX - touch.clientX;
-      const deltaY = dragRef.current.startY - touch.clientY;
-      
-      const newX = Math.max(0, Math.min(window.innerWidth - 280, dragRef.current.initialX + deltaX));
-      const newY = Math.max(0, Math.min(window.innerHeight - 200, dragRef.current.initialY + deltaY));
-      
+      const newX = Math.max(0, Math.min(window.innerWidth - 260, touch.clientX - dragOffset.current.x));
+      const newY = Math.max(0, Math.min(window.innerHeight - 180, touch.clientY - dragOffset.current.y));
       setPosition({ x: newX, y: newY });
     };
 
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      dragRef.current = null;
-    };
+    const handleEnd = () => setIsDragging(false);
 
-    if (isDragging) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-      document.addEventListener("touchmove", handleTouchMove);
-      document.addEventListener("touchend", handleMouseUp);
-    }
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleEnd);
+    document.addEventListener("touchmove", handleTouchMove, { passive: false });
+    document.addEventListener("touchend", handleEnd);
 
     return () => {
       document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
+      document.removeEventListener("mouseup", handleEnd);
       document.removeEventListener("touchmove", handleTouchMove);
-      document.removeEventListener("touchend", handleMouseUp);
+      document.removeEventListener("touchend", handleEnd);
     };
   }, [isDragging]);
-
-  // Open popup window
-  const openPopup = () => {
-    const width = 300;
-    const height = 400;
-    const left = window.screenX + window.outerWidth - width - 50;
-    const top = window.screenY + 50;
-    
-    window.open(
-      "/pip",
-      "dangdoro-pip",
-      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=no,status=no,toolbar=no,menubar=no,location=no`
-    );
-  };
-
-  if (!shouldShow) return null;
 
   const initialTime = mode === "focus" 
     ? initialFocusTime 
@@ -155,114 +263,126 @@ export function TimerPiPWidget() {
   const progress = (timeLeft / initialTime) * 100;
 
   return (
-    <div 
-      ref={widgetRef}
-      className="fixed z-[9999] animate-in slide-in-from-bottom-4 fade-in duration-300"
-      style={{ 
-        right: `${position.x}px`, 
-        bottom: `${position.y}px`,
-        cursor: isDragging ? "grabbing" : "default"
-      }}
-    >
-      {/* Floating PiP Widget */}
-      <div className="relative group">
-        {/* Glow effect */}
-        <div className={`absolute -inset-1 bg-gradient-to-r ${modeColors[mode]} rounded-2xl blur-xl opacity-60 group-hover:opacity-80 transition-opacity`} />
-        
-        <div className="relative w-64 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 backdrop-blur-xl shadow-2xl shadow-black/50">
-          {/* Background Image */}
-          <div className="absolute inset-0 z-0">
-            <Image
-              src={`/Backgrounds/${backgroundImage}`}
-              alt="Background"
-              fill
-              sizes="256px"
-              className="object-cover opacity-30"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/80 to-transparent" />
-          </div>
+    <>
+      {/* Hidden canvas and video for PiP */}
+      <canvas 
+        ref={canvasRef} 
+        width={300} 
+        height={200} 
+        className="hidden"
+      />
+      <video 
+        ref={videoRef} 
+        muted 
+        playsInline
+        className="hidden"
+      />
 
-          {/* Content */}
-          <div className="relative z-10 p-4">
-            {/* Header with drag handle, mode, pop-out and dismiss */}
-            <div className="flex items-center justify-between mb-3">
-              {/* Drag handle */}
-              <div 
-                className="flex items-center gap-2 cursor-grab active:cursor-grabbing select-none"
-                onMouseDown={handleMouseDown}
-                onTouchStart={handleTouchStart}
-              >
-                <GripHorizontal className="w-4 h-4 text-zinc-500" />
-                <div className={`w-2 h-2 rounded-full animate-pulse ${
-                  mode === "focus" ? "bg-emerald-500" : 
-                  mode === "break" ? "bg-sky-500" : "bg-violet-500"
-                }`} />
-                <span className={`text-[10px] font-bold uppercase tracking-widest ${
-                  mode === "focus" ? "text-emerald-400" : 
-                  mode === "break" ? "text-sky-400" : "text-violet-400"
-                }`}>
-                  {modeLabels[mode]}
-                </span>
+      {/* Floating widget within the app */}
+      {shouldShow && position && (
+        <div 
+          ref={widgetRef}
+          className={`fixed z-[9999] select-none ${!isDragging ? "animate-in slide-in-from-bottom-4 fade-in duration-300" : ""}`}
+          style={{ 
+            left: position.x,
+            top: position.y,
+            cursor: isDragging ? "grabbing" : "default",
+            transition: isDragging ? "none" : "opacity 0.3s",
+            transform: "translateZ(0)",
+            willChange: isDragging ? "left, top" : "auto"
+          }}
+        >
+          <div className="relative group">
+            <div className={`absolute -inset-1 bg-gradient-to-r ${modeColors[mode]} rounded-2xl blur-xl opacity-60 group-hover:opacity-80 transition-opacity pointer-events-none`} />
+            
+            <div className="relative w-64 overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/90 backdrop-blur-xl shadow-2xl shadow-black/50">
+              <div className="absolute inset-0 z-0 pointer-events-none">
+                <Image
+                  src={`/Backgrounds/${backgroundImage}`}
+                  alt="Background"
+                  fill
+                  sizes="256px"
+                  className="object-cover opacity-30"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/80 to-transparent" />
               </div>
-              
-              <div className="flex items-center gap-1">
-                {/* Pop-out button */}
-                <button
-                  onClick={openPopup}
-                  className="text-zinc-500 hover:text-white p-1 transition-colors"
-                  title="Open in popup window"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </button>
-                {/* Dismiss button */}
-                <button
-                  onClick={() => setIsDismissed(true)}
-                  className="text-zinc-500 hover:text-white text-lg leading-none transition-colors px-1"
-                  title="Dismiss"
-                >
-                  &times;
-                </button>
+
+              <div className="relative z-10 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div 
+                    className="flex items-center gap-2 cursor-grab active:cursor-grabbing select-none touch-none"
+                    onMouseDown={handleMouseDown}
+                    onTouchStart={handleTouchStart}
+                  >
+                    <GripHorizontal className="w-4 h-4 text-zinc-500" />
+                    <div className={`w-2 h-2 rounded-full animate-pulse ${
+                      mode === "focus" ? "bg-emerald-500" : 
+                      mode === "break" ? "bg-sky-500" : "bg-violet-500"
+                    }`} />
+                    <span className={`text-[10px] font-bold uppercase tracking-widest ${
+                      mode === "focus" ? "text-emerald-400" : 
+                      mode === "break" ? "text-sky-400" : "text-violet-400"
+                    }`}>
+                      {modeLabels[mode]}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center gap-1">
+                    {/* PiP button */}
+                    <button
+                      onClick={startPiP}
+                      className={`p-1 transition-colors ${isPiPActive ? "text-emerald-400" : "text-zinc-500 hover:text-white"}`}
+                      title="Float on top of all windows (Picture-in-Picture)"
+                    >
+                      <MonitorPlay className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setIsDismissed(true)}
+                      className="text-zinc-500 hover:text-white text-lg leading-none transition-colors px-1"
+                      title="Dismiss"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                </div>
+
+                <Link href="/" className="block text-center mb-3 hover:scale-105 transition-transform">
+                  <span className="text-4xl font-bold text-white tabular-nums tracking-tight">
+                    {formatTime(timeLeft)}
+                  </span>
+                </Link>
+
+                <div className="flex justify-center">
+                  <button
+                    onClick={() => (isActive ? pause() : start())}
+                    className={`p-3 rounded-xl border transition-all duration-200 transform active:scale-95 ${
+                      isActive
+                        ? "bg-white/10 border-white/20 hover:bg-white/20"
+                        : "bg-emerald-500/20 border-emerald-500/30 hover:bg-emerald-500/30"
+                    }`}
+                  >
+                    {isActive ? (
+                      <Pause className="w-5 h-5 text-white" />
+                    ) : (
+                      <Play className="w-5 h-5 text-emerald-400" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="h-1 bg-zinc-800">
+                <div
+                  className={`h-full transition-all duration-1000 ${
+                    mode === "focus" ? "bg-emerald-500" : 
+                    mode === "break" ? "bg-sky-500" : "bg-violet-500"
+                  }`}
+                  style={{ width: `${progress}%` }}
+                />
               </div>
             </div>
-
-            {/* Timer Display - Clickable to go back to timer */}
-            <Link href="/" className="block text-center mb-3 hover:scale-105 transition-transform">
-              <span className="text-4xl font-bold text-white tabular-nums tracking-tight">
-                {formatTime(timeLeft)}
-              </span>
-            </Link>
-
-            {/* Play/Pause Button */}
-            <div className="flex justify-center">
-              <button
-                onClick={() => (isActive ? pause() : start())}
-                className={`p-3 rounded-xl border transition-all duration-200 transform active:scale-95 ${
-                  isActive
-                    ? "bg-white/10 border-white/20 hover:bg-white/20"
-                    : "bg-emerald-500/20 border-emerald-500/30 hover:bg-emerald-500/30"
-                }`}
-              >
-                {isActive ? (
-                  <Pause className="w-5 h-5 text-white" />
-                ) : (
-                  <Play className="w-5 h-5 text-emerald-400" />
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Progress bar at bottom */}
-          <div className="h-1 bg-zinc-800">
-            <div
-              className={`h-full transition-all duration-1000 ${
-                mode === "focus" ? "bg-emerald-500" : 
-                mode === "break" ? "bg-sky-500" : "bg-violet-500"
-              }`}
-              style={{ width: `${progress}%` }}
-            />
           </div>
         </div>
-      </div>
-    </div>
+      )}
+    </>
   );
 }
