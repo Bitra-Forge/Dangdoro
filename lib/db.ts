@@ -202,7 +202,7 @@ export const addTask = async (
  * Task Group CRUD Operations
  */
 
-export const addGroup = async (userId: string, name: string, x = 40, y = 140, w = 300, h = 400) => {
+export const addGroup = async (userId: string, name: string, x = 40, y = 140, w = 300, h = 400, color = "zinc") => {
     try {
         const ref = await addDoc(collection(db, "taskGroups"), {
             userId,
@@ -211,12 +211,23 @@ export const addGroup = async (userId: string, name: string, x = 40, y = 140, w 
             positionY: y,
             width: w,
             height: h,
+            color,
             createdAt: serverTimestamp(),
         });
         return ref.id;
     } catch (error) {
         console.error("Error adding group:", error);
         return null;
+    }
+};
+
+export const updateGroupColor = async (groupId: string, color: string) => {
+    try {
+        await updateDoc(doc(db, "taskGroups", groupId), { color });
+        return true;
+    } catch (error) {
+        console.error("Error updating group color:", error);
+        return false;
     }
 };
 

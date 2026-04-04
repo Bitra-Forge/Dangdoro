@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation";
 import {
     ClipboardList, Plus, Trash2, CheckCircle2, Circle,
     ChevronDown, ChevronRight, Pencil, Check, X, GripVertical,
-    Play, Clock, Maximize2
+    Play, Clock, Maximize2, Palette
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import {
     addTask, subscribeToTasks, toggleTask, deleteTask,
     addGroup, renameGroup, deleteGroup as dbDeleteGroup,
     updateGroupPosition, updateGroupDimensions, moveTaskToGroup, subscribeToGroups,
-    updateTaskPriority, updateTaskField, type TaskPriority
+    updateTaskPriority, updateTaskField, updateGroupColor, type TaskPriority
 } from "@/lib/db";
 import { useTimerStore } from "@/lib/store";
 import { toast } from "sonner";
@@ -30,8 +30,21 @@ const PRIORITIES: { value: TaskPriority; label: string; border: string; dot: str
 const PRIORITY_ORDER: Record<TaskPriority, number> = { urgent: 0, high: 1, normal: 2, natural: 3 };
 const getPriority = (v: string) => PRIORITIES.find(p => p.value === v) ?? PRIORITIES[3];
 
+// ─── Group colors config ──────────────────────────────────────────────────────
+const GROUP_COLORS = [
+    { value: "zinc", label: "Default", bg: "bg-zinc-500", border: "border-zinc-500/40", shadow: "rgba(113,113,122,0.35)", glow: "shadow-zinc-500/25" },
+    { value: "emerald", label: "Emerald", bg: "bg-emerald-500", border: "border-emerald-500/40", shadow: "rgba(16,185,129,0.35)", glow: "shadow-emerald-500/25" },
+    { value: "sky", label: "Sky", bg: "bg-sky-500", border: "border-sky-500/40", shadow: "rgba(14,165,233,0.35)", glow: "shadow-sky-500/25" },
+    { value: "violet", label: "Violet", bg: "bg-violet-500", border: "border-violet-500/40", shadow: "rgba(139,92,246,0.35)", glow: "shadow-violet-500/25" },
+    { value: "rose", label: "Rose", bg: "bg-rose-500", border: "border-rose-500/40", shadow: "rgba(244,63,94,0.35)", glow: "shadow-rose-500/25" },
+    { value: "amber", label: "Amber", bg: "bg-amber-500", border: "border-amber-500/40", shadow: "rgba(245,158,11,0.35)", glow: "shadow-amber-500/25" },
+    { value: "cyan", label: "Cyan", bg: "bg-cyan-500", border: "border-cyan-500/40", shadow: "rgba(6,182,212,0.35)", glow: "shadow-cyan-500/25" },
+];
+const getGroupColor = (v: string) => GROUP_COLORS.find(c => c.value === v) ?? GROUP_COLORS[0];
+
 const GENERAL_STORAGE_KEY = "dangdoro-general-pos";
 const GENERAL_DIM_KEY = "dangdoro-general-dim";
+const GENERAL_COLOR_KEY = "dangdoro-general-color";
 
 // ─── Animated dot-grid + light glow background ───────────────────────────────
 function AnimatedDotGrid() {
@@ -86,21 +99,39 @@ function AnimatedDotGrid() {
     );
 }
 
-// ─── Priority picker ──────────────────────────────────────────────────────────
-function PriorityPicker({ taskId, priority, onClose }: { taskId: string; priority: TaskPriority; onClose: () => void }) {
+// ─── Priority picker (inline) ─────────────────────────────────────────────────
+function PriorityPicker({ taskId, priority, onClose }: { 
+    taskId: string; 
+    priority: TaskPriority; 
+    onClose: () => void;
+}) {
     return (
-        <div className="absolute left-0 top-6 z-50 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl p-1 min-w-[116px] animate-in fade-in zoom-in-95 duration-150">
+        <div className="flex items-center gap-1 bg-zinc-800/90 rounded-lg p-1 border border-white/10 shadow-lg">
             {PRIORITIES.map(p => (
-                <button key={p.value}
-                    onClick={async () => { await updateTaskPriority(taskId, p.value); onClose(); }}
-                    className={cn("flex items-center gap-2 w-full px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors hover:bg-white/5",
-                        priority === p.value ? p.text : "text-zinc-400")}
+                <button 
+                    key={p.value}
+                    onClick={async (e) => { 
+                        e.stopPropagation();
+                        await updateTaskPriority(taskId, p.value); 
+                        onClose(); 
+                    }}
+                    title={p.label}
+                    className={cn(
+                        "w-4 h-4 rounded-full transition-all flex items-center justify-center",
+                        priority === p.value 
+                            ? "ring-2 ring-white/30 scale-110" 
+                            : "hover:scale-110 opacity-60 hover:opacity-100"
+                    )}
                 >
-                    <span className={cn("w-2 h-2 rounded-full flex-shrink-0", p.dot)} />
-                    {p.label}
-                    {priority === p.value && <Check className="w-3 h-3 ml-auto" />}
+                    <span className={cn("w-2.5 h-2.5 rounded-full", p.dot)} />
                 </button>
             ))}
+            <button 
+                onClick={(e) => { e.stopPropagation(); onClose(); }}
+                className="ml-0.5 text-zinc-500 hover:text-zinc-300 transition-colors"
+            >
+                <X className="w-3 h-3" />
+            </button>
         </div>
     );
 }
@@ -210,13 +241,21 @@ function TaskRow({ task, onDragStart }: { task: any; onDragStart: (e: React.Poin
                     </button>
                 )}
 
-                {/* Priority dot */}
-                <div className="relative flex-shrink-0">
-                    <button onClick={() => setShowPriority(v => !v)} className="opacity-0 group-hover/row:opacity-100 transition-opacity">
+                {/* Priority picker - inline dots */}
+                {showPriority ? (
+                    <PriorityPicker 
+                        taskId={task.id} 
+                        priority={task.priority ?? "natural"} 
+                        onClose={() => setShowPriority(false)}
+                    />
+                ) : (
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); setShowPriority(true); }} 
+                        className="opacity-0 group-hover/row:opacity-100 transition-opacity flex-shrink-0"
+                    >
                         <span className={cn("w-2 h-2 rounded-full block", p.dot)} />
                     </button>
-                    {showPriority && <PriorityPicker taskId={task.id} priority={task.priority ?? "natural"} onClose={() => setShowPriority(false)} />}
-                </div>
+                )}
 
                 <button onClick={() => deleteTask(task.id)}
                     className="opacity-0 group-hover/row:opacity-100 transition-opacity text-zinc-700 hover:text-red-400 flex-shrink-0">
@@ -237,33 +276,45 @@ function TaskRow({ task, onDragStart }: { task: any; onDragStart: (e: React.Poin
 const GENERAL_ID = "__general__";
 
 function GroupCard({
-    group, tasks, userId, isGeneral, isDragOver, onTaskDragStart, cardRef,
+    group, tasks, userId, isGeneral, isDragOver, onTaskDragStart, cardRef, onColorChange,
 }: {
-    group: { id: string; name: string; positionX: number; positionY: number; width?: number; height?: number };
+    group: { id: string; name: string; positionX: number; positionY: number; width?: number; height?: number; color?: string };
     tasks: any[]; userId: string; isGeneral: boolean; isDragOver: boolean;
     onTaskDragStart: (e: React.PointerEvent, task: any) => void;
     cardRef: (el: HTMLDivElement | null) => void;
+    onColorChange?: (color: string) => void;
 }) {
     const [collapsed, setCollapsed] = useState(false);
     const [newTask, setNewTask] = useState("");
     const [newDuration, setNewDuration] = useState("");
     const [newNotes, setNewNotes] = useState("");
     const [showNotesForm, setShowNotesForm] = useState(false);
+    const [showColorPicker, setShowColorPicker] = useState(false);
 
     const [isRenaming, setIsRenaming] = useState(false);
     const [renameVal, setRenameVal] = useState(group.name);
     const [isDraggingCard, setIsDraggingCard] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
+    
+    const groupColor = getGroupColor(group.color ?? "zinc");
+
+    // Size constraints
+    const MIN_WIDTH = 280;
+    const MAX_WIDTH = 600;
+    const MIN_HEIGHT = 200;
+    const MAX_HEIGHT = 800;
+    const clampW = (w: number) => Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, w));
+    const clampH = (h: number) => Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, h));
 
     const posRef = useRef({ x: group.positionX, y: group.positionY });
-    const dimRef = useRef({ w: group.width ?? 300, h: group.height ?? 400 });
+    const dimRef = useRef({ w: clampW(group.width ?? 300), h: clampH(group.height ?? 400) });
     const dragOffset = useRef({ x: 0, y: 0 });
     const cardEl = useRef<HTMLDivElement | null>(null);
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         posRef.current = { x: group.positionX, y: group.positionY };
-        dimRef.current = { w: group.width ?? 300, h: group.height ?? 400 };
+        dimRef.current = { w: clampW(group.width ?? 300), h: clampH(group.height ?? 400) };
         if (cardEl.current) {
             cardEl.current.style.left = `${group.positionX}px`;
             cardEl.current.style.top = `${group.positionY}px`;
@@ -312,8 +363,8 @@ function GroupCard({
     };
     const onResizePointerMove = (e: React.PointerEvent) => {
         if (!isResizing || !cardEl.current) return;
-        const newW = Math.max(260, e.clientX - posRef.current.x);
-        const newH = Math.max(160, e.clientY - posRef.current.y);
+        const newW = clampW(e.clientX - posRef.current.x);
+        const newH = clampH(e.clientY - posRef.current.y);
         dimRef.current = { w: newW, h: newH };
         cardEl.current.style.width = `${newW}px`;
         if (!collapsed) cardEl.current.style.height = `${newH}px`;
@@ -352,22 +403,35 @@ function GroupCard({
         });
     };
 
+    const handleColorChange = async (color: string) => {
+        if (isGeneral) {
+            localStorage.setItem(GENERAL_COLOR_KEY, color);
+            onColorChange?.(color);
+        } else {
+            await updateGroupColor(group.id, color);
+        }
+        setShowColorPicker(false);
+    };
+
     return (
         <div
             ref={(el) => { cardEl.current = el; cardRef(el); }}
             data-group-id={group.id}
+            data-group-color={group.color ?? "zinc"}
             style={{
                 position: "absolute",
                 left: group.positionX,
                 top: group.positionY,
-                width: group.width ?? 300,
-                height: collapsed ? "auto" : (group.height ?? 400),
+                width: clampW(group.width ?? 300),
+                height: collapsed ? "auto" : clampH(group.height ?? 400),
                 willChange: "left,top,width,height"
             }}
             className={cn(
                 "bg-zinc-900/70 backdrop-blur-2xl border rounded-2xl shadow-2xl transition-[box-shadow,border-color] duration-200 flex flex-col",
-                isDraggingCard || isResizing ? "border-emerald-500/40 shadow-emerald-500/20 scale-[1.01] z-50" : "border-white/10 z-10",
-                isDragOver && "border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.2)]"
+                isDraggingCard || isResizing 
+                    ? cn(groupColor.border, groupColor.glow, "scale-[1.01] z-50") 
+                    : "border-white/10 z-10",
+                isDragOver && cn(groupColor.border, groupColor.glow)
             )}
         >
             {/* Draggable Header */}
@@ -392,6 +456,43 @@ function GroupCard({
                 )}
 
                 <span className="text-[10px] font-bold text-zinc-700 tabular-nums">{tasks.length}</span>
+                
+                {/* Color picker */}
+                <div className="relative">
+                    {showColorPicker ? (
+                        <div className="flex items-center gap-1 bg-zinc-800/90 rounded-lg p-1 border border-white/10 shadow-lg">
+                            {GROUP_COLORS.map(c => (
+                                <button 
+                                    key={c.value}
+                                    onClick={() => handleColorChange(c.value)}
+                                    title={c.label}
+                                    className={cn(
+                                        "w-4 h-4 rounded-full transition-all flex items-center justify-center",
+                                        (group.color ?? "zinc") === c.value 
+                                            ? "ring-2 ring-white/30 scale-110" 
+                                            : "hover:scale-110 opacity-60 hover:opacity-100"
+                                    )}
+                                >
+                                    <span className={cn("w-2.5 h-2.5 rounded-full", c.bg)} />
+                                </button>
+                            ))}
+                            <button 
+                                onClick={() => setShowColorPicker(false)}
+                                className="ml-0.5 text-zinc-500 hover:text-zinc-300 transition-colors"
+                            >
+                                <X className="w-3 h-3" />
+                            </button>
+                        </div>
+                    ) : (
+                        <button 
+                            onClick={() => setShowColorPicker(true)} 
+                            className="text-zinc-700 hover:text-zinc-300 transition-colors"
+                        >
+                            <span className={cn("w-2.5 h-2.5 rounded-full block", groupColor.bg)} />
+                        </button>
+                    )}
+                </div>
+
                 {!isGeneral && (
                     <>
                         <button onClick={() => { setIsRenaming(true); setRenameVal(group.name); }} className="text-zinc-700 hover:text-zinc-300 transition-colors">
@@ -406,7 +507,7 @@ function GroupCard({
 
             {/* Scrollable Body */}
             {!collapsed && (
-                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2.5">
+                <div className="flex-1 min-h-0 overflow-y-auto p-2.5" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                     <form onSubmit={handleAddTask} className="flex flex-col gap-2 mb-4 bg-white/5 p-2 rounded-xl border border-white/5">
                         <div className="flex items-center gap-1.5">
                             <input value={newTask} onChange={e => setNewTask(e.target.value)} placeholder="Task title…"
@@ -472,70 +573,121 @@ export default function TasksPage() {
     const { user, loading: authLoading } = useAuth();
     const [tasks, setTasks] = useState<any[]>([]);
     const [groups, setGroups] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
     const [isCreatingGroup, setIsCreatingGroup] = useState(false);
     const [newGroupName, setNewGroupName] = useState("");
 
-    const [generalPos, setGeneralPos] = useState({ x: 40, y: 88 });
-    const [generalDim, setGeneralDim] = useState({ w: 300, h: 420 });
-
-    useEffect(() => {
-        const savedPos = localStorage.getItem(GENERAL_STORAGE_KEY);
-        if (savedPos) { try { setGeneralPos(JSON.parse(savedPos)); } catch { } }
-        const savedDim = localStorage.getItem(GENERAL_DIM_KEY);
-        if (savedDim) { try { setGeneralDim(JSON.parse(savedDim)); } catch { } }
-    }, []);
+    const [generalPos, setGeneralPos] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem(GENERAL_STORAGE_KEY);
+            if (saved) { try { return JSON.parse(saved); } catch { } }
+        }
+        return { x: 40, y: 88 };
+    });
+    const [generalDim, setGeneralDim] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem(GENERAL_DIM_KEY);
+            if (saved) { try { return JSON.parse(saved); } catch { } }
+        }
+        return { w: 300, h: 420 };
+    });
+    const [generalColor, setGeneralColor] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem(GENERAL_COLOR_KEY);
+            if (saved) { return saved; }
+        }
+        return "zinc";
+    });
 
     const [draggingTask, setDraggingTask] = useState<any | null>(null);
+    const [dragTaskColor, setDragTaskColor] = useState<string>("zinc");
     const [clonePos, setClonePos] = useState({ x: 0, y: 0 });
     const [overGroupId, setOverGroupId] = useState<string | null>(null);
     const [overTrash, setOverTrash] = useState(false);
+    const [deletingTask, setDeletingTask] = useState<{ id: string; title: string; pos: { x: number; y: number }; color: string } | null>(null);
     const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
     useEffect(() => {
-        if (!user) return;
+        if (authLoading) return;
+        
+        if (!user) {
+            setLoading(false);
+            return;
+        }
+        
         let cleanup: (() => void) | undefined;
         const run = async () => {
             if (user.isAnonymous) {
                 const { syncUserProfile } = await import("@/lib/db");
                 await syncUserProfile(user);
             }
-            const u1 = subscribeToTasks(user.uid, setTasks);
+            const u1 = subscribeToTasks(user.uid, (t) => {
+                setTasks(t);
+                setLoading(false);
+            });
             const u2 = subscribeToGroups(user.uid, setGroups);
             cleanup = () => { u1(); u2(); };
         };
         run();
         return () => { if (cleanup) cleanup(); };
-    }, [user]);
+    }, [user, authLoading]);
+
+    // Helper to get task's group color
+    const getTaskGroupColor = useCallback((task: any) => {
+        if (!task.groupId) return generalColor;
+        const group = groups.find(g => g.id === task.groupId);
+        return group?.color ?? "zinc";
+    }, [groups, generalColor]);
 
     const onTaskDragStart = useCallback((e: React.PointerEvent, task: any) => {
         e.currentTarget.setPointerCapture(e.pointerId);
         setDraggingTask(task);
+        setDragTaskColor(getTaskGroupColor(task));
         setClonePos({ x: e.clientX, y: e.clientY });
-    }, []);
+    }, [getTaskGroupColor]);
 
     const onCanvasPointerMove = useCallback((e: React.PointerEvent) => {
         if (!draggingTask) return;
         setClonePos({ x: e.clientX, y: e.clientY });
         const el = document.elementFromPoint(e.clientX, e.clientY);
-        const trashZone = document.getElementById("trash-drop-zone");
-        setOverTrash(!!trashZone?.contains(el));
         let found: string | null = null;
         for (const [gid, ref] of Object.entries(groupRefs.current)) {
             if (ref && ref.contains(el)) { found = gid; break; }
         }
         setOverGroupId(found);
+        // When not over any group, we're in "delete zone" (empty space)
+        setOverTrash(!found);
     }, [draggingTask]);
 
     const onCanvasPointerUp = useCallback(async () => {
         if (!draggingTask) return;
-        if (overTrash) {
-            await deleteTask(draggingTask.id);
-            toast.success("Task deleted.");
-        } else if (overGroupId && overGroupId !== (draggingTask.groupId ?? GENERAL_ID)) {
-            await moveTaskToGroup(draggingTask.id, overGroupId === GENERAL_ID ? null : overGroupId);
+        
+        const task = draggingTask;
+        const wasOverTrash = overTrash;
+        const wasOverGroupId = overGroupId;
+        const currentPos = clonePos;
+        const currentColor = dragTaskColor;
+        
+        // Clear drag state IMMEDIATELY for smooth UX
+        setDraggingTask(null);
+        setOverGroupId(null);
+        setOverTrash(false);
+        
+        // If dropped in empty space (not over any group), delete the task
+        if (wasOverTrash && !wasOverGroupId) {
+            // Trigger delete animation
+            setDeletingTask({ id: task.id, title: task.title, pos: currentPos, color: currentColor });
+            // Wait for animation then delete
+            setTimeout(async () => {
+                await deleteTask(task.id);
+                setDeletingTask(null);
+                toast.success("Task deleted.");
+            }, 400);
+        } else if (wasOverGroupId && wasOverGroupId !== (task.groupId ?? GENERAL_ID)) {
+            // Move task to new group (fire and forget for instant feedback)
+            moveTaskToGroup(task.id, wasOverGroupId === GENERAL_ID ? null : wasOverGroupId);
         }
-        setDraggingTask(null); setOverGroupId(null); setOverTrash(false);
-    }, [draggingTask, overGroupId, overTrash]);
+    }, [draggingTask, overGroupId, overTrash, clonePos, dragTaskColor]);
 
     const handleCreateGroup = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -548,7 +700,7 @@ export default function TasksPage() {
 
 
 
-    if (authLoading) {
+    if (authLoading || loading) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-zinc-950">
                 <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
@@ -572,7 +724,8 @@ export default function TasksPage() {
         positionX: generalPos.x,
         positionY: generalPos.y,
         width: generalDim.w,
-        height: generalDim.h
+        height: generalDim.h,
+        color: generalColor
     };
     const tasksByGroup = (gid: string) =>
         gid === GENERAL_ID ? tasks.filter(t => !t.groupId) : tasks.filter(t => t.groupId === gid);
@@ -599,6 +752,7 @@ export default function TasksPage() {
                 key={GENERAL_ID} group={generalGroup} tasks={tasksByGroup(GENERAL_ID)}
                 userId={user.uid} isGeneral isDragOver={overGroupId === GENERAL_ID}
                 onTaskDragStart={onTaskDragStart} cardRef={el => { groupRefs.current[GENERAL_ID] = el; }}
+                onColorChange={setGeneralColor}
             />
             {groups.map(g => (
                 <GroupCard key={g.id} group={g} tasks={tasksByGroup(g.id)}
@@ -624,23 +778,82 @@ export default function TasksPage() {
                 </button>
             </div>
 
-            {/* Trash zone */}
-            {draggingTask && (
-                <div id="trash-drop-zone"
-                    className={cn("fixed bottom-8 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-8 py-4 rounded-2xl border transition-all duration-200",
-                        overTrash ? "bg-red-500/20 border-red-500/60 shadow-[0_0_30px_rgba(239,68,68,0.3)] scale-105" : "bg-zinc-900/70 border-white/10 backdrop-blur-xl")}>
-                    <Trash2 className={cn("w-4 h-4", overTrash ? "text-red-400" : "text-zinc-600")} />
-                    <span className={cn("text-xs font-black uppercase tracking-widest", overTrash ? "text-red-400" : "text-zinc-600")}>Drop to delete</span>
-                </div>
-            )}
-
             {/* Drag clone */}
-            {draggingTask && (
-                <div style={{ position: "fixed", left: clonePos.x + 10, top: clonePos.y + 10, pointerEvents: "none", zIndex: 99 }}
-                    className="bg-zinc-800 border border-white/20 rounded-xl px-3 py-2 shadow-2xl backdrop-blur-xl animate-in zoom-in-95 duration-100">
-                    <span className="text-xs font-bold text-white">{draggingTask.title}</span>
-                </div>
-            )}
+            {draggingTask && (() => {
+                const colorConfig = getGroupColor(dragTaskColor);
+                return (
+                    <div 
+                        style={{ 
+                            position: "fixed", 
+                            left: clonePos.x + 10, 
+                            top: clonePos.y + 10, 
+                            pointerEvents: "none", 
+                            zIndex: 99,
+                            animation: overTrash && !overGroupId ? "shake 0.3s ease-in-out infinite" : undefined,
+                            boxShadow: `0 0 16px 2px ${colorConfig.shadow}, 0 8px 24px rgba(0,0,0,0.4)`
+                        }}
+                        className={cn(
+                            "rounded-xl px-3 py-2 backdrop-blur-xl border",
+                            colorConfig.border,
+                            "bg-zinc-800/90"
+                        )}
+                    >
+                        <span className="text-xs font-bold text-white">{draggingTask.title}</span>
+                    </div>
+                );
+            })()}
+
+            {/* Delete animation */}
+            {deletingTask && (() => {
+                const colorConfig = getGroupColor(deletingTask.color);
+                return (
+                    <div 
+                        style={{ 
+                            position: "fixed", 
+                            left: deletingTask.pos.x + 10, 
+                            top: deletingTask.pos.y + 10, 
+                            pointerEvents: "none", 
+                            zIndex: 99,
+                            animation: "deleteTask 0.4s ease-out forwards",
+                            boxShadow: `0 0 30px ${colorConfig.shadow}`
+                        }}
+                        className={cn(
+                            "rounded-xl px-3 py-2 backdrop-blur-xl border",
+                            colorConfig.border,
+                            "bg-zinc-800/90"
+                        )}
+                    >
+                        <span className="text-xs font-bold text-white">{deletingTask.title}</span>
+                    </div>
+                );
+            })()}
+
+            {/* CSS Animations & Hide Scrollbar */}
+            <style jsx global>{`
+                /* Hide scrollbar for all group card scrollable areas */
+                .overflow-y-auto::-webkit-scrollbar {
+                    display: none;
+                }
+                @keyframes shake {
+                    0%, 100% { transform: translateX(0); }
+                    25% { transform: translateX(-2px) rotate(-1deg); }
+                    75% { transform: translateX(2px) rotate(1deg); }
+                }
+                @keyframes deleteTask {
+                    0% { 
+                        opacity: 1; 
+                        transform: scale(1) rotate(0deg); 
+                    }
+                    50% { 
+                        opacity: 0.8; 
+                        transform: scale(0.8) rotate(-5deg); 
+                    }
+                    100% { 
+                        opacity: 0; 
+                        transform: scale(0) rotate(-15deg); 
+                    }
+                }
+            `}</style>
 
             {/* Guest nudge */}
             {user.isAnonymous && (
