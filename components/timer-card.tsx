@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Play, Pause, RotateCcw, Check, X, ChevronUp, ChevronDown, Settings, Minus, Plus, Eye, EyeOff, Square } from "lucide-react";
+import { Play, Pause, RotateCcw, Check, X, ChevronUp, ChevronDown, Settings, Minus, Plus, Eye, EyeOff, Square, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTimerStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,7 @@ export function TimerCard() {
     isNavFocusMode,
     toggleNavFocusMode,
     setSessionEndSound,
+    sessionEndSound,
     sessionStartTime,
   } = useTimerStore();
 
@@ -44,6 +45,45 @@ export function TimerCard() {
   const [adjustmentAmount, setAdjustmentAmount] = useState(1); // in minutes
   const [hasHydrated, setHasHydrated] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [playingSoundId, setPlayingSoundId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const SESSION_SOUNDS = [
+    { id: "universfield-new-notification-027-383749.mp3", label: "Minimal Tech" },
+    { id: "universfield-soft-piano-logo-141290.mp3", label: "Zen Piano" },
+    { id: "koiroylers-cutie-cat-355747.mp3", label: "Cyber Cat" }
+  ];
+
+  const handlePreviewSound = (soundId: string) => {
+    if (playingSoundId === soundId) {
+      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+      setPlayingSoundId(null);
+      return;
+    }
+    if (audioRef.current) { audioRef.current.pause(); }
+    const audio = new Audio(`/SessionEndSounds/${soundId}`);
+    audio.volume = 0.5;
+    audioRef.current = audio;
+    setPlayingSoundId(soundId);
+    audio.play();
+    audio.onended = () => { setPlayingSoundId(null); audioRef.current = null; };
+  };
+
+  const handleSelectSound = async (soundId: string) => {
+    setSessionEndSound(soundId);
+    if (user) {
+      const { updateUserSettings } = await import("@/lib/db");
+      await updateUserSettings(user.uid, { sessionEndSound: soundId });
+    }
+  };
+
+  const handleSetAdjustment = async (value: number) => {
+    setAdjustmentAmount(value);
+    if (user) {
+      const { updateUserSettings } = await import("@/lib/db");
+      await updateUserSettings(user.uid, { adjustmentAmount: value });
+    }
+  };
 
   const handleStop = async () => {
     const startTime = sessionStartTime;
@@ -384,7 +424,7 @@ export function TimerCard() {
                   )}
                 </div>
 
-                {/* Right: Settings Toggle + Sliding Panel */}
+                {/* Right: Settings Toggle + Panel */}
                 <div className="relative flex items-center">
                   <Button
                     variant="ghost"
@@ -404,40 +444,126 @@ export function TimerCard() {
                     )} />
                   </Button>
 
-                  {/* Sliding Panel to the Right */}
+                  {/* Sliding Panel to the Right (Reset + Focus Mode) */}
                   <div className={cn(
-                    "absolute left-full ml-3 overflow-hidden transition-all duration-500 ease-out",
-                    isSettingsOpen ? "max-w-[200px] opacity-100" : "max-w-0 opacity-0"
+                    "absolute left-full ml-3 overflow-visible transition-all duration-500 ease-out",
+                    isSettingsOpen ? "max-w-[200px] opacity-100" : "max-w-0 opacity-0 pointer-events-none"
                   )}>
-                    <div className="flex items-center gap-2 bg-white/5 backdrop-blur-sm rounded-2xl px-3 py-2 border border-white/10 whitespace-nowrap">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={reset}
-                        title="Reset timer"
-                        className="h-11 w-11 rounded-xl text-white/60 transition-all duration-300 shrink-0 cursor-pointer"
-                      >
-                        <RotateCcw className="w-5 h-5" />
-                      </Button>
+                    <div className="relative">
+                      <div className="flex items-center gap-2 bg-zinc-900/90 backdrop-blur-2xl rounded-2xl px-3 py-2 border border-white/10 whitespace-nowrap">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={reset}
+                          title="Reset timer"
+                          className="h-11 w-11 rounded-xl text-white/60 transition-all duration-300 shrink-0 cursor-pointer"
+                        >
+                          <RotateCcw className="w-5 h-5" />
+                        </Button>
 
-                      <div className="w-px h-6 bg-white/10" />
+                        <div className="w-px h-6 bg-white/10" />
 
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={toggleNavFocusMode}
-                        title={isNavFocusMode ? "Disable Focus Mode (show nav)" : "Enable Focus Mode (hide nav)"}
-                        className={cn(
-                          "h-11 w-11 rounded-xl transition-all duration-300 shrink-0 cursor-pointer",
-                          isNavFocusMode
-                            ? "text-white bg-white/10"
-                            : "text-white/50"
-                        )}
-                      >
-                        {isNavFocusMode ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
-                      </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={toggleNavFocusMode}
+                          title={isNavFocusMode ? "Disable Focus Mode (show nav)" : "Enable Focus Mode (hide nav)"}
+                          className={cn(
+                            "h-11 w-11 rounded-xl transition-all duration-300 shrink-0 cursor-pointer",
+                            isNavFocusMode
+                              ? "text-white bg-white/10"
+                              : "text-white/50"
+                          )}
+                        >
+                          {isNavFocusMode ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+                        </Button>
+                      </div>
+
+                      {/* Settings Popup - appears above the sliding panel */}
+                      {isSettingsOpen && (
+                        <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                          <div className="w-[280px] bg-zinc-900/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden">
+
+                            {/* Step Size */}
+                            <div className="px-5 pt-5 pb-4 border-b border-white/[0.06]">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Minus className="w-3 h-3 text-white/30" />
+                                <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Step Size</span>
+                                <Plus className="w-3 h-3 text-white/30" />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {[1, 2, 5, 10].map((val) => (
+                                  <button
+                                    key={val}
+                                    onClick={() => handleSetAdjustment(val)}
+                                    className={cn(
+                                      "flex-1 py-2 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer",
+                                      adjustmentAmount === val
+                                        ? "bg-white text-black"
+                                        : "bg-white/5 text-white/50 border border-white/10 hover:bg-white/10 hover:text-white"
+                                    )}
+                                  >
+                                    {val}m
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Session End Sound */}
+                            <div className="px-5 pt-4 pb-5">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Volume2 className="w-3 h-3 text-white/30" />
+                                <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Session Sound</span>
+                              </div>
+                              <div className="flex flex-col gap-1.5">
+                                {SESSION_SOUNDS.map((sound) => (
+                                  <div key={sound.id} className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => handleSelectSound(sound.id)}
+                                      className={cn(
+                                        "flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-300 cursor-pointer text-left",
+                                        sessionEndSound === sound.id
+                                          ? "bg-white/10 text-white border border-white/20"
+                                          : "text-white/40 hover:bg-white/5 hover:text-white/70"
+                                      )}
+                                    >
+                                      <div className={cn(
+                                        "w-1.5 h-1.5 rounded-full shrink-0 transition-all",
+                                        sessionEndSound === sound.id ? "bg-white" : "bg-white/20"
+                                      )} />
+                                      {sound.label}
+                                    </button>
+                                    <button
+                                      onClick={() => handlePreviewSound(sound.id)}
+                                      className={cn(
+                                        "w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300 cursor-pointer shrink-0",
+                                        playingSoundId === sound.id
+                                          ? "bg-white text-black"
+                                          : "text-white/30 hover:bg-white/5 hover:text-white/60"
+                                      )}
+                                    >
+                                      {playingSoundId === sound.id
+                                        ? <Pause className="w-3 h-3 fill-current" />
+                                        : <Play className="w-3 h-3 fill-current ml-0.5" />
+                                      }
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
+
+                  {/* Backdrop to close settings */}
+                  {isSettingsOpen && (
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setIsSettingsOpen(false)}
+                    />
+                  )}
                 </div>
               </div>
             </>
