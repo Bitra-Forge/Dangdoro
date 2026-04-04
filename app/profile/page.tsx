@@ -5,11 +5,11 @@ import { cn } from "@/lib/utils";
 import { logOut } from "@/lib/auth";
 import { onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { uploadProfilePicture, updateProfilePictureBase64, getSessionHistory } from "@/lib/db";
-import { 
-    Camera, Shield, Zap, Clock, Calendar, LogOut, 
-    Trophy, Share2, Pencil, Activity, Award, Flame, 
-    Lock, Star, TrendingUp, Info
+import { uploadProfilePicture, updateProfilePictureBase64, getSessionHistory, updateUserProfile } from "@/lib/db";
+import {
+    Camera, Shield, Zap, Clock, Calendar, LogOut,
+    Trophy, Share2, Pencil, Activity, Award, Flame,
+    Lock, Star, TrendingUp, Info, CheckCircle2
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ import Cropper from "react-easy-crop";
 // --- Components ---
 
 const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0 }: any) => (
-    <motion.div 
+    <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 + delay, duration: 0.8 }}
@@ -38,7 +38,7 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0 }: any) => (
 );
 
 const ProductivitySquare = ({ level, date }: { level: number; date: Date }) => (
-    <div 
+    <div
         className={cn(
             "w-2.5 h-2.5 rounded-sm transition-all duration-500",
             level === 0 ? "bg-white/5" : "bg-purple-500"
@@ -63,6 +63,13 @@ export default function ProfilePage() {
     const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
     const [showCropper, setShowCropper] = useState(false);
 
+    // Edit State
+    const [isEditing, setIsEditing] = useState(false);
+    const [editName, setEditName] = useState("");
+    const [editNickname, setEditNickname] = useState("");
+    const [editBio, setEditBio] = useState("");
+    const [isSaving, setIsSaving] = useState(false);
+
     useEffect(() => {
         if (authLoading) return;
         if (!user) { setLoading(false); return; }
@@ -76,7 +83,14 @@ export default function ProfilePage() {
 
             // Sync user data
             const unsub = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
-                if (docSnap.exists()) setUserData(docSnap.data());
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    setUserData(data);
+                    // Pre-fill edit state
+                    setEditName(data.displayName || "");
+                    setEditNickname(data.nickname || "");
+                    setEditBio(data.bio || "");
+                }
                 setLoading(false);
             });
 
@@ -98,7 +112,7 @@ export default function ProfilePage() {
         if (!sessions.length) return 0;
         const sortedDates = [...new Set(sessions.map(s => startOfDay(s.completedAt.toDate()).getTime()))]
             .sort((a, b) => b - a);
-        
+
         let streak = 0;
         let today = startOfDay(new Date());
         let currentRef = today;
@@ -110,7 +124,7 @@ export default function ProfilePage() {
         for (let i = 0; i < sortedDates.length; i++) {
             const date = new Date(sortedDates[i]);
             const diff = differenceInDays(currentRef, date);
-            
+
             if (diff <= 1) {
                 streak++;
                 currentRef = date;
@@ -165,6 +179,24 @@ export default function ProfilePage() {
         } catch (error) { toast.error("Failed.", { id: "upload" }); }
     };
 
+    const handleSaveProfile = async () => {
+        if (!user) return;
+        setIsSaving(true);
+        try {
+            await updateUserProfile(user.uid, {
+                displayName: editName,
+                nickname: editNickname,
+                bio: editBio
+            });
+            toast.success("Profile saved!");
+            setIsEditing(false);
+        } catch (e) {
+            toast.error("Failed to save.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const getCroppedImgBase64 = async (imageSrc: string, pixelCrop: any): Promise<string | null> => {
         const img = new Image();
         img.src = imageSrc;
@@ -206,98 +238,143 @@ export default function ProfilePage() {
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[600px] bg-gradient-to-b from-purple-500/5 to-transparent pointer-events-none" />
 
             <main className="relative z-10 flex flex-col items-center pb-32 px-6 w-full flex-1 max-w-5xl mx-auto">
-                
+
                 {/* Header Section */}
                 <div className="flex flex-col items-center mb-16 w-full animate-in fade-in slide-in-from-top-12 duration-1000">
-                    <div className="relative group mb-10">
+                    <div className="relative group mb-10 cursor-pointer">
                         {/* Glow Behind PFP */}
-                        <div className="absolute -inset-8 bg-purple-600/20 rounded-full blur-[60px] animate-pulse opacity-60 pointer-events-none" />
-                        
-                        <div className="relative">
-                            <Avatar className="w-32 h-32 border-[6px] border-zinc-950 shadow-[0_0_40px_rgba(168,85,247,0.2)] relative z-10 overflow-visible ring-1 ring-white/10 ring-offset-0">
-                                <div className="absolute inset-0 rounded-full overflow-hidden">
-                                    <AvatarImage 
-                                        src={userData?.photoURL || user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`} 
-                                        className="object-cover w-full h-full" 
-                                    />
-                                    <AvatarFallback className="bg-zinc-900 font-black text-2xl text-white">
-                                        {user.displayName?.charAt(0) || "F"}
-                                    </AvatarFallback>
-                                </div>
+                        <div className="absolute -inset-12 bg-purple-600/20 rounded-full blur-[60px] opacity-0 group-hover:opacity-100 group-hover:bg-purple-500/30 transition-all duration-1000 pointer-events-none" />
 
-                                {!user.isAnonymous && (
+                        <div className="relative">
+                            <Avatar className="w-32 h-32 border border-white/10 group-hover:border-purple-400/40 relative z-10 overflow-hidden transition-all duration-700">
+                                <AvatarImage
+                                    src={userData?.photoURL || user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`}
+                                    className="object-cover w-full h-full"
+                                />
+                                <AvatarFallback className="bg-zinc-900 font-black text-2xl text-white">
+                                    {user.displayName?.charAt(0) || "F"}
+                                </AvatarFallback>
+
+                                {isEditing && (
                                     <label className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer rounded-full z-20">
                                         <Camera className="w-8 h-8 text-white" />
                                         <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
                                     </label>
                                 )}
                             </Avatar>
-                            
-                            {/* Rank Badge overlay */}
-                            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-zinc-950 border border-white/10 px-3 py-1 rounded-full shadow-2xl z-20 flex items-center gap-2">
-                                <div className={cn("w-2 h-2 rounded-full animate-pulse", user.isAnonymous ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]")} />
-                                <span className={cn("text-[8px] font-black uppercase tracking-widest", user.isAnonymous ? "text-amber-500/80" : "text-emerald-500/80")}>
-                                    {user.isAnonymous ? "Temporary" : "Permanent"}
-                                </span>
-                            </div>
                         </div>
                     </div>
 
                     <div className="flex flex-col items-center text-center">
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="h-[1px] w-8 bg-zinc-800" />
-                            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-purple-400">Elite Operative</span>
-                            <div className="h-[1px] w-8 bg-zinc-800" />
-                        </div>
-                        
-                        <h1 className="text-4xl font-black text-white italic tracking-tighter uppercase mb-2 drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]">
-                            {userData?.displayName || "Guest Master"}
-                        </h1>
-                        <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mb-10">
-                            Senior Productivity Architect | Sector 7-G
-                        </p>
+                        {isEditing ? (
+                            <div className="flex flex-col items-center gap-6 w-full max-w-sm animate-in fade-in slide-in-from-top-4 duration-500">
+                                <div className="flex items-center gap-3 w-full">
+                                    <div className="h-[1px] flex-1 bg-zinc-800" />
+                                    <input
+                                        value={editNickname}
+                                        onChange={e => setEditNickname(e.target.value)}
+                                        placeholder="NICKNAME"
+                                        className="bg-transparent border-b border-purple-500/30 text-[13px] font-black tracking-[0.3em] text-purple-400 text-center focus:outline-none focus:border-purple-500 transition-all px-2 py-1 w-40"
+                                    />
+                                    <div className="h-[1px] flex-1 bg-zinc-800" />
+                                </div>
 
-                        <div className="flex items-center gap-3">
-                            <Button className="h-10 px-8 rounded-xl bg-purple-600 text-white hover:bg-purple-500 font-bold uppercase tracking-widest text-[10px] shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all flex items-center gap-2">
-                                <Pencil className="w-3.5 h-3.5" />
-                                Edit Profile
-                            </Button>
-                            <Button variant="ghost" className="h-10 px-8 rounded-xl border border-white/10 text-zinc-400 hover:text-white hover:bg-white/5 font-bold uppercase tracking-widest text-[10px] transition-all flex items-center gap-2">
-                                <Share2 className="w-3.5 h-3.5" />
-                                Share Link
-                            </Button>
-                        </div>
+                                <input
+                                    value={editName}
+                                    onChange={e => setEditName(e.target.value)}
+                                    placeholder="Display Name"
+                                    className="bg-transparent border-b border-white/10 text-4xl font-black text-white tracking-tighter text-center focus:outline-none focus:border-white/30 transition-all w-full py-2"
+                                />
+
+                                <textarea
+                                    value={editBio}
+                                    onChange={e => setEditBio(e.target.value)}
+                                    placeholder="Professional Title | Sector"
+                                    rows={1}
+                                    className="bg-transparent border-b border-white/5 text-[11px] font-bold text-zinc-500 tracking-widest text-center focus:outline-none focus:border-white/20 transition-all w-full py-2 resize-none"
+                                />
+
+                                <div className="flex items-center gap-3 mt-4">
+                                    <Button
+                                        onClick={handleSaveProfile}
+                                        disabled={isSaving}
+                                        className="h-10 px-8 rounded-xl bg-purple-600 text-white hover:bg-purple-500 font-bold uppercase tracking-widest text-[10px] shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all flex items-center gap-2"
+                                    >
+                                        {isSaving ? "Saving..." : <CheckCircle2 className="w-3.5 h-3.5" />}
+                                        Save Changes
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() => setIsEditing(false)}
+                                        className="h-10 px-8 rounded-xl border border-white/10 text-zinc-400 hover:text-white hover:bg-white/5 font-bold uppercase tracking-widest text-[10px] transition-all"
+                                    >
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="h-[1px] w-12 bg-zinc-800" />
+                                    <span className="text-[13px] font-black tracking-[0.3em] text-purple-400">
+                                        {userData?.nickname || "NICKNAME"}
+                                    </span>
+                                    <div className="h-[1px] w-12 bg-zinc-800" />
+                                </div>
+
+                                <h1 className="text-4xl font-black text-white tracking-tighter mb-2 drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]">
+                                    {userData?.displayName || "Guest Master"}
+                                </h1>
+                                <p className="text-[11px] font-bold text-zinc-500 tracking-widest mb-10">
+                                    {userData?.bio || "Senior Productivity Architect | Sector 7-G"}
+                                </p>
+
+                                <div className="flex items-center gap-3">
+                                    <Button
+                                        onClick={() => setIsEditing(true)}
+                                        className="h-10 px-8 rounded-xl bg-purple-600 text-white hover:bg-purple-500 font-bold uppercase tracking-widest text-[10px] shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all flex items-center gap-2"
+                                    >
+                                        <Pencil className="w-3.5 h-3.5" />
+                                        Edit Profile
+                                    </Button>
+                                    <Button variant="ghost" className="h-10 px-8 rounded-xl border border-white/10 text-zinc-400 hover:text-white hover:bg-white/5 font-bold uppercase tracking-widest text-[10px] transition-all flex items-center gap-2">
+                                        <Share2 className="w-3.5 h-3.5" />
+                                        Share Link
+                                    </Button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
 
                 {/* Stat Row */}
                 <div className="w-full grid grid-cols-2 md:grid-cols-4 gap-6 mb-16">
-                    <StatCard 
-                        icon={Flame} 
-                        label="Focus Streak" 
-                        value={`${streakCount} Day${streakCount === 1 ? '' : 's'}`} 
-                        colorClass="bg-red-500" 
+                    <StatCard
+                        icon={Flame}
+                        label="Focus Streak"
+                        value={`${streakCount} Day${streakCount === 1 ? '' : 's'}`}
+                        colorClass="bg-red-500"
                         delay={0.1}
                     />
-                    <StatCard 
-                        icon={Zap} 
-                        label="Sessions" 
-                        value={userData?.totalPomodoros || 0} 
-                        colorClass="bg-amber-500" 
+                    <StatCard
+                        icon={Zap}
+                        label="Sessions"
+                        value={userData?.totalPomodoros || 0}
+                        colorClass="bg-amber-500"
                         delay={0.2}
                     />
-                    <StatCard 
-                        icon={Clock} 
-                        label="Total Minutes" 
-                        value={userData?.totalMinutes || 0} 
-                        colorClass="bg-sky-500" 
+                    <StatCard
+                        icon={Clock}
+                        label="Total Minutes"
+                        value={userData?.totalMinutes || 0}
+                        colorClass="bg-sky-500"
                         delay={0.3}
                     />
-                    <StatCard 
-                        icon={Calendar} 
-                        label="Joined Date" 
-                        value={userData?.createdAt?.seconds ? format(new Date(userData.createdAt.seconds * 1000), "MMM yyyy") : "---"} 
-                        colorClass="bg-purple-500" 
+                    <StatCard
+                        icon={Calendar}
+                        label="Joined Date"
+                        value={userData?.createdAt?.seconds ? format(new Date(userData.createdAt.seconds * 1000), "MMM yyyy") : "---"}
+                        colorClass="bg-purple-500"
                         delay={0.4}
                     />
                 </div>
@@ -305,7 +382,7 @@ export default function ProfilePage() {
                 {/* Dashboard Grid */}
                 <div className="w-full grid grid-cols-1 lg:grid-cols-10 gap-6">
                     {/* Recent Productivity */}
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.6, duration: 0.8 }}
@@ -316,7 +393,7 @@ export default function ProfilePage() {
                                 <div className="p-2 rounded-lg bg-zinc-800 border border-white/5">
                                     <Activity className="w-4 h-4 text-purple-400" />
                                 </div>
-                                <h3 className="text-sm font-black uppercase tracking-widest text-white italic italic-none">Recent Productivity</h3>
+                                <h3 className="text-sm font-black uppercase tracking-widest text-white italic">Recent Productivity</h3>
                             </div>
                             <div className="flex items-center gap-1.5">
                                 <span className="text-[8px] uppercase text-zinc-600 font-bold">Less</span>
@@ -335,7 +412,7 @@ export default function ProfilePage() {
                                 <ProductivitySquare key={i} level={day.level} date={day.date} />
                             ))}
                         </div>
-                        
+
                         <div className="mt-8 flex items-center justify-between pt-6 border-t border-white/5">
                             <div className="flex items-center gap-4">
                                 <TrendingUp className="w-4 h-4 text-emerald-400" />
@@ -350,7 +427,7 @@ export default function ProfilePage() {
                     </motion.div>
 
                     {/* Trophy Cabinet */}
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.7, duration: 0.8 }}
@@ -388,16 +465,16 @@ export default function ProfilePage() {
             {/* Cropping Modal */}
             <AnimatePresence>
                 {showCropper && image && (
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                         className="fixed inset-0 z-[100] bg-zinc-950/90 backdrop-blur-xl flex items-center justify-center p-4"
                     >
-                        <motion.div 
+                        <motion.div
                             initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }}
                             className="w-full max-w-xl aspect-square bg-zinc-900 border border-white/10 rounded-[3rem] overflow-hidden relative shadow-2xl"
                         >
                             <div className="absolute inset-0 pb-20">
-                                <Cropper image={image} crop={crop} zoom={zoom} aspect={1} onCropChange={setCrop} onCropComplete={onCropComplete} onZoomChange={setZoom} cropShape="round" showGrid={false} />
+                                <Cropper image={image || undefined} crop={crop} zoom={zoom} aspect={1} onCropChange={setCrop} onCropComplete={onCropComplete} onZoomChange={setZoom} cropShape="round" showGrid={false} />
                             </div>
                             <div className="absolute bottom-0 left-0 right-0 p-6 bg-zinc-900/80 backdrop-blur-md flex items-center justify-between border-t border-white/5">
                                 <Button variant="ghost" onClick={() => setShowCropper(false)} className="text-zinc-500 hover:text-white uppercase font-black text-xs tracking-widest">Cancel</Button>

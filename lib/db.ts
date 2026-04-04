@@ -492,3 +492,18 @@ export const updateUserSettings = async (userId: string, settings: any) => {
         return false;
     }
 };
+
+export const updateUserProfile = async (userId: string, data: { displayName?: string; nickname?: string; bio?: string }) => {
+    try {
+        const userRef = doc(db, "users", userId);
+        await updateDoc(userRef, data);
+
+        if (data.displayName && auth.currentUser) {
+            await updateProfile(auth.currentUser, { displayName: data.displayName });
+        }
+        return true;
+    } catch (error) {
+        console.error("Error updating user profile:", error);
+        return false;
+    }
+};
