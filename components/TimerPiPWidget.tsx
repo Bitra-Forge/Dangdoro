@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useTimerStore } from "@/lib/store";
 import Image from "next/image";
-import { Play, Pause, ExternalLink, GripHorizontal, MonitorPlay } from "lucide-react";
+import { Play, Pause, GripHorizontal, Tv2 } from "lucide-react";
 import Link from "next/link";
 
 const modeLabels = {
@@ -30,6 +30,11 @@ const formatTime = (seconds: number) => {
   return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
 };
 
+// Check if Document PiP is supported
+const isDocumentPiPSupported = () => {
+  return typeof window !== "undefined" && "documentPictureInPicture" in window;
+};
+
 export function TimerPiPWidget() {
   const pathname = usePathname();
   const [isDismissed, setIsDismissed] = useState(false);
@@ -40,12 +45,8 @@ export function TimerPiPWidget() {
   const [isDragging, setIsDragging] = useState(false);
   const dragOffset = useRef({ x: 0, y: 0 });
   const widgetRef = useRef<HTMLDivElement>(null);
-  
-  // PiP refs
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const pipWindowRef = useRef<PictureInPictureWindow | null>(null);
-  const animationFrameRef = useRef<number>(0);
+  const pipWindowRef = useRef<Window | null>(null);
+  const pipIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const timeLeft = useTimerStore((state) => state.timeLeft);
   const isActive = useTimerStore((state) => state.isActive);
@@ -76,156 +77,330 @@ export function TimerPiPWidget() {
     }
   }, [isOnTimerPage, isDismissed]);
 
-  // Draw timer on canvas for PiP
-  const drawCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const state = useTimerStore.getState();
-    const currentTimeLeft = state.timeLeft;
-    const currentMode = state.mode;
-    const currentIsActive = state.isActive;
-
-    // Background
-    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    gradient.addColorStop(0, "#18181b");
-    gradient.addColorStop(1, "#09090b");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Mode color
-    const modeColor = currentMode === "focus" ? "#10b981" : currentMode === "break" ? "#0ea5e9" : "#8b5cf6";
-    
-    // Glowing circle
-    ctx.beginPath();
-    ctx.arc(canvas.width / 2, canvas.height / 2 - 10, 80, 0, Math.PI * 2);
-    ctx.strokeStyle = modeColor;
-    ctx.lineWidth = 4;
-    ctx.shadowColor = modeColor;
-    ctx.shadowBlur = 20;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    // Timer text
-    ctx.font = "bold 48px system-ui, sans-serif";
-    ctx.fillStyle = "#ffffff";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(formatTime(currentTimeLeft), canvas.width / 2, canvas.height / 2 - 10);
-
-    // Mode label
-    ctx.font = "bold 14px system-ui, sans-serif";
-    ctx.fillStyle = modeColor;
-    ctx.fillText(modeLabels[currentMode].toUpperCase(), canvas.width / 2, canvas.height / 2 + 50);
-
-    // Status indicator
-    ctx.beginPath();
-    ctx.arc(canvas.width / 2, canvas.height / 2 + 80, 6, 0, Math.PI * 2);
-    ctx.fillStyle = currentIsActive ? modeColor : "#71717a";
-    ctx.fill();
-
-    // Status text
-    ctx.font = "12px system-ui, sans-serif";
-    ctx.fillStyle = "#a1a1aa";
-    ctx.fillText(currentIsActive ? "Running" : "Paused", canvas.width / 2, canvas.height / 2 + 105);
-
-    // Continue animation
-    if (isPiPActive) {
-      animationFrameRef.current = requestAnimationFrame(drawCanvas);
-    }
-  }, [isPiPActive]);
-
-  // Start Picture-in-Picture
-  const startPiP = useCallback(async () => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    
-    if (!video || !canvas) return;
-    
-    if (!document.pictureInPictureEnabled) {
-      alert("Picture-in-Picture is not supported in your browser. Try Chrome or Edge.");
+  // Start Document Picture-in-Picture
+  const startDocumentPiP = useCallback(async () => {
+    if (!isDocumentPiPSupported()) {
+      alert("Document Picture-in-Picture is not supported in your browser. Please use Chrome 116+ or Edge.");
       return;
     }
 
-    // If already in PiP, exit it
-    if (document.pictureInPictureElement) {
-      try {
-        await document.exitPictureInPicture();
-      } catch (e) {
-        console.log("Error exiting PiP:", e);
-      }
+    // Close existing PiP
+    if (pipWindowRef.current && !pipWindowRef.current.closed) {
+      pipWindowRef.current.close();
+      setIsPiPActive(false);
       return;
     }
 
     try {
-      // Draw initial frame first
-      drawCanvas();
-      
-      // Set up canvas stream
-      const stream = canvas.captureStream(30);
-      
-      // Stop any existing stream
-      if (video.srcObject) {
-        const oldStream = video.srcObject as MediaStream;
-        oldStream.getTracks().forEach(track => track.stop());
-      }
-      
-      video.srcObject = stream;
-      video.muted = true;
-
-      // Wait for video to be ready before playing
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error("Timeout")), 3000);
-        
-        const onCanPlay = () => {
-          clearTimeout(timeout);
-          video.removeEventListener("canplay", onCanPlay);
-          resolve();
-        };
-        
-        // If already ready
-        if (video.readyState >= 3) {
-          clearTimeout(timeout);
-          resolve();
-          return;
-        }
-        
-        video.addEventListener("canplay", onCanPlay);
-        video.load();
+      // @ts-ignore - documentPictureInPicture is not in types yet
+      const pipWindow = await window.documentPictureInPicture.requestWindow({
+        width: 300,
+        height: 220,
       });
 
-      // Play the video
-      await video.play();
-
-      // Enter PiP mode
-      pipWindowRef.current = await video.requestPictureInPicture();
+      pipWindowRef.current = pipWindow;
       setIsPiPActive(true);
 
-      // Handle PiP close
-      const handleLeavePiP = () => {
-        setIsPiPActive(false);
-        cancelAnimationFrame(animationFrameRef.current);
-        pipWindowRef.current = null;
-        video.removeEventListener("leavepictureinpicture", handleLeavePiP);
+      // Get current background image
+      const currentBg = useTimerStore.getState().backgroundImage;
+      const bgUrl = `${window.location.origin}/Backgrounds/${currentBg}`;
+
+      // Add styles that match the in-app widget exactly
+      const pipStyles = document.createElement("style");
+      pipStyles.textContent = `
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+        
+        body {
+          font-family: 'Inter', system-ui, -apple-system, sans-serif;
+          background: #09090b;
+          overflow: hidden;
+          height: 100vh;
+          cursor: move;
+          -webkit-app-region: drag;
+        }
+        
+        .pip-container {
+          width: 100%;
+          height: 100%;
+          position: relative;
+          overflow: hidden;
+        }
+        
+        .pip-bg {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+        }
+        
+        .pip-bg img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          opacity: 0.4;
+        }
+        
+        .pip-bg-overlay {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(to bottom, 
+            rgba(9, 9, 11, 0.5) 0%, 
+            rgba(9, 9, 11, 0.3) 50%, 
+            rgba(9, 9, 11, 0.7) 100%
+          );
+        }
+        
+        .pip-widget {
+          position: relative;
+          z-index: 10;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          padding: 16px;
+        }
+        
+        .pip-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 8px;
+        }
+        
+        .pip-mode {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        
+        .pip-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .pip-dot.focus { 
+          background: #10b981; 
+          box-shadow: 0 0 12px rgba(16, 185, 129, 0.6);
+        }
+        .pip-dot.break { 
+          background: #0ea5e9; 
+          box-shadow: 0 0 12px rgba(14, 165, 233, 0.6);
+        }
+        .pip-dot.long-break { 
+          background: #8b5cf6; 
+          box-shadow: 0 0 12px rgba(139, 92, 246, 0.6);
+        }
+        
+        @keyframes pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.7; transform: scale(0.9); }
+        }
+        
+        .pip-mode-label {
+          font-size: 10px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.2em;
+        }
+        
+        .pip-mode-label.focus { color: #10b981; }
+        .pip-mode-label.break { color: #0ea5e9; }
+        .pip-mode-label.long-break { color: #8b5cf6; }
+        
+        .pip-status {
+          font-size: 9px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.15em;
+          padding: 4px 8px;
+          border-radius: 6px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .pip-status.active { 
+          color: #10b981;
+          background: rgba(16, 185, 129, 0.1);
+          border-color: rgba(16, 185, 129, 0.2);
+        }
+        .pip-status.paused { 
+          color: #71717a;
+        }
+        
+        .pip-timer {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        .pip-time {
+          font-size: 52px;
+          font-weight: 700;
+          color: #ffffff;
+          font-variant-numeric: tabular-nums;
+          letter-spacing: -0.02em;
+          text-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
+        }
+        
+        .pip-controls {
+          display: flex;
+          justify-content: center;
+          padding: 8px 0;
+          -webkit-app-region: no-drag;
+        }
+        
+        .pip-btn {
+          width: 48px;
+          height: 48px;
+          border-radius: 14px;
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          background: rgba(255, 255, 255, 0.08);
+          backdrop-filter: blur(10px);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s ease;
+        }
+        
+        .pip-btn:hover {
+          background: rgba(255, 255, 255, 0.15);
+          border-color: rgba(255, 255, 255, 0.25);
+          transform: scale(1.05);
+        }
+        
+        .pip-btn:active {
+          transform: scale(0.95);
+        }
+        
+        .pip-btn svg {
+          width: 22px;
+          height: 22px;
+          color: white;
+        }
+        
+        .pip-progress {
+          height: 4px;
+          background: rgba(39, 39, 42, 0.6);
+          border-radius: 2px;
+          overflow: hidden;
+          margin-top: 8px;
+        }
+        
+        .pip-progress-bar {
+          height: 100%;
+          border-radius: 2px;
+          transition: width 0.5s linear;
+        }
+        
+        .pip-progress-bar.focus { background: linear-gradient(90deg, #10b981, #34d399); }
+        .pip-progress-bar.break { background: linear-gradient(90deg, #0ea5e9, #38bdf8); }
+        .pip-progress-bar.long-break { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+      `;
+      pipWindow.document.head.appendChild(pipStyles);
+
+      // Create widget content
+      const updatePiPContent = () => {
+        const state = useTimerStore.getState();
+        const currentTimeLeft = state.timeLeft;
+        const currentMode = state.mode;
+        const currentIsActive = state.isActive;
+        const currentBgImage = state.backgroundImage;
+        
+        const initialTime = currentMode === "focus" 
+          ? state.initialFocusTime 
+          : currentMode === "break" 
+            ? state.initialBreakTime 
+            : state.initialLongBreakTime;
+        
+        const progress = (currentTimeLeft / initialTime) * 100;
+        const bgImageUrl = `${window.location.origin}/Backgrounds/${currentBgImage}`;
+
+        pipWindow.document.body.innerHTML = `
+          <div class="pip-container">
+            <div class="pip-bg">
+              <img src="${bgImageUrl}" alt="" />
+              <div class="pip-bg-overlay"></div>
+            </div>
+            <div class="pip-widget">
+              <div class="pip-header">
+                <div class="pip-mode">
+                  <div class="pip-dot ${currentMode}"></div>
+                  <span class="pip-mode-label ${currentMode}">${modeLabels[currentMode]}</span>
+                </div>
+                <span class="pip-status ${currentIsActive ? 'active' : 'paused'}">${currentIsActive ? 'Running' : 'Paused'}</span>
+              </div>
+              <div class="pip-timer">
+                <span class="pip-time">${formatTime(currentTimeLeft)}</span>
+              </div>
+              <div class="pip-controls">
+                <button class="pip-btn" id="pip-toggle">
+                  ${currentIsActive 
+                    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>'
+                    : '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>'
+                  }
+                </button>
+              </div>
+              <div class="pip-progress">
+                <div class="pip-progress-bar ${currentMode}" style="width: ${progress}%"></div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // Add click handler for play/pause
+        const toggleBtn = pipWindow.document.getElementById("pip-toggle");
+        if (toggleBtn) {
+          toggleBtn.onclick = () => {
+            const s = useTimerStore.getState();
+            if (s.isActive) {
+              s.pause();
+            } else {
+              s.start();
+            }
+          };
+        }
       };
-      video.addEventListener("leavepictureinpicture", handleLeavePiP);
+
+      // Initial render
+      updatePiPContent();
+
+      // Update every 200ms
+      pipIntervalRef.current = setInterval(updatePiPContent, 200);
+
+      // Handle window close
+      pipWindow.addEventListener("pagehide", () => {
+        setIsPiPActive(false);
+        if (pipIntervalRef.current) {
+          clearInterval(pipIntervalRef.current);
+        }
+        pipWindowRef.current = null;
+      });
 
     } catch (error) {
-      console.error("Failed to start PiP:", error);
+      console.error("Failed to start Document PiP:", error);
       setIsPiPActive(false);
     }
-  }, [drawCanvas]);
+  }, []);
 
-  // Keep drawing while PiP is active
+  // Cleanup on unmount
   useEffect(() => {
-    if (isPiPActive) {
-      drawCanvas();
-    }
-    return () => cancelAnimationFrame(animationFrameRef.current);
-  }, [isPiPActive, drawCanvas, timeLeft, mode, isActive]);
+    return () => {
+      if (pipIntervalRef.current) {
+        clearInterval(pipIntervalRef.current);
+      }
+      if (pipWindowRef.current && !pipWindowRef.current.closed) {
+        pipWindowRef.current.close();
+      }
+    };
+  }, []);
 
   // Dragging handlers
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -298,20 +473,6 @@ export function TimerPiPWidget() {
 
   return (
     <>
-      {/* Hidden canvas and video for PiP */}
-      <canvas 
-        ref={canvasRef} 
-        width={300} 
-        height={200} 
-        className="hidden"
-      />
-      <video 
-        ref={videoRef} 
-        muted 
-        playsInline
-        className="hidden"
-      />
-
       {/* Floating widget within the app */}
       {shouldShow && position && (
         <div 
@@ -362,13 +523,13 @@ export function TimerPiPWidget() {
                   </div>
                   
                   <div className="flex items-center gap-1">
-                    {/* PiP button */}
+                    {/* Document PiP button */}
                     <button
-                      onClick={startPiP}
+                      onClick={startDocumentPiP}
                       className={`p-1 transition-colors ${isPiPActive ? "text-emerald-400" : "text-zinc-500 hover:text-white"}`}
-                      title="Float on top of all windows (Picture-in-Picture)"
+                      title="Pop out timer (floats everywhere)"
                     >
-                      <MonitorPlay className="w-4 h-4" />
+                      <Tv2 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => setIsDismissed(true)}
