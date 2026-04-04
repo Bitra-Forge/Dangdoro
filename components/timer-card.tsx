@@ -264,32 +264,39 @@ export function TimerCard() {
             </div>
           ) : (
             <>
-              <div className="flex items-center gap-6 md:gap-10 justify-center">
-                <button
-                  onClick={() => incrementTime(-adjustmentAmount * 60)}
-                  className="opacity-0 group-hover/timer:opacity-100 transition-all duration-300 transform hover:scale-110 active:scale-90 text-white"
-                >
-                  <Minus className="w-5 h-5 md:w-6 md:h-6" strokeWidth={2.5} />
-                </button>
+              <div className="flex items-center justify-center gap-4 md:gap-8 h-[160px] md:h-[200px]">
+                {/* Fixed position Step Buttons around the center */}
+                <div className="w-8 flex justify-center shrink-0">
+                  <button
+                    onClick={() => incrementTime(-adjustmentAmount * 60)}
+                    className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center transition-all duration-300 transform active:scale-95 text-white opacity-0 group-hover/timer:opacity-100 bg-transparent"
+                  >
+                    <Minus className="w-3.5 h-3.5" strokeWidth={2.5} />
+                  </button>
+                </div>
 
-                <h1
-                  onClick={startEditing}
-                  title="Click to edit"
-                  className={cn(
-                    "text-[6rem] md:text-[8rem] font-black leading-none select-none drop-shadow-2xl cursor-pointer",
-                    "bg-gradient-to-br from-white via-white/90 to-white/60 bg-clip-text text-transparent",
-                    "font-sans transition-all duration-700 mx-2"
-                  )}
-                >
-                  {formatTime(timeLeft)}
-                </h1>
+                <div className="w-fit flex justify-center items-center">
+                  <h1
+                    onClick={startEditing}
+                    title="Click to edit"
+                    className={cn(
+                      "text-[5rem] md:text-[8rem] font-black leading-none select-none drop-shadow-2xl cursor-pointer tabular-nums",
+                      "bg-gradient-to-br from-white via-white/90 to-white/60 bg-clip-text text-transparent",
+                      "font-sans transition-all duration-700"
+                    )}
+                  >
+                    {formatTime(timeLeft)}
+                  </h1>
+                </div>
 
-                <button
-                  onClick={() => incrementTime(adjustmentAmount * 60)}
-                  className="opacity-0 group-hover/timer:opacity-100 transition-all duration-300 transform hover:scale-110 active:scale-90 text-white"
-                >
-                  <Plus className="w-5 h-5 md:w-6 md:h-6" strokeWidth={2.5} />
-                </button>
+                <div className="w-8 flex justify-center shrink-0">
+                  <button
+                    onClick={() => incrementTime(adjustmentAmount * 60)}
+                    className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center transition-all duration-300 transform active:scale-95 text-white opacity-0 group-hover/timer:opacity-100 bg-transparent"
+                  >
+                    <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+                  </button>
+                </div>
               </div>
 
 
@@ -345,10 +352,10 @@ export function TimerCard() {
                       }
                     }}
                     className={cn(
-                      "h-16 px-16 rounded-2xl text-lg font-bold transition-all duration-300 shadow-xl",
+                      "h-16 px-16 rounded-2xl text-lg font-bold transition-all duration-300 shadow-xl cursor-pointer",
                       isActive
-                        ? "bg-white/10 text-white border-2 border-white/20 hover:bg-white/20 hover:border-white/30 hover:shadow-white/10 hover:scale-105 active:scale-100"
-                        : "bg-white text-black hover:bg-zinc-200 hover:shadow-white/20 hover:scale-105 active:scale-100"
+                        ? "bg-white/10 text-white border-2 border-white/20 active:scale-100"
+                        : "bg-white text-black active:scale-100"
                     )}
                   >
                     <span className="relative z-10 flex items-center gap-2.5">
@@ -369,7 +376,7 @@ export function TimerCard() {
                   {isActive && (
                     <Button
                       onClick={handleStop}
-                      className="h-16 px-8 rounded-2xl text-lg font-bold transition-all duration-300 bg-red-500/90 text-white hover:bg-red-500 border-2 border-red-400/50 hover:border-red-400 hover:scale-105 active:scale-100 shadow-xl shadow-red-500/25"
+                      className="h-16 px-8 rounded-2xl text-lg font-bold transition-all duration-300 bg-red-500/90 text-white border-2 border-red-400/50 active:scale-100 shadow-xl shadow-red-500/25 cursor-pointer"
                     >
                       <Square className="w-5 h-5 mr-2 fill-current" />
                       stop
@@ -385,10 +392,10 @@ export function TimerCard() {
                     onClick={() => setIsSettingsOpen(!isSettingsOpen)}
                     title="Toggle settings"
                     className={cn(
-                      "h-16 w-16 rounded-2xl transition-all duration-300",
+                      "h-16 w-16 rounded-2xl transition-all duration-300 cursor-pointer",
                       isSettingsOpen
-                        ? "text-white bg-white/15 hover:bg-white/20"
-                        : "text-white/50 hover:text-white hover:bg-white/10"
+                        ? "text-white bg-white/15"
+                        : "text-white/50"
                     )}
                   >
                     <Settings className={cn(
@@ -408,7 +415,7 @@ export function TimerCard() {
                         size="icon"
                         onClick={reset}
                         title="Reset timer"
-                        className="h-11 w-11 rounded-xl text-white/60 hover:text-white hover:bg-white/10 transition-all duration-300 shrink-0"
+                        className="h-11 w-11 rounded-xl text-white/60 transition-all duration-300 shrink-0 cursor-pointer"
                       >
                         <RotateCcw className="w-5 h-5" />
                       </Button>
@@ -421,10 +428,10 @@ export function TimerCard() {
                         onClick={toggleNavFocusMode}
                         title={isNavFocusMode ? "Disable Focus Mode (show nav)" : "Enable Focus Mode (hide nav)"}
                         className={cn(
-                          "h-11 w-11 rounded-xl transition-all duration-300 shrink-0",
+                          "h-11 w-11 rounded-xl transition-all duration-300 shrink-0 cursor-pointer",
                           isNavFocusMode
-                            ? "text-white bg-white/10 hover:bg-white/15"
-                            : "text-white/50 hover:text-white hover:bg-white/10"
+                            ? "text-white bg-white/10"
+                            : "text-white/50"
                         )}
                       >
                         {isNavFocusMode ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}

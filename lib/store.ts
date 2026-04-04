@@ -11,7 +11,12 @@ interface TimerState {
   breakTimeLeft: number;
   longBreakTimeLeft: number;
 
-  // Initial settings
+  // Baseline settings that we return to on RESET
+  settingsFocusTime: number;
+  settingsBreakTime: number;
+  settingsLongBreakTime: number;
+
+  // Session-specific initial times (used for progress denominator)
   initialFocusTime: number;
   initialBreakTime: number;
   initialLongBreakTime: number;
@@ -71,6 +76,12 @@ export const useTimerStore = create<TimerState>()(
       breakTimeLeft: 5 * 60,
       longBreakTimeLeft: 15 * 60,
 
+      // Baseline settings (the "original" values to reset to)
+      settingsFocusTime: 25 * 60,
+      settingsBreakTime: 5 * 60,
+      settingsLongBreakTime: 15 * 60,
+
+      // Session-specific denominator for progress
       initialFocusTime: 25 * 60,
       initialBreakTime: 5 * 60,
       initialLongBreakTime: 15 * 60,
@@ -106,18 +117,18 @@ export const useTimerStore = create<TimerState>()(
       pause: () => set({ isActive: false, lastUpdate: null }),
       stop: () => set({ isActive: false, lastUpdate: null }),
       reset: () => {
-        const { mode, initialFocusTime, initialBreakTime, initialLongBreakTime } = get();
-        const initial = mode === "focus" ? initialFocusTime : mode === "break" ? initialBreakTime : initialLongBreakTime;
+        const { mode, settingsFocusTime, settingsBreakTime, settingsLongBreakTime } = get();
+        const baseline = mode === "focus" ? settingsFocusTime : mode === "break" ? settingsBreakTime : settingsLongBreakTime;
 
         set({
           isActive: false,
           lastUpdate: null,
           sessionStartTime: null,
-          timeLeft: initial,
-          // Sync the per-mode progress on reset too
-          ...(mode === "focus" ? { focusTimeLeft: initial } :
-            mode === "break" ? { breakTimeLeft: initial } :
-              { longBreakTimeLeft: initial })
+          timeLeft: baseline,
+          // Reset the progress baseline too
+          ...(mode === "focus" ? { initialFocusTime: baseline, focusTimeLeft: baseline } :
+            mode === "break" ? { initialBreakTime: baseline, breakTimeLeft: baseline } :
+              { initialLongBreakTime: baseline, longBreakTimeLeft: baseline })
         });
       },
       tick: () => {
@@ -184,40 +195,51 @@ export const useTimerStore = create<TimerState>()(
               { longBreakTimeLeft: newTime })
         };
 
-        // If the timer is not active, we are setting a new session duration, so update initial.
-        // If the timer is active and we are adding time, increase the initial total to maintain progress.
+        // If timer is not active, this is pre-session setup — update initial to match new time.
+        // If timer is active, adjust initial by the same delta (both + and -) so the
+        // progress ratio (elapsed / total) stays correct regardless of direction.
         if (!isActive) {
           if (mode === "focus") updates.initialFocusTime = newTime;
           else if (mode === "break") updates.initialBreakTime = newTime;
           else if (mode === "long-break") updates.initialLongBreakTime = newTime;
-        } else if (seconds > 0) {
-          if (mode === "focus") updates.initialFocusTime = initialFocusTime + seconds;
-          else if (mode === "break") updates.initialBreakTime = initialBreakTime + seconds;
-          else if (mode === "long-break") updates.initialLongBreakTime = initialLongBreakTime + seconds;
+        } else {
+          // Clamp so initial never drops below 1 second (avoids divide-by-zero in progress)
+          if (mode === "focus") updates.initialFocusTime = Math.max(1, initialFocusTime + seconds);
+          else if (mode === "break") updates.initialBreakTime = Math.max(1, initialBreakTime + seconds);
+          else if (mode === "long-break") updates.initialLongBreakTime = Math.max(1, initialLongBreakTime + seconds);
         }
 
         set(updates);
       },
       setInitialTime: (mode, seconds) => {
-        const { mode: currentMode, isActive, initialFocusTime, initialBreakTime, initialLongBreakTime, focusTimeLeft, breakTimeLeft, longBreakTimeLeft } = get();
+        const { mode: currentMode, isActive } = get();
 
         const updates: any = {};
         if (mode === "focus") {
-          updates.initialFocusTime = seconds;
-          // Only update current progress if it was at the old initial (reset state)
-          if (focusTimeLeft === initialFocusTime) updates.focusTimeLeft = seconds;
+          updates.settingsFocusTime = seconds;
         } else if (mode === "break") {
-          updates.initialBreakTime = seconds;
-          if (breakTimeLeft === initialBreakTime) updates.breakTimeLeft = seconds;
+          updates.settingsBreakTime = seconds;
         } else if (mode === "long-break") {
-          updates.initialLongBreakTime = seconds;
-          if (longBreakTimeLeft === initialLongBreakTime) updates.longBreakTimeLeft = seconds;
+          updates.settingsLongBreakTime = seconds;
         }
 
-        // Sync main timeLeft if we are currently in this mode and not active
-        if (currentMode === mode && !isActive) {
-          updates.timeLeft = seconds;
-          updates.lastUpdate = null;
+        // Sync main timeLeft and progress baseline if not active
+        if (!isActive) {
+          if (mode === "focus") {
+            updates.focusTimeLeft = seconds;
+            updates.initialFocusTime = seconds;
+          } else if (mode === "break") {
+            updates.breakTimeLeft = seconds;
+            updates.initialBreakTime = seconds;
+          } else if (mode === "long-break") {
+            updates.longBreakTimeLeft = seconds;
+            updates.initialLongBreakTime = seconds;
+          }
+
+          if (currentMode === mode) {
+            updates.timeLeft = seconds;
+            updates.lastUpdate = null;
+          }
         }
 
         set(updates);
@@ -231,6 +253,10 @@ export const useTimerStore = create<TimerState>()(
           focusTimeLeft: 25 * 60,
           breakTimeLeft: 5 * 60,
           longBreakTimeLeft: 15 * 60,
+
+          settingsFocusTime: 25 * 60,
+          settingsBreakTime: 5 * 60,
+          settingsLongBreakTime: 15 * 60,
 
           initialFocusTime: 25 * 60,
           initialBreakTime: 5 * 60,
