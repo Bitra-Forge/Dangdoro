@@ -396,16 +396,15 @@ export const subscribeToTasks = (userId: string, callback: (tasks: any[]) => voi
  * Stats and Sessions
  */
 
-export const getSessionHistory = async (userId: string, limitCount: number = 20) => {
+export const getSessionHistory = async (userId: string, limitCount: number = 365) => {
     const q = query(
         collection(db, "sessions"),
+        where("userId", "==", userId),
         orderBy("completedAt", "desc"),
         limit(limitCount)
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter((s: any) => s.userId === userId);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 };
 
 /**
