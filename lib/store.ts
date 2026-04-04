@@ -164,7 +164,7 @@ export const useTimerStore = create<TimerState>()(
       incrementTime: (seconds) => {
         const { mode, timeLeft, isActive, initialFocusTime, initialBreakTime, initialLongBreakTime } = get();
         const newTime = Math.max(0, timeLeft + seconds);
-        
+
         const updates: any = {
           timeLeft: newTime,
           ...(mode === "focus" ? { focusTimeLeft: newTime } :
