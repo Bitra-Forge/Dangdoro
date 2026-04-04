@@ -11,25 +11,22 @@ import { onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export function TimerCard() {
-  const {
-    timeLeft,
-    isActive,
-    mode,
-    start,
-    pause,
-    stop,
-    reset,
-    setMode,
-    setInitialTime,
-    incrementTime,
-    activeTaskLabel,
-    clearTask,
-    isNavFocusMode,
-    toggleNavFocusMode,
-    setSessionEndSound,
-    sessionEndSound,
-    sessionStartTime,
-  } = useTimerStore();
+  const timeLeft = useTimerStore((s) => s.timeLeft);
+  const isActive = useTimerStore((s) => s.isActive);
+  const mode = useTimerStore((s) => s.mode);
+  const start = useTimerStore((s) => s.start);
+  const pause = useTimerStore((s) => s.pause);
+  const stop = useTimerStore((s) => s.stop);
+  const reset = useTimerStore((s) => s.reset);
+  const setMode = useTimerStore((s) => s.setMode);
+  const setInitialTime = useTimerStore((s) => s.setInitialTime);
+  const incrementTime = useTimerStore((s) => s.incrementTime);
+  const activeTaskLabel = useTimerStore((s) => s.activeTaskLabel);
+  const isNavFocusMode = useTimerStore((s) => s.isNavFocusMode);
+  const toggleNavFocusMode = useTimerStore((s) => s.toggleNavFocusMode);
+  const setSessionEndSound = useTimerStore((s) => s.setSessionEndSound);
+  const sessionEndSound = useTimerStore((s) => s.sessionEndSound);
+  const sessionStartTime = useTimerStore((s) => s.sessionStartTime);
 
   const { user } = useAuth();
   const router = useRouter();
@@ -219,10 +216,21 @@ export function TimerCard() {
   }
 
   return (
-    <div className="group/timer flex flex-col items-center justify-center space-y-8 animate-in fade-in transition-all duration-1000 relative z-10">
+    <div className={cn(
+      "group/timer flex flex-col items-center justify-center space-y-8 animate-in fade-in transition-all duration-1000 relative",
+      isSettingsOpen ? "z-50" : "z-10"
+    )}>
+      {/* Backdrop to close settings (Lowest layer) */}
+      {isSettingsOpen && (
+        <div
+          className="fixed inset-0 z-0 h-screen w-screen"
+          onClick={() => setIsSettingsOpen(false)}
+        />
+      )}
+
       {/* Mode Switcher */}
       <div className={cn(
-        "flex items-center gap-4 relative z-20 w-fit transition-all duration-700",
+        "flex items-center gap-4 relative z-10 w-fit transition-all duration-700",
         isActive && !isEditing ? "opacity-0 pointer-events-none" : "opacity-100"
       )}>
         {[
@@ -246,7 +254,7 @@ export function TimerCard() {
       </div>
 
       {/* Main Timer Display */}
-      <div className="relative group perspective-1000">
+      <div className="relative group perspective-1000 z-20">
         <div className={cn(
           "transition-all duration-700 relative",
           "bg-transparent border-transparent shadow-none",
@@ -365,7 +373,7 @@ export function TimerCard() {
               </div>
 
               <div className={cn(
-                "flex items-center justify-center gap-4 mt-10 transition-all duration-500",
+                "flex items-center justify-center gap-4 mt-10 transition-all duration-500 relative z-10",
                 isActive && "opacity-0 group-hover/timer:opacity-100"
               )}>
                 {/* Spacer to balance the layout */}
@@ -481,7 +489,7 @@ export function TimerCard() {
 
                       {/* Settings Popup - appears above the sliding panel */}
                       {isSettingsOpen && (
-                        <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-20 animate-in fade-in slide-in-from-bottom-2 duration-300">
                           <div className="w-[280px] bg-zinc-900/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden">
 
                             {/* Step Size */}
@@ -557,13 +565,6 @@ export function TimerCard() {
                     </div>
                   </div>
 
-                  {/* Backdrop to close settings */}
-                  {isSettingsOpen && (
-                    <div
-                      className="fixed inset-0 z-40"
-                      onClick={() => setIsSettingsOpen(false)}
-                    />
-                  )}
                 </div>
               </div>
             </>
