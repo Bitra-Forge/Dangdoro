@@ -58,8 +58,17 @@ export function TimerCard() {
             const data = docSnap.data();
             if (data.settings) {
               const { focusTime, breakTime, longBreakTime, adjustmentAmount: adj } = data.settings;
-              // If we have an active task loaded, don't let default settings override it immediately
-              if (!activeTaskLabel) {
+              
+              // Get current state to check if timer is in progress
+              const state = useTimerStore.getState();
+              const isTimerInProgress = state.isActive || 
+                state.timeLeft !== state.initialFocusTime ||
+                state.focusTimeLeft !== state.initialFocusTime ||
+                state.breakTimeLeft !== state.initialBreakTime ||
+                state.longBreakTimeLeft !== state.initialLongBreakTime;
+              
+              // Only update settings if no active task AND timer hasn't started
+              if (!activeTaskLabel && !isTimerInProgress) {
                 if (focusTime) setInitialTime("focus", focusTime * 60);
                 if (breakTime) setInitialTime("break", breakTime * 60);
                 if (longBreakTime) setInitialTime("long-break", longBreakTime * 60);

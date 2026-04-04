@@ -6,72 +6,95 @@ import { useAuth } from "@/components/AuthProvider";
 import { savePomodoroSession } from "@/lib/db";
 import { toast } from "sonner";
 
-const modeLabels = {
+// ============================================================================
+// Constants
+// ============================================================================
+
+const MODE_LABELS: Record<string, string> = {
   focus: "Focus",
   break: "Break",
-  "long-break": "Long Break"
+  "long-break": "Long Break",
 };
 
-const formatTime = (seconds: number) => {
+const TICK_INTERVAL_MS = 200;
+const COMPLETION_AUDIO_URL = "https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3";
+const COMPLETION_AUDIO_VOLUME = 0.4;
+
+// ============================================================================
+// Utilities
+// ============================================================================
+
+const formatTime = (seconds: number): string => {
   const hrs = Math.floor(seconds / 3600);
   const mins = Math.floor((seconds % 3600) / 60);
   const secs = seconds % 60;
 
-  if (hrs > 0) {
-    return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  }
-  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  const pad = (n: number) => n.toString().padStart(2, "0");
+
+  return hrs > 0
+    ? `${pad(hrs)}:${pad(mins)}:${pad(secs)}`
+    : `${pad(mins)}:${pad(secs)}`;
 };
 
+// ============================================================================
+// Component
+// ============================================================================
+
+/**
+ * TimerTicker - Global timer component that runs in the layout.
+ * 
+ * Responsibilities:
+ * 1. Tick the timer every 200ms when active
+ * 2. Update browser tab title with current time
+ * 3. Handle timer completion (save session, play sound, reset)
+ * 
+ * This component renders nothing - it only manages side effects.
+ */
 export function TimerTicker() {
-  const {
-    timeLeft,
-    isActive,
-    mode,
-    tick,
-    reset,
-    initialFocusTime
-  } = useTimerStore();
+  const timeLeft = useTimerStore((s) => s.timeLeft);
+  const isActive = useTimerStore((s) => s.isActive);
+  const mode = useTimerStore((s) => s.mode);
+  const tick = useTimerStore((s) => s.tick);
+  const reset = useTimerStore((s) => s.reset);
+  const initialFocusTime = useTimerStore((s) => s.initialFocusTime);
 
   const { user } = useAuth();
 
+  // Timer tick effect
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    if (!isActive) return;
 
-    if (isActive) {
-      timer = setInterval(() => {
-        tick();
-      }, 200);
-    }
-
+    const timer = setInterval(tick, TICK_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [isActive, tick]);
 
-  // Update browser tab title with timer (runs globally across all pages)
+  // Browser tab title effect
   useEffect(() => {
-    if (isActive) {
-      document.title = `${formatTime(timeLeft)} - ${modeLabels[mode]} | Dangdoro`;
-    } else {
-      document.title = "Dangdoro";
-    }
+    document.title = isActive
+      ? `${formatTime(timeLeft)} - ${MODE_LABELS[mode]} | Dangdoro`
+      : "Dangdoro";
   }, [timeLeft, isActive, mode]);
 
-  // Separate effect for completion logic
+  // Timer completion effect
   useEffect(() => {
-    if (timeLeft === 0 && isActive) {
-      if (mode === "focus" && user) {
-        savePomodoroSession(user.uid, Math.floor(initialFocusTime / 60))
-          .then(() => toast.success("Session saved! Keep it up!"))
-          .catch(() => toast.error("Failed to save session."));
-      }
+    if (timeLeft !== 0 || !isActive) return;
 
-      const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3");
-      audio.volume = 0.4;
-      audio.play().catch(err => console.log("Audio blocked:", err));
-
-      reset();
+    // Save focus session for authenticated users
+    if (mode === "focus" && user) {
+      const durationMinutes = Math.floor(initialFocusTime / 60);
+      savePomodoroSession(user.uid, durationMinutes)
+        .then(() => toast.success("Session saved! Keep it up!"))
+        .catch(() => toast.error("Failed to save session."));
     }
+
+    // Play completion sound
+    const audio = new Audio(COMPLETION_AUDIO_URL);
+    audio.volume = COMPLETION_AUDIO_VOLUME;
+    audio.play().catch((err) => console.log("Audio blocked:", err));
+
+    // Reset timer
+    reset();
   }, [timeLeft, isActive, mode, user, initialFocusTime, reset]);
 
-  return null; // This component doesn't render anything
+  return null;
 }
