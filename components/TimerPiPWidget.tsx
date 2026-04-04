@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useTimerStore } from "@/lib/store";
 import Image from "next/image";
-import { Play, Pause, GripHorizontal, Tv2, X } from "lucide-react";
+import { Play, Pause, GripHorizontal, X } from "lucide-react";
 import Link from "next/link";
 
 // ============================================================================
@@ -56,7 +56,7 @@ const isDocumentPiPSupported = (): boolean => {
 };
 
 // ============================================================================
-// PiP Styles Generator
+// PiP Styles Generator (for Document PiP - Chrome/Edge only)
 // ============================================================================
 
 const generatePiPStyles = (): string => `
@@ -356,10 +356,18 @@ function useDraggable(widgetRef: React.RefObject<HTMLDivElement | null>) {
   return { position, isDragging, handleMouseDown, handleTouchStart };
 }
 
+// ============================================================================
+// Document PiP Hook (Chrome/Edge only)
+// ============================================================================
+
 function useDocumentPiP() {
   const [isPiPActive, setIsPiPActive] = useState(false);
   const pipWindowRef = useRef<Window | null>(null);
   const pipIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const isOpen = useCallback(() => {
+    return pipWindowRef.current && !pipWindowRef.current.closed;
+  }, []);
 
   const closePiP = useCallback(() => {
     if (pipIntervalRef.current) {
@@ -373,14 +381,18 @@ function useDocumentPiP() {
     setIsPiPActive(false);
   }, []);
 
-  const openPiP = useCallback(async () => {
+  const openPiP = useCallback(async (options?: { skipIfOpen?: boolean }) => {
     if (!isDocumentPiPSupported()) {
-      alert("Document Picture-in-Picture is not supported. Please use Chrome 116+ or Edge.");
       return;
     }
 
-    // Toggle off if already open
-    if (pipWindowRef.current && !pipWindowRef.current.closed) {
+    // Skip if already open and skipIfOpen is true
+    if (options?.skipIfOpen && isOpen()) {
+      return;
+    }
+
+    // Toggle off if already open (when called without skipIfOpen)
+    if (!options?.skipIfOpen && isOpen()) {
       closePiP();
       return;
     }
@@ -432,14 +444,14 @@ function useDocumentPiP() {
       console.error("Failed to open Document PiP:", error);
       setIsPiPActive(false);
     }
-  }, [closePiP]);
+  }, [closePiP, isOpen]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => closePiP();
   }, [closePiP]);
 
-  return { isPiPActive, openPiP };
+  return { isPiPActive, openPiP, closePiP, isOpen };
 }
 
 // ============================================================================
@@ -464,7 +476,10 @@ export function TimerPiPWidget() {
 
   // Hooks
   const { position, isDragging, handleMouseDown, handleTouchStart } = useDraggable(widgetRef);
-  const { isPiPActive, openPiP } = useDocumentPiP();
+  const { openPiP } = useDocumentPiP();
+
+  // Check if Document PiP is supported (Chrome/Edge only)
+  const supportsDocumentPiP = isDocumentPiPSupported();
 
   // Derived state
   const isOnTimerPage = pathname === "/" || pathname === "/pip";
@@ -475,6 +490,33 @@ export function TimerPiPWidget() {
   // Show widget if: not on timer page, timer is running OR paused mid-session, not dismissed
   const hasActiveTimer = isActive || timeLeft < initialTime;
   const shouldShow = !isOnTimerPage && hasActiveTimer && !isDismissed;
+
+  // Auto-open Document PiP when user switches to another tab (Chrome/Edge only)
+  useEffect(() => {
+    if (!supportsDocumentPiP) return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // User switched to another tab - auto-open PiP if timer is active
+        const state = useTimerStore.getState();
+        const currentInitialTime = state.mode === "focus" 
+          ? state.initialFocusTime 
+          : state.mode === "break" 
+            ? state.initialBreakTime 
+            : state.initialLongBreakTime;
+        const hasTimer = state.isActive || state.timeLeft < currentInitialTime;
+        
+        if (hasTimer) {
+          openPiP({ skipIfOpen: true });
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [supportsDocumentPiP, openPiP]);
 
   // Reset dismissed when returning to timer page
   useEffect(() => {
@@ -533,23 +575,14 @@ export function TimerPiPWidget() {
                 </span>
               </div>
 
-              {/* Actions */}
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={openPiP}
-                  className={`p-1 transition-colors ${isPiPActive ? "text-emerald-400" : "text-zinc-500 hover:text-white"}`}
-                  title="Pop out timer (floats everywhere)"
-                >
-                  <Tv2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setIsDismissed(true)}
-                  className="p-1 text-zinc-500 hover:text-white transition-colors"
-                  title="Dismiss"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+              {/* Dismiss button */}
+              <button
+                onClick={() => setIsDismissed(true)}
+                className="p-1 text-zinc-500 hover:text-white transition-colors"
+                title="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
             {/* Timer display */}
