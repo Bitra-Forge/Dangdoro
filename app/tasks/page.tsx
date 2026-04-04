@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
     ClipboardList, Plus, Trash2, CheckCircle2, Circle,
     ChevronDown, ChevronRight, Pencil, Check, X, GripVertical,
-    Play, Clock, Maximize2, Palette
+    Play, Clock, Maximize2, Palette, Settings
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import {
@@ -45,10 +45,64 @@ const getGroupColor = (v: string) => GROUP_COLORS.find(c => c.value === v) ?? GR
 const GENERAL_STORAGE_KEY = "dangdoro-general-pos";
 const GENERAL_DIM_KEY = "dangdoro-general-dim";
 const GENERAL_COLOR_KEY = "dangdoro-general-color";
+const SHOW_DOTS_KEY = "dangdoro-show-dots";
+const BG_PALETTE_KEY = "dangdoro-bg-palette";
+
+// Background palette options
+const BG_PALETTES = {
+    mixed: {
+        name: "Mixed",
+        orbs: [
+            { x: 0.15, y: 0.3, r: 420, color: "10,185,129" },
+            { x: 0.78, y: 0.5, r: 340, color: "99,102,241" },
+            { x: 0.45, y: 0.8, r: 280, color: "56,189,248" },
+            { x: 0.9, y: 0.12, r: 220, color: "168,85,247" },
+        ]
+    },
+    emerald: {
+        name: "Emerald",
+        orbs: [
+            { x: 0.15, y: 0.3, r: 420, color: "16,185,129" },
+            { x: 0.78, y: 0.5, r: 340, color: "20,184,166" },
+            { x: 0.45, y: 0.8, r: 280, color: "34,197,94" },
+            { x: 0.9, y: 0.12, r: 220, color: "6,182,212" },
+        ]
+    },
+    dual: {
+        name: "Emerald + Purple",
+        orbs: [
+            { x: 0.2, y: 0.3, r: 400, color: "16,185,129" },
+            { x: 0.8, y: 0.6, r: 380, color: "139,92,246" },
+            { x: 0.5, y: 0.8, r: 300, color: "20,184,166" },
+        ]
+    },
+    cool: {
+        name: "Cool Mono",
+        orbs: [
+            { x: 0.15, y: 0.3, r: 420, color: "56,189,248" },
+            { x: 0.78, y: 0.5, r: 340, color: "99,102,241" },
+            { x: 0.45, y: 0.8, r: 280, color: "14,165,233" },
+        ]
+    },
+    warm: {
+        name: "Warm Sunset",
+        orbs: [
+            { x: 0.15, y: 0.3, r: 420, color: "251,146,60" },
+            { x: 0.78, y: 0.5, r: 340, color: "244,63,94" },
+            { x: 0.45, y: 0.8, r: 280, color: "245,158,11" },
+            { x: 0.9, y: 0.12, r: 220, color: "236,72,153" },
+        ]
+    },
+    none: {
+        name: "None",
+        orbs: []
+    }
+};
 
 // ─── Animated dot-grid + light glow background ───────────────────────────────
-function AnimatedDotGrid() {
+function AnimatedDotGrid({ showDots = true, palette = "mixed" }: { showDots?: boolean; palette?: keyof typeof BG_PALETTES }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const mouseRef = useRef({ x: -1000, y: -1000 });
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -56,20 +110,34 @@ function AnimatedDotGrid() {
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
-        const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+        const DOT_SPACING = 18;
+        const DOT_RADIUS = 1;
+        const HOVER_RADIUS = 100;
+
+        const resize = () => { 
+            canvas.width = window.innerWidth; 
+            canvas.height = window.innerHeight; 
+        };
         resize();
         window.addEventListener("resize", resize);
+        
+        const handleMouseMove = (e: MouseEvent) => {
+            mouseRef.current = { x: e.clientX, y: e.clientY };
+        };
+        window.addEventListener("mousemove", handleMouseMove);
 
-        const orbs = [
-            { x: 0.15, y: 0.3, r: 420, color: "10,185,129", speed: 0.00016, phase: 0 },
-            { x: 0.78, y: 0.5, r: 340, color: "99,102,241", speed: 0.00022, phase: 2.1 },
-            { x: 0.45, y: 0.8, r: 280, color: "56,189,248", speed: 0.00019, phase: 4.0 },
-            { x: 0.9, y: 0.12, r: 220, color: "168,85,247", speed: 0.00014, phase: 5.8 },
-        ];
+        const paletteConfig = BG_PALETTES[palette] || BG_PALETTES.mixed;
+        const orbs = paletteConfig.orbs.map((o, i) => ({
+            ...o,
+            speed: 0.00014 + (i * 0.00003),
+            phase: i * 1.8
+        }));
 
         let raf: number;
         const draw = (t: number) => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw background orbs
             for (const o of orbs) {
                 const cx = o.x * canvas.width + Math.sin(t * o.speed + o.phase) * 70;
                 const cy = o.y * canvas.height + Math.cos(t * o.speed + o.phase) * 50;
@@ -81,19 +149,52 @@ function AnimatedDotGrid() {
                 ctx.arc(cx, cy, o.r, 0, Math.PI * 2);
                 ctx.fill();
             }
+            
+            // Draw dots with hover effect (only if enabled)
+            if (showDots) {
+                const mx = mouseRef.current.x;
+                const my = mouseRef.current.y;
+                const cols = Math.ceil(canvas.width / DOT_SPACING) + 1;
+                const rows = Math.ceil(canvas.height / DOT_SPACING) + 1;
+                
+                for (let row = 0; row < rows; row++) {
+                    for (let col = 0; col < cols; col++) {
+                        const x = col * DOT_SPACING;
+                        const y = row * DOT_SPACING;
+                        
+                        // Calculate distance from mouse
+                        const dx = x - mx;
+                        const dy = y - my;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        // Calculate opacity based on distance (closer = brighter)
+                        let opacity = 0.09;
+                        if (dist < HOVER_RADIUS) {
+                            const intensity = 1 - (dist / HOVER_RADIUS);
+                            opacity = 0.09 + (intensity * intensity * 0.6);
+                        }
+                        
+                        ctx.beginPath();
+                        ctx.arc(x, y, DOT_RADIUS, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+                        ctx.fill();
+                    }
+                }
+            }
+            
             raf = requestAnimationFrame(draw);
         };
         raf = requestAnimationFrame(draw);
-        return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize); };
-    }, []);
+        return () => { 
+            cancelAnimationFrame(raf); 
+            window.removeEventListener("resize", resize); 
+            window.removeEventListener("mousemove", handleMouseMove);
+        };
+    }, [showDots, palette]);
 
     return (
         <>
-            <div className="fixed inset-0 z-0 pointer-events-none" style={{
-                backgroundColor: "#09090b",
-                backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.09) 1px, transparent 1px)",
-                backgroundSize: "28px 28px",
-            }} />
+            <div className="fixed inset-0 z-0 pointer-events-none" style={{ backgroundColor: "#09090b" }} />
             <canvas ref={canvasRef} className="fixed inset-0 w-full h-full pointer-events-none z-[1]" />
         </>
     );
@@ -162,7 +263,7 @@ function TaskRow({ task, onDragStart }: { task: any; onDragStart: (e: React.Poin
 
     if (isEditing) {
         return (
-            <div className={cn("flex flex-col gap-2 pl-2 pr-2 py-2 rounded-xl border-l-2 bg-white/5", p.border)}>
+            <div className={cn("flex flex-col gap-2 px-3 py-2.5 rounded-xl bg-white/5 border border-white/10", p.border)}>
                 <div className="flex items-center gap-2">
                     <input
                         autoFocus
@@ -197,74 +298,104 @@ function TaskRow({ task, onDragStart }: { task: any; onDragStart: (e: React.Poin
         <div
             onDoubleClick={() => !task.completed && setIsEditing(true)}
             className={cn(
-                "flex flex-col gap-0.5 group/row hover:bg-white/5 transition-colors select-none border-l-2 py-2",
+                "group/row flex flex-col gap-0.5 rounded-r-xl px-2 py-2 transition-all duration-200 select-none border-l-2",
                 p.border,
+                "hover:bg-white/[0.03]",
                 !task.completed && "cursor-pointer"
             )}
         >
-            <div className="flex items-center gap-2.5 pl-2 pr-3">
-                <span onPointerDown={(e) => onDragStart(e, task)}
-                    className="cursor-grab active:cursor-grabbing text-zinc-700 hover:text-zinc-400 transition-colors touch-none flex-shrink-0">
+            <div className="flex items-center gap-2">
+                {/* Drag handle */}
+                <span 
+                    onPointerDown={(e) => onDragStart(e, task)}
+                    className="cursor-grab active:cursor-grabbing text-zinc-700 hover:text-zinc-400 transition-colors touch-none flex-shrink-0"
+                >
                     <GripVertical className="w-3 h-3" />
                 </span>
 
-                <button onClick={() => toggleTask(task.id, !task.completed)} className="transition-transform active:scale-90 flex-shrink-0">
+                {/* Checkbox */}
+                <button 
+                    onClick={() => toggleTask(task.id, !task.completed)} 
+                    className="transition-transform active:scale-90 flex-shrink-0"
+                >
                     {task.completed
                         ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                         : <Circle className="w-4 h-4 text-zinc-700 hover:text-emerald-500/60 transition-colors" />}
                 </button>
 
-                <span className={cn("flex-1 text-sm font-semibold leading-tight min-w-0 truncate",
-                    task.completed ? "text-zinc-600 line-through" : "text-white")}>
+                {/* Title */}
+                <span className={cn(
+                    "flex-1 text-sm font-medium leading-tight min-w-0 truncate transition-colors",
+                    task.completed ? "text-zinc-600 line-through" : "text-zinc-200"
+                )}>
                     {task.title}
                 </span>
 
-                {task.durationMinutes && !task.completed && (
-                    <span className="flex items-center gap-1 text-[10px] font-bold text-zinc-600 bg-white/5 rounded-md px-1.5 py-0.5 flex-shrink-0">
-                        <Clock className="w-2.5 h-2.5" />{task.durationMinutes}m
-                    </span>
-                )}
+                {/* Right section: Duration + Actions */}
+                <div className="flex items-center gap-1.5 ml-auto">
+                    {/* Duration badge - always visible, gets pushed left by actions */}
+                    {task.durationMinutes && !task.completed && (
+                        <span className="flex items-center gap-1 text-[10px] font-semibold text-zinc-500 bg-white/5 rounded-md px-1.5 py-0.5 flex-shrink-0 transition-all duration-200">
+                            <Clock className="w-2.5 h-2.5" />{task.durationMinutes}m
+                        </span>
+                    )}
 
-                {/* Edit (only if not done) */}
-                {!task.completed && (
-                    <button onClick={() => setIsEditing(true)}
-                        className="opacity-0 group-hover/row:opacity-100 transition-opacity text-zinc-600 hover:text-zinc-300 flex-shrink-0">
-                        <Pencil className="w-3 h-3" />
-                    </button>
-                )}
+                    {/* Actions container - expands on hover */}
+                    {!task.completed && (
+                        <>
+                            <div className="flex items-center gap-1 overflow-hidden max-w-0 group-hover/row:max-w-[100px] transition-all duration-200 ease-out">
+                                {/* Edit */}
+                                <button 
+                                    onClick={() => setIsEditing(true)}
+                                    className="p-1 rounded-md text-zinc-600 hover:text-zinc-300 hover:bg-white/5 transition-colors flex-shrink-0"
+                                >
+                                    <Pencil className="w-3 h-3" />
+                                </button>
 
-                {/* Start on timer */}
-                {!task.completed && (
-                    <button onClick={handleStart} title="Start on timer"
-                        className="opacity-0 group-hover/row:opacity-100 transition-opacity text-emerald-500 hover:text-emerald-400 flex-shrink-0">
-                        <Play className="w-3.5 h-3.5 fill-current" />
-                    </button>
-                )}
+                                {/* Start on timer */}
+                                <button 
+                                    onClick={handleStart} 
+                                    title="Start on timer"
+                                    className="p-1 rounded-md text-emerald-500/70 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors flex-shrink-0"
+                                >
+                                    <Play className="w-3 h-3 fill-current" />
+                                </button>
 
-                {/* Priority picker - inline dots */}
-                {showPriority ? (
-                    <PriorityPicker 
-                        taskId={task.id} 
-                        priority={task.priority ?? "natural"} 
-                        onClose={() => setShowPriority(false)}
-                    />
-                ) : (
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); setShowPriority(true); }} 
-                        className="opacity-0 group-hover/row:opacity-100 transition-opacity flex-shrink-0"
-                    >
-                        <span className={cn("w-2 h-2 rounded-full block", p.dot)} />
-                    </button>
-                )}
+                                {/* Priority dot (shown when picker is closed) */}
+                                {!showPriority && (
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); setShowPriority(true); }} 
+                                        className="p-1 rounded-md hover:bg-white/5 transition-colors flex-shrink-0"
+                                    >
+                                        <span className={cn("w-2.5 h-2.5 rounded-full block", p.dot)} />
+                                    </button>
+                                )}
 
-                <button onClick={() => deleteTask(task.id)}
-                    className="opacity-0 group-hover/row:opacity-100 transition-opacity text-zinc-700 hover:text-red-400 flex-shrink-0">
-                    <Trash2 className="w-3 h-3" />
-                </button>
+                                {/* Delete */}
+                                <button 
+                                    onClick={() => deleteTask(task.id)}
+                                    className="p-1 rounded-md text-zinc-700 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0"
+                                >
+                                    <Trash2 className="w-3 h-3" />
+                                </button>
+                            </div>
+
+                            {/* Priority picker - outside overflow-hidden container */}
+                            {showPriority && (
+                                <PriorityPicker 
+                                    taskId={task.id} 
+                                    priority={task.priority ?? "natural"} 
+                                    onClose={() => setShowPriority(false)}
+                                />
+                            )}
+                        </>
+                    )}
+                </div>
             </div>
 
+            {/* Notes */}
             {task.notes && !task.completed && (
-                <p className="ml-9 pr-3 text-[10px] font-medium text-zinc-500 whitespace-pre-wrap line-clamp-2 italic">
+                <p className="ml-9 pr-3 text-[10px] font-medium text-zinc-600 whitespace-pre-wrap line-clamp-2 italic">
                     {task.notes}
                 </p>
             )}
@@ -454,8 +585,6 @@ function GroupCard({
                 ) : (
                     <span className="flex-1 text-xs font-black uppercase tracking-widest text-white truncate">{group.name}</span>
                 )}
-
-                <span className="text-[10px] font-bold text-zinc-700 tabular-nums">{tasks.length}</span>
                 
                 {/* Color picker */}
                 <div className="relative">
@@ -598,14 +727,31 @@ export default function TasksPage() {
         }
         return "zinc";
     });
+    const [showDots, setShowDots] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem(SHOW_DOTS_KEY);
+            if (saved !== null) { return saved === "true"; }
+        }
+        return true;
+    });
+    const [bgPalette, setBgPalette] = useState<keyof typeof BG_PALETTES>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem(BG_PALETTE_KEY);
+            if (saved && saved in BG_PALETTES) { return saved as keyof typeof BG_PALETTES; }
+        }
+        return "mixed";
+    });
+    const [showSettings, setShowSettings] = useState(false);
 
     const [draggingTask, setDraggingTask] = useState<any | null>(null);
     const [dragTaskColor, setDragTaskColor] = useState<string>("zinc");
     const [clonePos, setClonePos] = useState({ x: 0, y: 0 });
     const [overGroupId, setOverGroupId] = useState<string | null>(null);
     const [overTrash, setOverTrash] = useState(false);
+    const [deleteReady, setDeleteReady] = useState(false);
     const [deletingTask, setDeletingTask] = useState<{ id: string; title: string; pos: { x: number; y: number }; color: string } | null>(null);
     const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
+    const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         if (authLoading) return;
@@ -655,15 +801,30 @@ export default function TasksPage() {
             if (ref && ref.contains(el)) { found = gid; break; }
         }
         setOverGroupId(found);
+        
         // When not over any group, we're in "delete zone" (empty space)
-        setOverTrash(!found);
+        const isOverEmpty = !found;
+        setOverTrash(isOverEmpty);
+        
+        // Start/clear delete timer based on position
+        if (isOverEmpty && !deleteTimerRef.current) {
+            deleteTimerRef.current = setTimeout(() => {
+                setDeleteReady(true);
+            }, 600); // Hold for 600ms to enable delete
+        } else if (!isOverEmpty) {
+            if (deleteTimerRef.current) {
+                clearTimeout(deleteTimerRef.current);
+                deleteTimerRef.current = null;
+            }
+            setDeleteReady(false);
+        }
     }, [draggingTask]);
 
     const onCanvasPointerUp = useCallback(async () => {
         if (!draggingTask) return;
         
         const task = draggingTask;
-        const wasOverTrash = overTrash;
+        const wasDeleteReady = deleteReady;
         const wasOverGroupId = overGroupId;
         const currentPos = clonePos;
         const currentColor = dragTaskColor;
@@ -672,9 +833,14 @@ export default function TasksPage() {
         setDraggingTask(null);
         setOverGroupId(null);
         setOverTrash(false);
+        setDeleteReady(false);
+        if (deleteTimerRef.current) {
+            clearTimeout(deleteTimerRef.current);
+            deleteTimerRef.current = null;
+        }
         
-        // If dropped in empty space (not over any group), delete the task
-        if (wasOverTrash && !wasOverGroupId) {
+        // If dropped in empty space AND held long enough, delete the task
+        if (wasDeleteReady && !wasOverGroupId) {
             // Trigger delete animation
             setDeletingTask({ id: task.id, title: task.title, pos: currentPos, color: currentColor });
             // Wait for animation then delete
@@ -687,7 +853,7 @@ export default function TasksPage() {
             // Move task to new group (fire and forget for instant feedback)
             moveTaskToGroup(task.id, wasOverGroupId === GENERAL_ID ? null : wasOverGroupId);
         }
-    }, [draggingTask, overGroupId, overTrash, clonePos, dragTaskColor]);
+    }, [draggingTask, overGroupId, deleteReady, clonePos, dragTaskColor]);
 
     const handleCreateGroup = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -710,7 +876,7 @@ export default function TasksPage() {
     if (!user) {
         return (
             <div className="relative flex flex-col flex-1 min-h-screen overflow-hidden">
-                <AnimatedDotGrid />
+                <AnimatedDotGrid showDots={true} />
                 <main className="relative z-10 flex flex-col items-center justify-center flex-1 pt-24 pb-32 px-4">
                     <AuthRequired title="Arsenal Locked" description="Sign in to access your Task Forge." />
                 </main>
@@ -736,16 +902,85 @@ export default function TasksPage() {
             onPointerMove={draggingTask ? onCanvasPointerMove : undefined}
             onPointerUp={draggingTask ? onCanvasPointerUp : undefined}
         >
-            <AnimatedDotGrid />
+            <AnimatedDotGrid showDots={showDots} palette={bgPalette} />
 
 
 
-            {/* Title */}
-            <div className="fixed top-20 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2.5 pointer-events-none">
-                <div className="w-7 h-7 bg-white/8 rounded-xl flex items-center justify-center border border-white/10 backdrop-blur-sm">
-                    <ClipboardList className="w-3.5 h-3.5 text-emerald-400" />
-                </div>
-                <span className="text-lg font-black tracking-tight text-white uppercase italic drop-shadow-lg">Task Forge</span>
+            {/* Settings button & panel */}
+            <div className="fixed top-20 right-8 z-20">
+                <button
+                    onClick={() => setShowSettings(v => !v)}
+                    className={cn(
+                        "p-2.5 rounded-xl border backdrop-blur-sm transition-all",
+                        showSettings
+                            ? "bg-white/15 border-white/25 text-white"
+                            : "bg-zinc-900/80 border-white/10 text-zinc-400 hover:text-white"
+                    )}
+                    title="Background settings"
+                >
+                    <Settings className={cn("w-4 h-4 transition-transform duration-300", showSettings && "rotate-90")} />
+                </button>
+                
+                {showSettings && (
+                    <div className="absolute top-12 right-0 bg-zinc-900/95 backdrop-blur-xl border border-white/10 rounded-2xl p-4 min-w-[200px] animate-in fade-in slide-in-from-top-2 duration-200">
+                        {/* Dots toggle */}
+                        <div className="mb-4">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2 block">
+                                Dot Grid
+                            </label>
+                            <button
+                                onClick={() => {
+                                    const newVal = !showDots;
+                                    setShowDots(newVal);
+                                    localStorage.setItem(SHOW_DOTS_KEY, String(newVal));
+                                }}
+                                className={cn(
+                                    "w-full flex items-center justify-between px-3 py-2 rounded-xl border transition-all",
+                                    showDots 
+                                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" 
+                                        : "bg-white/5 border-white/10 text-zinc-500"
+                                )}
+                            >
+                                <span className="text-xs font-semibold">{showDots ? "Enabled" : "Disabled"}</span>
+                                <div className={cn(
+                                    "w-8 h-4 rounded-full transition-all relative",
+                                    showDots ? "bg-emerald-500" : "bg-zinc-700"
+                                )}>
+                                    <div className={cn(
+                                        "absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all",
+                                        showDots ? "left-4" : "left-0.5"
+                                    )} />
+                                </div>
+                            </button>
+                        </div>
+                        
+                        {/* Palette options */}
+                        <div>
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2 block">
+                                Color Palette
+                            </label>
+                            <div className="grid grid-cols-2 gap-1.5">
+                                {(Object.keys(BG_PALETTES) as (keyof typeof BG_PALETTES)[]).map((key) => (
+                                    <button
+                                        key={key}
+                                        onClick={() => {
+                                            setBgPalette(key);
+                                            localStorage.setItem(BG_PALETTE_KEY, key);
+                                        }}
+                                        className={cn(
+                                            "px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all text-left",
+                                            bgPalette === key
+                                                ? "bg-white/15 text-white border border-white/20"
+                                                : "bg-white/5 text-zinc-500 hover:text-zinc-300 border border-transparent"
+                                        )}
+                                    >
+                                        {BG_PALETTES[key].name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <GroupCard
@@ -781,6 +1016,7 @@ export default function TasksPage() {
             {/* Drag clone */}
             {draggingTask && (() => {
                 const colorConfig = getGroupColor(dragTaskColor);
+                const showDeleteWarning = overTrash && !overGroupId;
                 return (
                     <div 
                         style={{ 
@@ -789,16 +1025,26 @@ export default function TasksPage() {
                             top: clonePos.y + 10, 
                             pointerEvents: "none", 
                             zIndex: 99,
-                            animation: overTrash && !overGroupId ? "shake 0.3s ease-in-out infinite" : undefined,
-                            boxShadow: `0 0 16px 2px ${colorConfig.shadow}, 0 8px 24px rgba(0,0,0,0.4)`
+                            animation: showDeleteWarning ? "shake 0.3s ease-in-out infinite" : undefined,
+                            boxShadow: deleteReady 
+                                ? "0 0 20px 4px rgba(239,68,68,0.5), 0 8px 24px rgba(0,0,0,0.4)"
+                                : `0 0 16px 2px ${colorConfig.shadow}, 0 8px 24px rgba(0,0,0,0.4)`
                         }}
                         className={cn(
-                            "rounded-xl px-3 py-2 backdrop-blur-xl border",
-                            colorConfig.border,
-                            "bg-zinc-800/90"
+                            "rounded-xl px-3 py-2 backdrop-blur-xl border transition-colors",
+                            deleteReady ? "border-red-500/60 bg-red-950/80" : colorConfig.border,
+                            !deleteReady && "bg-zinc-800/90"
                         )}
                     >
-                        <span className="text-xs font-bold text-white">{draggingTask.title}</span>
+                        <div className="flex items-center gap-2">
+                            {deleteReady && <Trash2 className="w-3 h-3 text-red-400" />}
+                            <span className={cn("text-xs font-bold", deleteReady ? "text-red-300" : "text-white")}>
+                                {deleteReady ? "Release to delete" : draggingTask.title}
+                            </span>
+                        </div>
+                        {showDeleteWarning && !deleteReady && (
+                            <div className="text-[9px] text-zinc-500 mt-0.5">Hold to delete...</div>
+                        )}
                     </div>
                 );
             })()}
