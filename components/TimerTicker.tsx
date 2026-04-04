@@ -16,8 +16,6 @@ const MODE_LABELS: Record<string, string> = {
   "long-break": "Long Break",
 };
 
-const TICK_INTERVAL_MS = 200;
-const COMPLETION_AUDIO_URL = "https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3";
 const COMPLETION_AUDIO_VOLUME = 0.4;
 
 // ============================================================================
@@ -57,6 +55,7 @@ export function TimerTicker() {
   const tick = useTimerStore((s) => s.tick);
   const reset = useTimerStore((s) => s.reset);
   const initialFocusTime = useTimerStore((s) => s.initialFocusTime);
+  const sessionEndSound = useTimerStore((s) => s.sessionEndSound);
 
   const { user } = useAuth();
 
@@ -64,7 +63,7 @@ export function TimerTicker() {
   useEffect(() => {
     if (!isActive) return;
 
-    const timer = setInterval(tick, TICK_INTERVAL_MS);
+    const timer = setInterval(tick, 200);
     return () => clearInterval(timer);
   }, [isActive, tick]);
 
@@ -88,7 +87,8 @@ export function TimerTicker() {
     }
 
     // Play completion sound
-    const audio = new Audio(COMPLETION_AUDIO_URL);
+    const audioUrl = `/SessionEndSounds/${sessionEndSound}`;
+    const audio = new Audio(audioUrl);
     audio.volume = COMPLETION_AUDIO_VOLUME;
     audio.play().catch((err) => console.log("Audio blocked:", err));
 

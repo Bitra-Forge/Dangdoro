@@ -38,6 +38,8 @@ interface TimerState {
   resetToDefaults: () => void;
   backgroundImage: string;
   setBackgroundImage: (image: string) => void;
+  sessionEndSound: string;
+  setSessionEndSound: (sound: string) => void;
   isBgPanelOpen: boolean;
   setIsBgPanelOpen: (open: boolean) => void;
   isSoundPanelOpen: boolean;
@@ -73,6 +75,7 @@ export const useTimerStore = create<TimerState>()(
       lastUpdate: null,
 
       backgroundImage: "BG25.png", // Default background
+      sessionEndSound: "universfield-new-notification-027-383749.mp3",
 
       activeTaskId: null,
       activeTaskLabel: null,
@@ -227,9 +230,11 @@ export const useTimerStore = create<TimerState>()(
           initialBreakTime: 5 * 60,
           initialLongBreakTime: 15 * 60,
           lastUpdate: null,
+          sessionEndSound: "universfield-new-notification-027-383749.mp3",
         });
       },
       setBackgroundImage: (image: string) => set({ backgroundImage: image }),
+      setSessionEndSound: (sound: string) => set({ sessionEndSound: sound }),
       isBgPanelOpen: false,
       setIsBgPanelOpen: (open: boolean) => set({ isBgPanelOpen: open, isSoundPanelOpen: open ? false : get().isSoundPanelOpen }),
       isSoundPanelOpen: false,

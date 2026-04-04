@@ -25,6 +25,7 @@ export function TimerCard() {
     clearTask,
     isNavFocusMode,
     toggleNavFocusMode,
+    setSessionEndSound,
   } = useTimerStore();
 
   const { user } = useAuth();
@@ -74,6 +75,9 @@ export function TimerCard() {
                 if (longBreakTime) setInitialTime("long-break", longBreakTime * 60);
               }
               if (adj) setAdjustmentAmount(adj);
+              if (data.settings.sessionEndSound) {
+                setSessionEndSound(data.settings.sessionEndSound);
+              }
             }
           }
         },

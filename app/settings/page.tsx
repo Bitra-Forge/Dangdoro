@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
     Bell, Clock, Palette, LogOut, Shield, Mail, LogIn,
-    Zap, Minus, Plus, RotateCcw, Save, CheckCircle2
+    Play, Pause, Zap, Minus, Plus, RotateCcw, Save, CheckCircle2
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { logOut } from "@/lib/auth";
@@ -12,6 +12,7 @@ import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { updateUserSettings } from "@/lib/db";
+import { useTimerStore } from "@/lib/store";
 
 const DEFAULT_SETTINGS = {
     focusTime: 25,
@@ -19,7 +20,8 @@ const DEFAULT_SETTINGS = {
     longBreakTime: 15,
     adjustmentAmount: 1,
     notifications: true,
-    sound: true
+    sound: true,
+    sessionEndSound: "universfield-new-notification-027-383749.mp3"
 };
 
 function settingsEqual(a: typeof DEFAULT_SETTINGS, b: typeof DEFAULT_SETTINGS) {
@@ -29,9 +31,13 @@ function settingsEqual(a: typeof DEFAULT_SETTINGS, b: typeof DEFAULT_SETTINGS) {
         a.longBreakTime === b.longBreakTime &&
         a.adjustmentAmount === b.adjustmentAmount &&
         a.notifications === b.notifications &&
-        a.sound === b.sound
+        a.sound === b.sound &&
+        a.sessionEndSound === b.sessionEndSound
     );
 }
+
+
+// ... (keep settings page logic)
 
 export default function SettingsPage() {
     const { user, loading: authLoading, openAuthVault } = useAuth();
@@ -49,6 +55,9 @@ export default function SettingsPage() {
         longBreakTime: "15",
         adjustmentAmount: "1"
     });
+
+    const [playingSoundId, setPlayingSoundId] = useState<string | null>(null);
+    const audioRef = React.useRef<HTMLAudioElement | null>(null);
 
     // Derived: has changes only when settings differ from savedSettings
     const hasChanges = !settingsEqual(settings, savedSettings);
@@ -96,12 +105,20 @@ export default function SettingsPage() {
         });
     };
 
+    const { setSessionEndSound, setInitialTime } = useTimerStore();
+
     const handleSaveSettings = async () => {
         if (!user || !hasChanges) return;
 
         setSaving(true);
         const success = await updateUserSettings(user.uid, settings);
         if (success) {
+            // Update local store immediately
+            setSessionEndSound(settings.sessionEndSound);
+            setInitialTime("focus", settings.focusTime * 60);
+            setInitialTime("break", settings.breakTime * 60);
+            setInitialTime("long-break", settings.longBreakTime * 60);
+
             toast.success("Settings saved successfully");
             setSavedSettings({ ...settings });
         } else {
@@ -268,6 +285,100 @@ export default function SettingsPage() {
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    </section>
+
+                    {/* Audio Protocols */}
+                    <section className="bg-zinc-900/40 backdrop-blur-3xl border border-white/[0.06] rounded-3xl overflow-hidden shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-700 delay-75">
+                         <div className="flex items-center gap-3 px-8 py-5 border-b border-white/[0.06]">
+                            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                                <Bell className="w-4 h-4 text-emerald-400" />
+                            </div>
+                            <div>
+                                <h2 className="text-sm font-black text-white uppercase italic tracking-tighter">Audio Protocols</h2>
+                                <p className="text-[10px] text-zinc-500 font-medium">Select your session completion frequency</p>
+                            </div>
+                        </div>
+
+                        <div className="p-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                {[
+                                    { id: "universfield-new-notification-027-383749.mp3", label: "Minimal Tech", desc: "Clean & Precise" },
+                                    { id: "universfield-soft-piano-logo-141290.mp3", label: "Zen Piano", desc: "Balanced & Calm" },
+                                    { id: "koiroylers-cutie-cat-355747.mp3", label: "Cyber Cat", desc: "Playful & Vibrant" }
+                                ].map((sound) => (
+                                    <button
+                                        key={sound.id}
+                                        onClick={() => handleUpdateSetting("sessionEndSound", sound.id)}
+                                        className={`group relative flex flex-col items-center justify-between p-4 h-32 rounded-[1.5rem] border transition-all duration-500 overflow-hidden ${
+                                            settings.sessionEndSound === sound.id
+                                                ? "bg-emerald-500/[0.08] border-emerald-500/50 shadow-[0_0_30px_rgba(16,185,129,0.05)]"
+                                                : "bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04] hover:border-white/10"
+                                        }`}
+                                    >
+                                        <div className="relative z-10 flex flex-col items-center gap-1.5 pt-2">
+                                            <span className={`text-[11px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${
+                                                settings.sessionEndSound === sound.id 
+                                                    ? "text-emerald-400 scale-105" 
+                                                    : "text-zinc-400 group-hover:text-zinc-200"
+                                            }`}>
+                                                {sound.label}
+                                            </span>
+                                        </div>
+
+                                        {/* Play Preview button */}
+                                        <div className="flex flex-col items-center gap-2 pb-1">
+                                            <div 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    
+                                                    // If already playing this sound, stop it
+                                                    if (playingSoundId === sound.id) {
+                                                        if (audioRef.current) {
+                                                            audioRef.current.pause();
+                                                            audioRef.current = null;
+                                                        }
+                                                        setPlayingSoundId(null);
+                                                        return;
+                                                    }
+
+                                                    // If another sound is playing, stop it first
+                                                    if (audioRef.current) {
+                                                        audioRef.current.pause();
+                                                    }
+
+                                                    const audio = new Audio(`/SessionEndSounds/${sound.id}`);
+                                                    audio.volume = 0.5;
+                                                    audioRef.current = audio;
+                                                    setPlayingSoundId(sound.id);
+                                                    
+                                                    audio.play();
+                                                    audio.onended = () => {
+                                                        setPlayingSoundId(null);
+                                                        audioRef.current = null;
+                                                    };
+                                                }}
+                                                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-500 ${
+                                                    settings.sessionEndSound === sound.id
+                                                        ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/20"
+                                                        : "bg-white/5 text-zinc-500 border border-white/10 group-hover:bg-white/10 group-hover:text-white"
+                                                } active:scale-90`}
+                                            >
+                                                {playingSoundId === sound.id ? (
+                                                    <Pause className="w-4 h-4 fill-current" />
+                                                ) : (
+                                                    <Play className={`w-3.5 h-3.5 fill-current ${settings.sessionEndSound === sound.id ? "ml-0.5" : "ml-0.5"}`} />
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Selection indicator — subtle border glow */}
+                                        {settings.sessionEndSound === sound.id && (
+                                            <div className="absolute inset-0 border border-emerald-500/20 rounded-[1.5rem] pointer-events-none animate-pulse" />
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </section>
 
