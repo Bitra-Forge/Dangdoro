@@ -143,33 +143,79 @@ export function TimerPiPWidget() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
-    if (!video || !canvas || !document.pictureInPictureEnabled) {
+    if (!video || !canvas) return;
+    
+    if (!document.pictureInPictureEnabled) {
       alert("Picture-in-Picture is not supported in your browser. Try Chrome or Edge.");
       return;
     }
 
+    // If already in PiP, exit it
+    if (document.pictureInPictureElement) {
+      try {
+        await document.exitPictureInPicture();
+      } catch (e) {
+        console.log("Error exiting PiP:", e);
+      }
+      return;
+    }
+
     try {
+      // Draw initial frame first
+      drawCanvas();
+      
       // Set up canvas stream
       const stream = canvas.captureStream(30);
+      
+      // Stop any existing stream
+      if (video.srcObject) {
+        const oldStream = video.srcObject as MediaStream;
+        oldStream.getTracks().forEach(track => track.stop());
+      }
+      
       video.srcObject = stream;
+      video.muted = true;
+
+      // Wait for video to be ready before playing
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("Timeout")), 3000);
+        
+        const onCanPlay = () => {
+          clearTimeout(timeout);
+          video.removeEventListener("canplay", onCanPlay);
+          resolve();
+        };
+        
+        // If already ready
+        if (video.readyState >= 3) {
+          clearTimeout(timeout);
+          resolve();
+          return;
+        }
+        
+        video.addEventListener("canplay", onCanPlay);
+        video.load();
+      });
+
+      // Play the video
       await video.play();
 
-      // Enter PiP
+      // Enter PiP mode
       pipWindowRef.current = await video.requestPictureInPicture();
       setIsPiPActive(true);
 
-      // Start drawing
-      drawCanvas();
-
       // Handle PiP close
-      video.addEventListener("leavepictureinpicture", () => {
+      const handleLeavePiP = () => {
         setIsPiPActive(false);
         cancelAnimationFrame(animationFrameRef.current);
         pipWindowRef.current = null;
-      });
+        video.removeEventListener("leavepictureinpicture", handleLeavePiP);
+      };
+      video.addEventListener("leavepictureinpicture", handleLeavePiP);
 
     } catch (error) {
       console.error("Failed to start PiP:", error);
+      setIsPiPActive(false);
     }
   }, [drawCanvas]);
 
@@ -180,18 +226,6 @@ export function TimerPiPWidget() {
     }
     return () => cancelAnimationFrame(animationFrameRef.current);
   }, [isPiPActive, drawCanvas, timeLeft, mode, isActive]);
-
-  // Auto-start PiP when leaving tab
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden && isActive && !isPiPActive && document.pictureInPictureEnabled) {
-        startPiP();
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [isActive, isPiPActive, startPiP]);
 
   // Dragging handlers
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
