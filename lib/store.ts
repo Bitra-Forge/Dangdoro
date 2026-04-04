@@ -46,8 +46,11 @@ interface TimerState {
   setIsNavFocusMode: (enabled: boolean) => void;
   toggleNavFocusMode: () => void;
   activeSounds: Record<string, number>;
+  lastActiveSounds: Record<string, number> | null;
   toggleSound: (soundId: string) => void;
   setSoundVolume: (soundId: string, volume: number) => void;
+  stopAllSounds: () => void;
+  toggleAllSounds: () => void;
 }
 
 
@@ -235,6 +238,7 @@ export const useTimerStore = create<TimerState>()(
       setIsNavFocusMode: (enabled: boolean) => set({ isNavFocusMode: enabled }),
       toggleNavFocusMode: () => set((state) => ({ isNavFocusMode: !state.isNavFocusMode })),
       activeSounds: {},
+      lastActiveSounds: null,
       toggleSound: (soundId: string) => {
         const { activeSounds } = get();
         const newSounds = { ...activeSounds };
@@ -243,20 +247,28 @@ export const useTimerStore = create<TimerState>()(
         } else {
           newSounds[soundId] = 50; // Default volume for new active sound
         }
-        set({ activeSounds: newSounds });
+        set({ activeSounds: newSounds, lastActiveSounds: null });
       },
       setSoundVolume: (soundId: string, volume: number) => {
         const { activeSounds } = get();
         if (activeSounds[soundId] !== undefined) {
-          set({ activeSounds: { ...activeSounds, [soundId]: volume } });
+          set({ activeSounds: { ...activeSounds, [soundId]: volume }, lastActiveSounds: null });
+        }
+      },
+      stopAllSounds: () => set({ activeSounds: {}, lastActiveSounds: null }),
+      toggleAllSounds: () => {
+        const { activeSounds, lastActiveSounds } = get();
+        const activeCount = Object.keys(activeSounds).length;
+        
+        if (activeCount > 0) {
+          // Stop all and save
+          set({ lastActiveSounds: activeSounds, activeSounds: {} });
+        } else if (lastActiveSounds) {
+          // Restore last sounds
+          set({ activeSounds: lastActiveSounds, lastActiveSounds: null });
         }
       },
     }),
-
-
-
-
-
     {
       name: "dangdoro-timer-storage",
     }
