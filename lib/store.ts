@@ -17,6 +17,7 @@ interface TimerState {
   initialLongBreakTime: number;
 
   lastUpdate: number | null;
+  sessionStartTime: number | null;
 
   // Active task from task page
   activeTaskId: string | null;
@@ -29,6 +30,7 @@ interface TimerState {
   // Actions
   start: () => void;
   pause: () => void;
+  stop: () => void;
   reset: () => void;
   tick: () => void;
   setMode: (mode: "focus" | "break" | "long-break") => void;
@@ -73,6 +75,7 @@ export const useTimerStore = create<TimerState>()(
       initialBreakTime: 5 * 60,
       initialLongBreakTime: 15 * 60,
       lastUpdate: null,
+      sessionStartTime: null,
 
       backgroundImage: "BG25.png", // Default background
       sessionEndSound: "universfield-new-notification-027-383749.mp3",
@@ -94,12 +97,14 @@ export const useTimerStore = create<TimerState>()(
           activeTaskLabel: label,
           activeTaskNotes: notes,
           activeTaskPriority: priority,
+          sessionStartTime: null,
         });
       },
       clearTask: () => set({ activeTaskId: null, activeTaskLabel: null, activeTaskNotes: null, activeTaskPriority: null }),
 
-      start: () => set({ isActive: true, lastUpdate: Date.now() }),
+      start: () => set({ isActive: true, lastUpdate: Date.now(), sessionStartTime: Date.now() }),
       pause: () => set({ isActive: false, lastUpdate: null }),
+      stop: () => set({ isActive: false, lastUpdate: null }),
       reset: () => {
         const { mode, initialFocusTime, initialBreakTime, initialLongBreakTime } = get();
         const initial = mode === "focus" ? initialFocusTime : mode === "break" ? initialBreakTime : initialLongBreakTime;
@@ -107,6 +112,7 @@ export const useTimerStore = create<TimerState>()(
         set({
           isActive: false,
           lastUpdate: null,
+          sessionStartTime: null,
           timeLeft: initial,
           // Sync the per-mode progress on reset too
           ...(mode === "focus" ? { focusTimeLeft: initial } :
@@ -231,6 +237,7 @@ export const useTimerStore = create<TimerState>()(
           initialLongBreakTime: 15 * 60,
           lastUpdate: null,
           sessionEndSound: "universfield-new-notification-027-383749.mp3",
+          sessionStartTime: null,
         });
       },
       setBackgroundImage: (image: string) => set({ backgroundImage: image }),

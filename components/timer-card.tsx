@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Play, Pause, RotateCcw, Check, X, ChevronUp, ChevronDown, Settings, Minus, Plus, Eye, EyeOff } from "lucide-react";
+import { Play, Pause, RotateCcw, Check, X, ChevronUp, ChevronDown, Settings, Minus, Plus, Eye, EyeOff, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTimerStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ export function TimerCard() {
     mode,
     start,
     pause,
+    stop,
     reset,
     setMode,
     setInitialTime,
@@ -26,6 +27,7 @@ export function TimerCard() {
     isNavFocusMode,
     toggleNavFocusMode,
     setSessionEndSound,
+    sessionStartTime,
   } = useTimerStore();
 
   const { user } = useAuth();
@@ -41,6 +43,34 @@ export function TimerCard() {
   const [editSecs, setEditSecs] = useState("");
   const [adjustmentAmount, setAdjustmentAmount] = useState(1); // in minutes
   const [hasHydrated, setHasHydrated] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const handleStop = async () => {
+    const startTime = sessionStartTime;
+    stop();
+
+    if (!startTime) {
+      return;
+    }
+
+    const elapsedMs = Date.now() - startTime;
+    const elapsedMinutes = Math.round(elapsedMs / 60000);
+
+    if (mode === "focus" && elapsedMinutes >= 1) {
+      let currentUser = user;
+      if (!currentUser) {
+        const { signInGuest } = await import("@/lib/auth");
+        currentUser = await signInGuest();
+      }
+
+      if (currentUser) {
+        const { savePartialPomodoroSession } = await import("@/lib/db");
+        await savePartialPomodoroSession(currentUser.uid, elapsedMinutes);
+      }
+    }
+
+    reset();
+  };
 
   // Hydration guard: only render on client after storage is loaded
   useEffect(() => {
@@ -288,69 +318,120 @@ export function TimerCard() {
               </div>
 
               <div className={cn(
-                "flex items-center gap-4 mt-8 transition-all duration-500",
+                "flex items-center justify-center gap-4 mt-10 transition-all duration-500",
                 isActive && "opacity-0 group-hover/timer:opacity-100"
               )}>
-                <Button
-                  onClick={async () => {
-                    if (isActive) {
-                      pause();
-                    } else {
-                      let currentUser = user;
-                      if (!currentUser) {
-                        const { signInGuest } = await import("@/lib/auth");
-                        currentUser = await signInGuest();
+                {/* Spacer to balance the layout */}
+                <div className="w-16 shrink-0" />
+
+                {/* Center: Start / Stop */}
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={async () => {
+                      if (isActive) {
+                        pause();
+                      } else {
+                        let currentUser = user;
+                        if (!currentUser) {
+                          const { signInGuest } = await import("@/lib/auth");
+                          currentUser = await signInGuest();
+                        }
+
+                        if (currentUser && currentUser.isAnonymous) {
+                          const { syncUserProfile } = await import("@/lib/db");
+                          syncUserProfile(currentUser);
+                        }
+                        start();
                       }
+                    }}
+                    className={cn(
+                      "h-16 px-16 rounded-2xl text-lg font-bold transition-all duration-300 shadow-xl",
+                      isActive
+                        ? "bg-white/10 text-white border-2 border-white/20 hover:bg-white/20 hover:border-white/30 hover:shadow-white/10 hover:scale-105 active:scale-100"
+                        : "bg-white text-black hover:bg-zinc-200 hover:shadow-white/20 hover:scale-105 active:scale-100"
+                    )}
+                  >
+                    <span className="relative z-10 flex items-center gap-2.5">
+                      {isActive ? (
+                        <>
+                          <Pause className="w-5 h-5" />
+                          pause
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-5 h-5" />
+                          start
+                        </>
+                      )}
+                    </span>
+                  </Button>
 
-                      if (currentUser && currentUser.isAnonymous) {
-                        const { syncUserProfile } = await import("@/lib/db");
-                        syncUserProfile(currentUser);
-                      }
-                      start();
-                    }
-                  }}
-                  className={cn(
-                    "h-14 px-12 rounded-full text-lg font-bold transition-all duration-300",
-                    "bg-white text-black hover:bg-zinc-200"
+                  {isActive && (
+                    <Button
+                      onClick={handleStop}
+                      className="h-16 px-8 rounded-2xl text-lg font-bold transition-all duration-300 bg-red-500/90 text-white hover:bg-red-500 border-2 border-red-400/50 hover:border-red-400 hover:scale-105 active:scale-100 shadow-xl shadow-red-500/25"
+                    >
+                      <Square className="w-5 h-5 mr-2 fill-current" />
+                      stop
+                    </Button>
                   )}
-                >
-                  <span className="relative z-10 flex items-center">
-                    {isActive ? "pause" : "start"}
-                  </span>
-                </Button>
+                </div>
 
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={reset}
-                  className="h-14 w-14 rounded-full text-white/60 hover:text-white hover:bg-white/5 transition-all duration-300"
-                >
-                  <RotateCcw className="w-6 h-6" />
-                </Button>
+                {/* Right: Settings Toggle + Sliding Panel */}
+                <div className="relative flex items-center">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                    title="Toggle settings"
+                    className={cn(
+                      "h-16 w-16 rounded-2xl transition-all duration-300",
+                      isSettingsOpen
+                        ? "text-white bg-white/15 hover:bg-white/20"
+                        : "text-white/50 hover:text-white hover:bg-white/10"
+                    )}
+                  >
+                    <Settings className={cn(
+                      "w-6 h-6 transition-transform duration-300",
+                      isSettingsOpen && "rotate-90"
+                    )} />
+                  </Button>
 
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={toggleNavFocusMode}
-                  title={isNavFocusMode ? "Disable Focus Mode (show nav)" : "Enable Focus Mode (hide nav)"}
-                  className={cn(
-                    "h-10 w-10 rounded-full transition-all duration-300",
-                    isNavFocusMode
-                      ? "text-white bg-white/15 hover:bg-white/20"
-                      : "text-white/50 hover:text-white hover:bg-white/5"
-                  )}
-                >
-                  {isNavFocusMode ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                </Button>
+                  {/* Sliding Panel to the Right */}
+                  <div className={cn(
+                    "absolute left-full ml-3 overflow-hidden transition-all duration-500 ease-out",
+                    isSettingsOpen ? "max-w-[200px] opacity-100" : "max-w-0 opacity-0"
+                  )}>
+                    <div className="flex items-center gap-2 bg-white/5 backdrop-blur-sm rounded-2xl px-3 py-2 border border-white/10 whitespace-nowrap">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={reset}
+                        title="Reset timer"
+                        className="h-11 w-11 rounded-xl text-white/60 hover:text-white hover:bg-white/10 transition-all duration-300 shrink-0"
+                      >
+                        <RotateCcw className="w-5 h-5" />
+                      </Button>
 
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-14 w-14 rounded-full text-white/60 hover:text-white hover:bg-white/5 transition-all duration-300"
-                  onClick={() => router.push("/settings")}
-                >
-                  <Settings className="w-6 h-6" />
-                </Button>
+                      <div className="w-px h-6 bg-white/10" />
+
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={toggleNavFocusMode}
+                        title={isNavFocusMode ? "Disable Focus Mode (show nav)" : "Enable Focus Mode (hide nav)"}
+                        className={cn(
+                          "h-11 w-11 rounded-xl transition-all duration-300 shrink-0",
+                          isNavFocusMode
+                            ? "text-white bg-white/10 hover:bg-white/15"
+                            : "text-white/50 hover:text-white hover:bg-white/10"
+                        )}
+                      >
+                        {isNavFocusMode ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </>
           )}

@@ -142,6 +142,39 @@ export const savePomodoroSession = async (userId: string, durationMinutes: numbe
 };
 
 /**
+ * Saves a partially completed Pomodoro session (user stopped early).
+ * The duration reflects actual time spent, not the full configured duration.
+ */
+export const savePartialPomodoroSession = async (userId: string, durationMinutes: number) => {
+    if (durationMinutes < 1) return false;
+
+    try {
+        if (auth.currentUser && auth.currentUser.uid === userId) {
+            await syncUserProfile(auth.currentUser);
+        }
+
+        await addDoc(collection(db, "sessions"), {
+            userId,
+            duration: durationMinutes,
+            type: "work",
+            completedAt: serverTimestamp(),
+        });
+
+        const userRef = doc(db, "users", userId);
+        await updateDoc(userRef, {
+            totalPomodoros: increment(1),
+            totalMinutes: increment(durationMinutes),
+            lastActive: serverTimestamp()
+        });
+
+        return true;
+    } catch (error) {
+        console.error("Error saving partial session:", error);
+        return false;
+    }
+};
+
+/**
  * Fetches the top focusers for the leaderboard.
  */
 export const getLeaderboard = async (limitCount: number = 10) => {
