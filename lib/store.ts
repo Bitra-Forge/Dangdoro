@@ -162,14 +162,29 @@ export const useTimerStore = create<TimerState>()(
         });
       },
       incrementTime: (seconds) => {
-        const { mode, timeLeft } = get();
+        const { mode, timeLeft, isActive, initialFocusTime, initialBreakTime, initialLongBreakTime } = get();
         const newTime = Math.max(0, timeLeft + seconds);
-        set({
+        
+        const updates: any = {
           timeLeft: newTime,
           ...(mode === "focus" ? { focusTimeLeft: newTime } :
             mode === "break" ? { breakTimeLeft: newTime } :
               { longBreakTimeLeft: newTime })
-        });
+        };
+
+        // If the timer is not active, we are setting a new session duration, so update initial.
+        // If the timer is active and we are adding time, increase the initial total to maintain progress.
+        if (!isActive) {
+          if (mode === "focus") updates.initialFocusTime = newTime;
+          else if (mode === "break") updates.initialBreakTime = newTime;
+          else if (mode === "long-break") updates.initialLongBreakTime = newTime;
+        } else if (seconds > 0) {
+          if (mode === "focus") updates.initialFocusTime = initialFocusTime + seconds;
+          else if (mode === "break") updates.initialBreakTime = initialBreakTime + seconds;
+          else if (mode === "long-break") updates.initialLongBreakTime = initialLongBreakTime + seconds;
+        }
+
+        set(updates);
       },
       setInitialTime: (mode, seconds) => {
         const { mode: currentMode, isActive, initialFocusTime, initialBreakTime, initialLongBreakTime, focusTimeLeft, breakTimeLeft, longBreakTimeLeft } = get();
