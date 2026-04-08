@@ -37,14 +37,21 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0 }: any) => (
     </motion.div>
 );
 
-const ProductivitySquare = ({ level, date }: { level: number; date: Date }) => (
+const formatFocusedTime = (totalMinutes: number) => {
+    if (totalMinutes < 60) return `${totalMinutes}m`;
+
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+};
+
+const ProductivitySquare = ({ level }: { level: number }) => (
     <div
         className={cn(
             "w-2.5 h-2.5 rounded-sm transition-all duration-500",
             level === 0 ? "bg-white/5" : "bg-purple-500"
         )}
         style={{ opacity: level === 0 ? 1 : Math.min(0.2 + (level * 0.8), 1) }}
-        title={`${format(date, 'MMM d')}: ${Math.floor(level * 120)}m focused`}
     />
 );
 
@@ -147,7 +154,8 @@ export default function ProfilePage() {
             grid.push({
                 date,
                 level: Math.min(totalMins / 120, 1), // Max 2 hours for full purple
-                minutes: totalMins
+                minutes: totalMins,
+                tooltip: `${format(date, 'MMM d')}: ${formatFocusedTime(totalMins)} focused`
             });
         }
         return grid;
@@ -409,7 +417,9 @@ export default function ProfilePage() {
 
                         <div className="flex flex-wrap gap-1.5 justify-center">
                             {productivityData.map((day, i) => (
-                                <ProductivitySquare key={i} level={day.level} date={day.date} />
+                                <div key={i} title={day.tooltip}>
+                                    <ProductivitySquare level={day.level} />
+                                </div>
                             ))}
                         </div>
 
