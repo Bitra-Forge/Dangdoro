@@ -171,12 +171,12 @@ export default function LeaderboardPage() {
                                                     "rounded-full border transition-all duration-300 group-hover:border-opacity-100 overflow-hidden",
                                                     isGold ? "border-[#C9B037]/40 w-24 h-24" : isSilver ? "border-zinc-400/30 w-20 h-20" : "border-orange-700/20 w-20 h-20"
                                                 )}>
-                                                    <Avatar className="w-full h-full border-0">
+                                                    <Avatar className="w-full h-full border-0 rounded-full">
                                                         <AvatarImage
                                                             src={player.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${player.uid}`}
                                                             className="object-cover"
                                                         />
-                                                        <AvatarFallback>{player.displayName?.slice(0, 1)}</AvatarFallback>
+                                                        <AvatarFallback className="rounded-full">{player.displayName?.slice(0, 1)}</AvatarFallback>
                                                     </Avatar>
                                                 </div>
                                                 <div className={cn(
@@ -252,12 +252,12 @@ export default function LeaderboardPage() {
                                         </div>
 
                                         <div className="relative w-10 h-10 rounded-full border border-white/10 group-hover:border-white/20 transition-all duration-300 overflow-hidden">
-                                            <Avatar className="w-full h-full border-0 rounded-none">
+                                            <Avatar className="w-full h-full border-0 rounded-full">
                                                 <AvatarImage
                                                     src={player.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${player.uid}`}
                                                     className="object-cover w-full h-full"
                                                 />
-                                                <AvatarFallback className="text-[9px]">{player.displayName?.slice(0, 1)}</AvatarFallback>
+                                                <AvatarFallback className="text-[9px] rounded-full">{player.displayName?.slice(0, 1)}</AvatarFallback>
                                             </Avatar>
                                         </div>
 
