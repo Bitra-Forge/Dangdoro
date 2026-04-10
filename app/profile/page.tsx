@@ -28,29 +28,25 @@ const Noise = () => (
 
 const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal = false, lottie = null }: any) => {
     const getThemeAnimations = () => {
-        if (colorClass.includes('red')) return { 
-            glow: "rgba(239,68,68,0.1)",
-            border: "rgba(239,68,68,0.2)",
+        if (colorClass.includes('red')) return {
+            glow: "rgba(239,68,68,0.15)",
+            accent: "#ef4444",
             particles: "bg-red-500",
-            shadow: "0 0 20px rgba(239,68,68,0.1)"
         };
-        if (colorClass.includes('amber')) return { 
-            glow: "rgba(245,158,11,0.1)",
-            border: "rgba(245,158,11,0.2)",
+        if (colorClass.includes('amber')) return {
+            glow: "rgba(245,158,11,0.15)",
+            accent: "#f59e0b",
             particles: "bg-amber-500",
-            shadow: "0 0 20px rgba(245,158,11,0.1)"
         };
-        if (colorClass.includes('sky')) return { 
-            glow: "rgba(14,165,233,0.1)",
-            border: "rgba(14,165,233,0.2)",
+        if (colorClass.includes('sky')) return {
+            glow: "rgba(14,165,233,0.15)",
+            accent: "#0ea5e9",
             particles: "bg-sky-500",
-            shadow: "0 0 20px rgba(14,165,233,0.1)"
         };
-        return { 
-            glow: "rgba(168,85,247,0.1)",
-            border: "rgba(168,85,247,0.2)",
+        return {
+            glow: "rgba(168,85,247,0.15)",
+            accent: "#a855f7",
             particles: "bg-purple-500",
-            shadow: "0 0 20px rgba(168,85,247,0.1)"
         };
     };
 
@@ -60,10 +56,10 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal 
         <motion.div
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
-            whileHover={{ y: -2 }}
+            whileHover="hover"
             transition={{ delay: 0.2 + delay, duration: 0.8 }}
             className={cn(
-                "relative group bg-zinc-900/10 backdrop-blur-2xl border border-white/5 rounded-[5px] flex shadow-2xl transition-all duration-500 overflow-hidden cursor-default",
+                "relative group bg-zinc-900/10 backdrop-blur-2xl border border-white/5 rounded-[5px] flex shadow-2xl transition-all duration-500 overflow-hidden cursor-pointer",
                 horizontal ? "flex-row items-center p-4 gap-4" : "flex-col items-center text-center p-4"
             )}
         >
@@ -73,7 +69,7 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal 
             </div>
 
             {/* 2. Theme Specific Ambient Glow */}
-            <div 
+            <div
                 className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-all duration-700 blur-[30px] -z-10"
                 style={{ backgroundColor: theme.glow }}
             />
@@ -99,58 +95,52 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal 
                     </div>
                 )}
                 {colorClass.includes('red') && [...Array(6)].map((_, i) => (
-                    <motion.div 
-                        key={i} 
-                        animate={{ 
-                            x: [0, -120], 
+                    <motion.div
+                        key={i}
+                        animate={{
+                            x: [0, -120],
                             y: [(Math.random() - 0.5) * 40, (Math.random() - 0.5) * 60],
-                            opacity: [0, 0.4, 0], 
-                            scale: [1, 0.3] 
-                        }} 
-                        transition={{ 
-                            duration: 1.5 + Math.random(), 
-                            repeat: Infinity, 
-                            delay: i * 0.3 
-                        }} 
-                        className="absolute right-0 w-0.5 h-0.5 bg-red-400 rounded-full blur-[0.5px]" 
-                        style={{ top: `${20 + (i * 12)}%` }} 
+                            opacity: [0, 0.4, 0],
+                            scale: [1, 0.3]
+                        }}
+                        transition={{
+                            duration: 1.5 + Math.random(),
+                            repeat: Infinity,
+                            delay: i * 0.3
+                        }}
+                        className="absolute right-0 w-0.5 h-0.5 bg-red-400 rounded-full blur-[0.5px]"
+                        style={{ top: `${20 + (i * 12)}%` }}
                     />
-                ))}
-                {colorClass.includes('amber') && [...Array(6)].map((_, i) => (
-                    <motion.div key={i} animate={{ opacity: [0, 1, 0] }} transition={{ duration: 0.1, repeat: Infinity, delay: Math.random() }} className="absolute w-[1px] h-[1px] bg-amber-400" style={{ left: `${Math.random()*100}%`, top: `${Math.random()*100}%` }} />
-                ))}
-                {colorClass.includes('sky') && (
-                    <motion.div animate={{ rotate: [0, 360], scale: [0.8, 1.2, 0.8] }} transition={{ duration: 4, repeat: Infinity }} className="absolute -inset-8 border border-sky-500/10 rounded-full blur-[2px]" />
-                )}
-                {colorClass.includes('purple') && [...Array(5)].map((_, i) => (
-                    <motion.div key={i} animate={{ scale: [0, 1, 0], opacity: [0, 0.3, 0] }} transition={{ duration: 3, repeat: Infinity, delay: i * 0.6 }} className="absolute bg-purple-400 rounded-full blur-[4px]" style={{ width: '20px', height: '20px', left: `${Math.random()*80}%`, top: `${Math.random()*80}%` }} />
                 ))}
             </div>
 
             {/* Free-Floating Icon with Unique Animation */}
-            <motion.div 
-                whileHover={
-                    colorClass.includes('sky') ? { rotate: 360 } : 
-                    colorClass.includes('amber') ? { x: [0, -1, 1, -1, 1, 0] } :
-                    { scale: 1.15 }
-                }
+            <motion.div
+                variants={{
+                    hover: colorClass.includes('sky') ? { rotate: 360 } :
+                           colorClass.includes('amber') ? { x: [0, -1, 1, -1, 1, 0] } :
+                           { scale: 1.15 }
+                }}
                 transition={{ duration: colorClass.includes('sky') ? 1.5 : 0.2 }}
                 className={cn(
                     "transition-all duration-500 shrink-0 relative z-10 flex items-center justify-center",
-                    horizontal ? "" : "mb-4",
-                    "group-hover:drop-shadow-[0_0_8px_currentColor]"
+                    horizontal ? "" : "mb-4"
                 )}
             >
-                <Icon className={cn(
-                    "transition-all duration-500",
-                    horizontal ? "w-4 h-4" : "w-6 h-6", 
-                    colorClass?.replace('bg-', 'text-')
-                )} />
+                <Icon 
+                    className="transition-all duration-500"
+                    style={{ 
+                        width: horizontal ? 16 : 24, 
+                        height: horizontal ? 16 : 24,
+                        color: theme.accent,
+                        filter: `drop-shadow(0 0 8px ${theme.accent})`
+                    }} 
+                />
             </motion.div>
 
             <div className={cn("flex flex-col min-w-0 pr-1 relative z-10", horizontal ? "items-start text-left" : "items-center")}>
                 <span className={cn(
-                    "font-black text-white tracking-tighter tabular-nums mb-0.5 drop-shadow-sm leading-none whitespace-nowrap transition-all duration-500", 
+                    "font-black text-white tracking-tighter tabular-nums mb-0.5 drop-shadow-sm leading-none whitespace-nowrap transition-all duration-500",
                     horizontal ? "text-lg" : "text-2xl",
                     "group-hover:drop-shadow-[0_0_10px_white]"
                 )}>
@@ -168,7 +158,7 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal 
             )} />
 
             {/* Top Gloss Line */}
-            <motion.div 
+            <motion.div
                 className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"
                 initial={{ x: "-100%" }}
                 whileHover={{ x: "100%" }}
@@ -378,22 +368,22 @@ export default function ProfilePage() {
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
         if (!ctx) return null;
-        
+
         // High quality scale
-        canvas.width = 512; 
+        canvas.width = 512;
         canvas.height = 512;
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
-        
+
         ctx.drawImage(
-            img, 
-            pixelCrop.x, 
-            pixelCrop.y, 
-            pixelCrop.width, 
-            pixelCrop.height, 
-            0, 
-            0, 
-            512, 
+            img,
+            pixelCrop.x,
+            pixelCrop.y,
+            pixelCrop.width,
+            pixelCrop.height,
+            0,
+            0,
+            512,
             512
         );
         return canvas.toDataURL("image/jpeg", 0.92);
@@ -439,7 +429,7 @@ export default function ProfilePage() {
                 {/* --- IDENTITY HUB --- */}
                 <section className="w-full flex flex-col lg:flex-row items-center lg:items-start gap-12 mb-20 px-2 relative">
                     <div className="flex-1 flex flex-col md:flex-row items-center md:items-start gap-12 w-full">
-                        
+
                         {/* Avatar & Actions Side */}
                         <div className="flex flex-col items-center gap-6 shrink-0 z-20">
                             <motion.div
@@ -449,7 +439,7 @@ export default function ProfilePage() {
                                 className="relative group"
                             >
                                 <div className="absolute -inset-8 bg-purple-500/10 rounded-full blur-[60px] opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-                                
+
                                 <div className="relative">
                                     {/* Geometric frame decoration */}
                                     <Avatar className="w-40 h-40 md:w-48 md:h-48 rounded-2xl border border-white/10 group-hover:border-purple-500/40 group-hover:shadow-[0_0_30px_rgba(168,85,247,0.2)] relative z-10 overflow-hidden transition-all duration-700 shadow-2xl">
@@ -475,14 +465,14 @@ export default function ProfilePage() {
                             {/* Action Buttons Container - Perfectly aligned under Avatar */}
                             {!isEditing && (
                                 <div className="flex flex-col gap-2.5 w-32 md:w-40 items-center z-30">
-                                    <motion.div 
-                                        whileHover={{ scale: 1.02, y: -2 }} 
-                                        whileTap={{ scale: 0.98 }} 
+                                    <motion.div
+                                        whileHover={{ y: -2 }}
+                                        whileTap={{ y: 0 }}
                                         className="w-full"
                                     >
                                         <Button
                                             onClick={() => setIsEditing(true)}
-                                            className="w-full h-9 rounded-full bg-zinc-100 text-zinc-950 hover:bg-white font-black text-[9px] tracking-widest transition-all border border-white/20 relative shadow-xl overflow-hidden group/btn"
+                                            className="w-full h-9 rounded-full bg-zinc-100 text-zinc-950 hover:bg-white font-black text-[9px] tracking-widest transition-all border border-white/20 relative shadow-xl overflow-hidden group/btn cursor-pointer"
                                         >
                                             <div className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-[-25deg] -translate-x-full group-hover/btn:animate-shine transition-transform" />
                                             <div className="flex items-center justify-center gap-2 relative z-10 uppercase">
@@ -492,14 +482,14 @@ export default function ProfilePage() {
                                         </Button>
                                     </motion.div>
 
-                                    <motion.div 
-                                        whileHover={{ scale: 1.02, y: -1 }} 
-                                        whileTap={{ scale: 0.98 }} 
+                                    <motion.div
+                                        whileHover={{ y: -1 }}
+                                        whileTap={{ y: 0 }}
                                         className="w-full"
                                     >
                                         <Button
                                             variant="ghost"
-                                            className="w-full h-9 rounded-full border border-white/5 bg-zinc-900/40 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60 transition-all backdrop-blur-xl group/btn relative overflow-hidden text-[9px] font-black tracking-widest"
+                                            className="w-full h-9 rounded-full border border-white/5 bg-zinc-900/40 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60 transition-all backdrop-blur-xl group/btn relative overflow-hidden text-[9px] font-black tracking-widest cursor-pointer"
                                         >
                                             <div className="flex items-center justify-center gap-2 uppercase relative z-10">
                                                 <Share2 className="w-2.5 h-2.5 transition-transform group-hover/btn:rotate-12" />
@@ -561,7 +551,7 @@ export default function ProfilePage() {
                                         {userData?.displayName || "New Pilot"}
                                     </h1>
 
-                                    <p className="text-zinc-400 text-sm md:text-base font-medium leading-[1.8] mb-10 max-w-xl">
+                                    <p className="text-zinc-400 text-sm md:text-base font-medium leading-[1.8] mb-14 max-w-2xl break-all">
                                         {userData?.bio || "System Architect and Digital Curator focusing on high-fidelity procedural environments and neural interface aesthetics. Architecting the void since 2024."}
                                     </p>
                                 </motion.div>
@@ -570,7 +560,7 @@ export default function ProfilePage() {
                     </div>
 
                     {/* Quick Stats Column - Custom Stacked Layout */}
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.3 }}
