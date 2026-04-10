@@ -493,7 +493,7 @@ export const updateUserSettings = async (userId: string, settings: any) => {
     }
 };
 
-export const updateUserProfile = async (userId: string, data: { displayName?: string; nickname?: string; bio?: string }) => {
+export const updateUserProfile = async (userId: string, data: { displayName?: string; nickname?: string; bio?: string; profileTheme?: string }) => {
     try {
         const userRef = doc(db, "users", userId);
         await updateDoc(userRef, data);

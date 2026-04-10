@@ -20,6 +20,34 @@ import { motion, AnimatePresence } from "framer-motion";
 import Cropper from "react-easy-crop";
 import { DotLottiePlayer } from '@dotlottie/react-player';
 
+// --- Themes ---
+const THEMES: Record<string, { name: string; colors: string[]; accent: string; glow: string; text?: string }> = {
+    daybreak: {
+        name: "Daybreak",
+        colors: ["#9B8EC7", "#BDA6CE", "#F2EAE0"],
+        accent: "#F2EAE0",
+        glow: "rgba(242, 234, 224, 0.2)"
+    },
+    cinematic: {
+        name: "Cinematic",
+        colors: ["#522546", "#88304E", "#E23E57"],
+        accent: "#E23E57",
+        glow: "rgba(226, 62, 87, 0.2)"
+    },
+    teal: {
+        name: "Deep Teal Sea",
+        colors: ["#024959", "#026773", "#3CA6A6"],
+        accent: "#3CA6A6",
+        glow: "rgba(60, 166, 166, 0.2)"
+    },
+    meadow: {
+        name: "Emerald Meadow",
+        colors: ["#A2CB8B", "#C7EABB", "#E8F5BD"],
+        accent: "#E8F5BD",
+        glow: "rgba(232, 245, 189, 0.2)"
+    }
+};
+
 // --- Components ---
 
 const Noise = () => (
@@ -118,8 +146,8 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal 
             <motion.div
                 variants={{
                     hover: colorClass.includes('sky') ? { rotate: 360 } :
-                           colorClass.includes('amber') ? { x: [0, -1, 1, -1, 1, 0] } :
-                           { scale: 1.15 }
+                        colorClass.includes('amber') ? { x: [0, -1, 1, -1, 1, 0] } :
+                            { scale: 1.15 }
                 }}
                 transition={{ duration: colorClass.includes('sky') ? 1.5 : 0.2 }}
                 className={cn(
@@ -127,14 +155,14 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal 
                     horizontal ? "" : "mb-4"
                 )}
             >
-                <Icon 
+                <Icon
                     className="transition-all duration-500"
-                    style={{ 
-                        width: horizontal ? 16 : 24, 
+                    style={{
+                        width: horizontal ? 16 : 24,
                         height: horizontal ? 16 : 24,
                         color: theme.accent,
                         filter: `drop-shadow(0 0 8px ${theme.accent})`
-                    }} 
+                    }}
                 />
             </motion.div>
 
@@ -176,19 +204,31 @@ const formatFocusedTime = (totalMinutes: number) => {
     return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
 };
 
-const ProductivitySquare = ({ level }: { level: number }) => (
-    <div
-        className={cn(
-            "w-2.5 h-2.5 rounded-[2px] transition-all duration-700 relative group/sq",
-            level === 0 ? "bg-white/[0.03]" : "bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.2)]"
-        )}
-        style={{ opacity: level === 0 ? 1 : Math.min(0.3 + (level * 0.7), 1) }}
-    >
-        {level > 0 && (
-            <div className="absolute inset-0 bg-purple-400 blur-[2px] opacity-0 group-hover/sq:opacity-50 transition-opacity" />
-        )}
-    </div>
-);
+const ProductivitySquare = ({ level, theme }: { level: number, theme: any }) => {
+    // level: 0, 1, 2, 3
+    const colorIndex = level - 1;
+    const bgColor = level === 0 ? "bg-white/[0.03]" : "";
+
+    return (
+        <div
+            className={cn(
+                "w-2.5 h-2.5 rounded-full transition-all duration-700 relative group/sq",
+                bgColor
+            )}
+            style={{
+                backgroundColor: colorIndex !== -1 ? theme.colors[colorIndex] : undefined,
+                boxShadow: colorIndex !== -1 ? `0 0 10px ${theme.colors[colorIndex]}44` : undefined
+            }}
+        >
+            {level > 0 && (
+                <div
+                    className="absolute inset-0 blur-[2px] opacity-0 group-hover/sq:opacity-50 transition-opacity"
+                    style={{ backgroundColor: theme.colors[colorIndex] }}
+                />
+            )}
+        </div>
+    );
+};
 
 // --- Page ---
 
@@ -210,6 +250,7 @@ export default function ProfilePage() {
     const [editName, setEditName] = useState("");
     const [editNickname, setEditNickname] = useState("");
     const [editBio, setEditBio] = useState("");
+    const [selectedTheme, setSelectedTheme] = useState("daybreak");
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
@@ -232,6 +273,10 @@ export default function ProfilePage() {
                     setEditName(data.displayName || "");
                     setEditNickname(data.nickname || "");
                     setEditBio(data.bio || "");
+                    if (data.profileTheme) {
+                        const themeKey = data.profileTheme.toLowerCase();
+                        setSelectedTheme(THEMES[themeKey] ? themeKey : "daybreak");
+                    }
                 }
                 setLoading(false);
             });
@@ -286,9 +331,16 @@ export default function ProfilePage() {
             const date = subDays(now, i);
             const daySessions = sessions.filter(s => isSameDay(s.completedAt.toDate(), date));
             const totalMins = daySessions.reduce((acc, curr) => acc + curr.duration, 0);
+            let level = 0;
+            if (totalMins > 0) {
+                if (totalMins < 30) level = 1;
+                else if (totalMins < 120) level = 2;
+                else level = 3;
+            }
+
             grid.push({
                 date,
-                level: Math.min(totalMins / 120, 1), // Max 2 hours for full purple
+                level,
                 minutes: totalMins,
                 tooltip: `${format(date, 'MMM d')}: ${formatFocusedTime(totalMins)} focused`
             });
@@ -350,7 +402,8 @@ export default function ProfilePage() {
             await updateUserProfile(user.uid, {
                 displayName: editName,
                 nickname: editNickname,
-                bio: editBio
+                bio: editBio,
+                profileTheme: selectedTheme
             });
             toast.success("Profile saved!");
             setIsEditing(false);
@@ -413,13 +466,18 @@ export default function ProfilePage() {
         );
     }
 
+    const currentTheme = THEMES[selectedTheme] || THEMES.daybreak;
+
     return (
         <div className="flex flex-col flex-1 bg-zinc-950 min-h-screen relative overflow-x-hidden" style={{ fontFamily: '__nextjs-Geist' }}>
             <Noise />
 
             {/* Immersive Background Elements */}
             <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full h-screen pointer-events-none z-0">
-                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-600/10 rounded-full blur-[120px] animate-pulse-slow" />
+                <div
+                    className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full blur-[120px] animate-pulse-slow transition-colors duration-1000"
+                    style={{ backgroundColor: `${currentTheme.accent}11` }}
+                />
                 <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-600/5 rounded-full blur-[120px] animate-pulse-slow" style={{ animationDelay: '2s' }} />
                 <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/5 to-transparent" />
             </div>
@@ -436,18 +494,62 @@ export default function ProfilePage() {
                                 initial={{ opacity: 0, scale: 0.8 }}
                                 animate={{ opacity: 1, scale: 1 }}
                                 transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-                                className="relative group"
+                                className="relative group flex items-center"
                             >
-                                <div className="absolute -inset-8 bg-purple-500/10 rounded-full blur-[60px] opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-
-                                <div className="relative">
-                                    {/* Geometric frame decoration */}
-                                    <Avatar className="w-40 h-40 md:w-48 md:h-48 rounded-2xl border border-white/10 group-hover:border-purple-500/40 group-hover:shadow-[0_0_30px_rgba(168,85,247,0.2)] relative z-10 overflow-hidden transition-all duration-700 shadow-2xl">
+                                {/* Theme Picker - Left Side of Avatar when Editing */}
+                                <AnimatePresence>
+                                    {isEditing && (
+                                        <motion.div
+                                            initial={{ opacity: 0, x: 20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            exit={{ opacity: 0, x: 20 }}
+                                            className="absolute right-full mr-8 flex flex-col gap-4 items-center"
+                                        >
+                                            <div className="flex flex-col gap-3">
+                                                {Object.entries(THEMES).map(([id, t]) => (
+                                                    <button
+                                                        key={id}
+                                                        onClick={() => setSelectedTheme(id)}
+                                                        className={cn(
+                                                            "w-10 h-10 rounded-xl border transition-all duration-300 flex flex-col items-center justify-center gap-0.5 overflow-hidden group/theme",
+                                                            selectedTheme === id
+                                                                ? "border-white/40 bg-white/5 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                                                                : "border-white/5 bg-zinc-950/50 hover:border-white/20"
+                                                        )}
+                                                    >
+                                                        <div className="flex gap-0.5">
+                                                            {t.colors.slice(-2).map((c, i) => (
+                                                                <div key={i} className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c }} />
+                                                            ))}
+                                                        </div>
+                                                        <span className="text-[6px] font-black uppercase tracking-tighter text-zinc-600 group-hover/theme:text-zinc-400">
+                                                            {t.name.split(' ')[0]}
+                                                        </span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                                <div className="relative group">
+                                    {/* Atmospheric Glow - Multilayered for strength */}
+                                    <div 
+                                        className="absolute -inset-12 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-1000 blur-[100px] pointer-events-none z-0"
+                                        style={{ backgroundColor: `${currentTheme.accent}25` }}
+                                    />
+                                    <div 
+                                        className="absolute -inset-4 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-700 blur-[40px] pointer-events-none z-0"
+                                        style={{ backgroundColor: `${currentTheme.accent}40` }}
+                                    />
+                                    
+                                    <Avatar
+                                        className="w-40 h-40 md:w-48 md:h-48 rounded-[2.2rem] border border-white/10 relative z-10 overflow-hidden transition-all duration-500 group-hover:border-white/30"
+                                    >
                                         <AvatarImage
                                             src={userData?.photoURL || user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`}
-                                            className="object-cover w-full h-full scale-100 transition-transform duration-1000 ease-out rounded-2xl"
+                                            className="object-cover w-full h-full scale-100 group-hover:scale-105 transition-transform duration-[2s] ease-out rounded-[2.2rem]"
                                         />
-                                        <AvatarFallback className="bg-zinc-900 font-black text-6xl text-white rounded-2xl transition-all group-hover:bg-zinc-800">
+                                        <AvatarFallback className="bg-zinc-900 font-black text-6xl text-white rounded-[2.2rem] transition-all group-hover:bg-zinc-800">
                                             {user.displayName?.charAt(0) || "D"}
                                         </AvatarFallback>
 
@@ -521,7 +623,7 @@ export default function ProfilePage() {
                                         onChange={e => setEditBio(e.target.value)}
                                         placeholder="System Architect | Digital Curator"
                                         rows={2}
-                                        className="bg-transparent border-b border-white/5 text-sm font-medium text-zinc-400 leading-relaxed focus:outline-none focus:border-white/20 transition-all w-full py-2 resize-none"
+                                        className="bg-transparent border-b border-white/5 text-sm font-medium text-zinc-400 leading-relaxed focus:outline-none focus:border-white/20 transition-all w-full py-2 resize-none scrollbar-none [ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                                     />
 
                                     <div className="flex items-center gap-4 mt-4">
@@ -621,54 +723,40 @@ export default function ProfilePage() {
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: 0.6, duration: 0.8 }}
-                        className="lg:col-span-8 bg-zinc-900/10 backdrop-blur-3xl border border-white/5 rounded-[2.5rem] p-10 flex flex-col shadow-2xl relative overflow-hidden group"
+                        className="lg:col-span-8 bg-zinc-900/10 backdrop-blur-3xl border border-white/5 rounded-[10px] p-10 flex flex-col shadow-2xl relative overflow-hidden group"
                     >
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-purple-500/20 to-transparent" />
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white/5 to-transparent" style={{ backgroundImage: `linear-gradient(to right, transparent, ${currentTheme.accent}33, transparent)` }} />
 
                         <div className="flex items-center justify-between mb-10 relative z-10">
                             <div className="flex items-center gap-4">
-                                <div className="p-3 rounded-2xl bg-zinc-900 border border-white/5 shadow-inner group-hover:border-purple-500/30 transition-colors">
-                                    <Activity className="w-5 h-5 text-purple-400 group-hover:animate-pulse" />
+                                <div className="p-3 rounded-[10px] bg-zinc-900 border border-white/5 shadow-inner transition-colors" style={{ borderColor: `${currentTheme.accent}11` }}>
+                                    <Activity className="w-5 h-5 group-hover:animate-pulse" style={{ color: currentTheme.accent }} />
                                 </div>
                                 <div>
                                     <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white">Neural Activity</h3>
                                     <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mt-0.5">Focus density over past 140 cycles</p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3 bg-zinc-950/50 px-4 py-2 rounded-full border border-white/5">
+                            <div className="flex items-center gap-3 bg-zinc-950/50 px-4 py-2 rounded-[10px] border border-white/5">
                                 <span className="text-[9px] uppercase text-zinc-600 font-extrabold tracking-tighter">Low</span>
                                 <div className="flex gap-1.5 items-center">
-                                    <div className="w-2.5 h-2.5 rounded-sm bg-white/[0.03]" />
-                                    <div className="w-2.5 h-2.5 rounded-sm bg-purple-500/20" />
-                                    <div className="w-2.5 h-2.5 rounded-sm bg-purple-500" />
+                                    {currentTheme.colors.map((c, i) => (
+                                        <div key={i} className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c }} />
+                                    ))}
                                 </div>
                                 <span className="text-[9px] uppercase text-zinc-600 font-extrabold tracking-tighter">Peak</span>
                             </div>
                         </div>
 
-                        <div className="flex flex-wrap gap-2 justify-center py-6 px-4 bg-zinc-950/20 rounded-[2rem] border border-white/[0.02] mb-8 relative">
+                        <div className="flex flex-wrap gap-2 justify-center py-6 px-4 bg-zinc-950/20 rounded-[10px] border border-white/[0.02] mb-8 relative">
                             {/* Grid background lines */}
                             <div className="absolute inset-0 opacity-[0.02] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
 
                             {productivityData.map((day, i) => (
                                 <div key={i} title={day.tooltip} className="relative z-10">
-                                    <ProductivitySquare level={day.level} />
+                                    <ProductivitySquare level={day.level} theme={currentTheme} />
                                 </div>
                             ))}
-                        </div>
-
-                        <div className="mt-auto flex items-center justify-between pt-8 border-t border-white/[0.03]">
-                            <div className="flex items-center gap-4">
-                                <div className="w-8 h-8 rounded-full border border-emerald-500/20 flex items-center justify-center bg-emerald-500/5">
-                                    <TrendingUp className="w-4 h-4 text-emerald-400" />
-                                </div>
-                                <span className="text-[11px] font-black text-zinc-500 uppercase tracking-widest">
-                                    Neural efficiency <span className="text-emerald-400">+12.4%</span> vs prev cycle
-                                </span>
-                            </div>
-                            <Button variant="ghost" className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-400 hover:text-purple-300 hover:bg-purple-500/5 px-6 rounded-full transition-all">
-                                [ ANALYZE LOGS ]
-                            </Button>
                         </div>
                     </motion.div>
 
@@ -677,19 +765,19 @@ export default function ProfilePage() {
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: 0.7, duration: 0.8 }}
-                        className="lg:col-span-4 bg-zinc-900/10 backdrop-blur-3xl border border-white/5 rounded-[2.5rem] p-8 flex flex-col shadow-2xl relative overflow-hidden group"
+                        className="lg:col-span-4 bg-zinc-900/10 backdrop-blur-3xl border border-white/5 rounded-[10px] p-8 flex flex-col shadow-2xl relative overflow-hidden group"
                     >
                         <div className="flex items-center justify-between mb-8 relative z-10">
                             <div className="flex items-center gap-4">
-                                <div className="p-3 rounded-2xl bg-zinc-900 border border-white/5 shadow-inner">
-                                    <Calendar className="w-5 h-5 text-purple-400" />
+                                <div className="p-3 rounded-[10px] bg-zinc-900 border border-white/5 shadow-inner">
+                                    <Calendar className="w-5 h-5" style={{ color: currentTheme.accent }} />
                                 </div>
                                 <div>
                                     <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white">{format(new Date(), 'MMMM')}</h3>
-                                    <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mt-0.5">Deployment Timeline</p>
+                                    <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mt-0.5">Streak TimeLine</p>
                                 </div>
                             </div>
-                            <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+                            <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: currentTheme.accent }} />
                         </div>
 
                         <div className="grid grid-cols-7 gap-2 mb-4">
@@ -704,18 +792,23 @@ export default function ProfilePage() {
                                         <>
                                             {/* Base day indicator */}
                                             <div className={cn(
-                                                "w-full h-full rounded-xl flex items-center justify-center text-[10px] font-black transition-all duration-500",
+                                                "w-full h-full rounded-[10px] flex items-center justify-center text-[10px] font-black transition-all duration-500",
                                                 day.hasActivity
-                                                    ? "bg-purple-600/20 text-purple-400 border border-purple-500/30"
+                                                    ? "text-white border"
                                                     : "bg-white/[0.02] text-zinc-700 border border-white/[0.02]",
                                                 day.isToday && "ring-1 ring-white/20 border-white/20"
-                                            )}>
+                                            )}
+                                                style={day.hasActivity ? {
+                                                    backgroundColor: `${currentTheme.accent}22`,
+                                                    borderColor: `${currentTheme.accent}44`,
+                                                    color: currentTheme.accent
+                                                } : {}}>
                                                 {day.day}
                                             </div>
 
                                             {/* Activity pulse */}
                                             {day.hasActivity && (
-                                                <div className="absolute inset-0 bg-purple-500/10 blur-[8px] rounded-full scale-75" />
+                                                <div className="absolute inset-0 blur-[8px] rounded-[10px] scale-75" style={{ backgroundColor: currentTheme.accent, opacity: 0.1 }} />
                                             )}
 
                                             {/* Today indicator bug */}
@@ -728,20 +821,6 @@ export default function ProfilePage() {
                                     )}
                                 </div>
                             ))}
-                        </div>
-
-                        <div className="mt-auto px-4 py-3 rounded-2xl bg-zinc-950/40 border border-white/[0.02] flex items-center justify-between">
-                            <div className="flex flex-col">
-                                <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">Active Cycles</span>
-                                <span className="text-xs font-black text-white">{monthDays.filter(d => d?.hasActivity).length} Days Found</span>
-                            </div>
-                            <div className="h-8 w-px bg-white/5" />
-                            <div className="flex flex-col items-end">
-                                <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">Integrity</span>
-                                <span className="text-xs font-black text-emerald-400">
-                                    {Math.round((monthDays.filter(d => d?.hasActivity).length / (monthDays.length - monthDays.filter(d => d === null).length)) * 100)}%
-                                </span>
-                            </div>
                         </div>
                     </motion.div>
                 </div>
@@ -763,7 +842,16 @@ export default function ProfilePage() {
                             </div>
                             <div className="absolute bottom-0 left-0 right-0 p-8 bg-zinc-950/80 backdrop-blur-xl flex items-center justify-between border-t border-white/5">
                                 <Button variant="ghost" onClick={() => setShowCropper(false)} className="text-zinc-500 hover:text-white uppercase font-black text-xs tracking-[0.2em]">Abort</Button>
-                                <Button onClick={handleUploadCropped} className="bg-purple-600 text-white hover:bg-purple-500 font-black uppercase text-xs tracking-[0.3em] px-10 h-12 rounded-2xl shadow-[0_0_30px_rgba(168,85,247,0.3)]">Confirm Sync</Button>
+                                <Button
+                                    onClick={handleUploadCropped}
+                                    className="text-white font-black uppercase text-xs tracking-[0.3em] px-10 h-12 rounded-2xl shadow-xl transition-all"
+                                    style={{
+                                        backgroundColor: currentTheme.accent,
+                                        boxShadow: `0 0 30px ${currentTheme.accent}44`
+                                    }}
+                                >
+                                    Confirm Sync
+                                </Button>
                             </div>
                         </motion.div>
                     </motion.div>
