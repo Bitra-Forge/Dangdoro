@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { AuthRequired } from "@/components/auth-required";
 import { motion, AnimatePresence } from "framer-motion";
 import Cropper from "react-easy-crop";
-import { DotLottiePlayer } from '@dotlottie/react-player';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 
 // --- Themes ---
 const THEMES: Record<string, { name: string; colors: string[]; accent: string; glow: string; text?: string }> = {
@@ -113,7 +113,7 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal 
                             "h-full p-2 flex items-center justify-center",
                             colorClass.includes('red') ? "absolute right-0 w-[150px] -rotate-90 translate-x-[20%] scale-[2]" : "w-full scale-[1.6]"
                         )}>
-                            <DotLottiePlayer
+                            <DotLottieReact
                                 src={lottie}
                                 autoplay
                                 loop
