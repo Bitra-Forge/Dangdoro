@@ -925,7 +925,7 @@ export default function ProfilePage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: showStats ? 1 : 0, y: showStats ? 0 : 20 }}
                     transition={{ duration: 0.5 }}
-                    className={cn("w-full mt-12 pointer-events-none", showStats && "pointer-events-auto")}
+                    className="w-full mt-12"
                 >
                     {showStats && (
                         <>
