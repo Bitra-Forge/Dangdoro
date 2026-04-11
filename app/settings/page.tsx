@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { updateUserSettings } from "@/lib/db";
 import { useTimerStore } from "@/lib/store";
+import { BackgroundTheme } from "@/components/background-theme";
 
 const DEFAULT_SETTINGS = {
     focusTime: 25,
@@ -155,7 +156,8 @@ export default function SettingsPage() {
     ];
 
     return (
-        <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
+        <BackgroundTheme>
+            <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
             {/* Ambient glow */}
             <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-sky-500/5 rounded-full blur-[140px] pointer-events-none" />
             <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-purple-500/5 rounded-full blur-[120px] pointer-events-none" />
@@ -457,5 +459,6 @@ export default function SettingsPage() {
                 </div>
             </main>
         </div>
+        </BackgroundTheme>
     );
 }

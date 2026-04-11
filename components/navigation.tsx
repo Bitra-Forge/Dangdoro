@@ -1,6 +1,6 @@
 "use client";
 
-import { Timer, ClipboardList, BarChart3, Settings, Trophy, User } from "lucide-react";
+import { Timer, ClipboardList, Settings, Trophy, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -9,7 +9,6 @@ const navLinks = [
     { label: "Timer", href: "/", icon: Timer },
     { label: "Tasks", href: "/tasks", icon: ClipboardList },
     { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
-    { label: "Stats", href: "/stats", icon: BarChart3 },
     { label: "Profile", href: "/profile", icon: User },
     { label: "Settings", href: "/settings", icon: Settings },
 ];

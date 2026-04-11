@@ -6,6 +6,7 @@ import { X } from "lucide-react";
 import Image from "next/image";
 
 const backgrounds = [
+  "none",
   "BG25.png",
   "Bg21.png",
   "Bg7.png",
@@ -58,19 +59,27 @@ export function BackgroundPanel() {
                   : "border-transparent hover:border-white/30"
               )}
             >
-              <Image
-                src={`/Backgrounds/${bg}`}
-                alt={bg}
-                fill
-                className={cn(
-                  "object-cover transition-transform duration-500",
-                  currentBg === bg ? "scale-110" : "group-hover:scale-110"
-                )}
-              />
-              <div className={cn(
-                "absolute inset-0 bg-black/20 transition-opacity",
-                currentBg === bg ? "opacity-0" : "opacity-40 group-hover:opacity-10"
-              )} />
+              {bg === "none" ? (
+                <div className="w-full h-full bg-gradient-to-br from-zinc-900 to-zinc-950 flex items-center justify-center">
+                  <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">None</span>
+                </div>
+              ) : (
+                <>
+                  <Image
+                    src={`/Backgrounds/${bg}`}
+                    alt={bg}
+                    fill
+                    className={cn(
+                      "object-cover transition-transform duration-500",
+                      currentBg === bg ? "scale-110" : "group-hover:scale-110"
+                    )}
+                  />
+                  <div className={cn(
+                    "absolute inset-0 bg-black/20 transition-opacity",
+                    currentBg === bg ? "opacity-0" : "opacity-40 group-hover:opacity-10"
+                  )} />
+                </>
+              )}
             </button>
           ))}
         </div>

@@ -3,22 +3,32 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { cn } from "@/lib/utils";
 import { logOut } from "@/lib/auth";
-import { onSnapshot, doc } from "firebase/firestore";
+import { onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { uploadProfilePicture, updateProfilePictureBase64, getSessionHistory, updateUserProfile } from "@/lib/db";
 import {
     Camera, Shield, Zap, Clock, Calendar, LogOut,
     Trophy, Share2, Pencil, Activity, Award, Flame,
-    Lock, Star, TrendingUp, Info, CheckCircle2
+    Lock, Star, TrendingUp, Info, CheckCircle2, BarChart3
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { format, differenceInDays, startOfDay, subDays, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from "date-fns";
+import { format, differenceInDays, startOfDay, subDays, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, getDay, subMonths, isSameMonth } from "date-fns";
 import { toast } from "sonner";
 import { AuthRequired } from "@/components/auth-required";
 import { motion, AnimatePresence } from "framer-motion";
 import Cropper from "react-easy-crop";
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
+import { BackgroundTheme } from "@/components/background-theme";
+import {
+    AreaChart,
+    Area,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer,
+} from "recharts";
 
 // --- Themes ---
 const THEMES: Record<string, { name: string; colors: string[]; accent: string; glow: string; text?: string }> = {
@@ -48,11 +58,18 @@ const THEMES: Record<string, { name: string; colors: string[]; accent: string; g
     }
 };
 
-// --- Components ---
+// --- Types ---
+type TimeRange = "week" | "month" | "year";
 
-const Noise = () => (
-    <div className="fixed inset-0 pointer-events-none opacity-[0.03] z-[100]" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 200 200\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'noiseFilter\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.65\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23noiseFilter)\'/%3E%3C/svg%3E")' }} />
-);
+interface SessionData {
+    id: string;
+    userId: string;
+    duration: number;
+    completedAt?: { seconds: number; nanoseconds: number };
+    type: string;
+}
+
+// --- Components ---
 
 const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal = false, lottie = null }: any) => {
     const getThemeAnimations = () => {
@@ -253,6 +270,19 @@ export default function ProfilePage() {
     const [selectedTheme, setSelectedTheme] = useState("daybreak");
     const [isSaving, setIsSaving] = useState(false);
 
+    // Stats State
+    const [userStats, setUserStats] = useState<any>(null);
+    const [weekData, setWeekData] = useState<any[]>([]);
+    const [monthData, setMonthData] = useState<any[]>([]);
+    const [yearData, setYearData] = useState<any[]>([]);
+    const [timeRange, setTimeRange] = useState<TimeRange>("week");
+    const [showStats, setShowStats] = useState(false);
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
     useEffect(() => {
         if (authLoading) return;
         if (!user) { setLoading(false); return; }
@@ -282,8 +312,73 @@ export default function ProfilePage() {
             });
 
             // Sync sessions info for grid & streak
-            const history = await getSessionHistory(user.uid, 365);
+            const history = (await getSessionHistory(user.uid, 365)) as SessionData[];
             setSessions(history);
+
+            // Fetch stats data
+            const userDoc = await getDoc(doc(db, "users", user.uid));
+            if (userDoc.exists()) {
+                setUserStats(userDoc.data());
+            }
+
+            // Process data for week chart (last 7 days)
+            const last7Days = Array.from({ length: 7 }).map((_, i) => {
+                const date = subDays(new Date(), 6 - i);
+                return {
+                    date: format(date, "EEE"),
+                    fullDate: startOfDay(date),
+                    minutes: 0,
+                };
+            });
+
+            // Process data for month chart (last 30 days)
+            const last30Days = Array.from({ length: 30 }).map((_, i) => {
+                const date = subDays(new Date(), 29 - i);
+                return {
+                    date: format(date, "d"),
+                    tooltipLabel: format(date, "d MMM"),
+                    fullDate: startOfDay(date),
+                    minutes: 0,
+                };
+            });
+
+            // Process data for year chart (last 12 months)
+            const last12Months = Array.from({ length: 12 }).map((_, i) => {
+                const date = subMonths(new Date(), 11 - i);
+                return {
+                    date: format(date, "MMM"),
+                    fullDate: startOfMonth(date),
+                    minutes: 0,
+                };
+            });
+
+            history.forEach((session: SessionData) => {
+                if (session.completedAt) {
+                    const sessionDate = new Date(session.completedAt.seconds * 1000);
+
+                    // Week data
+                    const dayMatch = last7Days.find(d => isSameDay(d.fullDate, startOfDay(sessionDate)));
+                    if (dayMatch) {
+                        dayMatch.minutes += session.duration || 0;
+                    }
+
+                    // Month data
+                    const monthDayMatch = last30Days.find(d => isSameDay(d.fullDate, startOfDay(sessionDate)));
+                    if (monthDayMatch) {
+                        monthDayMatch.minutes += session.duration || 0;
+                    }
+
+                    // Year data
+                    const monthMatch = last12Months.find(d => isSameMonth(d.fullDate, sessionDate));
+                    if (monthMatch) {
+                        monthMatch.minutes += session.duration || 0;
+                    }
+                }
+            });
+
+            setWeekData(last7Days);
+            setMonthData(last30Days);
+            setYearData(last12Months);
 
             return unsub;
         };
@@ -469,8 +564,8 @@ export default function ProfilePage() {
     const currentTheme = THEMES[selectedTheme] || THEMES.daybreak;
 
     return (
-        <div className="flex flex-col flex-1 bg-zinc-950 min-h-screen relative overflow-x-hidden" style={{ fontFamily: '__nextjs-Geist' }}>
-            <Noise />
+        <BackgroundTheme>
+            <div className="flex flex-col flex-1 bg-zinc-950 min-h-screen relative overflow-x-hidden" style={{ fontFamily: '__nextjs-Geist' }}>
 
             {/* Immersive Background Elements */}
             <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full h-screen pointer-events-none z-0">
@@ -824,6 +919,195 @@ export default function ProfilePage() {
                         </div>
                     </motion.div>
                 </div>
+
+                {/* --- STATS SECTION (MERGED FROM STATS PAGE) --- */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: showStats ? 1 : 0, y: showStats ? 0 : 20 }}
+                    transition={{ duration: 0.5 }}
+                    className={cn("w-full mt-12 pointer-events-none", showStats && "pointer-events-auto")}
+                >
+                    {showStats && (
+                        <>
+                            {/* Stats Toggle Button */}
+                            <div className="flex justify-center mb-6">
+                                <button
+                                    onClick={() => setShowStats(!showStats)}
+                                    className="flex items-center gap-2 px-4 py-2 bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl hover:border-white/20 transition-all"
+                                >
+                                    <BarChart3 className="w-4 h-4 text-purple-400" />
+                                    <span className="text-xs font-black uppercase tracking-widest text-zinc-400">Hide Stats</span>
+                                </button>
+                            </div>
+
+                            {/* Stats Cards */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                {[
+                                    { label: "Focus Minutes", value: userStats?.totalMinutes || 0, icon: Clock, color: "text-amber-400" },
+                                    { label: "Total Sessions", value: userStats?.totalPomodoros || 0, icon: Zap, color: "text-purple-400" },
+                                    { label: "Daily Avg", value: userStats?.totalPomodoros ? Math.round((userStats?.totalMinutes || 0) / userStats?.totalPomodoros) : 0, icon: TrendingUp, color: "text-sky-400" }
+                                ].map((stat, i) => (
+                                    <motion.div
+                                        key={i}
+                                        initial={{ opacity: 0, scale: 0.95 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        transition={{ delay: i * 0.1, duration: 0.4 }}
+                                        className="bg-zinc-900/40 backdrop-blur-3xl border border-white/10 rounded-2xl p-4 shadow-xl flex flex-col items-center text-center group hover:bg-white/5 transition-all"
+                                    >
+                                        <stat.icon className={`w-6 h-6 ${stat.color} mb-2 group-hover:scale-110 transition-transform`} />
+                                        <span className="text-2xl font-black text-white">{stat.value}</span>
+                                        <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mt-0.5">{stat.label}</span>
+                                    </motion.div>
+                                ))}
+                            </div>
+
+                            {/* Chart Section */}
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ delay: 0.3, duration: 0.5 }}
+                                className="w-full bg-zinc-900/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-6 md:p-10 shadow-2xl"
+                            >
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                                    <h2 className="text-lg font-black text-white uppercase italic tracking-tighter">
+                                        {timeRange === "week" && "7-Day Focus Intensity"}
+                                        {timeRange === "month" && "30-Day Focus Intensity"}
+                                        {timeRange === "year" && "12-Month Focus Intensity"}
+                                    </h2>
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex items-center bg-zinc-950/50 p-1 rounded-xl border border-white/5">
+                                            {[
+                                                { id: "week", label: "Week" },
+                                                { id: "month", label: "Month" },
+                                                { id: "year", label: "Year" }
+                                            ].map((tab) => (
+                                                <button
+                                                    key={tab.id}
+                                                    onClick={() => setTimeRange(tab.id as TimeRange)}
+                                                    className={cn(
+                                                        "px-3 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all",
+                                                        timeRange === tab.id
+                                                            ? "bg-purple-500 text-white"
+                                                            : "text-zinc-500 hover:text-white"
+                                                    )}
+                                                >
+                                                    {tab.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="h-[420px] min-h-[420px] w-full mt-4 relative group/chart">
+                                    {mounted && (
+                                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                                            <AreaChart data={timeRange === "week" ? weekData : timeRange === "month" ? monthData : yearData} key={timeRange} margin={{ top: 5, right: 20, left: 20, bottom: 10 }}>
+                                                <defs>
+                                                    <linearGradient id="colorMinutes" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
+                                                        <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
+                                                    </linearGradient>
+                                                </defs>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.5} />
+                                                <XAxis
+                                                    dataKey="date"
+                                                    axisLine={false}
+                                                    tickLine={false}
+                                                    tick={{ fill: '#71717a', fontSize: 10, fontWeight: 900 }}
+                                                    dy={10}
+                                                    interval={timeRange === "month" ? 4 : 0}
+                                                    minTickGap={timeRange === "year" ? 0 : 5}
+                                                />
+                                                <YAxis
+                                                    hide
+                                                    domain={[0, 'auto']}
+                                                />
+                                                <Tooltip
+                                                    cursor={{ stroke: 'rgba(168, 85, 247, 0.2)', strokeWidth: 2 }}
+                                                    content={({ active, payload }) => {
+                                                        if (active && payload && payload.length) {
+                                                            const label = payload[0].payload.tooltipLabel || payload[0].payload.date;
+                                                            return (
+                                                                <div className="bg-zinc-950/80 backdrop-blur-2xl border border-white/10 p-4 rounded-2xl shadow-2xl relative overflow-hidden group">
+                                                                    <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%),linear-gradient(90deg,rgba(255,0,0,0.02),rgba(0,255,0,0.01),rgba(0,0,255,0.02))] bg-[length:100%_4px,3px_100%] pointer-events-none" />
+                                                                    <div className="relative z-10">
+                                                                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                                                                            <Calendar className="w-3 h-3" />
+                                                                            {label}
+                                                                        </p>
+                                                                        <div className="flex items-baseline gap-2">
+                                                                            <p className="text-3xl font-black text-white italic tracking-tighter drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]">
+                                                                                {payload[0].value}
+                                                                            </p>
+                                                                            <span className="text-purple-500 font-black text-xs uppercase italic">Minutes</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        }
+                                                        return null;
+                                                    }}
+                                                />
+                                                <Area
+                                                    type="monotone"
+                                                    dataKey="minutes"
+                                                    stroke="#a855f7"
+                                                    strokeWidth={4}
+                                                    fillOpacity={1}
+                                                    fill="url(#colorMinutes)"
+                                                    animationBegin={0}
+                                                    animationDuration={1500}
+                                                    animationEasing="ease-in-out"
+                                                    activeDot={{
+                                                        r: 6,
+                                                        fill: "#a855f7",
+                                                        stroke: "#fff",
+                                                        strokeWidth: 2,
+                                                        style: { filter: 'drop-shadow(0_0_8px_rgba(168,85,247,0.8))' }
+                                                    }}
+                                                />
+                                            </AreaChart>
+                                        </ResponsiveContainer>
+                                    )}
+                                </div>
+                            </motion.div>
+
+                            {/* Guest Persistence Notice */}
+                            {user && user.isAnonymous && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.5, duration: 0.5 }}
+                                    className="w-full mt-8 p-6 bg-purple-500/5 border border-purple-500/10 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center">
+                                            <TrendingUp className="w-6 h-6 text-purple-400" />
+                                        </div>
+                                        <div className="text-left">
+                                            <h3 className="text-sm font-black text-white uppercase italic tracking-tight">Persistence Protocol</h3>
+                                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-relaxed">
+                                                Guest stats are temporary. Connect with Google to secure your focus history permanently.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </>
+                    )}
+
+                    {!showStats && (
+                        <div className="flex justify-center">
+                            <button
+                                onClick={() => setShowStats(true)}
+                                className="flex items-center gap-2 px-4 py-2 bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl hover:border-white/20 transition-all"
+                            >
+                                <BarChart3 className="w-4 h-4 text-purple-400" />
+                                <span className="text-xs font-black uppercase tracking-widest text-zinc-400">View Stats</span>
+                            </button>
+                        </div>
+                    )}
+                </motion.div>
             </main>
 
             {/* Cropping Modal */}
@@ -858,5 +1142,6 @@ export default function ProfilePage() {
                 )}
             </AnimatePresence>
         </div>
+        </BackgroundTheme>
     );
 }

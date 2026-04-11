@@ -12,6 +12,7 @@ import { toggleTask } from "@/lib/db";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { BackgroundTheme } from "@/components/background-theme";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -52,20 +53,25 @@ export default function Home() {
   const p = priorityStyles[activeTaskPriority ?? "natural"] ?? priorityStyles.natural;
 
   return (
-    <div className={`flex flex-col flex-1 bg-zinc-950 min-h-screen relative overflow-hidden ${spaceGrotesk.variable} font-sans`}
+    <BackgroundTheme showSettings={true}>
+      <div className={`flex flex-col flex-1 bg-zinc-950 min-h-screen relative overflow-hidden ${spaceGrotesk.variable} font-sans`}
       style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
       {/* Immersive Background */}
       <div className="absolute inset-0 z-0 select-none pointer-events-none transition-all duration-1000">
-        <Image
-          key={backgroundImage}
-          src={`/Backgrounds/${backgroundImage}`}
-          alt="Background"
-          fill
-          sizes="100vw"
-          priority
-          className="object-cover opacity-100 transition-all duration-1000 animate-in fade-in fill-mode-forwards"
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/40 via-transparent to-zinc-950/40" />
+        {backgroundImage !== "none" && (
+          <>
+            <Image
+              key={backgroundImage}
+              src={`/Backgrounds/${backgroundImage}`}
+              alt="Background"
+              fill
+              sizes="100vw"
+              priority
+              className="object-cover opacity-100 transition-all duration-1000 animate-in fade-in fill-mode-forwards"
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/40 via-transparent to-zinc-950/40" />
+          </>
+        )}
       </div>
 
       <main className="relative z-10 flex flex-col items-center justify-center pt-24 pb-32 px-4 w-full flex-1">
@@ -166,6 +172,7 @@ export default function Home() {
           <TimerCard />
         </div>
       </main>
-    </div>
+      </div>
+    </BackgroundTheme>
   );
 }

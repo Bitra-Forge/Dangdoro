@@ -10,7 +10,6 @@ import { useAuth } from "@/components/AuthProvider";
 const navLinks = [
     { label: "Timer", href: "/" },
     { label: "Tasks", href: "/tasks" },
-    { label: "Stats", href: "/stats" },
     { label: "Settings", href: "/settings" },
 ];
 

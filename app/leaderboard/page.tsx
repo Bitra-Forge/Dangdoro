@@ -10,6 +10,7 @@ import { Space_Grotesk } from "next/font/google";
 import { useAuth } from "@/components/AuthProvider";
 import { ProfileStatsCard } from "@/components/profile-stats-card";
 import { AuthRequired } from "@/components/auth-required";
+import { BackgroundTheme } from "@/components/background-theme";
 
 const spaceGrotesk = Space_Grotesk({
     subsets: ["latin"],
@@ -73,11 +74,12 @@ export default function LeaderboardPage() {
     ].filter(Boolean);
 
     return (
-        <div className={cn(
-            "relative min-h-screen bg-zinc-950 flex flex-col pt-16 overflow-x-hidden",
-            spaceGrotesk.variable,
-            "font-sans"
-        )}
+        <BackgroundTheme>
+            <div className={cn(
+                "relative min-h-screen bg-zinc-950 flex flex-col pt-16 overflow-x-hidden",
+                spaceGrotesk.variable,
+                "font-sans"
+            )}
             style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
             {/* Background Atmosphere - Balanced Neutral Glow */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[600px] bg-gradient-to-b from-zinc-900/40 to-transparent pointer-events-none" />
@@ -300,6 +302,7 @@ export default function LeaderboardPage() {
                 )}
             </main>
         </div>
+        </BackgroundTheme>
     );
 }
 
