@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { format, differenceInDays, startOfDay, subDays, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, getDay, subMonths, isSameMonth } from "date-fns";
+import { format, differenceInDays, startOfDay, subDays, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, getDay, subMonths, isSameMonth, subWeeks, startOfWeek, isSameWeek } from "date-fns";
 import { toast } from "sonner";
 import { AuthRequired } from "@/components/auth-required";
 import { motion, AnimatePresence } from "framer-motion";
@@ -21,7 +21,9 @@ import Cropper from "react-easy-crop";
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { BackgroundTheme } from "@/components/background-theme";
 import {
-    AreaChart,
+    ComposedChart,
+    Bar,
+    Line,
     Area,
     XAxis,
     YAxis,
@@ -59,7 +61,7 @@ const THEMES: Record<string, { name: string; colors: string[]; accent: string; g
 };
 
 // --- Types ---
-type TimeRange = "week" | "month" | "year";
+type TimeRange = "days" | "weeks" | "months";
 
 interface SessionData {
     id: string;
@@ -276,12 +278,10 @@ export default function ProfilePage() {
     const [isSaving, setIsSaving] = useState(false);
 
     // Stats State
-    const [userStats, setUserStats] = useState<any>(null);
     const [weekData, setWeekData] = useState<any[]>([]);
     const [monthData, setMonthData] = useState<any[]>([]);
     const [yearData, setYearData] = useState<any[]>([]);
-    const [timeRange, setTimeRange] = useState<TimeRange>("week");
-    const [showStats, setShowStats] = useState(false);
+    const [timeRange, setTimeRange] = useState<TimeRange>("days");
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
@@ -323,35 +323,38 @@ export default function ProfilePage() {
             // Fetch stats data
             const userDoc = await getDoc(doc(db, "users", user.uid));
             if (userDoc.exists()) {
-                setUserStats(userDoc.data());
+                // Stats cards removed, skipping setUserStats
             }
 
-            // Process data for week chart (last 7 days)
+            // Process data for "Days" chart (last 7 days - daily granularity)
             const last7Days = Array.from({ length: 7 }).map((_, i) => {
                 const date = subDays(new Date(), 6 - i);
                 return {
                     date: format(date, "EEE"),
+                    tooltipLabel: format(date, "iiii, d MMM"),
                     fullDate: startOfDay(date),
                     minutes: 0,
                 };
             });
 
-            // Process data for month chart (last 30 days)
-            const last30Days = Array.from({ length: 30 }).map((_, i) => {
-                const date = subDays(new Date(), 29 - i);
+            // Process data for "Weeks" chart (last 8 weeks - weekly granularity)
+            const last8Weeks = Array.from({ length: 8 }).map((_, i) => {
+                const date = subWeeks(new Date(), 7 - i);
+                const sOW = startOfWeek(date);
                 return {
-                    date: format(date, "d"),
-                    tooltipLabel: format(date, "d MMM"),
-                    fullDate: startOfDay(date),
+                    date: `W${format(date, "w")}`,
+                    tooltipLabel: `Week of ${format(sOW, "MMM d")}`,
+                    fullDate: sOW,
                     minutes: 0,
                 };
             });
 
-            // Process data for year chart (last 12 months)
+            // Process data for "Months" chart (last 12 months - monthly granularity)
             const last12Months = Array.from({ length: 12 }).map((_, i) => {
                 const date = subMonths(new Date(), 11 - i);
                 return {
                     date: format(date, "MMM"),
+                    tooltipLabel: format(date, "MMMM yyyy"),
                     fullDate: startOfMonth(date),
                     minutes: 0,
                 };
@@ -361,20 +364,20 @@ export default function ProfilePage() {
                 if (session.completedAt) {
                     const sessionDate = new Date(session.completedAt.seconds * 1000);
 
-                    // Week data
+                    // Days
                     const dayMatch = last7Days.find(d => isSameDay(d.fullDate, startOfDay(sessionDate)));
                     if (dayMatch) {
                         dayMatch.minutes += session.duration || 0;
                     }
 
-                    // Month data
-                    const monthDayMatch = last30Days.find(d => isSameDay(d.fullDate, startOfDay(sessionDate)));
-                    if (monthDayMatch) {
-                        monthDayMatch.minutes += session.duration || 0;
+                    // Weeks
+                    const weekMatch = last8Weeks.find(w => isSameWeek(w.fullDate, sessionDate));
+                    if (weekMatch) {
+                        weekMatch.minutes += session.duration || 0;
                     }
 
-                    // Year data
-                    const monthMatch = last12Months.find(d => isSameMonth(d.fullDate, sessionDate));
+                    // Months
+                    const monthMatch = last12Months.find(m => isSameMonth(m.fullDate, sessionDate));
                     if (monthMatch) {
                         monthMatch.minutes += session.duration || 0;
                     }
@@ -382,7 +385,7 @@ export default function ProfilePage() {
             });
 
             setWeekData(last7Days);
-            setMonthData(last30Days);
+            setMonthData(last8Weeks);
             setYearData(last12Months);
 
             return unsub;
@@ -927,190 +930,247 @@ export default function ProfilePage() {
                     {/* --- STATS SECTION (MERGED FROM STATS PAGE) --- */}
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: showStats ? 1 : 0, y: showStats ? 0 : 20 }}
+                        animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5 }}
                         className="w-full mt-12"
                     >
-                        {showStats && (
-                            <>
-                                {/* Stats Toggle Button */}
-                                <div className="flex justify-center mb-6">
-                                    <button
-                                        onClick={() => setShowStats(!showStats)}
-                                        className="flex items-center gap-2 px-4 py-2 bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl hover:border-white/20 transition-all"
-                                    >
-                                        <BarChart3 className="w-4 h-4 text-purple-400" />
-                                        <span className="text-xs font-black uppercase tracking-widest text-zinc-400">Hide Stats</span>
-                                    </button>
+                        {/* Chart Section */}
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.98, y: 30 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            transition={{ delay: 0.2, duration: 1, ease: [0.16, 1, 0.3, 1] }}
+                            className="w-full bg-zinc-900/10 backdrop-blur-3xl border border-white/5 rounded-[10px] p-6 md:p-10 shadow-2xl relative overflow-hidden group"
+                        >
+                            {/* Abstract Grid Background */}
+                            <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize: '50px 50px' }} />
+                            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40 pointer-events-none" />
+
+                            {/* Theme-based Ambient Glow */}
+                            <div
+                                className="absolute -top-24 -right-24 w-64 h-64 rounded-full blur-[120px] opacity-20 transition-colors duration-1000"
+                                style={{ backgroundColor: currentTheme.accent }}
+                            />
+
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12 relative z-10">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 rounded-2xl bg-zinc-900 border border-white/5 shadow-inner">
+                                        <BarChart3 className="w-5 h-5" style={{ color: currentTheme.accent }} />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
+                                            {timeRange === "days" && "7-Day System Flux"}
+                                            {timeRange === "weeks" && "8-Week Neural Pulse"}
+                                            {timeRange === "months" && "12-Month Core Load"}
+                                            <motion.span 
+                                                className="inline-block w-2 h-2 rounded-full animate-pulse" 
+                                                animate={{ backgroundColor: currentTheme.accent }}
+                                                transition={{ duration: 1 }}
+                                            />
+                                        </h2>
+                                    </div>
                                 </div>
 
-                                {/* Stats Cards */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                <div className="flex items-center gap-1.5 bg-zinc-950/60 p-1.5 rounded-[12px] border border-white/5 backdrop-blur-2xl shadow-2xl relative overflow-hidden">
+                                    {/* Subtle Ambient Glow inside tabs */}
+                                    <motion.div
+                                        className="absolute inset-0 opacity-[0.03]"
+                                        animate={{ backgroundColor: currentTheme.accent }}
+                                        transition={{ duration: 1 }}
+                                    />
+
                                     {[
-                                        { label: "Focus Minutes", value: userStats?.totalMinutes || 0, icon: Clock, color: "text-amber-400" },
-                                        { label: "Total Sessions", value: userStats?.totalPomodoros || 0, icon: Zap, color: "text-purple-400" },
-                                        { label: "Daily Avg", value: userStats?.totalPomodoros ? Math.round((userStats?.totalMinutes || 0) / userStats?.totalPomodoros) : 0, icon: TrendingUp, color: "text-sky-400" }
-                                    ].map((stat, i) => (
-                                        <motion.div
-                                            key={i}
-                                            initial={{ opacity: 0, scale: 0.95 }}
-                                            animate={{ opacity: 1, scale: 1 }}
-                                            transition={{ delay: i * 0.1, duration: 0.4 }}
-                                            className="bg-zinc-900/40 backdrop-blur-3xl border border-white/10 rounded-2xl p-4 shadow-xl flex flex-col items-center text-center group hover:bg-white/5 transition-all"
+                                        { id: "days", label: "Days", icon: Calendar },
+                                        { id: "weeks", label: "Weeks", icon: TrendingUp },
+                                        { id: "months", label: "Months", icon: BarChart3 }
+                                    ].map((tab) => (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => setTimeRange(tab.id as TimeRange)}
+                                            className={cn(
+                                                "flex items-center gap-2.5 px-6 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] rounded-[8px] transition-all duration-500 relative group/tab",
+                                                timeRange === tab.id
+                                                    ? "text-white"
+                                                    : "text-zinc-500 hover:text-zinc-300"
+                                            )}
                                         >
-                                            <stat.icon className={`w-6 h-6 ${stat.color} mb-2 group-hover:scale-110 transition-transform`} />
-                                            <span className="text-2xl font-black text-white">{stat.value}</span>
-                                            <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mt-0.5">{stat.label}</span>
-                                        </motion.div>
+                                            {timeRange === tab.id && (
+                                                <motion.div
+                                                    layoutId="activeTabHighlight"
+                                                    className="absolute inset-0 z-0 rounded-[8px]"
+                                                    animate={{
+                                                        background: `linear-gradient(135deg, ${currentTheme.accent}EE, ${currentTheme.accent}99)`,
+                                                        boxShadow: `0 4px 15px ${currentTheme.accent}44, inset 0 0 10px rgba(255,255,255,0.2)`
+                                                    }}
+                                                    transition={{
+                                                        background: { duration: 1 },
+                                                        boxShadow: { duration: 1 },
+                                                        layout: {
+                                                            type: "spring",
+                                                            stiffness: 400,
+                                                            damping: 30,
+                                                            mass: 0.8
+                                                        }
+                                                    }}
+                                                >
+                                                    {/* Glass Reflection */}
+                                                    <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none" />
+                                                </motion.div>
+                                            )}
+
+                                            {/* Hover Glow */}
+                                            {timeRange !== tab.id && (
+                                                <div className="absolute inset-0 opacity-0 group-hover/tab:opacity-100 transition-opacity duration-300 rounded-[8px] bg-white/[0.03]" />
+                                            )}
+
+                                            <tab.icon className={cn(
+                                                "w-3.5 h-3.5 relative z-10 transition-transform duration-500",
+                                                timeRange === tab.id ? "scale-110" : "group-hover/tab:scale-110 opacity-70"
+                                            )} />
+                                            <span className="relative z-10 font-black tracking-[0.15em]">{tab.label}</span>
+                                        </button>
                                     ))}
                                 </div>
+                            </div>
 
-                                {/* Chart Section */}
-                                <motion.div
-                                    initial={{ opacity: 0, scale: 0.95 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    transition={{ delay: 0.3, duration: 0.5 }}
-                                    className="w-full bg-zinc-900/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-6 md:p-10 shadow-2xl"
-                                >
-                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                                        <h2 className="text-lg font-black text-white uppercase italic tracking-tighter">
-                                            {timeRange === "week" && "7-Day Focus Intensity"}
-                                            {timeRange === "month" && "30-Day Focus Intensity"}
-                                            {timeRange === "year" && "12-Month Focus Intensity"}
-                                        </h2>
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex items-center bg-zinc-950/50 p-1 rounded-xl border border-white/5">
-                                                {[
-                                                    { id: "week", label: "Week" },
-                                                    { id: "month", label: "Month" },
-                                                    { id: "year", label: "Year" }
-                                                ].map((tab) => (
-                                                    <button
-                                                        key={tab.id}
-                                                        onClick={() => setTimeRange(tab.id as TimeRange)}
-                                                        className={cn(
-                                                            "px-3 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all",
-                                                            timeRange === tab.id
-                                                                ? "bg-purple-500 text-white"
-                                                                : "text-zinc-500 hover:text-white"
-                                                        )}
-                                                    >
-                                                        {tab.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
+                            <div className="h-[400px] w-full mt-4 relative group/chart">
+                                {mounted && (
+                                    <div className="relative w-full h-full">
+                                        {/* Traveling Laser HUD Line */}
+                                        <motion.div
+                                            key={`laser_${timeRange}`}
+                                            initial={{ left: "0%" }}
+                                            animate={{ left: "100%" }}
+                                            transition={{ duration: 2.5, ease: "easeInOut" }}
+                                            className="absolute top-0 bottom-10 w-[2px] z-20 pointer-events-none"
+                                            style={{
+                                                background: `linear-gradient(to bottom, transparent, ${currentTheme.accent}, transparent)`,
+                                                boxShadow: `0 0 15px ${currentTheme.accent}`
+                                            }}
+                                        />
 
-                                    <div className="h-[420px] min-h-[420px] w-full mt-4 relative group/chart">
-                                        {mounted && (
-                                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                                                <AreaChart data={timeRange === "week" ? weekData : timeRange === "month" ? monthData : yearData} key={timeRange} margin={{ top: 5, right: 20, left: 20, bottom: 10 }}>
+                                        <motion.div
+                                            key={`mask_${timeRange}`}
+                                            initial={{ clipPath: 'inset(0 100% 0 0)' }}
+                                            animate={{ clipPath: 'inset(0 0% 0 0)' }}
+                                            transition={{ duration: 2.5, ease: "easeInOut" }}
+                                            className="w-full h-full"
+                                        >
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <ComposedChart
+                                                    data={timeRange === "days" ? weekData : timeRange === "weeks" ? monthData : yearData}
+                                                    key={`${timeRange}_composed`}
+                                                    margin={{ top: 20, right: 10, left: -20, bottom: 25 }}
+                                                >
                                                     <defs>
-                                                        <linearGradient id="colorMinutes" x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
-                                                            <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
+                                                        <linearGradient id="colorFlow_analytics" x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="0%" stopColor={currentTheme.accent} stopOpacity={0.5} style={{ transition: 'stop-color 1000ms ease-in-out' }} />
+                                                            <stop offset="50%" stopColor={currentTheme.accent} stopOpacity={0.2} style={{ transition: 'stop-color 1000ms ease-in-out' }} />
+                                                            <stop offset="100%" stopColor={currentTheme.colors[0]} stopOpacity={0.05} style={{ transition: 'stop-color 1000ms ease-in-out' }} />
+                                                        </linearGradient>
+                                                        <linearGradient id="strokeFlow_analytics" x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="0%" stopColor={currentTheme.accent} style={{ transition: 'stop-color 1000ms ease-in-out' }} />
+                                                            <stop offset="100%" stopColor={currentTheme.colors[1] || currentTheme.accent} style={{ transition: 'stop-color 1000ms ease-in-out' }} />
                                                         </linearGradient>
                                                     </defs>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.5} />
+
+                                                    <CartesianGrid
+                                                        strokeDasharray="0"
+                                                        stroke="rgba(255,255,255,0.05)"
+                                                        vertical={false}
+                                                    />
+
                                                     <XAxis
                                                         dataKey="date"
                                                         axisLine={false}
                                                         tickLine={false}
-                                                        tick={{ fill: '#71717a', fontSize: 10, fontWeight: 900 }}
+                                                        tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 10, fontWeight: 900, letterSpacing: '0.05em' }}
                                                         dy={10}
-                                                        interval={timeRange === "month" ? 4 : 0}
-                                                        minTickGap={timeRange === "year" ? 0 : 5}
+                                                        padding={{ left: 30, right: 30 }}
                                                     />
-                                                    <YAxis
-                                                        hide
-                                                        domain={[0, 'auto']}
-                                                    />
+
+                                                    <YAxis hide domain={[0, 'auto']} />
+
                                                     <Tooltip
-                                                        cursor={{ stroke: 'rgba(168, 85, 247, 0.2)', strokeWidth: 2 }}
+                                                        cursor={{ fill: 'rgba(255,255,255,0.03)', radius: 12 }}
                                                         content={({ active, payload }) => {
                                                             if (active && payload && payload.length) {
                                                                 const label = payload[0].payload.tooltipLabel || payload[0].payload.date;
                                                                 return (
-                                                                    <div className="bg-zinc-950/80 backdrop-blur-2xl border border-white/10 p-4 rounded-2xl shadow-2xl relative overflow-hidden group">
-                                                                        <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%),linear-gradient(90deg,rgba(255,0,0,0.02),rgba(0,255,0,0.01),rgba(0,0,255,0.02))] bg-[length:100%_4px,3px_100%] pointer-events-none" />
+                                                                    <motion.div
+                                                                        initial={{ opacity: 0, scale: 0.9, y: 5 }}
+                                                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                                                        className="bg-zinc-900/95 backdrop-blur-xl border border-white/10 p-4 rounded-2xl shadow-2xl relative"
+                                                                    >
                                                                         <div className="relative z-10">
-                                                                            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
-                                                                                <Calendar className="w-3 h-3" />
+                                                                            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2">
                                                                                 {label}
                                                                             </p>
-                                                                            <div className="flex items-baseline gap-2">
-                                                                                <p className="text-3xl font-black text-white italic tracking-tighter drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]">
+                                                                            <div className="flex items-baseline gap-1.5">
+                                                                                <span className="text-3xl font-black text-white tracking-tight tabular-nums">
                                                                                     {payload[0].value}
-                                                                                </p>
-                                                                                <span className="text-purple-500 font-black text-xs uppercase italic">Minutes</span>
+                                                                                </span>
+                                                                                <span className="text-[10px] font-bold uppercase text-zinc-400">Mins</span>
                                                                             </div>
                                                                         </div>
-                                                                    </div>
+                                                                    </motion.div>
                                                                 );
                                                             }
                                                             return null;
                                                         }}
                                                     />
+
+                                                    {/* Operational Trend Area */}
                                                     <Area
                                                         type="monotone"
                                                         dataKey="minutes"
-                                                        stroke="#a855f7"
-                                                        strokeWidth={4}
+                                                        stroke="url(#strokeFlow_analytics)"
+                                                        strokeWidth={3}
+                                                        fill="url(#colorFlow_analytics)"
                                                         fillOpacity={1}
-                                                        fill="url(#colorMinutes)"
-                                                        animationBegin={0}
                                                         animationDuration={1500}
                                                         animationEasing="ease-in-out"
+                                                        style={{ transition: 'stroke 1000ms ease-in-out' }}
                                                         activeDot={{
                                                             r: 6,
-                                                            fill: "#a855f7",
-                                                            stroke: "#fff",
-                                                            strokeWidth: 2,
-                                                            style: { filter: 'drop-shadow(0_0_8px_rgba(168,85,247,0.8))' }
+                                                            fill: "#fff",
+                                                            stroke: currentTheme.accent,
+                                                            strokeWidth: 3,
+                                                            style: { 
+                                                                filter: `drop-shadow(0 0 10px ${currentTheme.accent})`,
+                                                                transition: 'stroke 1000ms ease-in-out'
+                                                            }
                                                         }}
                                                     />
-                                                </AreaChart>
+                                                </ComposedChart>
                                             </ResponsiveContainer>
-                                        )}
+                                        </motion.div>
                                     </div>
-                                </motion.div>
-
-                                {/* Guest Persistence Notice */}
-                                {user && user.isAnonymous && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: 0.5, duration: 0.5 }}
-                                        className="w-full mt-8 p-6 bg-purple-500/5 border border-purple-500/10 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6"
-                                    >
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center">
-                                                <TrendingUp className="w-6 h-6 text-purple-400" />
-                                            </div>
-                                            <div className="text-left">
-                                                <h3 className="text-sm font-black text-white uppercase italic tracking-tight">Persistence Protocol</h3>
-                                                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-relaxed">
-                                                    Guest stats are temporary. Connect with Google to secure your focus history permanently.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </motion.div>
                                 )}
-                            </>
+                            </div>
+                        </motion.div>
+
+                        {/* Guest Persistence Notice */}
+                        {user && user.isAnonymous && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.5, duration: 0.5 }}
+                                className="w-full mt-8 p-6 bg-purple-500/5 border border-purple-500/10 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6"
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center">
+                                        <TrendingUp className="w-6 h-6 text-purple-400" />
+                                    </div>
+                                    <div className="text-left">
+                                        <h3 className="text-sm font-black text-white uppercase italic tracking-tight">Persistence Protocol</h3>
+                                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-relaxed">
+                                            Guest stats are temporary. Connect with Google to secure your focus history permanently.
+                                        </p>
+                                    </div>
+                                </div>
+                            </motion.div>
                         )}
 
-                        {!showStats && (
-                            <div className="flex justify-center">
-                                <button
-                                    onClick={() => setShowStats(true)}
-                                    className="flex items-center gap-2 px-4 py-2 bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl hover:border-white/20 transition-all"
-                                >
-                                    <BarChart3 className="w-4 h-4 text-purple-400" />
-                                    <span className="text-xs font-black uppercase tracking-widest text-zinc-400">View Stats</span>
-                                </button>
-                            </div>
-                        )}
                     </motion.div>
                 </main>
 
