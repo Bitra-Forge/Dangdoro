@@ -65,28 +65,29 @@ export function AnimatedDotGrid({
                 const my = mouseRef.current.y;
                 const cols = Math.ceil(canvas.width / DOT_SPACING) + 1;
                 const rows = Math.ceil(canvas.height / DOT_SPACING) + 1;
+                const HOVER_RADIUS_SQ = HOVER_RADIUS * HOVER_RADIUS;
                 
                 for (let row = 0; row < rows; row++) {
                     for (let col = 0; col < cols; col++) {
                         const x = col * DOT_SPACING;
                         const y = row * DOT_SPACING;
                         
-                        // Calculate distance from mouse
+                        // Calculate square distance from mouse (faster than sqrt)
                         const dx = x - mx;
                         const dy = y - my;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        const distSq = dx * dx + dy * dy;
                         
                         // Calculate opacity based on distance (closer = brighter)
                         let opacity = 0.09;
-                        if (dist < HOVER_RADIUS) {
+                        if (distSq < HOVER_RADIUS_SQ) {
+                            const dist = Math.sqrt(distSq);
                             const intensity = 1 - (dist / HOVER_RADIUS);
                             opacity = 0.09 + (intensity * intensity * 0.6);
                         }
                         
-                        ctx.beginPath();
-                        ctx.arc(x, y, DOT_RADIUS, 0, Math.PI * 2);
                         ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-                        ctx.fill();
+                        // fillRect is much faster than arc() for small dots
+                        ctx.fillRect(x - DOT_RADIUS, y - DOT_RADIUS, DOT_RADIUS * 2, DOT_RADIUS * 2);
                     }
                 }
             }
