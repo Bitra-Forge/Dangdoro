@@ -123,38 +123,43 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal 
             <div className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-1000 overflow-hidden">
                 {lottie && (
                     <div className={cn(
-                        "absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-700",
-                        colorClass.includes('red') ? "justify-end opacity-40 group-hover:opacity-60" : "opacity-30 group-hover:opacity-50"
+                        "absolute inset-0 pointer-events-none transition-opacity duration-700 overflow-hidden",
+                        colorClass.includes('red') ? "opacity-80 group-hover:opacity-100" : "opacity-30 group-hover:opacity-50"
                     )}>
                         <div className={cn(
-                            "h-full p-2 flex items-center justify-center",
-                            colorClass.includes('red') ? "absolute right-0 w-[150px] -rotate-90 translate-x-[20%] scale-[2]" : "w-full scale-[1.6]"
+                            "absolute right-0 top-1/2 -translate-y-1/2 h-[150%] transition-all duration-700",
+                            colorClass.includes('red') ? "-rotate-90 translate-x-[28%]" : "left-0 w-full h-full flex items-center justify-center scale-[1.6]"
                         )}>
                             <DotLottieReact
                                 src={lottie}
                                 autoplay
                                 loop
-                                style={{ width: '100%', height: '100%' }}
+                                style={{ 
+                                    height: '100%',
+                                    width: 'auto',
+                                    mixBlendMode: colorClass.includes('red') ? 'screen' : 'normal',
+                                }}
                             />
                         </div>
                     </div>
                 )}
-                {colorClass.includes('red') && [...Array(6)].map((_, i) => (
+                {colorClass.includes('red') && [...Array(12)].map((_, i) => (
                     <motion.div
                         key={i}
                         animate={{
-                            x: [0, -120],
-                            y: [(Math.random() - 0.5) * 40, (Math.random() - 0.5) * 60],
-                            opacity: [0, 0.4, 0],
-                            scale: [1, 0.3]
+                            x: [0, -140 - Math.random() * 60],
+                            y: [(Math.random() - 0.5) * 60, (Math.random() - 0.5) * 80],
+                            opacity: [0, 0.6, 0],
+                            scale: [1.2, 0.2]
                         }}
                         transition={{
-                            duration: 1.5 + Math.random(),
+                            duration: 1.2 + Math.random() * 0.8,
                             repeat: Infinity,
-                            delay: i * 0.3
+                            delay: i * 0.15,
+                            ease: "easeOut"
                         }}
-                        className="absolute right-0 w-0.5 h-0.5 bg-red-400 rounded-full blur-[0.5px]"
-                        style={{ top: `${20 + (i * 12)}%` }}
+                        className="absolute right-0 w-1 h-1 bg-orange-400 rounded-full blur-[0.6px]"
+                        style={{ top: `${15 + (i * 7)}%`, mixBlendMode: 'screen' }}
                     />
                 ))}
             </div>
@@ -567,581 +572,581 @@ export default function ProfilePage() {
         <BackgroundTheme>
             <div className="flex flex-col flex-1 bg-zinc-950 min-h-screen relative overflow-x-hidden" style={{ fontFamily: '__nextjs-Geist' }}>
 
-            {/* Immersive Background Elements */}
-            <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full h-screen pointer-events-none z-0">
-                <div
-                    className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full blur-[120px] animate-pulse-slow transition-colors duration-1000"
-                    style={{ backgroundColor: `${currentTheme.accent}11` }}
-                />
-                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-600/5 rounded-full blur-[120px] animate-pulse-slow" style={{ animationDelay: '2s' }} />
-                <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/5 to-transparent" />
-            </div>
+                {/* Immersive Background Elements */}
+                <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full h-screen pointer-events-none z-0">
+                    <div
+                        className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full blur-[120px] animate-pulse-slow transition-colors duration-1000"
+                        style={{ backgroundColor: `${currentTheme.accent}11` }}
+                    />
+                    <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-600/5 rounded-full blur-[120px] animate-pulse-slow" style={{ animationDelay: '2s' }} />
+                    <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/5 to-transparent" />
+                </div>
 
-            <main className="relative z-10 flex flex-col items-center pb-32 px-6 w-full flex-1 max-w-6xl mx-auto pt-20">
+                <main className="relative z-10 flex flex-col items-center pb-32 px-6 w-full flex-1 max-w-6xl mx-auto pt-20">
 
-                {/* --- IDENTITY HUB --- */}
-                <section className="w-full flex flex-col lg:flex-row items-center lg:items-start gap-12 mb-20 px-2 relative">
-                    <div className="flex-1 flex flex-col md:flex-row items-center md:items-start gap-12 w-full">
+                    {/* --- IDENTITY HUB --- */}
+                    <section className="w-full flex flex-col lg:flex-row items-center lg:items-start gap-12 mb-20 px-2 relative">
+                        <div className="flex-1 flex flex-col md:flex-row items-center md:items-start gap-12 w-full">
 
-                        {/* Avatar & Actions Side */}
-                        <div className="flex flex-col items-center gap-6 shrink-0 z-20">
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-                                className="relative group flex items-center"
-                            >
-                                {/* Theme Picker - Left Side of Avatar when Editing */}
-                                <AnimatePresence>
-                                    {isEditing && (
-                                        <motion.div
-                                            initial={{ opacity: 0, x: 20 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            exit={{ opacity: 0, x: 20 }}
-                                            className="absolute right-full mr-8 flex flex-col gap-4 items-center"
+                            {/* Avatar & Actions Side */}
+                            <div className="flex flex-col items-center gap-6 shrink-0 z-20">
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+                                    className="relative group flex items-center"
+                                >
+                                    {/* Theme Picker - Left Side of Avatar when Editing */}
+                                    <AnimatePresence>
+                                        {isEditing && (
+                                            <motion.div
+                                                initial={{ opacity: 0, x: 20 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                exit={{ opacity: 0, x: 20 }}
+                                                className="absolute right-full mr-8 flex flex-col gap-4 items-center"
+                                            >
+                                                <div className="flex flex-col gap-3">
+                                                    {Object.entries(THEMES).map(([id, t]) => (
+                                                        <button
+                                                            key={id}
+                                                            onClick={() => setSelectedTheme(id)}
+                                                            className={cn(
+                                                                "w-10 h-10 rounded-xl border transition-all duration-300 flex flex-col items-center justify-center gap-0.5 overflow-hidden group/theme",
+                                                                selectedTheme === id
+                                                                    ? "border-white/40 bg-white/5 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                                                                    : "border-white/5 bg-zinc-950/50 hover:border-white/20"
+                                                            )}
+                                                        >
+                                                            <div className="flex gap-0.5">
+                                                                {t.colors.slice(-2).map((c, i) => (
+                                                                    <div key={i} className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c }} />
+                                                                ))}
+                                                            </div>
+                                                            <span className="text-[6px] font-black uppercase tracking-tighter text-zinc-600 group-hover/theme:text-zinc-400">
+                                                                {t.name.split(' ')[0]}
+                                                            </span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                    <div className="relative group">
+                                        {/* Atmospheric Glow - Multilayered for strength */}
+                                        <div
+                                            className="absolute -inset-12 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-1000 blur-[100px] pointer-events-none z-0"
+                                            style={{ backgroundColor: `${currentTheme.accent}25` }}
+                                        />
+                                        <div
+                                            className="absolute -inset-4 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-700 blur-[40px] pointer-events-none z-0"
+                                            style={{ backgroundColor: `${currentTheme.accent}40` }}
+                                        />
+
+                                        <Avatar
+                                            className="w-40 h-40 md:w-48 md:h-48 rounded-[2.2rem] border border-white/10 relative z-10 overflow-hidden transition-all duration-500 group-hover:border-white/30"
                                         >
-                                            <div className="flex flex-col gap-3">
-                                                {Object.entries(THEMES).map(([id, t]) => (
+                                            <AvatarImage
+                                                src={userData?.photoURL || user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`}
+                                                className="object-cover w-full h-full scale-100 group-hover:scale-105 transition-transform duration-[2s] ease-out rounded-[2.2rem]"
+                                            />
+                                            <AvatarFallback className="bg-zinc-900 font-black text-6xl text-white rounded-[2.2rem] transition-all group-hover:bg-zinc-800">
+                                                {user.displayName?.charAt(0) || "D"}
+                                            </AvatarFallback>
+
+                                            {isEditing && (
+                                                <label className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center opacity-0 hover:opacity-100 transition-all cursor-pointer z-30">
+                                                    <Camera className="w-10 h-10 text-white mb-3" />
+                                                    <span className="text-[10px] font-black tracking-widest uppercase">Update Scan</span>
+                                                    <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+                                                </label>
+                                            )}
+                                        </Avatar>
+                                    </div>
+                                </motion.div>
+
+                                {/* Action Buttons Container - Perfectly aligned under Avatar */}
+                                {!isEditing && (
+                                    <div className="flex flex-col gap-2.5 w-32 md:w-40 items-center z-30">
+                                        <motion.div
+                                            whileHover={{ y: -2 }}
+                                            whileTap={{ y: 0 }}
+                                            className="w-full"
+                                        >
+                                            <Button
+                                                onClick={() => setIsEditing(true)}
+                                                className="w-full h-9 rounded-full bg-zinc-100 text-zinc-950 hover:bg-white font-black text-[9px] tracking-widest transition-all border border-white/20 relative shadow-xl overflow-hidden group/btn cursor-pointer"
+                                            >
+                                                <div className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-[-25deg] -translate-x-full group-hover/btn:animate-shine transition-transform" />
+                                                <div className="flex items-center justify-center gap-2 relative z-10 uppercase">
+                                                    <Pencil className="w-2.5 h-2.5" />
+                                                    Edit Profile
+                                                </div>
+                                            </Button>
+                                        </motion.div>
+
+                                        <motion.div
+                                            whileHover={{ y: -1 }}
+                                            whileTap={{ y: 0 }}
+                                            className="w-full"
+                                        >
+                                            <Button
+                                                variant="ghost"
+                                                className="w-full h-9 rounded-full border border-white/5 bg-zinc-900/40 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60 transition-all backdrop-blur-xl group/btn relative overflow-hidden text-[9px] font-black tracking-widest cursor-pointer"
+                                            >
+                                                <div className="flex items-center justify-center gap-2 uppercase relative z-10">
+                                                    <Share2 className="w-2.5 h-2.5 transition-transform group-hover/btn:rotate-12" />
+                                                    Share Vault
+                                                </div>
+                                            </Button>
+                                        </motion.div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Text Identity Section */}
+                            <div className="flex-1 flex flex-col items-center md:items-start text-center md:text-left pt-4 h-full">
+                                {isEditing ? (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="flex flex-col items-center md:items-start gap-6 w-full max-w-xl"
+                                    >
+                                        <input
+                                            value={editName}
+                                            onChange={e => setEditName(e.target.value)}
+                                            placeholder="Identity Name"
+                                            className="bg-transparent border-b border-white/10 text-4xl md:text-5xl font-black text-white tracking-tighter focus:outline-none focus:border-white/30 transition-all w-full py-1 h-16 uppercase"
+                                        />
+
+                                        <textarea
+                                            value={editBio}
+                                            onChange={e => setEditBio(e.target.value)}
+                                            placeholder="System Architect | Digital Curator"
+                                            rows={2}
+                                            className="bg-transparent border-b border-white/5 text-sm font-medium text-zinc-400 leading-relaxed focus:outline-none focus:border-white/20 transition-all w-full py-2 resize-none scrollbar-none [ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                                        />
+
+                                        <div className="flex items-center gap-4 mt-4">
+                                            <Button
+                                                onClick={handleSaveProfile}
+                                                disabled={isSaving}
+                                                className="h-12 px-10 rounded-2xl bg-white text-black hover:bg-zinc-200 font-black uppercase tracking-widest text-[10px] shadow-[0_0_40px_rgba(255,255,255,0.1)] transition-all flex items-center gap-2"
+                                            >
+                                                {isSaving ? "Syncing..." : "Commit Changes"}
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                onClick={() => setIsEditing(false)}
+                                                className="h-12 px-8 rounded-2xl border border-white/10 text-zinc-400 font-black uppercase tracking-widest text-[10px] hover:bg-white/5 transition-all"
+                                            >
+                                                Abort
+                                            </Button>
+                                        </div>
+                                    </motion.div>
+                                ) : (
+                                    <motion.div
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        className="flex flex-col items-center md:items-start w-full max-w-2xl"
+                                    >
+                                        <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter mb-4 uppercase drop-shadow-[0_0_40px_rgba(255,255,255,0.1)] mt-2">
+                                            {userData?.displayName || "New Pilot"}
+                                        </h1>
+
+                                        <p className="text-zinc-400 text-sm md:text-base font-medium leading-[1.8] mb-14 max-w-2xl break-all">
+                                            {userData?.bio || "System Architect and Digital Curator focusing on high-fidelity procedural environments and neural interface aesthetics. Architecting the void since 2024."}
+                                        </p>
+                                    </motion.div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Quick Stats Column - Custom Stacked Layout */}
+                        <motion.div
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.3 }}
+                            className="grid grid-cols-2 gap-3 w-full lg:w-[360px] shrink-0"
+                        >
+                            {/* Streak: Spans 2x width (top) - Horizontal */}
+                            <div className="col-span-2">
+                                <StatCard
+                                    icon={Flame}
+                                    label="Combustion Streak"
+                                    value={`${streakCount} Days`}
+                                    colorClass="bg-red-500"
+                                    delay={0.1}
+                                    horizontal={true}
+                                    lottie="https://lottie.host/d45a67bc-112f-44fa-96d8-7bbb5b0424a0/ISj7KzGPJL.lottie"
+                                />
+                            </div>
+
+                            {/* Middle row: Two horizontal cards side-by-side */}
+                            <StatCard
+                                icon={Zap}
+                                label="Sessions"
+                                value={userData?.totalPomodoros || 0}
+                                colorClass="bg-amber-500"
+                                delay={0.2}
+                                horizontal={true}
+                                lottie="https://lottie.host/744101ff-3133-4079-924b-56b7ba413dc2/cG4FlIP6px.lottie"
+                            />
+                            <StatCard
+                                icon={Clock}
+                                label="Active Uptime"
+                                value={formatFocusedTime(userData?.totalMinutes || 0)}
+                                colorClass="bg-sky-500"
+                                delay={0.3}
+                                horizontal={true}
+                                lottie="https://lottie.host/6d8cee47-05d6-4d85-a3e4-34ab0969f50f/OmVO7S6zrr.lottie"
+                            />
+
+                            {/* Deployment: Spans 2x width (bottom) - Horizontal */}
+                            <div className="col-span-2">
+                                <StatCard
+                                    icon={Calendar}
+                                    label="Joined since"
+                                    value={userData?.createdAt?.seconds ? format(new Date(userData.createdAt.seconds * 1000), "MMM yyyy") : "---"}
+                                    colorClass="bg-purple-500"
+                                    delay={0.4}
+                                    horizontal={true}
+                                />
+                            </div>
+                        </motion.div>
+                    </section>
+
+                    {/* --- OPERATIONAL SUBSTRATE (Bento Grid) --- */}
+                    <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+
+                        {/* Neural Activity (Heatmap) */}
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: 0.6, duration: 0.8 }}
+                            className="lg:col-span-8 bg-zinc-900/10 backdrop-blur-3xl border border-white/5 rounded-[10px] p-10 flex flex-col shadow-2xl relative overflow-hidden group"
+                        >
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white/5 to-transparent" style={{ backgroundImage: `linear-gradient(to right, transparent, ${currentTheme.accent}33, transparent)` }} />
+
+                            <div className="flex items-center justify-between mb-10 relative z-10">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 rounded-[10px] bg-zinc-900 border border-white/5 shadow-inner transition-colors" style={{ borderColor: `${currentTheme.accent}11` }}>
+                                        <Activity className="w-5 h-5 group-hover:animate-pulse" style={{ color: currentTheme.accent }} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white">Neural Activity</h3>
+                                        <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mt-0.5">Focus density over past 140 cycles</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3 bg-zinc-950/50 px-4 py-2 rounded-[10px] border border-white/5">
+                                    <span className="text-[9px] uppercase text-zinc-600 font-extrabold tracking-tighter">Low</span>
+                                    <div className="flex gap-1.5 items-center">
+                                        {currentTheme.colors.map((c, i) => (
+                                            <div key={i} className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c }} />
+                                        ))}
+                                    </div>
+                                    <span className="text-[9px] uppercase text-zinc-600 font-extrabold tracking-tighter">Peak</span>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2 justify-center py-6 px-4 bg-zinc-950/20 rounded-[10px] border border-white/[0.02] mb-8 relative">
+                                {/* Grid background lines */}
+                                <div className="absolute inset-0 opacity-[0.02] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+
+                                {productivityData.map((day, i) => (
+                                    <div key={i} title={day.tooltip} className="relative z-10">
+                                        <ProductivitySquare level={day.level} theme={currentTheme} />
+                                    </div>
+                                ))}
+                            </div>
+                        </motion.div>
+
+                        {/* Streak Calendar Terminal */}
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: 0.7, duration: 0.8 }}
+                            className="lg:col-span-4 bg-zinc-900/10 backdrop-blur-3xl border border-white/5 rounded-[10px] p-8 flex flex-col shadow-2xl relative overflow-hidden group"
+                        >
+                            <div className="flex items-center justify-between mb-8 relative z-10">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 rounded-[10px] bg-zinc-900 border border-white/5 shadow-inner">
+                                        <Calendar className="w-5 h-5" style={{ color: currentTheme.accent }} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white">{format(new Date(), 'MMMM')}</h3>
+                                        <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mt-0.5">Streak TimeLine</p>
+                                    </div>
+                                </div>
+                                <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: currentTheme.accent }} />
+                            </div>
+
+                            <div className="grid grid-cols-7 gap-2 mb-4">
+                                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                                    <div key={i} className="text-[9px] font-black text-zinc-700 text-center uppercase py-2">
+                                        {day}
+                                    </div>
+                                ))}
+                                {monthDays.map((day, i) => (
+                                    <div key={i} className="aspect-square flex items-center justify-center relative">
+                                        {day ? (
+                                            <>
+                                                {/* Base day indicator */}
+                                                <div className={cn(
+                                                    "w-full h-full rounded-[10px] flex items-center justify-center text-[10px] font-black transition-all duration-500",
+                                                    day.hasActivity
+                                                        ? "text-white border"
+                                                        : "bg-white/[0.02] text-zinc-700 border border-white/[0.02]",
+                                                    day.isToday && "ring-1 ring-white/20 border-white/20"
+                                                )}
+                                                    style={day.hasActivity ? {
+                                                        backgroundColor: `${currentTheme.accent}22`,
+                                                        borderColor: `${currentTheme.accent}44`,
+                                                        color: currentTheme.accent
+                                                    } : {}}>
+                                                    {day.day}
+                                                </div>
+
+                                                {/* Activity pulse */}
+                                                {day.hasActivity && (
+                                                    <div className="absolute inset-0 blur-[8px] rounded-[10px] scale-75" style={{ backgroundColor: currentTheme.accent, opacity: 0.1 }} />
+                                                )}
+
+                                                {/* Today indicator bug */}
+                                                {day.isToday && (
+                                                    <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_5px_white]" />
+                                                )}
+                                            </>
+                                        ) : (
+                                            <div className="w-full h-full" />
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </motion.div>
+                    </div>
+
+                    {/* --- STATS SECTION (MERGED FROM STATS PAGE) --- */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: showStats ? 1 : 0, y: showStats ? 0 : 20 }}
+                        transition={{ duration: 0.5 }}
+                        className="w-full mt-12"
+                    >
+                        {showStats && (
+                            <>
+                                {/* Stats Toggle Button */}
+                                <div className="flex justify-center mb-6">
+                                    <button
+                                        onClick={() => setShowStats(!showStats)}
+                                        className="flex items-center gap-2 px-4 py-2 bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl hover:border-white/20 transition-all"
+                                    >
+                                        <BarChart3 className="w-4 h-4 text-purple-400" />
+                                        <span className="text-xs font-black uppercase tracking-widest text-zinc-400">Hide Stats</span>
+                                    </button>
+                                </div>
+
+                                {/* Stats Cards */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                    {[
+                                        { label: "Focus Minutes", value: userStats?.totalMinutes || 0, icon: Clock, color: "text-amber-400" },
+                                        { label: "Total Sessions", value: userStats?.totalPomodoros || 0, icon: Zap, color: "text-purple-400" },
+                                        { label: "Daily Avg", value: userStats?.totalPomodoros ? Math.round((userStats?.totalMinutes || 0) / userStats?.totalPomodoros) : 0, icon: TrendingUp, color: "text-sky-400" }
+                                    ].map((stat, i) => (
+                                        <motion.div
+                                            key={i}
+                                            initial={{ opacity: 0, scale: 0.95 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            transition={{ delay: i * 0.1, duration: 0.4 }}
+                                            className="bg-zinc-900/40 backdrop-blur-3xl border border-white/10 rounded-2xl p-4 shadow-xl flex flex-col items-center text-center group hover:bg-white/5 transition-all"
+                                        >
+                                            <stat.icon className={`w-6 h-6 ${stat.color} mb-2 group-hover:scale-110 transition-transform`} />
+                                            <span className="text-2xl font-black text-white">{stat.value}</span>
+                                            <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mt-0.5">{stat.label}</span>
+                                        </motion.div>
+                                    ))}
+                                </div>
+
+                                {/* Chart Section */}
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{ delay: 0.3, duration: 0.5 }}
+                                    className="w-full bg-zinc-900/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-6 md:p-10 shadow-2xl"
+                                >
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                                        <h2 className="text-lg font-black text-white uppercase italic tracking-tighter">
+                                            {timeRange === "week" && "7-Day Focus Intensity"}
+                                            {timeRange === "month" && "30-Day Focus Intensity"}
+                                            {timeRange === "year" && "12-Month Focus Intensity"}
+                                        </h2>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex items-center bg-zinc-950/50 p-1 rounded-xl border border-white/5">
+                                                {[
+                                                    { id: "week", label: "Week" },
+                                                    { id: "month", label: "Month" },
+                                                    { id: "year", label: "Year" }
+                                                ].map((tab) => (
                                                     <button
-                                                        key={id}
-                                                        onClick={() => setSelectedTheme(id)}
+                                                        key={tab.id}
+                                                        onClick={() => setTimeRange(tab.id as TimeRange)}
                                                         className={cn(
-                                                            "w-10 h-10 rounded-xl border transition-all duration-300 flex flex-col items-center justify-center gap-0.5 overflow-hidden group/theme",
-                                                            selectedTheme === id
-                                                                ? "border-white/40 bg-white/5 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
-                                                                : "border-white/5 bg-zinc-950/50 hover:border-white/20"
+                                                            "px-3 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all",
+                                                            timeRange === tab.id
+                                                                ? "bg-purple-500 text-white"
+                                                                : "text-zinc-500 hover:text-white"
                                                         )}
                                                     >
-                                                        <div className="flex gap-0.5">
-                                                            {t.colors.slice(-2).map((c, i) => (
-                                                                <div key={i} className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c }} />
-                                                            ))}
-                                                        </div>
-                                                        <span className="text-[6px] font-black uppercase tracking-tighter text-zinc-600 group-hover/theme:text-zinc-400">
-                                                            {t.name.split(' ')[0]}
-                                                        </span>
+                                                        {tab.label}
                                                     </button>
                                                 ))}
                                             </div>
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                                <div className="relative group">
-                                    {/* Atmospheric Glow - Multilayered for strength */}
-                                    <div 
-                                        className="absolute -inset-12 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-1000 blur-[100px] pointer-events-none z-0"
-                                        style={{ backgroundColor: `${currentTheme.accent}25` }}
-                                    />
-                                    <div 
-                                        className="absolute -inset-4 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-700 blur-[40px] pointer-events-none z-0"
-                                        style={{ backgroundColor: `${currentTheme.accent}40` }}
-                                    />
-                                    
-                                    <Avatar
-                                        className="w-40 h-40 md:w-48 md:h-48 rounded-[2.2rem] border border-white/10 relative z-10 overflow-hidden transition-all duration-500 group-hover:border-white/30"
-                                    >
-                                        <AvatarImage
-                                            src={userData?.photoURL || user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`}
-                                            className="object-cover w-full h-full scale-100 group-hover:scale-105 transition-transform duration-[2s] ease-out rounded-[2.2rem]"
-                                        />
-                                        <AvatarFallback className="bg-zinc-900 font-black text-6xl text-white rounded-[2.2rem] transition-all group-hover:bg-zinc-800">
-                                            {user.displayName?.charAt(0) || "D"}
-                                        </AvatarFallback>
+                                        </div>
+                                    </div>
 
-                                        {isEditing && (
-                                            <label className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center opacity-0 hover:opacity-100 transition-all cursor-pointer z-30">
-                                                <Camera className="w-10 h-10 text-white mb-3" />
-                                                <span className="text-[10px] font-black tracking-widest uppercase">Update Scan</span>
-                                                <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
-                                            </label>
+                                    <div className="h-[420px] min-h-[420px] w-full mt-4 relative group/chart">
+                                        {mounted && (
+                                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                                                <AreaChart data={timeRange === "week" ? weekData : timeRange === "month" ? monthData : yearData} key={timeRange} margin={{ top: 5, right: 20, left: 20, bottom: 10 }}>
+                                                    <defs>
+                                                        <linearGradient id="colorMinutes" x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
+                                                            <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
+                                                        </linearGradient>
+                                                    </defs>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.5} />
+                                                    <XAxis
+                                                        dataKey="date"
+                                                        axisLine={false}
+                                                        tickLine={false}
+                                                        tick={{ fill: '#71717a', fontSize: 10, fontWeight: 900 }}
+                                                        dy={10}
+                                                        interval={timeRange === "month" ? 4 : 0}
+                                                        minTickGap={timeRange === "year" ? 0 : 5}
+                                                    />
+                                                    <YAxis
+                                                        hide
+                                                        domain={[0, 'auto']}
+                                                    />
+                                                    <Tooltip
+                                                        cursor={{ stroke: 'rgba(168, 85, 247, 0.2)', strokeWidth: 2 }}
+                                                        content={({ active, payload }) => {
+                                                            if (active && payload && payload.length) {
+                                                                const label = payload[0].payload.tooltipLabel || payload[0].payload.date;
+                                                                return (
+                                                                    <div className="bg-zinc-950/80 backdrop-blur-2xl border border-white/10 p-4 rounded-2xl shadow-2xl relative overflow-hidden group">
+                                                                        <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%),linear-gradient(90deg,rgba(255,0,0,0.02),rgba(0,255,0,0.01),rgba(0,0,255,0.02))] bg-[length:100%_4px,3px_100%] pointer-events-none" />
+                                                                        <div className="relative z-10">
+                                                                            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                                                                                <Calendar className="w-3 h-3" />
+                                                                                {label}
+                                                                            </p>
+                                                                            <div className="flex items-baseline gap-2">
+                                                                                <p className="text-3xl font-black text-white italic tracking-tighter drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]">
+                                                                                    {payload[0].value}
+                                                                                </p>
+                                                                                <span className="text-purple-500 font-black text-xs uppercase italic">Minutes</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            return null;
+                                                        }}
+                                                    />
+                                                    <Area
+                                                        type="monotone"
+                                                        dataKey="minutes"
+                                                        stroke="#a855f7"
+                                                        strokeWidth={4}
+                                                        fillOpacity={1}
+                                                        fill="url(#colorMinutes)"
+                                                        animationBegin={0}
+                                                        animationDuration={1500}
+                                                        animationEasing="ease-in-out"
+                                                        activeDot={{
+                                                            r: 6,
+                                                            fill: "#a855f7",
+                                                            stroke: "#fff",
+                                                            strokeWidth: 2,
+                                                            style: { filter: 'drop-shadow(0_0_8px_rgba(168,85,247,0.8))' }
+                                                        }}
+                                                    />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
                                         )}
-                                    </Avatar>
-                                </div>
-                            </motion.div>
-
-                            {/* Action Buttons Container - Perfectly aligned under Avatar */}
-                            {!isEditing && (
-                                <div className="flex flex-col gap-2.5 w-32 md:w-40 items-center z-30">
-                                    <motion.div
-                                        whileHover={{ y: -2 }}
-                                        whileTap={{ y: 0 }}
-                                        className="w-full"
-                                    >
-                                        <Button
-                                            onClick={() => setIsEditing(true)}
-                                            className="w-full h-9 rounded-full bg-zinc-100 text-zinc-950 hover:bg-white font-black text-[9px] tracking-widest transition-all border border-white/20 relative shadow-xl overflow-hidden group/btn cursor-pointer"
-                                        >
-                                            <div className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-[-25deg] -translate-x-full group-hover/btn:animate-shine transition-transform" />
-                                            <div className="flex items-center justify-center gap-2 relative z-10 uppercase">
-                                                <Pencil className="w-2.5 h-2.5" />
-                                                Edit Profile
-                                            </div>
-                                        </Button>
-                                    </motion.div>
-
-                                    <motion.div
-                                        whileHover={{ y: -1 }}
-                                        whileTap={{ y: 0 }}
-                                        className="w-full"
-                                    >
-                                        <Button
-                                            variant="ghost"
-                                            className="w-full h-9 rounded-full border border-white/5 bg-zinc-900/40 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60 transition-all backdrop-blur-xl group/btn relative overflow-hidden text-[9px] font-black tracking-widest cursor-pointer"
-                                        >
-                                            <div className="flex items-center justify-center gap-2 uppercase relative z-10">
-                                                <Share2 className="w-2.5 h-2.5 transition-transform group-hover/btn:rotate-12" />
-                                                Share Vault
-                                            </div>
-                                        </Button>
-                                    </motion.div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Text Identity Section */}
-                        <div className="flex-1 flex flex-col items-center md:items-start text-center md:text-left pt-4 h-full">
-                            {isEditing ? (
-                                <motion.div
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className="flex flex-col items-center md:items-start gap-6 w-full max-w-xl"
-                                >
-                                    <input
-                                        value={editName}
-                                        onChange={e => setEditName(e.target.value)}
-                                        placeholder="Identity Name"
-                                        className="bg-transparent border-b border-white/10 text-4xl md:text-5xl font-black text-white tracking-tighter focus:outline-none focus:border-white/30 transition-all w-full py-1 h-16 uppercase"
-                                    />
-
-                                    <textarea
-                                        value={editBio}
-                                        onChange={e => setEditBio(e.target.value)}
-                                        placeholder="System Architect | Digital Curator"
-                                        rows={2}
-                                        className="bg-transparent border-b border-white/5 text-sm font-medium text-zinc-400 leading-relaxed focus:outline-none focus:border-white/20 transition-all w-full py-2 resize-none scrollbar-none [ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                                    />
-
-                                    <div className="flex items-center gap-4 mt-4">
-                                        <Button
-                                            onClick={handleSaveProfile}
-                                            disabled={isSaving}
-                                            className="h-12 px-10 rounded-2xl bg-white text-black hover:bg-zinc-200 font-black uppercase tracking-widest text-[10px] shadow-[0_0_40px_rgba(255,255,255,0.1)] transition-all flex items-center gap-2"
-                                        >
-                                            {isSaving ? "Syncing..." : "Commit Changes"}
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            onClick={() => setIsEditing(false)}
-                                            className="h-12 px-8 rounded-2xl border border-white/10 text-zinc-400 font-black uppercase tracking-widest text-[10px] hover:bg-white/5 transition-all"
-                                        >
-                                            Abort
-                                        </Button>
                                     </div>
                                 </motion.div>
-                            ) : (
-                                <motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    className="flex flex-col items-center md:items-start w-full max-w-2xl"
-                                >
-                                    <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter mb-4 uppercase drop-shadow-[0_0_40px_rgba(255,255,255,0.1)] mt-2">
-                                        {userData?.displayName || "New Pilot"}
-                                    </h1>
 
-                                    <p className="text-zinc-400 text-sm md:text-base font-medium leading-[1.8] mb-14 max-w-2xl break-all">
-                                        {userData?.bio || "System Architect and Digital Curator focusing on high-fidelity procedural environments and neural interface aesthetics. Architecting the void since 2024."}
-                                    </p>
-                                </motion.div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Quick Stats Column - Custom Stacked Layout */}
-                    <motion.div
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.3 }}
-                        className="grid grid-cols-2 gap-3 w-full lg:w-[360px] shrink-0"
-                    >
-                        {/* Streak: Spans 2x width (top) - Horizontal */}
-                        <div className="col-span-2">
-                            <StatCard
-                                icon={Flame}
-                                label="Combustion Streak"
-                                value={`${streakCount} Days`}
-                                colorClass="bg-red-500"
-                                delay={0.1}
-                                horizontal={true}
-                                lottie="https://lottie.host/d45a67bc-112f-44fa-96d8-7bbb5b0424a0/ISj7KzGPJL.lottie"
-                            />
-                        </div>
-
-                        {/* Middle row: Two horizontal cards side-by-side */}
-                        <StatCard
-                            icon={Zap}
-                            label="Sessions"
-                            value={userData?.totalPomodoros || 0}
-                            colorClass="bg-amber-500"
-                            delay={0.2}
-                            horizontal={true}
-                            lottie="https://lottie.host/744101ff-3133-4079-924b-56b7ba413dc2/cG4FlIP6px.lottie"
-                        />
-                        <StatCard
-                            icon={Clock}
-                            label="Active Uptime"
-                            value={formatFocusedTime(userData?.totalMinutes || 0)}
-                            colorClass="bg-sky-500"
-                            delay={0.3}
-                            horizontal={true}
-                            lottie="https://lottie.host/6d8cee47-05d6-4d85-a3e4-34ab0969f50f/OmVO7S6zrr.lottie"
-                        />
-
-                        {/* Deployment: Spans 2x width (bottom) - Horizontal */}
-                        <div className="col-span-2">
-                            <StatCard
-                                icon={Calendar}
-                                label="Joined since"
-                                value={userData?.createdAt?.seconds ? format(new Date(userData.createdAt.seconds * 1000), "MMM yyyy") : "---"}
-                                colorClass="bg-purple-500"
-                                delay={0.4}
-                                horizontal={true}
-                            />
-                        </div>
-                    </motion.div>
-                </section>
-
-                {/* --- OPERATIONAL SUBSTRATE (Bento Grid) --- */}
-                <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-
-                    {/* Neural Activity (Heatmap) */}
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.6, duration: 0.8 }}
-                        className="lg:col-span-8 bg-zinc-900/10 backdrop-blur-3xl border border-white/5 rounded-[10px] p-10 flex flex-col shadow-2xl relative overflow-hidden group"
-                    >
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white/5 to-transparent" style={{ backgroundImage: `linear-gradient(to right, transparent, ${currentTheme.accent}33, transparent)` }} />
-
-                        <div className="flex items-center justify-between mb-10 relative z-10">
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 rounded-[10px] bg-zinc-900 border border-white/5 shadow-inner transition-colors" style={{ borderColor: `${currentTheme.accent}11` }}>
-                                    <Activity className="w-5 h-5 group-hover:animate-pulse" style={{ color: currentTheme.accent }} />
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white">Neural Activity</h3>
-                                    <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mt-0.5">Focus density over past 140 cycles</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3 bg-zinc-950/50 px-4 py-2 rounded-[10px] border border-white/5">
-                                <span className="text-[9px] uppercase text-zinc-600 font-extrabold tracking-tighter">Low</span>
-                                <div className="flex gap-1.5 items-center">
-                                    {currentTheme.colors.map((c, i) => (
-                                        <div key={i} className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c }} />
-                                    ))}
-                                </div>
-                                <span className="text-[9px] uppercase text-zinc-600 font-extrabold tracking-tighter">Peak</span>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2 justify-center py-6 px-4 bg-zinc-950/20 rounded-[10px] border border-white/[0.02] mb-8 relative">
-                            {/* Grid background lines */}
-                            <div className="absolute inset-0 opacity-[0.02] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
-
-                            {productivityData.map((day, i) => (
-                                <div key={i} title={day.tooltip} className="relative z-10">
-                                    <ProductivitySquare level={day.level} theme={currentTheme} />
-                                </div>
-                            ))}
-                        </div>
-                    </motion.div>
-
-                    {/* Streak Calendar Terminal */}
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.7, duration: 0.8 }}
-                        className="lg:col-span-4 bg-zinc-900/10 backdrop-blur-3xl border border-white/5 rounded-[10px] p-8 flex flex-col shadow-2xl relative overflow-hidden group"
-                    >
-                        <div className="flex items-center justify-between mb-8 relative z-10">
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 rounded-[10px] bg-zinc-900 border border-white/5 shadow-inner">
-                                    <Calendar className="w-5 h-5" style={{ color: currentTheme.accent }} />
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white">{format(new Date(), 'MMMM')}</h3>
-                                    <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mt-0.5">Streak TimeLine</p>
-                                </div>
-                            </div>
-                            <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: currentTheme.accent }} />
-                        </div>
-
-                        <div className="grid grid-cols-7 gap-2 mb-4">
-                            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                                <div key={i} className="text-[9px] font-black text-zinc-700 text-center uppercase py-2">
-                                    {day}
-                                </div>
-                            ))}
-                            {monthDays.map((day, i) => (
-                                <div key={i} className="aspect-square flex items-center justify-center relative">
-                                    {day ? (
-                                        <>
-                                            {/* Base day indicator */}
-                                            <div className={cn(
-                                                "w-full h-full rounded-[10px] flex items-center justify-center text-[10px] font-black transition-all duration-500",
-                                                day.hasActivity
-                                                    ? "text-white border"
-                                                    : "bg-white/[0.02] text-zinc-700 border border-white/[0.02]",
-                                                day.isToday && "ring-1 ring-white/20 border-white/20"
-                                            )}
-                                                style={day.hasActivity ? {
-                                                    backgroundColor: `${currentTheme.accent}22`,
-                                                    borderColor: `${currentTheme.accent}44`,
-                                                    color: currentTheme.accent
-                                                } : {}}>
-                                                {day.day}
+                                {/* Guest Persistence Notice */}
+                                {user && user.isAnonymous && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.5, duration: 0.5 }}
+                                        className="w-full mt-8 p-6 bg-purple-500/5 border border-purple-500/10 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6"
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center">
+                                                <TrendingUp className="w-6 h-6 text-purple-400" />
                                             </div>
+                                            <div className="text-left">
+                                                <h3 className="text-sm font-black text-white uppercase italic tracking-tight">Persistence Protocol</h3>
+                                                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-relaxed">
+                                                    Guest stats are temporary. Connect with Google to secure your focus history permanently.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </>
+                        )}
 
-                                            {/* Activity pulse */}
-                                            {day.hasActivity && (
-                                                <div className="absolute inset-0 blur-[8px] rounded-[10px] scale-75" style={{ backgroundColor: currentTheme.accent, opacity: 0.1 }} />
-                                            )}
-
-                                            {/* Today indicator bug */}
-                                            {day.isToday && (
-                                                <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_5px_white]" />
-                                            )}
-                                        </>
-                                    ) : (
-                                        <div className="w-full h-full" />
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </motion.div>
-                </div>
-
-                {/* --- STATS SECTION (MERGED FROM STATS PAGE) --- */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: showStats ? 1 : 0, y: showStats ? 0 : 20 }}
-                    transition={{ duration: 0.5 }}
-                    className="w-full mt-12"
-                >
-                    {showStats && (
-                        <>
-                            {/* Stats Toggle Button */}
-                            <div className="flex justify-center mb-6">
+                        {!showStats && (
+                            <div className="flex justify-center">
                                 <button
-                                    onClick={() => setShowStats(!showStats)}
+                                    onClick={() => setShowStats(true)}
                                     className="flex items-center gap-2 px-4 py-2 bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl hover:border-white/20 transition-all"
                                 >
                                     <BarChart3 className="w-4 h-4 text-purple-400" />
-                                    <span className="text-xs font-black uppercase tracking-widest text-zinc-400">Hide Stats</span>
+                                    <span className="text-xs font-black uppercase tracking-widest text-zinc-400">View Stats</span>
                                 </button>
                             </div>
+                        )}
+                    </motion.div>
+                </main>
 
-                            {/* Stats Cards */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                                {[
-                                    { label: "Focus Minutes", value: userStats?.totalMinutes || 0, icon: Clock, color: "text-amber-400" },
-                                    { label: "Total Sessions", value: userStats?.totalPomodoros || 0, icon: Zap, color: "text-purple-400" },
-                                    { label: "Daily Avg", value: userStats?.totalPomodoros ? Math.round((userStats?.totalMinutes || 0) / userStats?.totalPomodoros) : 0, icon: TrendingUp, color: "text-sky-400" }
-                                ].map((stat, i) => (
-                                    <motion.div
-                                        key={i}
-                                        initial={{ opacity: 0, scale: 0.95 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        transition={{ delay: i * 0.1, duration: 0.4 }}
-                                        className="bg-zinc-900/40 backdrop-blur-3xl border border-white/10 rounded-2xl p-4 shadow-xl flex flex-col items-center text-center group hover:bg-white/5 transition-all"
-                                    >
-                                        <stat.icon className={`w-6 h-6 ${stat.color} mb-2 group-hover:scale-110 transition-transform`} />
-                                        <span className="text-2xl font-black text-white">{stat.value}</span>
-                                        <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mt-0.5">{stat.label}</span>
-                                    </motion.div>
-                                ))}
-                            </div>
-
-                            {/* Chart Section */}
+                {/* Cropping Modal */}
+                <AnimatePresence>
+                    {showCropper && image && (
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-[100] bg-zinc-950/90 backdrop-blur-xl flex items-center justify-center p-4"
+                        >
                             <motion.div
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ delay: 0.3, duration: 0.5 }}
-                                className="w-full bg-zinc-900/40 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] p-6 md:p-10 shadow-2xl"
+                                initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }}
+                                className="w-full max-w-xl aspect-square bg-zinc-900 border border-white/10 rounded-[3rem] overflow-hidden relative shadow-[0_0_100px_rgba(0,0,0,0.8)]"
                             >
-                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                                    <h2 className="text-lg font-black text-white uppercase italic tracking-tighter">
-                                        {timeRange === "week" && "7-Day Focus Intensity"}
-                                        {timeRange === "month" && "30-Day Focus Intensity"}
-                                        {timeRange === "year" && "12-Month Focus Intensity"}
-                                    </h2>
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex items-center bg-zinc-950/50 p-1 rounded-xl border border-white/5">
-                                            {[
-                                                { id: "week", label: "Week" },
-                                                { id: "month", label: "Month" },
-                                                { id: "year", label: "Year" }
-                                            ].map((tab) => (
-                                                <button
-                                                    key={tab.id}
-                                                    onClick={() => setTimeRange(tab.id as TimeRange)}
-                                                    className={cn(
-                                                        "px-3 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all",
-                                                        timeRange === tab.id
-                                                            ? "bg-purple-500 text-white"
-                                                            : "text-zinc-500 hover:text-white"
-                                                    )}
-                                                >
-                                                    {tab.label}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
+                                <div className="absolute inset-0 pb-24">
+                                    <Cropper image={image || undefined} crop={crop} zoom={zoom} aspect={1} onCropChange={setCrop} onCropComplete={onCropComplete} onZoomChange={setZoom} cropShape="rect" showGrid={false} />
                                 </div>
-
-                                <div className="h-[420px] min-h-[420px] w-full mt-4 relative group/chart">
-                                    {mounted && (
-                                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                                            <AreaChart data={timeRange === "week" ? weekData : timeRange === "month" ? monthData : yearData} key={timeRange} margin={{ top: 5, right: 20, left: 20, bottom: 10 }}>
-                                                <defs>
-                                                    <linearGradient id="colorMinutes" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
-                                                        <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
-                                                    </linearGradient>
-                                                </defs>
-                                                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} opacity={0.5} />
-                                                <XAxis
-                                                    dataKey="date"
-                                                    axisLine={false}
-                                                    tickLine={false}
-                                                    tick={{ fill: '#71717a', fontSize: 10, fontWeight: 900 }}
-                                                    dy={10}
-                                                    interval={timeRange === "month" ? 4 : 0}
-                                                    minTickGap={timeRange === "year" ? 0 : 5}
-                                                />
-                                                <YAxis
-                                                    hide
-                                                    domain={[0, 'auto']}
-                                                />
-                                                <Tooltip
-                                                    cursor={{ stroke: 'rgba(168, 85, 247, 0.2)', strokeWidth: 2 }}
-                                                    content={({ active, payload }) => {
-                                                        if (active && payload && payload.length) {
-                                                            const label = payload[0].payload.tooltipLabel || payload[0].payload.date;
-                                                            return (
-                                                                <div className="bg-zinc-950/80 backdrop-blur-2xl border border-white/10 p-4 rounded-2xl shadow-2xl relative overflow-hidden group">
-                                                                    <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%),linear-gradient(90deg,rgba(255,0,0,0.02),rgba(0,255,0,0.01),rgba(0,0,255,0.02))] bg-[length:100%_4px,3px_100%] pointer-events-none" />
-                                                                    <div className="relative z-10">
-                                                                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
-                                                                            <Calendar className="w-3 h-3" />
-                                                                            {label}
-                                                                        </p>
-                                                                        <div className="flex items-baseline gap-2">
-                                                                            <p className="text-3xl font-black text-white italic tracking-tighter drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]">
-                                                                                {payload[0].value}
-                                                                            </p>
-                                                                            <span className="text-purple-500 font-black text-xs uppercase italic">Minutes</span>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        }
-                                                        return null;
-                                                    }}
-                                                />
-                                                <Area
-                                                    type="monotone"
-                                                    dataKey="minutes"
-                                                    stroke="#a855f7"
-                                                    strokeWidth={4}
-                                                    fillOpacity={1}
-                                                    fill="url(#colorMinutes)"
-                                                    animationBegin={0}
-                                                    animationDuration={1500}
-                                                    animationEasing="ease-in-out"
-                                                    activeDot={{
-                                                        r: 6,
-                                                        fill: "#a855f7",
-                                                        stroke: "#fff",
-                                                        strokeWidth: 2,
-                                                        style: { filter: 'drop-shadow(0_0_8px_rgba(168,85,247,0.8))' }
-                                                    }}
-                                                />
-                                            </AreaChart>
-                                        </ResponsiveContainer>
-                                    )}
+                                <div className="absolute bottom-0 left-0 right-0 p-8 bg-zinc-950/80 backdrop-blur-xl flex items-center justify-between border-t border-white/5">
+                                    <Button variant="ghost" onClick={() => setShowCropper(false)} className="text-zinc-500 hover:text-white uppercase font-black text-xs tracking-[0.2em]">Abort</Button>
+                                    <Button
+                                        onClick={handleUploadCropped}
+                                        className="text-white font-black uppercase text-xs tracking-[0.3em] px-10 h-12 rounded-2xl shadow-xl transition-all"
+                                        style={{
+                                            backgroundColor: currentTheme.accent,
+                                            boxShadow: `0 0 30px ${currentTheme.accent}44`
+                                        }}
+                                    >
+                                        Confirm Sync
+                                    </Button>
                                 </div>
                             </motion.div>
-
-                            {/* Guest Persistence Notice */}
-                            {user && user.isAnonymous && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: 0.5, duration: 0.5 }}
-                                    className="w-full mt-8 p-6 bg-purple-500/5 border border-purple-500/10 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6"
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center">
-                                            <TrendingUp className="w-6 h-6 text-purple-400" />
-                                        </div>
-                                        <div className="text-left">
-                                            <h3 className="text-sm font-black text-white uppercase italic tracking-tight">Persistence Protocol</h3>
-                                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-relaxed">
-                                                Guest stats are temporary. Connect with Google to secure your focus history permanently.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            )}
-                        </>
-                    )}
-
-                    {!showStats && (
-                        <div className="flex justify-center">
-                            <button
-                                onClick={() => setShowStats(true)}
-                                className="flex items-center gap-2 px-4 py-2 bg-zinc-900/50 backdrop-blur-xl border border-white/10 rounded-xl hover:border-white/20 transition-all"
-                            >
-                                <BarChart3 className="w-4 h-4 text-purple-400" />
-                                <span className="text-xs font-black uppercase tracking-widest text-zinc-400">View Stats</span>
-                            </button>
-                        </div>
-                    )}
-                </motion.div>
-            </main>
-
-            {/* Cropping Modal */}
-            <AnimatePresence>
-                {showCropper && image && (
-                    <motion.div
-                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[100] bg-zinc-950/90 backdrop-blur-xl flex items-center justify-center p-4"
-                    >
-                        <motion.div
-                            initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }}
-                            className="w-full max-w-xl aspect-square bg-zinc-900 border border-white/10 rounded-[3rem] overflow-hidden relative shadow-[0_0_100px_rgba(0,0,0,0.8)]"
-                        >
-                            <div className="absolute inset-0 pb-24">
-                                <Cropper image={image || undefined} crop={crop} zoom={zoom} aspect={1} onCropChange={setCrop} onCropComplete={onCropComplete} onZoomChange={setZoom} cropShape="rect" showGrid={false} />
-                            </div>
-                            <div className="absolute bottom-0 left-0 right-0 p-8 bg-zinc-950/80 backdrop-blur-xl flex items-center justify-between border-t border-white/5">
-                                <Button variant="ghost" onClick={() => setShowCropper(false)} className="text-zinc-500 hover:text-white uppercase font-black text-xs tracking-[0.2em]">Abort</Button>
-                                <Button
-                                    onClick={handleUploadCropped}
-                                    className="text-white font-black uppercase text-xs tracking-[0.3em] px-10 h-12 rounded-2xl shadow-xl transition-all"
-                                    style={{
-                                        backgroundColor: currentTheme.accent,
-                                        boxShadow: `0 0 30px ${currentTheme.accent}44`
-                                    }}
-                                >
-                                    Confirm Sync
-                                </Button>
-                            </div>
                         </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </div>
+                    )}
+                </AnimatePresence>
+            </div>
         </BackgroundTheme>
     );
 }
