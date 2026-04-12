@@ -127,14 +127,14 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal 
                         colorClass.includes('red') ? "opacity-80 group-hover:opacity-100" : "opacity-30 group-hover:opacity-50"
                     )}>
                         <div className={cn(
-                            "absolute right-0 top-1/2 -translate-y-1/2 h-[150%] transition-all duration-700",
+                            "absolute right-0 top-1/2 -translate-y-1/2 h-full transition-all duration-700",
                             colorClass.includes('red') ? "-rotate-90 translate-x-[28%]" : "left-0 w-full h-full flex items-center justify-center scale-[1.6]"
                         )}>
                             <DotLottieReact
                                 src={lottie}
                                 autoplay
                                 loop
-                                style={{ 
+                                style={{
                                     height: '100%',
                                     width: 'auto',
                                     mixBlendMode: colorClass.includes('red') ? 'screen' : 'normal',
@@ -143,7 +143,7 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal 
                         </div>
                     </div>
                 )}
-                {colorClass.includes('red') && [...Array(12)].map((_, i) => (
+                {colorClass.includes('red') && [...Array(15)].map((_, i) => (
                     <motion.div
                         key={i}
                         animate={{
@@ -155,11 +155,11 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal 
                         transition={{
                             duration: 1.2 + Math.random() * 0.8,
                             repeat: Infinity,
-                            delay: i * 0.15,
+                            delay: i * 0.1,
                             ease: "easeOut"
                         }}
                         className="absolute right-0 w-1 h-1 bg-orange-400 rounded-full blur-[0.6px]"
-                        style={{ top: `${15 + (i * 7)}%`, mixBlendMode: 'screen' }}
+                        style={{ top: `${(i * 100) / 24}%`, mixBlendMode: 'screen' }}
                     />
                 ))}
             </div>
@@ -777,7 +777,6 @@ export default function ProfilePage() {
                                     colorClass="bg-red-500"
                                     delay={0.1}
                                     horizontal={true}
-                                    lottie="https://lottie.host/d45a67bc-112f-44fa-96d8-7bbb5b0424a0/ISj7KzGPJL.lottie"
                                 />
                             </div>
 
