@@ -1053,9 +1053,9 @@ export default function ProfilePage() {
                                             initial={{ clipPath: 'inset(0 100% 0 0)' }}
                                             animate={{ clipPath: 'inset(0 0% 0 0)' }}
                                             transition={{ duration: 2.5, ease: "easeInOut" }}
-                                            className="w-full h-full"
+                                            className="w-full h-full min-w-0"
                                         >
-                                            <ResponsiveContainer width="100%" height="100%">
+                                            <ResponsiveContainer width="100%" height={400} debounce={50}>
                                                 <ComposedChart
                                                     data={timeRange === "days" ? weekData : timeRange === "weeks" ? monthData : yearData}
                                                     key={`${timeRange}_composed`}
