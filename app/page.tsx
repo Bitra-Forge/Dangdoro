@@ -28,7 +28,6 @@ export default function Home() {
   const activeTaskNotes = useTimerStore((state) => state.activeTaskNotes);
   const activeTaskPriority = useTimerStore((state) => state.activeTaskPriority);
   const clearTask = useTimerStore((state) => state.clearTask);
-  const timeLeft = useTimerStore((state) => state.timeLeft);
   const initialFocusTime = useTimerStore((state) => state.initialFocusTime);
   const isActive = useTimerStore((state) => state.isActive);
   const mode = useTimerStore((state) => state.mode);

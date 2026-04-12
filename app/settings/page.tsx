@@ -106,7 +106,8 @@ export default function SettingsPage() {
         });
     };
 
-    const { setSessionEndSound, setInitialTime } = useTimerStore();
+    const setSessionEndSound = useTimerStore((state) => state.setSessionEndSound);
+    const setInitialTime = useTimerStore((state) => state.setInitialTime);
 
     const handleSaveSettings = async () => {
         if (!user || !hasChanges) return;

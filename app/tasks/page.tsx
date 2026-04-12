@@ -91,7 +91,7 @@ function PriorityPicker({ taskId, priority, onClose }: {
 // ─── Task row (with double-click edit) ─────────────────────────────────────────
 function TaskRow({ task, onDragStart }: { task: any; onDragStart: (e: React.PointerEvent, task: any) => void }) {
     const router = useRouter();
-    const { loadTask } = useTimerStore();
+    const loadTask = useTimerStore((state) => state.loadTask);
     const [showPriority, setShowPriority] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editTitle, setEditTitle] = useState(task.title);
