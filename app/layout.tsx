@@ -42,6 +42,7 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${figtree.variable} ${geistMono.variable} ${notoSerif.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-zinc-950 text-white">
         <AuthProvider>

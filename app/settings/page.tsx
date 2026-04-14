@@ -38,7 +38,8 @@ const DEFAULT_SETTINGS = {
     adjustmentAmount: 1,
     notifications: true,
     sound: true,
-    sessionEndSound: "universfield-new-notification-027-383749.mp3"
+    sessionEndSound: "universfield-new-notification-027-383749.mp3",
+    glassmorphism: true
 };
 
 function settingsEqual(a: typeof DEFAULT_SETTINGS, b: typeof DEFAULT_SETTINGS) {
@@ -52,7 +53,8 @@ function settingsEqual(a: typeof DEFAULT_SETTINGS, b: typeof DEFAULT_SETTINGS) {
         a.adjustmentAmount === b.adjustmentAmount &&
         a.notifications === b.notifications &&
         a.sound === b.sound &&
-        a.sessionEndSound === b.sessionEndSound
+        a.sessionEndSound === b.sessionEndSound &&
+        a.glassmorphism === b.glassmorphism
     );
 }
 
@@ -137,6 +139,7 @@ export default function SettingsPage() {
     const setSessionEndSound = useTimerStore((state) => state.setSessionEndSound);
     const setInitialTime = useTimerStore((state) => state.setInitialTime);
     const setLongBreakEvery = useTimerStore((state) => state.setLongBreakEvery);
+    const setSettingsGlassmorphism = useTimerStore((state) => state.setSettingsGlassmorphism);
 
     const handleSaveSettings = async () => {
         if (!user || !hasChanges) return;
@@ -151,6 +154,7 @@ export default function SettingsPage() {
             setLongBreakEvery(settings.longBreakEvery);
             useTimerStore.getState().setAutoStartBreak(settings.autoStartBreak);
             useTimerStore.getState().setAutoStartFocus(settings.autoStartFocus);
+            setSettingsGlassmorphism(settings.glassmorphism);
 
             toast.success("Settings saved");
             setSavedSettings({ ...settings });
@@ -304,6 +308,37 @@ export default function SettingsPage() {
                                         </div>
                                     </button>
                                 ))}
+                            </div>
+                        </section>
+                        {/* Premium Effects Section */}
+                        <section>
+                            <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-1">Premium Effects</h2>
+                            <div className="bg-zinc-900/50 rounded-lg overflow-hidden border border-white/5">
+                                <button
+                                    onClick={() => setSettings(prev => ({ ...prev, glassmorphism: !prev.glassmorphism }))}
+                                    className="w-full text-left p-6 transition-colors hover:bg-white/[0.01]"
+                                >
+                                    <div className="flex items-center justify-between gap-4">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-lg bg-[#C9B037]/20 flex items-center justify-center border border-[#C9B037]/20">
+                                                <Sparkles className="w-5 h-5 text-[#C9B037]" />
+                                            </div>
+                                            <div>
+                                                <div className="text-zinc-200 font-medium">UI Transparency (Glassmorphism)</div>
+                                                <div className="text-[9px] text-zinc-500 uppercase tracking-wider mt-1">Enable cinematic frosted-glass backgrounds. Disable for solid high-contrast mode.</div>
+                                            </div>
+                                        </div>
+                                        <div className={cn(
+                                            "relative w-12 h-7 rounded-full transition-colors flex-shrink-0",
+                                            settings.glassmorphism ? "bg-[#C9B037]" : "bg-zinc-700"
+                                        )}>
+                                            <div className={cn(
+                                                "absolute left-1 top-1 w-5 h-5 rounded-full bg-white transition-transform",
+                                                settings.glassmorphism ? "translate-x-5" : "translate-x-0"
+                                            )} />
+                                        </div>
+                                    </div>
+                                </button>
                             </div>
                         </section>
 

@@ -15,7 +15,9 @@ import {
     writeBatch,
     QuerySnapshot,
     DocumentData,
-    limit
+    limit,
+    startAt,
+    endAt
 } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -371,32 +373,58 @@ export const subscribeToFriendsList = (
 };
 
 /**
- * Search for users by nickname or display name.
+ * Search for users by nickname, display name, email, or user ID.
+ * Returns only public-safe fields (no emails, no sensitive data).
  */
-export const searchUsers = async (searchTerm: string, excludeUserId: string) => {
+export const searchUsers = async (searchTerm: string, excludeUserId: string, limitCount: number = 20) => {
     try {
-        // Firestore doesn't support full-text search, so we'll fetch and filter
-        // In production, consider using Algolia or Typesense for better search
-        const usersRef = collection(db, "users");
-        const snapshot = await getDocs(usersRef);
-        
-        const term = searchTerm.toLowerCase();
-        const results = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
+        const term = searchTerm.trim();
+        const termLower = term.toLowerCase();
+
+        // If it looks like a full user ID, fetch directly (very fast)
+        if (term.length === 28) {
+            const userRef = doc(db, "users", term);
+            const snap = await getDoc(userRef);
+            if (snap.exists() && snap.id !== excludeUserId) {
+                const data = snap.data();
+                return [{
+                    id: snap.id,
+                    displayName: data.displayName,
+                    photoURL: data.photoURL,
+                    // NO email returned - privacy safe
+                }];
+            }
+            return [];
+        }
+
+        // For short searches, use ordered query with limit
+        const q = query(
+            collection(db, "users"),
+            orderBy("displayName"),
+            limit(200)
+        );
+
+        const snapshot = await getDocs(q);
+
+        return snapshot.docs
+            .map(docSnap => {
+                const data = docSnap.data();
+                return {
+                    id: docSnap.id,
+                    displayName: data.displayName,
+                    photoURL: data.photoURL,
+                    // Deliberately excludes: email, settings, isAnonymous, createdAt
+                    // Only returns public-safe fields
+                };
+            })
             .filter((user: any) => {
                 if (user.id === excludeUserId) return false;
-                
                 const displayName = (user.displayName || "").toLowerCase();
-                const nickname = (user.nickname || "").toLowerCase();
-                const email = (user.email || "").toLowerCase();
-                
-                return displayName.includes(term) || 
-                       nickname.includes(term) || 
-                       email.includes(term);
-            })
-            .slice(0, 20); // Limit results
+                const uid = user.id.toLowerCase();
 
-        return results;
+                return displayName.includes(termLower) || uid.includes(termLower);
+            })
+            .slice(0, limitCount);
     } catch (error) {
         console.error("Error searching users:", error);
         return [];

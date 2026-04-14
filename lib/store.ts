@@ -18,6 +18,7 @@ interface TimerState {
   settingsLongBreakEvery: number;
   settingsAutoStartBreak: boolean;
   settingsAutoStartFocus: boolean;
+  settingsGlassmorphism: boolean;
 
   // Session-specific initial times (used for progress denominator)
   initialFocusTime: number;
@@ -35,6 +36,8 @@ interface TimerState {
   activeTaskPriority: string | null; // using string to avoid circular dependency
   loadTask: (id: string, label: string, durationSeconds: number, priority: string, notes: string) => void;
   clearTask: () => void;
+  activeGroupId: string | null;
+  setActiveGroupId: (id: string | null) => void;
 
   // Actions
   start: () => void;
@@ -50,6 +53,7 @@ interface TimerState {
   setLongBreakEvery: (count: number) => void;
   setAutoStartBreak: (enabled: boolean) => void;
   setAutoStartFocus: (enabled: boolean) => void;
+  setSettingsGlassmorphism: (enabled: boolean) => void;
   resetToDefaults: () => void;
   backgroundImage: string;
   setBackgroundImage: (image: string) => void;
@@ -113,6 +117,7 @@ export const useTimerStore = create<TimerState>()(
       settingsLongBreakEvery: 4,
       settingsAutoStartBreak: false,
       settingsAutoStartFocus: false,
+      settingsGlassmorphism: true,
 
       // Session-specific denominator for progress
       initialFocusTime: 25 * 60,
@@ -129,6 +134,9 @@ export const useTimerStore = create<TimerState>()(
       activeTaskLabel: null,
       activeTaskNotes: null,
       activeTaskPriority: null,
+      activeGroupId: null,
+      setActiveGroupId: (id) => set({ activeGroupId: id }),
+      setSettingsGlassmorphism: (enabled) => set({ settingsGlassmorphism: enabled }),
 
       loadTask: (id, label, durationSeconds, priority, notes) => {
         set({
@@ -404,6 +412,7 @@ export const useTimerStore = create<TimerState>()(
           settingsLongBreakEvery: 4,
           settingsAutoStartBreak: false,
           settingsAutoStartFocus: false,
+          settingsGlassmorphism: true,
 
           initialFocusTime: 25 * 60,
           initialBreakTime: 5 * 60,

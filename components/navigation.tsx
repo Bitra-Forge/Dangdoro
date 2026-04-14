@@ -1,6 +1,6 @@
 "use client";
 
-import { Timer, ClipboardList, Settings, Trophy, User, Users } from "lucide-react";
+import { Timer, ClipboardList, Settings, Trophy, User, Users, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -8,7 +8,7 @@ import { usePathname } from "next/navigation";
 const navLinks = [
     { label: "Timer", href: "/", icon: Timer },
     { label: "Tasks", href: "/tasks", icon: ClipboardList },
-    { label: "Groups", href: "/friends", icon: Users },
+    { label: "Groups", href: "/groups", icon: Users },
     { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
     { label: "Profile", href: "/profile", icon: User },
     { label: "Settings", href: "/settings", icon: Settings },

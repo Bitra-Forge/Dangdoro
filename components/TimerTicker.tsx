@@ -59,6 +59,8 @@ export function TimerTicker() {
   const settingsAutoStartBreak = useTimerStore((s) => s.settingsAutoStartBreak);
   const settingsAutoStartFocus = useTimerStore((s) => s.settingsAutoStartFocus);
 
+  const activeGroupId = useTimerStore((s) => s.activeGroupId);
+
   const { user } = useAuth();
 
   // Timer tick effect
@@ -85,8 +87,8 @@ export function TimerTicker() {
     // Save focus session for authenticated users
     if (mode === "focus" && user) {
       const durationMinutes = Math.floor(initialFocusTime / 60);
-      savePomodoroSession(user.uid, durationMinutes)
-        .then(() => toast.success("Session saved! Keep it up!"))
+      savePomodoroSession(user.uid, durationMinutes, activeGroupId)
+        .then(() => toast.success(`Session saved! ${activeGroupId ? "Group contribution recorded." : "Keep it up!"}`))
         .catch(() => toast.error("Failed to save session."));
     }
 

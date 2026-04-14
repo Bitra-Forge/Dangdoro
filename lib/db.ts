@@ -111,28 +111,34 @@ export const syncUserProfile = async (user: User) => {
 /**
  * Saves a completed Pomodoro session and increments the user's focus stats.
  */
-export const savePomodoroSession = async (userId: string, durationMinutes: number = 25) => {
+export const savePomodoroSession = async (userId: string, durationMinutes: number = 25, groupId: string | null = null) => {
     try {
-        // Lazy Sync: Ensure profile exists before saving session
         if (auth.currentUser && auth.currentUser.uid === userId) {
             await syncUserProfile(auth.currentUser);
         }
 
-        // 1. Add session record
         await addDoc(collection(db, "sessions"), {
             userId,
+            groupId, // Track if session happened in a group
             duration: durationMinutes,
             type: "work",
             completedAt: serverTimestamp(),
         });
 
-        // 2. Increment user totals
         const userRef = doc(db, "users", userId);
         await updateDoc(userRef, {
             totalPomodoros: increment(1),
             totalMinutes: increment(durationMinutes),
             lastActive: serverTimestamp()
         });
+
+        if (groupId) {
+            const groupRef = doc(db, "focusGroups", groupId);
+            await updateDoc(groupRef, {
+                [`memberStats.${userId}.totalMinutes`]: increment(durationMinutes),
+                [`memberStats.${userId}.lastActive`]: serverTimestamp()
+            });
+        }
 
         return true;
     } catch (error) {
@@ -145,7 +151,7 @@ export const savePomodoroSession = async (userId: string, durationMinutes: numbe
  * Saves a partially completed Pomodoro session (user stopped early).
  * The duration reflects actual time spent, not the full configured duration.
  */
-export const savePartialPomodoroSession = async (userId: string, durationMinutes: number) => {
+export const savePartialPomodoroSession = async (userId: string, durationMinutes: number, groupId: string | null = null) => {
     if (durationMinutes < 1) return false;
 
     try {
@@ -155,6 +161,7 @@ export const savePartialPomodoroSession = async (userId: string, durationMinutes
 
         await addDoc(collection(db, "sessions"), {
             userId,
+            groupId,
             duration: durationMinutes,
             type: "work",
             completedAt: serverTimestamp(),
@@ -166,6 +173,14 @@ export const savePartialPomodoroSession = async (userId: string, durationMinutes
             totalMinutes: increment(durationMinutes),
             lastActive: serverTimestamp()
         });
+
+        if (groupId) {
+            const groupRef = doc(db, "focusGroups", groupId);
+            await updateDoc(groupRef, {
+                [`memberStats.${userId}.totalMinutes`]: increment(durationMinutes),
+                [`memberStats.${userId}.lastActive`]: serverTimestamp()
+            });
+        }
 
         return true;
     } catch (error) {
@@ -191,6 +206,42 @@ export const getLeaderboard = async (limitCount: number = 10) => {
         id: doc.id,
         ...doc.data()
     }));
+};
+
+/**
+ * Fetches the top focus groups for the leaderboard.
+ */
+export const getGroupLeaderboard = async (limitCount: number = 20) => {
+    const groupsRef = collection(db, "focusGroups");
+    // Sorting by member count or total minutes if we add it. 
+    // For now, sorting by member count as a proxy for 'active' groups.
+    const q = query(
+        groupsRef,
+        orderBy("members", "desc"),
+        limit(limitCount)
+    );
+
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+    }));
+};
+
+/**
+ * Utility to fetch multiple user profiles by their IDs.
+ * Used for hydration in groups and leaderboards.
+ */
+export const fetchUserProfiles = async (uids: string[]) => {
+    if (!uids.length) return [];
+    
+    // Firestore 'in' queries are limited to 10-30 items depending on version. 
+    // We'll chunk if necessary, but groups are usually < 30.
+    const usersRef = collection(db, "users");
+    const q = query(usersRef, where("uid", "in", uids.slice(0, 30)));
+    const querySnapshot = await getDocs(q);
+    
+    return querySnapshot.docs.map(doc => doc.data());
 };
 
 /**
