@@ -6,10 +6,12 @@ import { logOut } from "@/lib/auth";
 import { onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { uploadProfilePicture, updateProfilePictureBase64, getSessionHistory, updateUserProfile } from "@/lib/db";
+import { getFriendsList } from "@/lib/friendship";
 import {
     Camera, Shield, Zap, Clock, Calendar, LogOut,
     Trophy, Share2, Pencil, Activity, Award, Flame,
-    Lock, Star, TrendingUp, Info, CheckCircle2, BarChart3
+    Lock, Star, TrendingUp, Info, CheckCircle2, BarChart3,
+    Users, Copy, UserCheck
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -283,6 +285,7 @@ export default function ProfilePage() {
     const [yearData, setYearData] = useState<any[]>([]);
     const [timeRange, setTimeRange] = useState<TimeRange>("days");
     const [mounted, setMounted] = useState(false);
+    const [friends, setFriends] = useState<any[]>([]);
 
     useEffect(() => {
         setMounted(true);
@@ -319,6 +322,10 @@ export default function ProfilePage() {
             // Sync sessions info for grid & streak
             const history = (await getSessionHistory(user.uid, 365)) as SessionData[];
             setSessions(history);
+
+            // Fetch friends list
+            const friendsData = await getFriendsList(user.uid);
+            setFriends(friendsData);
 
             // Fetch stats data
             const userDoc = await getDoc(doc(db, "users", user.uid));
@@ -756,6 +763,21 @@ export default function ProfilePage() {
                                             {userData?.displayName || "New Pilot"}
                                         </h1>
 
+                                        {/* User ID for easy searching */}
+                                        <button
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(user.uid);
+                                                toast.success("User ID copied to clipboard!");
+                                            }}
+                                            className="flex items-center gap-2 px-4 py-2 bg-zinc-900/50 border border-white/10 rounded-xl hover:border-white/20 transition-all mb-4 group"
+                                            title="Click to copy"
+                                        >
+                                            <span className="text-[10px] font-mono text-zinc-500 group-hover:text-zinc-400">
+                                                ID: {user.uid}
+                                            </span>
+                                            <Copy className="w-3 h-3 text-zinc-600 group-hover:text-zinc-400" />
+                                        </button>
+
                                         <p className="text-zinc-400 text-sm md:text-base font-medium leading-[1.8] mb-14 max-w-2xl break-all">
                                             {userData?.bio || "System Architect and Digital Curator focusing on high-fidelity procedural environments and neural interface aesthetics. Architecting the void since 2024."}
                                         </p>
@@ -813,6 +835,68 @@ export default function ProfilePage() {
                                     delay={0.4}
                                     horizontal={true}
                                 />
+                            </div>
+
+                            {/* Friends Card: Spans 2x width */}
+                            <div className="col-span-2">
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.98 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{ delay: 0.5, duration: 0.8 }}
+                                    className="relative group bg-zinc-900/10 backdrop-blur-2xl border border-white/5 rounded-[5px] flex flex-col items-center text-center p-4 shadow-2xl cursor-pointer hover:bg-zinc-900/20 transition-all duration-500"
+                                    onClick={() => window.location.href = "/friends"}
+                                >
+                                    {/* Ambient Glow */}
+                                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none z-0">
+                                        <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent" />
+                                    </div>
+                                    <div className="absolute -inset-12 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-1000 blur-[100px] pointer-events-none z-0" style={{ backgroundColor: "rgba(168,85,247,0.15)" }} />
+
+                                    {/* Icon */}
+                                    <motion.div
+                                        variants={{ hover: { scale: 1.15 } }}
+                                        whileHover="hover"
+                                        transition={{ duration: 0.2 }}
+                                        className="mb-3 relative z-10"
+                                    >
+                                        <UserCheck className="w-5 h-5" style={{ color: "#a855f7", filter: "drop-shadow(0 0 8px #a855f7)" }} />
+                                    </motion.div>
+
+                                    {/* Friends Count */}
+                                    <span className="text-2xl font-black text-white tracking-tighter tabular-nums mb-0.5 drop-shadow-sm group-hover:drop-shadow-[0_0_10px_white] transition-all relative z-10">
+                                        {friends.length}
+                                    </span>
+                                    <span className="text-[8.5px] font-black text-zinc-500 uppercase tracking-[0.15em] group-hover:text-zinc-300 transition-all leading-none relative z-10">
+                                        Focus Friends
+                                    </span>
+
+                                    {/* Friends Avatars Preview */}
+                                    {friends.length > 0 && (
+                                        <div className="flex -space-x-2 mt-3 relative z-10">
+                                            {friends.slice(0, 5).map((friend, i) => {
+                                                const photoURL = friend.userData?.photoURL;
+                                                return (
+                                                    <div key={i} className="w-6 h-6 rounded-full border border-zinc-800 overflow-hidden">
+                                                        <Avatar className="w-full h-full">
+                                                            <AvatarImage src={photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${friend.friendId}`} />
+                                                            <AvatarFallback className="text-[6px]">
+                                                                {friend.userData?.displayName?.slice(0, 1) || "F"}
+                                                            </AvatarFallback>
+                                                        </Avatar>
+                                                    </div>
+                                                );
+                                            })}
+                                            {friends.length > 5 && (
+                                                <div className="w-6 h-6 rounded-full border border-zinc-800 bg-zinc-700 flex items-center justify-center">
+                                                    <span className="text-[6px] font-bold text-zinc-300">+{friends.length - 5}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Reactive Corner */}
+                                    <div className="absolute bottom-1 right-1 w-2 h-2 border-r border-b border-white/10 rounded-br-[1px] transition-all duration-500 group-hover:border-white/40 group-hover:w-3 group-hover:h-3" />
+                                </motion.div>
                             </div>
                         </motion.div>
                     </section>

@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)"
+    ]
+  },
+  "tools": [
+    {
+      "name": "firebase",
+      "description": "Firebase CLI tool",
+      "command": "firebase",
+      "args": [
+        "--json"
+      ]
+    }
+  ]
+}

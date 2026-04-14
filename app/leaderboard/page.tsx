@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Trophy, Zap, Clock, Medal, Sprout, Leaf, Flower2, ChevronRight, TrendingUp, Search, Info } from "lucide-react";
+import { Trophy, Zap, Clock, Medal, Sprout, Leaf, Flower2, ChevronRight, TrendingUp, Search, Info, Users } from "lucide-react";
 import { getLeaderboard } from "@/lib/db";
+import { getFriendsLeaderboard } from "@/lib/friendship";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { syncUserProfile } from "@/lib/db";
@@ -18,10 +19,13 @@ const spaceGrotesk = Space_Grotesk({
     weight: ["300", "400", "500", "600", "700"],
 });
 
+type LeaderboardTab = "global" | "friends";
+
 export default function LeaderboardPage() {
     const { user, loading: authLoading } = useAuth();
     const [players, setPlayers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState<LeaderboardTab>("global");
 
     useEffect(() => {
         const fetchTops = async () => {
@@ -32,12 +36,17 @@ export default function LeaderboardPage() {
                 await syncUserProfile(user);
             }
 
-            const tops = await getLeaderboard(20);
-            setPlayers(tops);
+            if (activeTab === "global") {
+                const tops = await getLeaderboard(20);
+                setPlayers(tops);
+            } else {
+                const friendsTops = await getFriendsLeaderboard(user!.uid, 20);
+                setPlayers(friendsTops);
+            }
             setLoading(false);
         };
         fetchTops();
-    }, [user, authLoading]);
+    }, [user, authLoading, activeTab]);
 
     if (authLoading) {
         return (
@@ -96,10 +105,10 @@ export default function LeaderboardPage() {
                 )}
 
                 {/* Clean Header */}
-                <header className="flex flex-col items-center text-center mb-24 w-full">
+                <header className="flex flex-col items-center text-center mb-12 w-full">
                     <div className="flex items-center gap-3 mb-6">
                         <div className="w-12 h-[1px] bg-zinc-900/50" />
-                        <span className="text-[10px] font-black tracking-[0.4em] text-zinc-600 uppercase">Global Season</span>
+                        <span className="text-[10px] font-black tracking-[0.4em] text-zinc-600 uppercase">Focus Rankings</span>
                         <div className="w-12 h-[1px] bg-zinc-900/50" />
                     </div>
 
@@ -112,10 +121,53 @@ export default function LeaderboardPage() {
                     </div>
                 </header>
 
+                {/* Tab Toggle */}
+                <div className="flex items-center gap-2 p-2 bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-2xl mb-12 w-full max-w-md">
+                    <button
+                        onClick={() => setActiveTab("global")}
+                        className={cn(
+                            "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all duration-300",
+                            activeTab === "global"
+                                ? "bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)]"
+                                : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
+                        )}
+                    >
+                        <Trophy className="w-4 h-4" />
+                        <span className="text-xs font-bold">Global</span>
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("friends")}
+                        className={cn(
+                            "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all duration-300",
+                            activeTab === "friends"
+                                ? "bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)]"
+                                : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
+                        )}
+                    >
+                        <Users className="w-4 h-4" />
+                        <span className="text-xs font-bold">Friends</span>
+                    </button>
+                </div>
+
                 {loading ? (
                     <div className="flex flex-col items-center justify-center h-96 gap-4">
                         <div className="w-16 h-16 border-4 border-[#C9B037]/10 border-t-[#C9B037] rounded-full animate-spin" />
                         <p className="text-xs font-black uppercase text-zinc-600 tracking-widest animate-pulse">Syncing Growth...</p>
+                    </div>
+                ) : activeTab === "friends" && players.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-96 gap-6">
+                        <Users className="w-20 h-20 text-zinc-700" />
+                        <h3 className="text-2xl font-bold text-zinc-400">No Friends to Rank</h3>
+                        <p className="text-sm text-zinc-600 max-w-md text-center">
+                            Add friends to see how you stack up against each other!
+                        </p>
+                        <a
+                            href="/friends"
+                            className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all duration-300 flex items-center gap-2"
+                        >
+                            <Users className="w-4 h-4" />
+                            <span className="text-sm font-bold">Find Friends</span>
+                        </a>
                     </div>
                 ) : (
                     <div className="w-full flex flex-col items-center gap-16">
