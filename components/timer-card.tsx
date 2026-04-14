@@ -235,11 +235,11 @@ export function TimerCard() {
         "flex items-center gap-4 relative z-10 w-fit transition-all duration-700",
         isActive && !isEditing ? "opacity-0 pointer-events-none" : "opacity-100"
       )}>
-        {[
+        {([
           { id: "focus", label: "pomodoro" },
           { id: "break", label: "short break" },
           { id: "long-break", label: "long break" }
-        ].map((m) => (
+        ] as const).map((m) => (
           <button
             key={m.id}
             onClick={() => setMode(m.id as "focus" | "break" | "long-break")}
@@ -375,12 +375,9 @@ export function TimerCard() {
               </div>
 
               <div className={cn(
-                "flex items-center justify-center gap-4 mt-10 transition-all duration-500 relative z-10",
+                "flex items-center justify-center gap-6 mt-10 transition-all duration-500 relative z-10",
                 isActive && "opacity-0 group-hover/timer:opacity-100"
               )}>
-                {/* Spacer to balance the layout */}
-                <div className="w-16 shrink-0" />
-
                 {/* Center: Start / Stop */}
                 <div className="flex items-center gap-3">
                   <Button
@@ -402,172 +399,146 @@ export function TimerCard() {
                       }
                     }}
                     className={cn(
-                      "h-16 px-16 rounded-2xl text-lg font-bold transition-all duration-300 shadow-xl cursor-pointer",
+                      "h-14 min-w-[132px] rounded-[20px] px-7 font-bold transition-all duration-300 active:scale-95 cursor-pointer shadow-[0_10px_30px_rgba(255,255,255,0.22)]",
                       isActive
-                        ? "bg-white/10 text-white border-2 border-white/20 active:scale-100"
-                        : "bg-white text-black active:scale-100"
+                        ? "bg-white/20 text-white border border-white/35 hover:bg-white/30"
+                        : "bg-white/90 text-black border border-white/90 hover:bg-white"
                     )}
+                    style={{ fontSize: "17px", fontFamily: "'Space Grotesk', sans-serif" }}
+                    title={isActive ? "Pause" : "Start"}
                   >
-                    <span className="relative z-10 flex items-center gap-2.5">
-                      {isActive ? (
-                        <>
-                          <Pause className="w-5 h-5" />
-                          pause
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-5 h-5" />
-                          start
-                        </>
-                      )}
-                    </span>
+                    {isActive ? "Pause" : "Start"}
                   </Button>
 
                   {isActive && (
                     <Button
+                      variant="ghost"
+                      size="icon"
                       onClick={handleStop}
-                      className="h-16 px-8 rounded-2xl text-lg font-bold transition-all duration-300 bg-red-500/90 text-white border-2 border-red-400/50 active:scale-100 shadow-xl shadow-red-500/25 cursor-pointer"
+                      className="h-14 w-14 rounded-2xl transition-all duration-300 text-red-500 border border-white/25 bg-white/10 hover:bg-white/20 active:scale-95 cursor-pointer flex items-center justify-center"
+                      title="Stop"
                     >
-                      <Square className="w-5 h-5 mr-2 fill-current" />
-                      stop
+                      <Square className="w-6 h-6 fill-current" />
                     </Button>
                   )}
                 </div>
 
-                {/* Right: Settings Toggle + Panel */}
-                <div className="relative flex items-center">
+                {/* Right: Reset and Settings icons */}
+                <div className="flex items-center gap-2">
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                    title="Toggle settings"
-                    className={cn(
-                      "h-16 w-16 rounded-2xl transition-all duration-300 cursor-pointer",
-                      isSettingsOpen
-                        ? "text-white bg-white/15"
-                        : "text-white/50"
-                    )}
+                    onClick={reset}
+                    title="Reset timer"
+                    className="h-14 w-14 rounded-2xl text-white border border-white/25 bg-white/10 hover:bg-white/20 transition-all duration-300 shrink-0 cursor-pointer"
                   >
-                    <Settings className={cn(
-                      "w-6 h-6 transition-transform duration-300",
-                      isSettingsOpen && "rotate-90"
-                    )} />
+                    <RotateCcw className="w-6 h-6" />
                   </Button>
 
-                  {/* Sliding Panel to the Right (Reset + Focus Mode) */}
-                  <div className={cn(
-                    "absolute left-full ml-3 overflow-visible transition-all duration-500 ease-out",
-                    isSettingsOpen ? "max-w-[200px] opacity-100" : "max-w-0 opacity-0 pointer-events-none"
-                  )}>
-                    <div className="relative">
-                      <div className="flex items-center gap-2 bg-zinc-900/90 backdrop-blur-2xl rounded-2xl px-3 py-2 border border-white/10 whitespace-nowrap">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={reset}
-                          title="Reset timer"
-                          className="h-11 w-11 rounded-xl text-white/60 transition-all duration-300 shrink-0 cursor-pointer"
-                        >
-                          <RotateCcw className="w-5 h-5" />
-                        </Button>
+                  <div className="relative flex items-center">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                      title="Toggle settings"
+                      className="h-14 w-14 rounded-2xl transition-all duration-300 cursor-pointer text-white border border-white/25 bg-white/10 hover:bg-white/20"
+                    >
+                      <Settings className={cn(
+                        "w-6 h-6 transition-transform duration-300",
+                        isSettingsOpen && "rotate-90"
+                      )} />
+                    </Button>
 
-                        <div className="w-px h-6 bg-white/10" />
+                    {/* Settings Popup - appears above the toggle */}
+                    {isSettingsOpen && (
+                      <div className="absolute bottom-full mb-3 right-0 z-20 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <div className="w-[280px] bg-zinc-900/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden">
 
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={toggleNavFocusMode}
-                          title={isNavFocusMode ? "Disable Focus Mode (show nav)" : "Enable Focus Mode (hide nav)"}
-                          className={cn(
-                            "h-11 w-11 rounded-xl transition-all duration-300 shrink-0 cursor-pointer",
-                            isNavFocusMode
-                              ? "text-white bg-white/10"
-                              : "text-white/50"
-                          )}
-                        >
-                          {isNavFocusMode ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
-                        </Button>
-                      </div>
+                          {/* Step Size */}
+                          <div className="px-5 pt-5 pb-4 border-b border-white/[0.06]">
+                            <div className="flex items-center gap-2 mb-3">
+                              <Minus className="w-3 h-3 text-white/30" />
+                              <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Step Size</span>
+                              <Plus className="w-3 h-3 text-white/30" />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {[1, 2, 5, 10].map((val) => (
+                                <button
+                                  key={val}
+                                  onClick={() => handleSetAdjustment(val)}
+                                  className={cn(
+                                    "flex-1 py-2 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer",
+                                    adjustmentAmount === val
+                                      ? "bg-white text-black"
+                                      : "bg-white/5 text-white/50 border border-white/10 hover:bg-white/10 hover:text-white"
+                                  )}
+                                >
+                                  {val}m
+                                </button>
+                              ))}
+                            </div>
+                          </div>
 
-                      {/* Settings Popup - appears above the sliding panel */}
-                      {isSettingsOpen && (
-                        <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 z-20 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                          <div className="w-[280px] bg-zinc-900/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden">
-
-                            {/* Step Size */}
-                            <div className="px-5 pt-5 pb-4 border-b border-white/[0.06]">
-                              <div className="flex items-center gap-2 mb-3">
-                                <Minus className="w-3 h-3 text-white/30" />
-                                <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Step Size</span>
-                                <Plus className="w-3 h-3 text-white/30" />
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {[1, 2, 5, 10].map((val) => (
+                          {/* Session End Sound */}
+                          <div className="px-5 pt-4 pb-5">
+                            <div className="flex items-center gap-2 mb-3">
+                              <Volume2 className="w-3 h-3 text-white/30" />
+                              <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Session Sound</span>
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                              {SESSION_SOUNDS.map((sound) => (
+                                <div key={sound.id} className="flex items-center gap-2">
                                   <button
-                                    key={val}
-                                    onClick={() => handleSetAdjustment(val)}
+                                    onClick={() => handleSelectSound(sound.id)}
                                     className={cn(
-                                      "flex-1 py-2 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer",
-                                      adjustmentAmount === val
-                                        ? "bg-white text-black"
-                                        : "bg-white/5 text-white/50 border border-white/10 hover:bg-white/10 hover:text-white"
+                                      "flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-300 cursor-pointer text-left",
+                                      sessionEndSound === sound.id
+                                        ? "bg-white/10 text-white border border-white/20"
+                                        : "text-white/40 hover:bg-white/5 hover:text-white/70"
                                     )}
                                   >
-                                    {val}m
+                                    <div className={cn(
+                                      "w-1.5 h-1.5 rounded-full shrink-0 transition-all",
+                                      sessionEndSound === sound.id ? "bg-white" : "bg-white/20"
+                                    )} />
+                                    {sound.label}
                                   </button>
-                                ))}
-                              </div>
-                            </div>
-
-                            {/* Session End Sound */}
-                            <div className="px-5 pt-4 pb-5">
-                              <div className="flex items-center gap-2 mb-3">
-                                <Volume2 className="w-3 h-3 text-white/30" />
-                                <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Session Sound</span>
-                              </div>
-                              <div className="flex flex-col gap-1.5">
-                                {SESSION_SOUNDS.map((sound) => (
-                                  <div key={sound.id} className="flex items-center gap-2">
-                                    <button
-                                      onClick={() => handleSelectSound(sound.id)}
-                                      className={cn(
-                                        "flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-300 cursor-pointer text-left",
-                                        sessionEndSound === sound.id
-                                          ? "bg-white/10 text-white border border-white/20"
-                                          : "text-white/40 hover:bg-white/5 hover:text-white/70"
-                                      )}
-                                    >
-                                      <div className={cn(
-                                        "w-1.5 h-1.5 rounded-full shrink-0 transition-all",
-                                        sessionEndSound === sound.id ? "bg-white" : "bg-white/20"
-                                      )} />
-                                      {sound.label}
-                                    </button>
-                                    <button
-                                      onClick={() => handlePreviewSound(sound.id)}
-                                      className={cn(
-                                        "w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300 cursor-pointer shrink-0",
-                                        playingSoundId === sound.id
-                                          ? "bg-white text-black"
-                                          : "text-white/30 hover:bg-white/5 hover:text-white/60"
-                                      )}
-                                    >
-                                      {playingSoundId === sound.id
-                                        ? <Pause className="w-3 h-3 fill-current" />
-                                        : <Play className="w-3 h-3 fill-current ml-0.5" />
-                                      }
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
+                                  <button
+                                    onClick={() => handlePreviewSound(sound.id)}
+                                    className={cn(
+                                      "w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300 cursor-pointer shrink-0",
+                                      playingSoundId === sound.id
+                                        ? "bg-white text-black"
+                                        : "text-white/30 hover:bg-white/5 hover:text-white/60"
+                                    )}
+                                  >
+                                    {playingSoundId === sound.id
+                                      ? <Pause className="w-3 h-3 fill-current" />
+                                      : <Play className="w-3 h-3 fill-current ml-0.5" />
+                                    }
+                                  </button>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
-
                 </div>
+              </div>
+
+              {/* Focus toggle pinned to page corner */}
+              <div className="fixed bottom-6 right-6 z-40">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleNavFocusMode}
+                  title={isNavFocusMode ? "Disable Focus Mode (show nav)" : "Enable Focus Mode (hide nav)"}
+                  className="h-14 w-14 rounded-2xl transition-all duration-300 shrink-0 cursor-pointer text-white border border-white/25 bg-white/10 hover:bg-white/20 backdrop-blur-md"
+                >
+                  {isNavFocusMode ? <Eye className="w-6 h-6" /> : <EyeOff className="w-6 h-6" />}
+                </Button>
               </div>
             </>
           )}
