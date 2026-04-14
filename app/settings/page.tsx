@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
     Bell, Clock, LogOut, Shield, Mail, LogIn,
     Play, Pause, Zap, Minus, Plus, RotateCcw, Save, CheckCircle2,
-    ChevronRight, Key, PlayCircle, PauseCircle
+    ChevronRight, Key, PlayCircle, PauseCircle, Sparkles
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { logOut } from "@/lib/auth";

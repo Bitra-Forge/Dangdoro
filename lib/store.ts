@@ -291,15 +291,12 @@ export const useTimerStore = create<TimerState>()(
         const currentTimeForOldMode = timeLeft;
         if (oldMode === "focus") {
           updates.focusTimeLeft = currentTimeForOldMode;
-          updates.initialFocusTime = currentTimeForOldMode;
         }
         if (oldMode === "break") {
           updates.breakTimeLeft = currentTimeForOldMode;
-          updates.initialBreakTime = currentTimeForOldMode;
         }
         if (oldMode === "long-break") {
           updates.longBreakTimeLeft = currentTimeForOldMode;
-          updates.initialLongBreakTime = currentTimeForOldMode;
         }
 
         // Load progress for new mode

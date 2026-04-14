@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Play, Pause, RotateCcw, Check, X, ChevronUp, ChevronDown, Settings, Minus, Plus, Eye, EyeOff, Square, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ export function TimerCard() {
   const incrementTime = useTimerStore((s) => s.incrementTime);
   const activeTaskLabel = useTimerStore((s) => s.activeTaskLabel);
   const isNavFocusMode = useTimerStore((s) => s.isNavFocusMode);
+  const setIsNavFocusMode = useTimerStore((s) => s.setIsNavFocusMode);
   const toggleNavFocusMode = useTimerStore((s) => s.toggleNavFocusMode);
   const setSessionEndSound = useTimerStore((s) => s.setSessionEndSound);
   const sessionEndSound = useTimerStore((s) => s.sessionEndSound);
@@ -44,6 +46,9 @@ export function TimerCard() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [playingSoundId, setPlayingSoundId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const hideControlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isTimerHovered, setIsTimerHovered] = useState(false);
+  const [showHoverControls, setShowHoverControls] = useState(false);
 
   const SESSION_SOUNDS = [
     { id: "universfield-new-notification-027-383749.mp3", label: "Minimal Tech" },
@@ -80,6 +85,36 @@ export function TimerCard() {
       const { updateUserSettings } = await import("@/lib/db");
       await updateUserSettings(user.uid, { adjustmentAmount: value });
     }
+  };
+
+  const clearHideControlsTimeout = () => {
+    if (hideControlsTimeoutRef.current) {
+      clearTimeout(hideControlsTimeoutRef.current);
+      hideControlsTimeoutRef.current = null;
+    }
+  };
+
+  const handleTimerMouseEnter = () => {
+    setIsTimerHovered(true);
+    clearHideControlsTimeout();
+    if (isActive) {
+      setShowHoverControls(true);
+    }
+  };
+
+  const handleTimerMouseLeave = () => {
+    setIsTimerHovered(false);
+    clearHideControlsTimeout();
+
+    if (!isActive) {
+      setShowHoverControls(false);
+      return;
+    }
+
+    hideControlsTimeoutRef.current = setTimeout(() => {
+      setShowHoverControls(false);
+      hideControlsTimeoutRef.current = null;
+    }, 2000);
   };
 
   const handleStop = async () => {
@@ -162,6 +197,61 @@ export function TimerCard() {
     };
   }, [user?.uid, setInitialTime]);
 
+  useEffect(() => {
+    if (!isActive) {
+      clearHideControlsTimeout();
+      setShowHoverControls(false);
+    }
+  }, [isActive]);
+
+  useEffect(() => {
+    return () => {
+      clearHideControlsTimeout();
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (typeof document === "undefined") {
+        return;
+      }
+
+      // Keep focus mode state aligned when user exits fullscreen with Esc.
+      if (!document.fullscreenElement && isNavFocusMode) {
+        setIsNavFocusMode(false);
+      }
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, [isNavFocusMode, setIsNavFocusMode]);
+
+  const handleFocusToggle = async () => {
+    if (typeof document === "undefined") {
+      toggleNavFocusMode();
+      return;
+    }
+
+    try {
+      if (isNavFocusMode) {
+        if (document.fullscreenElement) {
+          await document.exitFullscreen();
+        }
+        setIsNavFocusMode(false);
+      } else {
+        await document.documentElement.requestFullscreen();
+        setIsNavFocusMode(true);
+      }
+    } catch (error) {
+      // Fall back to focus mode toggle if fullscreen is blocked by browser policy.
+      toggleNavFocusMode();
+    }
+  };
+
+  const shouldRevealHoverControls = isTimerHovered || showHoverControls;
+
   const formatTime = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
@@ -217,11 +307,28 @@ export function TimerCard() {
     );
   }
 
+  const focusToggle = (
+    <div className="fixed bottom-6 right-6 z-40">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={handleFocusToggle}
+        title={isNavFocusMode ? "Disable Focus Mode (show nav)" : "Enable Focus Mode (hide nav)"}
+        className="h-14 w-14 rounded-2xl transition-all duration-300 shrink-0 cursor-pointer text-white border border-white/25 bg-white/10 hover:bg-white/20 backdrop-blur-md"
+      >
+        {isNavFocusMode ? <Eye className="w-6 h-6" /> : <EyeOff className="w-6 h-6" />}
+      </Button>
+    </div>
+  );
+
   return (
-    <div className={cn(
-      "group/timer flex flex-col items-center justify-center space-y-8 animate-in fade-in transition-all duration-1000 relative",
-      isSettingsOpen ? "z-50" : "z-10"
-    )}>
+    <>
+      <div
+        className={cn(
+          "group/timer flex flex-col items-center justify-center space-y-8 animate-in fade-in transition-all duration-1000 relative",
+          isSettingsOpen ? "z-50" : "z-10"
+        )}
+      >
       {/* Backdrop to close settings (Lowest layer) */}
       {isSettingsOpen && (
         <div
@@ -230,9 +337,15 @@ export function TimerCard() {
         />
       )}
 
+      <div
+        onMouseEnter={handleTimerMouseEnter}
+        onMouseLeave={handleTimerMouseLeave}
+        className="flex flex-col items-center justify-center space-y-8"
+      >
+
       {/* Mode Switcher */}
       <div className={cn(
-        "flex items-center gap-4 relative z-10 w-fit transition-all duration-700",
+        "-mt-20 flex items-center gap-2 relative z-10 w-fit p-1.5 rounded-2xl border border-white/20 bg-black/25 backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all duration-700",
         isActive && !isEditing ? "opacity-0 pointer-events-none" : "opacity-100"
       )}>
         {([
@@ -244,10 +357,14 @@ export function TimerCard() {
             key={m.id}
             onClick={() => setMode(m.id as "focus" | "break" | "long-break")}
             className={cn(
-              "px-8 py-3 text-sm font-bold transition-all duration-300 rounded-full cursor-pointer border",
+              "min-w-[120px] md:min-w-[145px] px-5 py-3 text-[13px] font-black tracking-[0.02em] text-center transition-all duration-300 rounded-xl cursor-pointer border",
               mode === m.id
-                ? "bg-white text-black border-transparent"
-                : "bg-white/5 text-white border-white/20 hover:border-white/40"
+                ? m.id === "focus"
+                  ? "bg-sky-300/90 text-sky-950 border-sky-200/80 shadow-[0_6px_14px_rgba(125,211,252,0.18)]"
+                  : m.id === "break"
+                    ? "bg-emerald-300/90 text-emerald-950 border-emerald-200/80 shadow-[0_6px_14px_rgba(110,231,183,0.18)]"
+                    : "bg-fuchsia-300/90 text-fuchsia-950 border-fuchsia-200/80 shadow-[0_6px_14px_rgba(240,171,252,0.18)]"
+                : "bg-black/20 text-white/75 border-white/10 hover:bg-white/[0.14] hover:text-white hover:border-white/30"
             )}
           >
             {m.label}
@@ -319,7 +436,10 @@ export function TimerCard() {
                 <div className="w-8 flex justify-center shrink-0">
                   <button
                     onClick={() => incrementTime(-adjustmentAmount * 60)}
-                    className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center transition-all duration-300 transform active:scale-95 text-white opacity-0 group-hover/timer:opacity-100 bg-transparent"
+                    className={cn(
+                      "w-8 h-8 rounded-full border border-white/20 flex items-center justify-center transition-all duration-200 transform text-white bg-transparent hover:bg-white/15 hover:border-white/40 hover:scale-105 active:scale-95 active:bg-white/25",
+                      shouldRevealHoverControls ? "opacity-100" : "opacity-0"
+                    )}
                   >
                     <Minus className="w-3.5 h-3.5" strokeWidth={2.5} />
                   </button>
@@ -342,7 +462,10 @@ export function TimerCard() {
                 <div className="w-8 flex justify-center shrink-0">
                   <button
                     onClick={() => incrementTime(adjustmentAmount * 60)}
-                    className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center transition-all duration-300 transform active:scale-95 text-white opacity-0 group-hover/timer:opacity-100 bg-transparent"
+                    className={cn(
+                      "w-8 h-8 rounded-full border border-white/20 flex items-center justify-center transition-all duration-200 transform text-white bg-transparent hover:bg-white/15 hover:border-white/40 hover:scale-105 active:scale-95 active:bg-white/25",
+                      shouldRevealHoverControls ? "opacity-100" : "opacity-0"
+                    )}
                   >
                     <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
                   </button>
@@ -352,11 +475,11 @@ export function TimerCard() {
 
               {/* Progress Bar Section */}
               <div className="flex items-center gap-4 w-[320px] mt-2 mb-2 group/progress">
-                <div className="flex-1 h-[2px] bg-white/5 rounded-full relative transition-all duration-1000">
+                <div className="flex-1 h-[3px] bg-white/5 rounded-full relative transition-all duration-1000">
                   <div
                     className={cn(
                       "absolute left-0 top-0 h-full transition-all duration-1000 ease-linear rounded-full",
-                      !isActive && "opacity-0 group-hover/timer:opacity-100",
+                      !isActive && !shouldRevealHoverControls && "opacity-0",
                       mode === "focus" && "shadow-[0_0_10px_rgba(56,189,248,1),0_0_20px_rgba(56,189,248,0.6)] bg-sky-400",
                       mode === "break" && "shadow-[0_0_10px_rgba(52,211,153,1),0_0_20px_rgba(52,211,153,0.6)] bg-emerald-400",
                       mode === "long-break" && "shadow-[0_0_10px_rgba(192,132,252,1),0_0_20px_rgba(192,132,252,0.6)] bg-purple-400"
@@ -368,7 +491,7 @@ export function TimerCard() {
                 </div>
                 <span className={cn(
                   "text-[10px] font-black text-white tracking-widest uppercase tabular-nums transition-opacity duration-300",
-                  !isActive && "opacity-0 group-hover/timer:opacity-100"
+                  !isActive && !shouldRevealHoverControls && "opacity-0"
                 )}>
                   {Math.round(Math.min(100, Math.max(0, (1 - (timeLeft / (mode === "focus" ? initialFocusTime : mode === "break" ? initialBreakTime : initialLongBreakTime))) * 100)))}%
                 </span>
@@ -376,7 +499,7 @@ export function TimerCard() {
 
               <div className={cn(
                 "flex items-center justify-center gap-6 mt-10 transition-all duration-500 relative z-10",
-                isActive && "opacity-0 group-hover/timer:opacity-100"
+                isActive && !shouldRevealHoverControls && "opacity-0"
               )}>
                 {/* Center: Start / Stop */}
                 <div className="flex items-center gap-3">
@@ -399,9 +522,9 @@ export function TimerCard() {
                       }
                     }}
                     className={cn(
-                      "h-14 min-w-[132px] rounded-[20px] px-7 font-bold transition-all duration-300 active:scale-95 cursor-pointer shadow-[0_10px_30px_rgba(255,255,255,0.22)]",
+                      "h-14 min-w-[132px] rounded-[20px] px-7 font-bold transition-all duration-300 active:scale-95 cursor-pointer",
                       isActive
-                        ? "bg-white/20 text-white border border-white/35 hover:bg-white/30"
+                        ? "bg-white/10 text-white border border-white/25 hover:bg-white/20"
                         : "bg-white/90 text-black border border-white/90 hover:bg-white"
                     )}
                     style={{ fontSize: "17px", fontFamily: "'Space Grotesk', sans-serif" }}
@@ -528,22 +651,15 @@ export function TimerCard() {
                 </div>
               </div>
 
-              {/* Focus toggle pinned to page corner */}
-              <div className="fixed bottom-6 right-6 z-40">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={toggleNavFocusMode}
-                  title={isNavFocusMode ? "Disable Focus Mode (show nav)" : "Enable Focus Mode (hide nav)"}
-                  className="h-14 w-14 rounded-2xl transition-all duration-300 shrink-0 cursor-pointer text-white border border-white/25 bg-white/10 hover:bg-white/20 backdrop-blur-md"
-                >
-                  {isNavFocusMode ? <Eye className="w-6 h-6" /> : <EyeOff className="w-6 h-6" />}
-                </Button>
-              </div>
             </>
           )}
         </div>
       </div>
-    </div >
+      </div>
+
+      </div>
+
+      {typeof document !== "undefined" ? createPortal(focusToggle, document.body) : null}
+    </>
   );
 }
