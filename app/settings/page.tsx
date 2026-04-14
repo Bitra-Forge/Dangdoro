@@ -17,10 +17,24 @@ import { cn } from "@/lib/utils";
 import { useTimerStore } from "@/lib/store";
 import { BackgroundTheme } from "@/components/background-theme";
 
+type AppSettings = typeof DEFAULT_SETTINGS;
+
+type TimerSettingKey = keyof Pick<AppSettings, "focusTime" | "breakTime" | "longBreakTime" | "longBreakEvery" | "adjustmentAmount">;
+
+type TimerField = {
+    label: string;
+    key: TimerSettingKey;
+    icon: React.ComponentType<{ className?: string }>;
+    color: string;
+};
+
 const DEFAULT_SETTINGS = {
     focusTime: 25,
     breakTime: 5,
     longBreakTime: 15,
+    longBreakEvery: 4,
+    autoStartBreak: false,
+    autoStartFocus: false,
     adjustmentAmount: 1,
     notifications: true,
     sound: true,
@@ -32,6 +46,9 @@ function settingsEqual(a: typeof DEFAULT_SETTINGS, b: typeof DEFAULT_SETTINGS) {
         a.focusTime === b.focusTime &&
         a.breakTime === b.breakTime &&
         a.longBreakTime === b.longBreakTime &&
+        a.longBreakEvery === b.longBreakEvery &&
+        a.autoStartBreak === b.autoStartBreak &&
+        a.autoStartFocus === b.autoStartFocus &&
         a.adjustmentAmount === b.adjustmentAmount &&
         a.notifications === b.notifications &&
         a.sound === b.sound &&
@@ -41,15 +58,15 @@ function settingsEqual(a: typeof DEFAULT_SETTINGS, b: typeof DEFAULT_SETTINGS) {
 
 export default function SettingsPage() {
     const { user, loading: authLoading, openAuthVault } = useAuth();
-    const [userData, setUserData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    const [savedSettings, setSavedSettings] = useState({ ...DEFAULT_SETTINGS });
-    const [settings, setSettings] = useState({ ...DEFAULT_SETTINGS });
+    const [savedSettings, setSavedSettings] = useState<AppSettings>({ ...DEFAULT_SETTINGS });
+    const [settings, setSettings] = useState<AppSettings>({ ...DEFAULT_SETTINGS });
     const [saving, setSaving] = useState(false);
-    const [inputValues, setInputValues] = useState<Record<string, string>>({
+    const [inputValues, setInputValues] = useState<Record<TimerSettingKey, string>>({
         focusTime: "25",
         breakTime: "5",
         longBreakTime: "15",
+        longBreakEvery: "4",
         adjustmentAmount: "1"
     });
 
@@ -60,14 +77,12 @@ export default function SettingsPage() {
 
     useEffect(() => {
         if (!user) {
-            setLoading(false);
             return;
         }
 
         const unsub = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                setUserData(data);
                 if (data.settings) {
                     const merged = { ...DEFAULT_SETTINGS, ...data.settings };
                     setSavedSettings(merged);
@@ -76,6 +91,7 @@ export default function SettingsPage() {
                         focusTime: String(merged.focusTime),
                         breakTime: String(merged.breakTime),
                         longBreakTime: String(merged.longBreakTime),
+                        longBreakEvery: String(merged.longBreakEvery ?? 4),
                         adjustmentAmount: String(merged.adjustmentAmount)
                     });
                 }
@@ -86,10 +102,26 @@ export default function SettingsPage() {
         return () => unsub();
     }, [user]);
 
-    const handleUpdateSetting = useCallback((key: string, value: any) => {
+    const handleUpdateSetting = useCallback((key: TimerSettingKey, value: number) => {
         setSettings(prev => ({ ...prev, [key]: value }));
         setInputValues(prev => ({ ...prev, [key]: String(value) }));
     }, []);
+
+    const handleUpdateAudio = useCallback((value: string) => {
+        setSettings(prev => ({ ...prev, sessionEndSound: value }));
+    }, []);
+
+    const toggleAutoStart = useCallback((key: "autoStartBreak" | "autoStartFocus") => {
+        setSettings(prev => ({ ...prev, [key]: !prev[key] }));
+    }, []);
+
+    const timerFields: TimerField[] = [
+        { label: "Pomodoro", key: "focusTime", icon: Zap, color: "bg-blue-500" },
+        { label: "Break", key: "breakTime", icon: Clock, color: "bg-green-500" },
+        { label: "Long Break", key: "longBreakTime", icon: Clock, color: "bg-purple-500" },
+        { label: "Long Break Interval", key: "longBreakEvery", icon: PauseCircle, color: "bg-fuchsia-500" },
+        { label: "Steps", key: "adjustmentAmount", icon: ChevronRight, color: "bg-zinc-700" },
+    ];
 
     const handleRestoreDefaults = () => {
         setSettings({ ...DEFAULT_SETTINGS });
@@ -97,12 +129,14 @@ export default function SettingsPage() {
             focusTime: String(DEFAULT_SETTINGS.focusTime),
             breakTime: String(DEFAULT_SETTINGS.breakTime),
             longBreakTime: String(DEFAULT_SETTINGS.longBreakTime),
+            longBreakEvery: String(DEFAULT_SETTINGS.longBreakEvery),
             adjustmentAmount: String(DEFAULT_SETTINGS.adjustmentAmount)
         });
     };
 
     const setSessionEndSound = useTimerStore((state) => state.setSessionEndSound);
     const setInitialTime = useTimerStore((state) => state.setInitialTime);
+    const setLongBreakEvery = useTimerStore((state) => state.setLongBreakEvery);
 
     const handleSaveSettings = async () => {
         if (!user || !hasChanges) return;
@@ -114,6 +148,9 @@ export default function SettingsPage() {
             setInitialTime("focus", settings.focusTime * 60);
             setInitialTime("break", settings.breakTime * 60);
             setInitialTime("long-break", settings.longBreakTime * 60);
+            setLongBreakEvery(settings.longBreakEvery);
+            useTimerStore.getState().setAutoStartBreak(settings.autoStartBreak);
+            useTimerStore.getState().setAutoStartFocus(settings.autoStartFocus);
 
             toast.success("Settings saved");
             setSavedSettings({ ...settings });
@@ -130,7 +167,7 @@ export default function SettingsPage() {
             }
             await logOut();
             toast.success("Signed out.");
-        } catch (error: any) {
+        } catch (error: unknown) {
             toast.error("Error signing out.");
         }
     };
@@ -178,12 +215,7 @@ export default function SettingsPage() {
                         <section>
                             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-1">Timer</h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 bg-zinc-900/50 rounded-lg overflow-hidden border border-white/5">
-                                {[
-                                    { label: "Pomodoro", key: "focusTime", icon: Zap, color: "bg-blue-500" },
-                                    { label: "Break", key: "breakTime", icon: Clock, color: "bg-green-500" },
-                                    { label: "Long Break", key: "longBreakTime", icon: Clock, color: "bg-purple-500" },
-                                    { label: "Steps", key: "adjustmentAmount", icon: ChevronRight, color: "bg-zinc-700" },
-                                ].map((item, i) => (
+                                {timerFields.map((item, i) => (
                                     <div 
                                         key={item.key}
                                         className={`flex items-center justify-between p-6 transition-colors hover:bg-white/[0.01] 
@@ -196,11 +228,16 @@ export default function SettingsPage() {
                                             <div className={`w-8 h-8 rounded-full ${item.color} flex items-center justify-center`}>
                                                 <item.icon className="w-4 h-4 text-white" />
                                             </div>
-                                            <span className="text-zinc-200 font-medium">{item.label}</span>
-                                        </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-zinc-200 font-medium">{item.label}</span>
+                        {item.key === "longBreakEvery" && (
+                            <span className="text-[9px] text-zinc-500 uppercase tracking-wider">Number of pomodoros before a long break</span>
+                        )}
+                    </div>
+                </div>
                                         <div className="flex items-center gap-3 bg-black/20 p-1 rounded-lg">
                                             <button 
-                                                onClick={() => handleUpdateSetting(item.key, Math.max(1, (settings as any)[item.key] - 1))}
+                                                onClick={() => handleUpdateSetting(item.key, Math.max(1, settings[item.key] - 1))}
                                                 className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-white transition-colors hover:bg-white/5 rounded-lg"
                                             >
                                                 <Minus className="w-3.5 h-3.5" />
@@ -226,13 +263,46 @@ export default function SettingsPage() {
                                                 className="w-12 bg-transparent text-center font-bold text-lg outline-none focus:text-white focus:bg-white/5 rounded transition-all tabular-nums cursor-text"
                                             />
                                             <button 
-                                                onClick={() => handleUpdateSetting(item.key, Math.min(120, (settings as any)[item.key] + 1))}
+                                                onClick={() => handleUpdateSetting(item.key, Math.min(120, settings[item.key] + 1))}
                                                 className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-white transition-colors hover:bg-white/5 rounded-lg"
                                             >
                                                 <Plus className="w-3.5 h-3.5" />
                                             </button>
                                         </div>
                                     </div>
+                                ))}
+                            </div>
+                        </section>
+
+                        {/* Auto Start Section */}
+                        <section>
+                            <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-1">Auto Start</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 bg-zinc-900/50 rounded-lg overflow-hidden border border-white/5">
+                                {[
+                                    { key: "autoStartBreak", title: "Auto start break", description: "Start short and long breaks automatically after pomodoro ends." },
+                                    { key: "autoStartFocus", title: "Auto start pomodoro", description: "Start the next pomodoro automatically after a break ends." },
+                                ].map((item, i) => (
+                                    <button
+                                        key={item.key}
+                                        onClick={() => toggleAutoStart(item.key as "autoStartBreak" | "autoStartFocus")}
+                                        className={`text-left p-6 transition-colors hover:bg-white/[0.01] border-white/5 ${i === 0 ? "md:border-r border-b md:border-b-0" : ""}`}
+                                    >
+                                        <div className="flex items-center justify-between gap-4">
+                                            <div>
+                                                <div className="text-zinc-200 font-medium">{item.title}</div>
+                                                <div className="text-[9px] text-zinc-500 uppercase tracking-wider mt-1">{item.description}</div>
+                                            </div>
+                                            <div className={cn(
+                                                "relative w-12 h-7 rounded-full transition-colors flex-shrink-0",
+                                                settings[item.key as "autoStartBreak" | "autoStartFocus"] ? "bg-emerald-500" : "bg-zinc-700"
+                                            )}>
+                                                <div className={cn(
+                                                    "absolute left-1 top-1 w-5 h-5 rounded-full bg-white transition-transform",
+                                                    settings[item.key as "autoStartBreak" | "autoStartFocus"] ? "translate-x-5" : "translate-x-0"
+                                                )} />
+                                            </div>
+                                        </div>
+                                    </button>
                                 ))}
                             </div>
                         </section>
@@ -252,7 +322,7 @@ export default function SettingsPage() {
                                             ${i < 2 ? 'border-b md:border-b-0 md:border-r border-white/5' : ''} 
                                             ${i === 2 ? 'md:border-0' : ''}
                                             ${settings.sessionEndSound === sound.id ? 'bg-emerald-500/10' : 'hover:bg-white/[0.02]'}`}
-                                        onClick={() => handleUpdateSetting("sessionEndSound", sound.id)}
+                                        onClick={() => handleUpdateAudio(sound.id)}
                                     >
                                         <div className="flex items-center gap-3">
                                             <div className={cn(

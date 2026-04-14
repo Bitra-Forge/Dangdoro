@@ -15,6 +15,9 @@ interface TimerState {
   settingsFocusTime: number;
   settingsBreakTime: number;
   settingsLongBreakTime: number;
+  settingsLongBreakEvery: number;
+  settingsAutoStartBreak: boolean;
+  settingsAutoStartFocus: boolean;
 
   // Session-specific initial times (used for progress denominator)
   initialFocusTime: number;
@@ -23,6 +26,7 @@ interface TimerState {
 
   lastUpdate: number | null;
   sessionStartTime: number | null;
+  completedFocusSessions: number;
 
   // Active task from task page
   activeTaskId: string | null;
@@ -39,9 +43,13 @@ interface TimerState {
   reset: () => void;
   tick: () => void;
   setMode: (mode: "focus" | "break" | "long-break") => void;
+  advanceSession: () => void;
   setTime: (seconds: number) => void;
   incrementTime: (seconds: number) => void;
   setInitialTime: (mode: "focus" | "break" | "long-break", seconds: number) => void;
+  setLongBreakEvery: (count: number) => void;
+  setAutoStartBreak: (enabled: boolean) => void;
+  setAutoStartFocus: (enabled: boolean) => void;
   resetToDefaults: () => void;
   backgroundImage: string;
   setBackgroundImage: (image: string) => void;
@@ -62,6 +70,28 @@ interface TimerState {
   toggleAllSounds: () => void;
 }
 
+type TimerUpdate = Partial<Pick<
+  TimerState,
+  | "timeLeft"
+  | "isActive"
+  | "mode"
+  | "focusTimeLeft"
+  | "breakTimeLeft"
+  | "longBreakTimeLeft"
+  | "settingsFocusTime"
+  | "settingsBreakTime"
+  | "settingsLongBreakTime"
+  | "settingsLongBreakEvery"
+  | "settingsAutoStartBreak"
+  | "settingsAutoStartFocus"
+  | "initialFocusTime"
+  | "initialBreakTime"
+  | "initialLongBreakTime"
+  | "lastUpdate"
+  | "sessionStartTime"
+  | "completedFocusSessions"
+>>;
+
 
 
 
@@ -80,6 +110,9 @@ export const useTimerStore = create<TimerState>()(
       settingsFocusTime: 25 * 60,
       settingsBreakTime: 5 * 60,
       settingsLongBreakTime: 15 * 60,
+      settingsLongBreakEvery: 4,
+      settingsAutoStartBreak: false,
+      settingsAutoStartFocus: false,
 
       // Session-specific denominator for progress
       initialFocusTime: 25 * 60,
@@ -87,6 +120,7 @@ export const useTimerStore = create<TimerState>()(
       initialLongBreakTime: 15 * 60,
       lastUpdate: null,
       sessionStartTime: null,
+      completedFocusSessions: 0,
 
       backgroundImage: "BG25.png", // Default background
       sessionEndSound: "universfield-new-notification-027-383749.mp3",
@@ -104,6 +138,7 @@ export const useTimerStore = create<TimerState>()(
           initialFocusTime: durationSeconds,
           isActive: false,
           lastUpdate: null,
+          completedFocusSessions: 0,
           activeTaskId: id,
           activeTaskLabel: label,
           activeTaskNotes: notes,
@@ -113,9 +148,33 @@ export const useTimerStore = create<TimerState>()(
       },
       clearTask: () => set({ activeTaskId: null, activeTaskLabel: null, activeTaskNotes: null, activeTaskPriority: null }),
 
-      start: () => set({ isActive: true, lastUpdate: Date.now(), sessionStartTime: Date.now() }),
+      start: () => {
+        const { mode, settingsBreakTime } = get();
+
+        set({
+          isActive: true,
+          lastUpdate: Date.now(),
+          sessionStartTime: Date.now(),
+          ...(mode === "focus" || mode === "long-break"
+            ? { breakTimeLeft: settingsBreakTime, initialBreakTime: settingsBreakTime }
+            : {}),
+        });
+      },
       pause: () => set({ isActive: false, lastUpdate: null }),
-      stop: () => set({ isActive: false, lastUpdate: null }),
+      stop: () => {
+        const { mode, settingsFocusTime, settingsBreakTime, settingsLongBreakTime } = get();
+        const baseline = mode === "focus" ? settingsFocusTime : mode === "break" ? settingsBreakTime : settingsLongBreakTime;
+
+        set({
+          isActive: false,
+          lastUpdate: null,
+          sessionStartTime: null,
+          timeLeft: baseline,
+          ...(mode === "focus" ? { focusTimeLeft: baseline, initialFocusTime: baseline } :
+            mode === "break" ? { breakTimeLeft: baseline, initialBreakTime: baseline } :
+              { longBreakTimeLeft: baseline, initialLongBreakTime: baseline }),
+        });
+      },
       reset: () => {
         const { mode, settingsFocusTime, settingsBreakTime, settingsLongBreakTime } = get();
         const baseline = mode === "focus" ? settingsFocusTime : mode === "break" ? settingsBreakTime : settingsLongBreakTime;
@@ -124,6 +183,7 @@ export const useTimerStore = create<TimerState>()(
           isActive: false,
           lastUpdate: null,
           sessionStartTime: null,
+          completedFocusSessions: 0,
           timeLeft: baseline,
           // Reset the progress baseline too
           ...(mode === "focus" ? { initialFocusTime: baseline, focusTimeLeft: baseline } :
@@ -152,20 +212,93 @@ export const useTimerStore = create<TimerState>()(
           });
         }
       },
+      advanceSession: () => {
+        const { mode, completedFocusSessions, settingsFocusTime, settingsBreakTime, settingsLongBreakTime, settingsLongBreakEvery, settingsAutoStartBreak, settingsAutoStartFocus } = get();
+
+        const nextMode =
+          mode === "focus"
+            ? ((completedFocusSessions + 1) % Math.max(1, settingsLongBreakEvery) === 0 ? "long-break" : "break")
+            : "focus";
+
+        const nextTimeLeft =
+          nextMode === "focus"
+            ? settingsFocusTime
+            : nextMode === "break"
+              ? settingsBreakTime
+              : settingsLongBreakTime;
+
+        const shouldAutoStart = nextMode === "break" || nextMode === "long-break"
+          ? settingsAutoStartBreak
+          : settingsAutoStartFocus;
+
+        const updates: TimerUpdate = {
+          mode: nextMode,
+          timeLeft: nextTimeLeft,
+          lastUpdate: Date.now(),
+          isActive: shouldAutoStart,
+          sessionStartTime: shouldAutoStart ? Date.now() : null,
+          ...(nextMode === "focus" ? { initialFocusTime: nextTimeLeft, focusTimeLeft: nextTimeLeft } :
+            nextMode === "break" ? { initialBreakTime: nextTimeLeft, breakTimeLeft: nextTimeLeft } :
+              { initialLongBreakTime: nextTimeLeft, longBreakTimeLeft: nextTimeLeft })
+        };
+
+        // Reset the completed phase back to its configured duration so switching back
+        // later never lands on 00:00.
+        if (mode === "focus") {
+          updates.focusTimeLeft = settingsFocusTime;
+          updates.initialFocusTime = settingsFocusTime;
+        } else if (mode === "break") {
+          updates.breakTimeLeft = settingsBreakTime;
+          updates.initialBreakTime = settingsBreakTime;
+        } else if (mode === "long-break") {
+          updates.longBreakTimeLeft = settingsLongBreakTime;
+          updates.initialLongBreakTime = settingsLongBreakTime;
+        }
+
+        if (mode === "focus") {
+          updates.completedFocusSessions = completedFocusSessions + 1;
+        } else if (mode === "long-break") {
+          updates.completedFocusSessions = 0;
+        }
+
+        set(updates);
+      },
       setMode: (newMode) => {
-        const { mode: oldMode, timeLeft, focusTimeLeft, breakTimeLeft, longBreakTimeLeft } = get();
+        const {
+          mode: oldMode,
+          timeLeft,
+          focusTimeLeft,
+          breakTimeLeft,
+          longBreakTimeLeft,
+          settingsFocusTime,
+          settingsBreakTime,
+          settingsLongBreakTime,
+        } = get();
+
+        const resolveStoredTime = (storedTime: number, baseline: number) =>
+          storedTime > 0 ? storedTime : baseline;
 
         // Save current progress to old mode
-        const updates: any = {};
-        if (oldMode === "focus") updates.focusTimeLeft = timeLeft;
-        if (oldMode === "break") updates.breakTimeLeft = timeLeft;
-        if (oldMode === "long-break") updates.longBreakTimeLeft = timeLeft;
+        const updates: TimerUpdate = {};
+        const currentTimeForOldMode = timeLeft;
+        if (oldMode === "focus") {
+          updates.focusTimeLeft = currentTimeForOldMode;
+          updates.initialFocusTime = currentTimeForOldMode;
+        }
+        if (oldMode === "break") {
+          updates.breakTimeLeft = currentTimeForOldMode;
+          updates.initialBreakTime = currentTimeForOldMode;
+        }
+        if (oldMode === "long-break") {
+          updates.longBreakTimeLeft = currentTimeForOldMode;
+          updates.initialLongBreakTime = currentTimeForOldMode;
+        }
 
         // Load progress for new mode
-        let nextTimeLeft = updates.focusTimeLeft || focusTimeLeft; // Fallback if just updated
-        if (newMode === "focus") nextTimeLeft = (updates.focusTimeLeft !== undefined ? updates.focusTimeLeft : focusTimeLeft);
-        if (newMode === "break") nextTimeLeft = (updates.breakTimeLeft !== undefined ? updates.breakTimeLeft : breakTimeLeft);
-        if (newMode === "long-break") nextTimeLeft = (updates.longBreakTimeLeft !== undefined ? updates.longBreakTimeLeft : longBreakTimeLeft);
+        let nextTimeLeft = resolveStoredTime(focusTimeLeft, settingsFocusTime);
+        if (newMode === "focus") nextTimeLeft = resolveStoredTime(updates.focusTimeLeft ?? focusTimeLeft, settingsFocusTime);
+        if (newMode === "break") nextTimeLeft = resolveStoredTime(updates.breakTimeLeft ?? breakTimeLeft, settingsBreakTime);
+        if (newMode === "long-break") nextTimeLeft = resolveStoredTime(updates.longBreakTimeLeft ?? longBreakTimeLeft, settingsLongBreakTime);
 
         set({
           ...updates,
@@ -188,7 +321,7 @@ export const useTimerStore = create<TimerState>()(
         const { mode, timeLeft, isActive, initialFocusTime, initialBreakTime, initialLongBreakTime } = get();
         const newTime = Math.max(0, timeLeft + seconds);
 
-        const updates: any = {
+        const updates: TimerUpdate = {
           timeLeft: newTime,
           ...(mode === "focus" ? { focusTimeLeft: newTime } :
             mode === "break" ? { breakTimeLeft: newTime } :
@@ -212,38 +345,49 @@ export const useTimerStore = create<TimerState>()(
         set(updates);
       },
       setInitialTime: (mode, seconds) => {
-        const { mode: currentMode, isActive } = get();
+        const { mode: currentMode, isActive, settingsFocusTime, settingsBreakTime, settingsLongBreakTime } = get();
 
-        const updates: any = {};
+        const sanitizedSeconds = seconds <= 0
+          ? (mode === "focus"
+            ? settingsFocusTime
+            : mode === "break"
+              ? settingsBreakTime
+              : settingsLongBreakTime)
+          : seconds;
+
+        const updates: TimerUpdate = {};
         if (mode === "focus") {
-          updates.settingsFocusTime = seconds;
+          updates.settingsFocusTime = sanitizedSeconds;
         } else if (mode === "break") {
-          updates.settingsBreakTime = seconds;
+          updates.settingsBreakTime = sanitizedSeconds;
         } else if (mode === "long-break") {
-          updates.settingsLongBreakTime = seconds;
+          updates.settingsLongBreakTime = sanitizedSeconds;
         }
 
         // Sync main timeLeft and progress baseline if not active
         if (!isActive) {
           if (mode === "focus") {
-            updates.focusTimeLeft = seconds;
-            updates.initialFocusTime = seconds;
+            updates.focusTimeLeft = sanitizedSeconds;
+            updates.initialFocusTime = sanitizedSeconds;
           } else if (mode === "break") {
-            updates.breakTimeLeft = seconds;
-            updates.initialBreakTime = seconds;
+            updates.breakTimeLeft = sanitizedSeconds;
+            updates.initialBreakTime = sanitizedSeconds;
           } else if (mode === "long-break") {
-            updates.longBreakTimeLeft = seconds;
-            updates.initialLongBreakTime = seconds;
+            updates.longBreakTimeLeft = sanitizedSeconds;
+            updates.initialLongBreakTime = sanitizedSeconds;
           }
 
           if (currentMode === mode) {
-            updates.timeLeft = seconds;
+            updates.timeLeft = sanitizedSeconds;
             updates.lastUpdate = null;
           }
         }
 
         set(updates);
       },
+      setLongBreakEvery: (count) => set({ settingsLongBreakEvery: Math.max(1, Math.floor(count || 1)) }),
+      setAutoStartBreak: (enabled: boolean) => set({ settingsAutoStartBreak: enabled }),
+      setAutoStartFocus: (enabled: boolean) => set({ settingsAutoStartFocus: enabled }),
       resetToDefaults: () => {
         set({
           timeLeft: 25 * 60,
@@ -257,6 +401,9 @@ export const useTimerStore = create<TimerState>()(
           settingsFocusTime: 25 * 60,
           settingsBreakTime: 5 * 60,
           settingsLongBreakTime: 15 * 60,
+          settingsLongBreakEvery: 4,
+          settingsAutoStartBreak: false,
+          settingsAutoStartFocus: false,
 
           initialFocusTime: 25 * 60,
           initialBreakTime: 5 * 60,
@@ -264,6 +411,7 @@ export const useTimerStore = create<TimerState>()(
           lastUpdate: null,
           sessionEndSound: "universfield-new-notification-027-383749.mp3",
           sessionStartTime: null,
+          completedFocusSessions: 0,
         });
       },
       setBackgroundImage: (image: string) => set({ backgroundImage: image }),

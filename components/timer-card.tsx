@@ -125,7 +125,7 @@ export function TimerCard() {
           if (docSnap.exists()) {
             const data = docSnap.data();
             if (data.settings) {
-              const { focusTime, breakTime, longBreakTime, adjustmentAmount: adj } = data.settings;
+              const { focusTime, breakTime, longBreakTime, longBreakEvery, adjustmentAmount: adj } = data.settings;
               
               // Get current state to check if timer is in progress
               const state = useTimerStore.getState();
@@ -140,6 +140,7 @@ export function TimerCard() {
                 if (focusTime) setInitialTime("focus", focusTime * 60);
                 if (breakTime) setInitialTime("break", breakTime * 60);
                 if (longBreakTime) setInitialTime("long-break", longBreakTime * 60);
+                if (longBreakEvery) useTimerStore.getState().setLongBreakEvery(longBreakEvery);
               }
               if (adj) setAdjustmentAmount(adj);
               if (data.settings.sessionEndSound) {
@@ -188,10 +189,11 @@ export function TimerCard() {
     const m = parseInt(editMins) || 0;
     const s = parseInt(editSecs) || 0;
     const totalSeconds = (h * 3600) + (m * 60) + s;
+    const nextSeconds = totalSeconds <= 0
+      ? (mode === "focus" ? initialFocusTime : mode === "break" ? initialBreakTime : initialLongBreakTime)
+      : totalSeconds;
 
-    if (totalSeconds >= 0) {
-      setInitialTime(mode, totalSeconds);
-    }
+    setInitialTime(mode, nextSeconds);
     setIsEditing(false);
   };
 
@@ -240,7 +242,7 @@ export function TimerCard() {
         ].map((m) => (
           <button
             key={m.id}
-            onClick={() => setMode(m.id as any)}
+            onClick={() => setMode(m.id as "focus" | "break" | "long-break")}
             className={cn(
               "px-8 py-3 text-sm font-bold transition-all duration-300 rounded-full cursor-pointer border",
               mode === m.id

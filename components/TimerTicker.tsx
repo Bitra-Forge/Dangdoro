@@ -53,9 +53,11 @@ export function TimerTicker() {
   const isActive = useTimerStore((s) => s.isActive);
   const mode = useTimerStore((s) => s.mode);
   const tick = useTimerStore((s) => s.tick);
-  const reset = useTimerStore((s) => s.reset);
+  const advanceSession = useTimerStore((s) => s.advanceSession);
   const initialFocusTime = useTimerStore((s) => s.initialFocusTime);
   const sessionEndSound = useTimerStore((s) => s.sessionEndSound);
+  const settingsAutoStartBreak = useTimerStore((s) => s.settingsAutoStartBreak);
+  const settingsAutoStartFocus = useTimerStore((s) => s.settingsAutoStartFocus);
 
   const { user } = useAuth();
 
@@ -78,6 +80,8 @@ export function TimerTicker() {
   useEffect(() => {
     if (timeLeft !== 0 || !isActive) return;
 
+    if (typeof window === "undefined") return;
+
     // Save focus session for authenticated users
     if (mode === "focus" && user) {
       const durationMinutes = Math.floor(initialFocusTime / 60);
@@ -92,9 +96,9 @@ export function TimerTicker() {
     audio.volume = COMPLETION_AUDIO_VOLUME;
     audio.play().catch((err) => console.log("Audio blocked:", err));
 
-    // Reset timer
-    reset();
-  }, [timeLeft, isActive, mode, user, initialFocusTime, reset]);
+    // Move to the next pomodoro phase
+    advanceSession();
+  }, [timeLeft, isActive, mode, user, initialFocusTime, sessionEndSound, advanceSession, settingsAutoStartBreak, settingsAutoStartFocus]);
 
   return null;
 }
