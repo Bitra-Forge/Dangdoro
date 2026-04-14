@@ -1,7 +1,7 @@
 // Background palette configurations
 export const BG_PALETTES = {
     mixed: {
-        name: "Mixed",
+        name: "Productive Flow",
         orbs: [
             { x: 0.15, y: 0.3, r: 420, color: "10,185,129" },
             { x: 0.78, y: 0.5, r: 340, color: "99,102,241" },
@@ -10,7 +10,7 @@ export const BG_PALETTES = {
         ]
     },
     emerald: {
-        name: "Emerald",
+        name: "Focus Sessions",
         orbs: [
             { x: 0.15, y: 0.3, r: 420, color: "16,185,129" },
             { x: 0.78, y: 0.5, r: 340, color: "20,184,166" },
