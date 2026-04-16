@@ -58,15 +58,48 @@ export interface Friend {
     userData?: any; // User profile data (joined manually)
 }
 
+const getRequestTimeValue = (request: any): number => {
+    return request.updatedAt?.toMillis?.() || request.createdAt?.toMillis?.() || 0;
+};
+
+const getRequestsBetweenUsers = async (userId1: string, userId2: string): Promise<FriendRequest[]> => {
+    // Query each sender direction separately, then filter client-side.
+    // This avoids requiring a composite index on (fromUserId, toUserId).
+    const q1 = query(collection(db, "friendRequests"), where("fromUserId", "==", userId1));
+    const q2 = query(collection(db, "friendRequests"), where("fromUserId", "==", userId2));
+
+    const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+
+    const docsFromUser1 = snap1.docs
+        .filter((requestDoc) => requestDoc.data().toUserId === userId2)
+        .map((requestDoc) => ({ id: requestDoc.id, ...requestDoc.data() })) as FriendRequest[];
+
+    const docsFromUser2 = snap2.docs
+        .filter((requestDoc) => requestDoc.data().toUserId === userId1)
+        .map((requestDoc) => ({ id: requestDoc.id, ...requestDoc.data() })) as FriendRequest[];
+
+    return [...docsFromUser1, ...docsFromUser2].sort((a, b) => getRequestTimeValue(b) - getRequestTimeValue(a));
+};
+
 /**
  * Send a friend request from one user to another.
  */
 export const sendFriendRequest = async (fromUserId: string, toUserId: string) => {
     try {
-        // Check if request already exists
-        const existingRequest = await getFriendRequest(fromUserId, toUserId);
-        if (existingRequest) {
-            console.log("Friend request already exists");
+        // Validate parameters
+        if (!fromUserId || typeof fromUserId !== 'string' || !fromUserId.trim()) {
+            console.error("Invalid fromUserId:", fromUserId);
+            return false;
+        }
+        
+        if (!toUserId || typeof toUserId !== 'string' || !toUserId.trim()) {
+            console.error("Invalid toUserId:", toUserId);
+            return false;
+        }
+
+        // Prevent self-requests
+        if (fromUserId === toUserId) {
+            console.error("Cannot send friend request to yourself");
             return false;
         }
 
@@ -76,6 +109,30 @@ export const sendFriendRequest = async (fromUserId: string, toUserId: string) =>
         if (friendSnap.exists()) {
             console.log("Already friends");
             return false;
+        }
+
+        // Load all historical requests between the two users.
+        const requestHistory = await getRequestsBetweenUsers(fromUserId, toUserId);
+
+        // Any pending request in either direction means this action should be blocked.
+        const pendingRequest = requestHistory.find((request) => request.status === "pending");
+        if (pendingRequest) {
+            console.log("Friend request already pending");
+            return false;
+        }
+
+        // Re-use the latest declined/accepted request document if available.
+        // This avoids creating many duplicate docs for the same pair over time.
+        const reusableRequest = requestHistory[0];
+        if (reusableRequest) {
+            await updateDoc(doc(db, "friendRequests", reusableRequest.id), {
+                fromUserId,
+                toUserId,
+                status: "pending",
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            });
+            return true;
         }
 
         // Create new friend request
@@ -99,6 +156,22 @@ export const sendFriendRequest = async (fromUserId: string, toUserId: string) =>
  */
 export const acceptFriendRequest = async (requestId: string, fromUserId: string, toUserId: string) => {
     try {
+        // Validate parameters
+        if (!requestId || typeof requestId !== 'string' || !requestId.trim()) {
+            console.error("Invalid requestId:", requestId);
+            return false;
+        }
+
+        if (!fromUserId || typeof fromUserId !== 'string' || !fromUserId.trim()) {
+            console.error("Invalid fromUserId:", fromUserId);
+            return false;
+        }
+
+        if (!toUserId || typeof toUserId !== 'string' || !toUserId.trim()) {
+            console.error("Invalid toUserId:", toUserId);
+            return false;
+        }
+
         const batch = writeBatch(db);
 
         // Update request status
@@ -151,6 +224,17 @@ export const declineFriendRequest = async (requestId: string) => {
  */
 export const removeFriend = async (userId1: string, userId2: string) => {
     try {
+        // Validate parameters
+        if (!userId1 || typeof userId1 !== 'string' || !userId1.trim()) {
+            console.error("Invalid userId1:", userId1);
+            return false;
+        }
+
+        if (!userId2 || typeof userId2 !== 'string' || !userId2.trim()) {
+            console.error("Invalid userId2:", userId2);
+            return false;
+        }
+
         const batch = writeBatch(db);
 
         const friendRef1 = doc(db, "users", userId1, "friends", userId2);
@@ -172,6 +256,12 @@ export const removeFriend = async (userId1: string, userId2: string) => {
  */
 export const cancelFriendRequest = async (requestId: string) => {
     try {
+        // Validate parameter
+        if (!requestId || typeof requestId !== 'string' || !requestId.trim()) {
+            console.error("Invalid requestId:", requestId);
+            return false;
+        }
+
         await deleteDoc(doc(db, "friendRequests", requestId));
         return true;
     } catch (error) {
@@ -185,35 +275,8 @@ export const cancelFriendRequest = async (requestId: string) => {
  */
 export const getFriendRequest = async (userId1: string, userId2: string): Promise<FriendRequest | null> => {
     try {
-        // Check both directions
-        const q1 = query(
-            collection(db, "friendRequests"),
-            where("fromUserId", "==", userId1),
-            where("toUserId", "==", userId2)
-        );
-
-        const q2 = query(
-            collection(db, "friendRequests"),
-            where("fromUserId", "==", userId2),
-            where("toUserId", "==", userId1)
-        );
-
-        const [snap1, snap2] = await Promise.all([
-            getDocs(q1),
-            getDocs(q2)
-        ]);
-
-        if (!snap1.empty) {
-            const doc = snap1.docs[0];
-            return { id: doc.id, ...doc.data() } as FriendRequest;
-        }
-
-        if (!snap2.empty) {
-            const doc = snap2.docs[0];
-            return { id: doc.id, ...doc.data() } as FriendRequest;
-        }
-
-        return null;
+        const requests = await getRequestsBetweenUsers(userId1, userId2);
+        return requests[0] || null;
     } catch (error) {
         console.error("Error getting friend request:", error);
         return null;
@@ -231,7 +294,7 @@ export const getReceivedFriendRequests = async (userId: string) => {
         );
 
         const snapshot = await getDocs(q);
-        return snapshot.docs
+        const requests = snapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() }))
             .filter((r: any) => r.status === "pending")
             .sort((a: any, b: any) => {
@@ -239,6 +302,18 @@ export const getReceivedFriendRequests = async (userId: string) => {
                 const bTime = b.createdAt?.toMillis?.() || 0;
                 return bTime - aTime;
             });
+
+        return Promise.all(
+            requests.map(async (request: any) => {
+                const fromUserDoc = await getDoc(doc(db, "users", request.fromUserId));
+                return {
+                    ...request,
+                    fromUserData: fromUserDoc.exists()
+                        ? { id: fromUserDoc.id, ...fromUserDoc.data() }
+                        : null,
+                };
+            })
+        );
     } catch (error) {
         console.error("Error getting received friend requests:", error);
         return [];
@@ -256,7 +331,7 @@ export const getSentFriendRequests = async (userId: string) => {
         );
 
         const snapshot = await getDocs(q);
-        return snapshot.docs
+        const requests = snapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() }))
             .filter((r: any) => r.status === "pending")
             .sort((a: any, b: any) => {
@@ -264,6 +339,18 @@ export const getSentFriendRequests = async (userId: string) => {
                 const bTime = b.createdAt?.toMillis?.() || 0;
                 return bTime - aTime;
             });
+
+        return Promise.all(
+            requests.map(async (request: any) => {
+                const toUserDoc = await getDoc(doc(db, "users", request.toUserId));
+                return {
+                    ...request,
+                    toUserData: toUserDoc.exists()
+                        ? { id: toUserDoc.id, ...toUserDoc.data() }
+                        : null,
+                };
+            })
+        );
     } catch (error) {
         console.error("Error getting sent friend requests:", error);
         return [];
@@ -319,7 +406,7 @@ export const subscribeToReceivedFriendRequests = (
         where("toUserId", "==", userId)
     );
 
-    return onSnapshot(q, (snapshot) => {
+    return onSnapshot(q, async (snapshot) => {
         const requests = snapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() }))
             .filter((r: any) => r.status === "pending")
@@ -328,7 +415,20 @@ export const subscribeToReceivedFriendRequests = (
                 const bTime = b.createdAt?.toMillis?.() || 0;
                 return bTime - aTime;
             });
-        callback(requests);
+
+        const requestsWithData = await Promise.all(
+            requests.map(async (request: any) => {
+                const fromUserDoc = await getDoc(doc(db, "users", request.fromUserId));
+                return {
+                    ...request,
+                    fromUserData: fromUserDoc.exists()
+                        ? { id: fromUserDoc.id, ...fromUserDoc.data() }
+                        : null,
+                };
+            })
+        );
+
+        callback(requestsWithData);
     }, (error) => {
         console.error("Error subscribing to friend requests:", error);
     });
@@ -389,6 +489,7 @@ export const searchUsers = async (searchTerm: string, excludeUserId: string, lim
                 const data = snap.data();
                 return [{
                     id: snap.id,
+                    uid: snap.id,
                     displayName: data.displayName,
                     photoURL: data.photoURL,
                     // NO email returned - privacy safe
@@ -411,6 +512,7 @@ export const searchUsers = async (searchTerm: string, excludeUserId: string, lim
                 const data = docSnap.data();
                 return {
                     id: docSnap.id,
+                    uid: docSnap.id,
                     displayName: data.displayName,
                     photoURL: data.photoURL,
                     // Deliberately excludes: email, settings, isAnonymous, createdAt

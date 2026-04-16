@@ -8,8 +8,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Space_Grotesk } from "next/font/google";
 import { cn } from "@/lib/utils";
 import {
-    UserPlus, X, Search, Users, Clock, Trophy, LogOut, Check,
-    UserCheck, Timer, ChevronRight
+    UserPlus, X, Search, Users, Clock, Trophy, Check,
+    UserCheck, Timer, ChevronRight, UserMinus
 } from "lucide-react";
 import {
     sendFriendRequest, acceptFriendRequest, declineFriendRequest,
@@ -87,7 +87,16 @@ export default function FriendsPage() {
     }, [searchQuery, user?.uid]);
 
     const handleSendRequest = async (toUserId: string, displayName: string) => {
-        if (!user) return;
+        if (!user || !user.uid) {
+            toast.error("Unable to send request: User not authenticated");
+            return;
+        }
+
+        if (!toUserId || toUserId.trim() === "") {
+            toast.error("Unable to send request: Invalid recipient");
+            return;
+        }
+
         setRequestingIds(prev => new Set(prev).add(toUserId));
         const success = await sendFriendRequest(user.uid, toUserId);
         if (success) {
@@ -105,21 +114,34 @@ export default function FriendsPage() {
     };
 
     const handleAcceptRequest = async (requestId: string, fromUserId: string) => {
-        const success = await acceptFriendRequest(requestId, fromUserId, user!.uid);
+        if (!user || !user.uid) {
+            toast.error("Unable to accept request: User not authenticated");
+            return;
+        }
+
+        const success = await acceptFriendRequest(requestId, fromUserId, user.uid);
         if (success) {
             toast.success("Friend request accepted!");
+        } else {
+            toast.error("Failed to accept friend request");
         }
     };
 
     const handleDeclineRequest = async (requestId: string) => {
         const success = await declineFriendRequest(requestId);
         if (success) toast.info("Friend request declined");
+        else toast.error("Failed to decline friend request");
     };
 
     const handleRemoveFriend = async (friendId: string) => {
-        if (!user) return;
+        if (!user || !user.uid) {
+            toast.error("Unable to remove friend: User not authenticated");
+            return;
+        }
+
         const success = await removeFriend(user.uid, friendId);
         if (success) toast.success("Friend removed");
+        else toast.error("Failed to remove friend");
     };
 
     const handleCancelRequest = async (requestId: string) => {
@@ -127,6 +149,8 @@ export default function FriendsPage() {
         if (success) {
             toast.info("Friend request canceled");
             setSentRequests(prev => prev.filter(r => r.id !== requestId));
+        } else {
+            toast.error("Failed to cancel friend request");
         }
     };
 
@@ -202,18 +226,20 @@ function FriendsTab({ friends, loading, onRemoveFriend, onGoToSearch }: any) {
                 const totalMinutes = userData?.totalMinutes || 0;
                 const hours = Math.floor(totalMinutes / 60);
                 const minutes = totalMinutes % 60;
+                const profileUserId = userData?.uid || userData?.id || friend.friendId;
                 return (
-                    <motion.div key={friend.friendId} whileHover={{ scale: 1.01, y: -2 }} className="group relative flex items-center gap-4 p-4 rounded-2xl bg-zinc-900/40 border border-white/5 hover:border-white/10 transition-all cursor-pointer">
-                        <Link href={`/profile?user=${userData?.uid}`} className="absolute inset-0 z-0" />
-                        <Avatar className="w-12 h-12 border border-white/10"><AvatarImage src={userData?.photoURL} /><AvatarFallback>{userData?.displayName?.[0]}</AvatarFallback></Avatar>
-                        <div className="flex-1 min-w-0 z-10">
-                            <p className="text-sm font-bold text-white group-hover:text-[#C9B037] transition-colors">{userData?.displayName}</p>
-                            <div className="flex items-center gap-3 mt-1">
-                                <span className="text-[10px] text-zinc-500 flex items-center gap-1"><Clock className="w-3 h-3" /> {hours}h {minutes}m</span>
-                                <span className="text-[10px] text-zinc-500 flex items-center gap-1"><Trophy className="w-3 h-3" /> {userData?.totalPomodoros || 0} Sessions</span>
+                    <motion.div key={friend.friendId} whileHover={{ scale: 1.01, y: -2 }} className="group relative flex items-center gap-4 p-4 rounded-2xl bg-zinc-900/40 border border-white/5 hover:border-white/10 transition-all">
+                        <Link href={`/profile?user=${profileUserId}`} className="flex items-center gap-4 flex-1 min-w-0" aria-label={`Open ${userData?.displayName || "friend"} profile`}>
+                            <Avatar className="w-12 h-12 border border-white/10"><AvatarImage src={userData?.photoURL} /><AvatarFallback>{userData?.displayName?.[0]}</AvatarFallback></Avatar>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-white group-hover:text-[#C9B037] transition-colors">{userData?.displayName}</p>
+                                <div className="flex items-center gap-3 mt-1">
+                                    <span className="text-[10px] text-zinc-500 flex items-center gap-1"><Clock className="w-3 h-3" /> {hours}h {minutes}m</span>
+                                    <span className="text-[10px] text-zinc-500 flex items-center gap-1"><Trophy className="w-3 h-3" /> {userData?.totalPomodoros || 0} Sessions</span>
+                                </div>
                             </div>
-                        </div>
-                        <button onClick={() => onRemoveFriend(friend.friendId)} className="p-2 opacity-0 group-hover:opacity-100 hover:bg-red-500/10 text-zinc-600 hover:text-red-500 rounded-xl transition-all z-10"><LogOut className="w-4 h-4" /></button>
+                        </Link>
+                        <button onClick={() => onRemoveFriend(friend.friendId)} className="p-2 opacity-0 group-hover:opacity-100 hover:bg-red-500/10 text-zinc-600 hover:text-red-500 rounded-xl transition-all z-10"><UserMinus className="w-4 h-4" /></button>
                     </motion.div>
                 );
             })}
@@ -265,11 +291,12 @@ function SearchTab({ searchQuery, setSearchQuery, onSearch, searching, searchRes
             </div>
             <div className="space-y-3">
                 {searchResults.map((res: any) => {
-                    const isFriend = friends.some((f: any) => f.friendId === res.uid);
-                    const hasSentRequest = sentRequests.some((r: any) => r.toUserId === res.uid);
-                    const isRequesting = requestingIds.has(res.uid);
+                    const recipientId = res.id || res.uid;
+                    const isFriend = friends.some((f: any) => f.friendId === recipientId);
+                    const hasSentRequest = sentRequests.some((r: any) => r.toUserId === recipientId);
+                    const isRequesting = requestingIds.has(recipientId);
                     return (
-                        <div key={res.uid} className="flex items-center gap-4 p-4 bg-zinc-900/40 rounded-2xl border border-white/5">
+                        <div key={recipientId} className="flex items-center gap-4 p-4 bg-zinc-900/40 rounded-2xl border border-white/5">
                             <Avatar className="w-10 h-10"><AvatarImage src={res.photoURL} /><AvatarFallback>{res.displayName?.[0]}</AvatarFallback></Avatar>
                             <div className="flex-1"><p className="text-sm font-bold text-white">{res.displayName}</p></div>
                             {isFriend ? (
@@ -277,7 +304,7 @@ function SearchTab({ searchQuery, setSearchQuery, onSearch, searching, searchRes
                             ) : hasSentRequest ? (
                                 <span className="px-3 py-1.5 bg-yellow-500/10 text-yellow-400 rounded-lg text-[10px] font-black uppercase tracking-widest">Pending</span>
                             ) : (
-                                <button onClick={() => onSendRequest(res.uid, res.displayName)} disabled={isRequesting} className="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all">
+                                <button onClick={() => onSendRequest(recipientId, res.displayName)} disabled={isRequesting || !recipientId} className="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all">
                                     {isRequesting ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <UserPlus className="w-4 h-4" />}
                                 </button>
                             )}
