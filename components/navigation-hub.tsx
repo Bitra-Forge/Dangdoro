@@ -9,6 +9,7 @@ import { QuickActionsNav } from "@/components/quick-actions-nav";
 import { Navigation } from "@/components/navigation";
 import { useTimerStore } from "@/lib/store";
 import { NotesPanel } from "@/components/notes-panel";
+import { QuickTasksPanel } from "@/components/quick-tasks-panel";
 import { FloatingNotesTrigger } from "@/components/floating-notes-trigger";
 
 export function NavigationHub() {
@@ -95,6 +96,7 @@ export function NavigationHub() {
         <>
           <FloatingNotesTrigger />
           <NotesPanel />
+          <QuickTasksPanel />
         </>
       )}
       <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center px-4 w-full justify-center pointer-events-none">

@@ -1,7 +1,6 @@
 "use client";
 
 import { useNotesStore } from "@/lib/notes-store";
-import { cn } from "@/lib/utils";
 import {
   X,
   Trash2,
@@ -13,6 +12,7 @@ import {
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
+import { AnimatePresence, motion } from "framer-motion";
 
 export function NotesPanel() {
   const isOpen = useNotesStore((state) => state.isNotesOpen);
@@ -24,6 +24,7 @@ export function NotesPanel() {
   const editorRef = useRef<HTMLDivElement>(null);
   const savedSelectionRef = useRef<Range | null>(null);
   const didOpenFocusRef = useRef(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const hasHtmlTags = /<\/?[a-z][\s\S]*>/i.test(notes);
   const htmlFromPlainText = notes
@@ -96,7 +97,19 @@ export function NotesPanel() {
     return () => document.removeEventListener("selectionchange", handleSelectionChange);
   }, []);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!panelRef.current) return;
+      if (!panelRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen, setIsOpen]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(plainText);
@@ -139,20 +152,22 @@ export function NotesPanel() {
   const charCount = plainText.length;
 
   return (
-    <div
-      className={cn(
-        "fixed left-[4.75rem] bottom-28 w-full max-w-[420px] transition-all duration-500 transform origin-left-bottom z-[60]",
-        isOpen
-          ? "opacity-100 scale-100 pointer-events-auto"
-          : "opacity-0 scale-95 pointer-events-none translate-x-[-8px]"
-      )}
-    >
-      <div className="bg-slate-950/80 backdrop-blur-3xl border border-white/10 rounded-[2rem] shadow-[0_25px_50px_rgba(0,0,0,0.7)] flex flex-col overflow-hidden">
+    <AnimatePresence initial={false} mode="wait">
+      {isOpen && (
+        <motion.div
+          key="quick-notes-panel"
+          ref={panelRef}
+          initial={{ scale: 0.96, x: -14, y: 10 }}
+          animate={{ scale: 1, x: 0, y: 0 }}
+          transition={{ type: "spring", stiffness: 360, damping: 34, mass: 0.7 }}
+          className="fixed left-[4.75rem] bottom-28 w-full max-w-[420px] transform origin-left-bottom z-[60]"
+        >
+          <div className="bg-slate-950/80 backdrop-blur-3xl border border-white/10 rounded-[10px] shadow-[0_25px_50px_rgba(0,0,0,0.7)] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between bg-white/5">
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-[#00BD7D] shadow-[0_0_8px_#00BD7D]" />
+              <div className="w-1.5 h-1.5 rounded-full bg-[#49B6E5] shadow-[0_0_8px_#49B6E5]" />
               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50">
                 Quick Notes
               </span>
@@ -165,21 +180,21 @@ export function NotesPanel() {
           <div className="flex items-center gap-2">
             <button
               onClick={handleCopy}
-              className="p-2 rounded-xl hover:bg-white/10 text-white/30 hover:text-white transition-all cursor-pointer group relative"
+              className="p-2 rounded-[10px] hover:bg-white/10 text-white/30 hover:text-white transition-all cursor-pointer group relative"
               title="Copy all"
             >
               {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
             </button>
             <button
               onClick={handleClear}
-              className="p-2 rounded-xl hover:bg-red-500/20 text-white/30 hover:text-red-400 transition-all cursor-pointer group"
+              className="p-2 rounded-[10px] hover:bg-red-500/20 text-white/30 hover:text-red-400 transition-all cursor-pointer group"
               title="Clear notes"
             >
               <Trash2 className="w-4 h-4" />
             </button>
             <button
               onClick={() => setIsOpen(false)}
-              className="p-2 rounded-xl hover:bg-white/10 text-white/30 hover:text-white transition-all cursor-pointer"
+              className="p-2 rounded-[10px] hover:bg-white/10 text-white/30 hover:text-white transition-all cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -192,7 +207,7 @@ export function NotesPanel() {
             <button
               onMouseDown={keepSelectionOnToolbarMouseDown}
               onClick={() => applyFormat("bold")}
-              className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-all"
+              className="p-1.5 rounded-[10px] hover:bg-white/10 text-white/40 hover:text-white transition-all"
               title="Bold"
             >
               <Bold className="w-3.5 h-3.5" />
@@ -200,7 +215,7 @@ export function NotesPanel() {
             <button
               onMouseDown={keepSelectionOnToolbarMouseDown}
               onClick={() => applyFormat("italic")}
-              className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-all"
+              className="p-1.5 rounded-[10px] hover:bg-white/10 text-white/40 hover:text-white transition-all"
               title="Italic"
             >
               <Italic className="w-3.5 h-3.5" />
@@ -208,7 +223,7 @@ export function NotesPanel() {
             <button
               onMouseDown={keepSelectionOnToolbarMouseDown}
               onClick={() => applyFormat("underline")}
-              className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition-all"
+              className="p-1.5 rounded-[10px] hover:bg-white/10 text-white/40 hover:text-white transition-all"
               title="Underline"
             >
               <Underline className="w-3.5 h-3.5" />
@@ -217,7 +232,7 @@ export function NotesPanel() {
             <button
               onMouseDown={keepSelectionOnToolbarMouseDown}
               onClick={() => applyFormat("fontSize", "2")}
-              className="px-2 py-1.5 rounded-lg hover:bg-white/10 text-[10px] font-semibold leading-none tracking-wide text-white/40 hover:text-white transition-all"
+              className="px-2 py-1.5 rounded-[10px] hover:bg-white/10 text-[10px] font-semibold leading-none tracking-wide text-white/40 hover:text-white transition-all"
               title="Extra small text"
             >
               A
@@ -225,7 +240,7 @@ export function NotesPanel() {
             <button
               onMouseDown={keepSelectionOnToolbarMouseDown}
               onClick={() => applyFormat("fontSize", "3")}
-              className="px-2 py-1.5 rounded-lg hover:bg-white/10 text-xs font-semibold leading-none tracking-wide text-white/40 hover:text-white transition-all"
+              className="px-2 py-1.5 rounded-[10px] hover:bg-white/10 text-xs font-semibold leading-none tracking-wide text-white/40 hover:text-white transition-all"
               title="Small text"
             >
               A
@@ -233,7 +248,7 @@ export function NotesPanel() {
             <button
               onMouseDown={keepSelectionOnToolbarMouseDown}
               onClick={() => applyFormat("fontSize", "4")}
-              className="px-2 py-1.5 rounded-lg hover:bg-white/10 text-sm font-semibold leading-none tracking-wide text-white/40 hover:text-white transition-all"
+              className="px-2 py-1.5 rounded-[10px] hover:bg-white/10 text-sm font-semibold leading-none tracking-wide text-white/40 hover:text-white transition-all"
               title="Medium text"
             >
               A
@@ -241,7 +256,7 @@ export function NotesPanel() {
             <button
               onMouseDown={keepSelectionOnToolbarMouseDown}
               onClick={() => applyFormat("fontSize", "5")}
-              className="px-2 py-1.5 rounded-lg hover:bg-white/10 text-base font-semibold leading-none tracking-wide text-white/40 hover:text-white transition-all"
+              className="px-2 py-1.5 rounded-[10px] hover:bg-white/10 text-base font-semibold leading-none tracking-wide text-white/40 hover:text-white transition-all"
               title="Large text"
             >
               A
@@ -268,8 +283,10 @@ export function NotesPanel() {
         </div>
 
         {/* Perspective Decoration */}
-        <div className="h-1.5 w-full bg-gradient-to-r from-transparent via-[#00BD7D]/20 to-transparent opacity-30" />
-      </div>
-    </div>
+        <div className="h-1.5 w-full bg-gradient-to-r from-transparent via-[#49B6E5]/20 to-transparent opacity-30" />
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
