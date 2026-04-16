@@ -135,7 +135,8 @@ export function TimerCard() {
 
       if (currentUser) {
         const { savePartialPomodoroSession } = await import("@/lib/db");
-        await savePartialPomodoroSession(currentUser.uid, elapsedMinutes);
+        const activeGroupId = useTimerStore.getState().activeGroupId;
+        await savePartialPomodoroSession(currentUser.uid, elapsedMinutes, activeGroupId);
       }
     }
 

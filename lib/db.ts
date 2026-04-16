@@ -136,7 +136,8 @@ export const savePomodoroSession = async (userId: string, durationMinutes: numbe
             const groupRef = doc(db, "focusGroups", groupId);
             await updateDoc(groupRef, {
                 [`memberStats.${userId}.totalMinutes`]: increment(durationMinutes),
-                [`memberStats.${userId}.lastActive`]: serverTimestamp()
+                [`memberStats.${userId}.lastActive`]: serverTimestamp(),
+                totalMinutes: increment(durationMinutes) // AGGREGATE
             });
         }
 
@@ -178,7 +179,8 @@ export const savePartialPomodoroSession = async (userId: string, durationMinutes
             const groupRef = doc(db, "focusGroups", groupId);
             await updateDoc(groupRef, {
                 [`memberStats.${userId}.totalMinutes`]: increment(durationMinutes),
-                [`memberStats.${userId}.lastActive`]: serverTimestamp()
+                [`memberStats.${userId}.lastActive`]: serverTimestamp(),
+                totalMinutes: increment(durationMinutes) // AGGREGATE
             });
         }
 
@@ -209,23 +211,57 @@ export const getLeaderboard = async (limitCount: number = 10) => {
 };
 
 /**
- * Fetches the top focus groups for the leaderboard.
+ * Fetches focus groups for the leaderboard with filtering and sorting.
+ * Sorting is done client-side to avoid composite Firestore index requirements.
  */
-export const getGroupLeaderboard = async (limitCount: number = 20) => {
+export const getGroupLeaderboard = async (options: { 
+    userId?: string; 
+    filter?: "joined" | "discover" | "all"; 
+    sortBy?: "members" | "minutes";
+    limitCount?: number;
+} = {}) => {
+    const { userId, filter = "all", sortBy = "minutes", limitCount = 20 } = options;
     const groupsRef = collection(db, "focusGroups");
-    // Sorting by member count or total minutes if we add it. 
-    // For now, sorting by member count as a proxy for 'active' groups.
-    const q = query(
-        groupsRef,
-        orderBy("members", "desc"),
-        limit(limitCount)
-    );
+    
+    let q;
+    
+    if (filter === "joined" && userId) {
+        // Simple filter — no orderBy needed, sort client-side
+        q = query(
+            groupsRef,
+            where("members", "array-contains", userId),
+            limit(100)
+        );
+    } else {
+        // Discover or all: fetch public groups only
+        // Supports both legacy "public" value and new privacy model "public"
+        q = query(
+            groupsRef,
+            where("privacy", "==", "public"),
+            limit(100)
+        );
+    }
 
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
+    let groups = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-    }));
+    } as any));
+
+    // Filter out already-joined groups for the "discover" tab
+    if (filter === "discover" && userId) {
+        groups = groups.filter(g => !Array.isArray(g.members) || !g.members.includes(userId));
+    }
+
+    // Sort client-side (no composite index needed)
+    groups.sort((a, b) => {
+        if (sortBy === "minutes") {
+            return (b.totalMinutes || 0) - (a.totalMinutes || 0);
+        }
+        return (b.memberCount || b.members?.length || 0) - (a.memberCount || a.members?.length || 0);
+    });
+
+    return groups.slice(0, limitCount);
 };
 
 /**

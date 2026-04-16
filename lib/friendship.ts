@@ -488,7 +488,6 @@ export const searchUsers = async (searchTerm: string, excludeUserId: string, lim
             if (snap.exists() && snap.id !== excludeUserId) {
                 const data = snap.data();
                 return [{
-                    id: snap.id,
                     uid: snap.id,
                     displayName: data.displayName,
                     photoURL: data.photoURL,
@@ -511,7 +510,6 @@ export const searchUsers = async (searchTerm: string, excludeUserId: string, lim
             .map(docSnap => {
                 const data = docSnap.data();
                 return {
-                    id: docSnap.id,
                     uid: docSnap.id,
                     displayName: data.displayName,
                     photoURL: data.photoURL,
@@ -520,9 +518,9 @@ export const searchUsers = async (searchTerm: string, excludeUserId: string, lim
                 };
             })
             .filter((user: any) => {
-                if (user.id === excludeUserId) return false;
+                if (user.uid === excludeUserId) return false;
                 const displayName = (user.displayName || "").toLowerCase();
-                const uid = user.id.toLowerCase();
+                const uid = user.uid.toLowerCase();
 
                 return displayName.includes(termLower) || uid.includes(termLower);
             })

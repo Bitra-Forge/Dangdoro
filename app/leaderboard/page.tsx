@@ -39,6 +39,8 @@ function LeaderboardContent() {
     
     // Group drill-down state
     const [selectedGroup, setSelectedGroup] = useState<any | null>(null);
+    const [activeSubTab, setActiveSubTab] = useState<"joined" | "discover">("joined");
+    const [sortBy, setSortBy] = useState<"members" | "minutes">("minutes");
 
     useEffect(() => {
         const fetchTops = async () => {
@@ -79,13 +81,18 @@ function LeaderboardContent() {
                 const friendsTops = await getFriendsLeaderboard(user!.uid, 20);
                 setPlayers(friendsTops);
             } else if (activeTab === "groups") {
-                const groups = await getGroupLeaderboard(20);
+                const groups = await getGroupLeaderboard({
+                    userId: user!.uid,
+                    filter: activeSubTab,
+                    sortBy: sortBy,
+                    limitCount: 20
+                });
                 setPlayers(groups);
             }
             setLoading(false);
         };
         fetchTops();
-    }, [user, authLoading, activeTab, selectedGroup, searchParams]);
+    }, [user, authLoading, activeTab, selectedGroup, searchParams, activeSubTab, sortBy]);
 
     if (authLoading) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center"><div className="w-12 h-12 border-4 border-[#C9B037]/20 border-t-[#C9B037] rounded-full animate-spin" /></div>;
 
@@ -145,17 +152,42 @@ function LeaderboardContent() {
 
                     {/* Tab Toggle */}
                     {!selectedGroup && (
-                        <div className="flex items-center gap-2 p-2 bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-2xl mb-12 w-full max-w-md">
-                            {[
-                                { id: "global", icon: Trophy, label: "Global" },
-                                { id: "friends", icon: Users, label: "Friends" },
-                                { id: "groups", icon: Briefcase, label: "Groups" }
-                            ].map(tab => (
-                                <button key={tab.id} onClick={() => setActiveTab(tab.id as LeaderboardTab)} className={cn("flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl transition-all duration-300", activeTab === tab.id ? "bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)]" : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5")}>
-                                    <tab.icon className="w-4 h-4" />
-                                    <span className="text-xs font-bold">{tab.label}</span>
-                                </button>
-                            ))}
+                        <div className="flex flex-col items-center gap-6 mb-12 w-full max-w-2xl">
+                            <div className="flex items-center gap-2 p-1.5 bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-2xl w-full">
+                                {[
+                                    { id: "global", icon: Trophy, label: "Global" },
+                                    { id: "friends", icon: Users, label: "Friends" },
+                                    { id: "groups", icon: Briefcase, label: "Groups" }
+                                ].map(tab => (
+                                    <button key={tab.id} onClick={() => setActiveTab(tab.id as LeaderboardTab)} className={cn("flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300", activeTab === tab.id ? "bg-white/10 text-white shadow-lg border border-white/5" : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5")}>
+                                        <tab.icon className="w-4 h-4" />
+                                        <span className="text-xs font-bold">{tab.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+
+                            {activeTab === "groups" && (
+                                <div className="flex items-center justify-between w-full px-2">
+                                    <div className="flex gap-1 p-1 bg-zinc-950/40 rounded-xl border border-white/5">
+                                        {[
+                                            { id: "joined", label: "My Units" },
+                                            { id: "discover", label: "Discover" }
+                                        ].map(t => (
+                                            <button key={t.id} onClick={() => setActiveSubTab(t.id as any)} className={cn("px-5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all", activeSubTab === t.id ? "bg-white/10 text-white shadow-md" : "text-zinc-600 hover:text-zinc-400")}>
+                                                {t.label}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">Sort By</span>
+                                        <div className="flex p-1 bg-zinc-950/40 rounded-xl border border-white/5">
+                                            <button onClick={() => setSortBy("minutes")} className={cn("p-1.5 rounded-lg transition-all", sortBy === "minutes" ? "bg-[#C9B037]/20 text-[#C9B037]" : "text-zinc-600")} title="Focus Time"><Clock className="w-3.5 h-3.5" /></button>
+                                            <button onClick={() => setSortBy("members")} className={cn("p-1.5 rounded-lg transition-all", sortBy === "members" ? "bg-white/10 text-white" : "text-zinc-600")} title="Member Count"><Users className="w-3.5 h-3.5" /></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -165,27 +197,45 @@ function LeaderboardContent() {
                             <p className="text-xs font-black uppercase text-zinc-600 tracking-widest animate-pulse">Syncing Growth...</p>
                         </div>
                     ) : activeTab === "groups" && !selectedGroup ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
-                            {players.map((group, idx) => (
-                                <motion.div key={group.id || `group-${idx}`} whileHover={{ y: -5 }} onClick={() => setSelectedGroup(group)} className="p-6 rounded-3xl bg-zinc-900/40 border border-white/5 hover:border-[#C9B037]/40 transition-all cursor-pointer group relative overflow-hidden">
-                                     <div className="absolute top-0 right-0 w-24 h-24 bg-[#C9B037]/5 blur-2xl -mr-8 -mt-8" />
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div className="w-12 h-12 rounded-2xl bg-[#C9B037]/10 flex items-center justify-center border border-[#C9B037]/20">
-                                            <span className="text-lg font-black text-[#C9B037]">#{idx + 1}</span>
-                                        </div>
-                                        <div className="px-3 py-1 bg-white/5 border border-white/5 rounded-full text-[9px] font-black uppercase text-zinc-500">{group.type}</div>
+                        <div className="w-full space-y-8">
+                            {players.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center p-20 bg-zinc-900/20 border border-white/5 border-dashed rounded-[3rem] text-center space-y-4">
+                                    <div className="w-20 h-20 rounded-full bg-zinc-800/50 flex items-center justify-center mx-auto text-zinc-700">
+                                        <Briefcase className="w-10 h-10" />
                                     </div>
-                                    <h3 className="text-xl font-bold text-white mb-2">{group.name}</h3>
-                                    <p className="text-xs text-zinc-500 mb-6 truncate">{group.description}</p>
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2 text-zinc-400">
-                                            <Users className="w-3 h-3" />
-                                            <span className="text-xs font-bold">{group.members?.length || 0} Members</span>
-                                        </div>
-                                        <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-[#C9B037] transition-all" />
-                                    </div>
-                                </motion.div>
-                            ))}
+                                    <h3 className="text-xl font-bold text-zinc-400">No {activeSubTab} units found</h3>
+                                    <p className="text-sm text-zinc-600 max-w-xs">{activeSubTab === "joined" ? "You haven't joined any focus groups yet." : "There are no public groups matching your search."}</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
+                                    {players.map((group, idx) => (
+                                        <motion.div key={group.id || `group-${idx}`} whileHover={{ y: -5 }} onClick={() => setSelectedGroup(group)} className="p-6 rounded-3xl bg-zinc-900/40 border border-white/5 hover:border-[#C9B037]/40 transition-all cursor-pointer group relative overflow-hidden">
+                                            <div className="absolute top-0 right-0 w-24 h-24 bg-[#C9B037]/5 blur-2xl -mr-8 -mt-8" />
+                                            <div className="flex justify-between items-start mb-4">
+                                                <div className="w-12 h-12 rounded-2xl bg-[#C9B037]/10 flex items-center justify-center border border-[#C9B037]/20">
+                                                    <span className="text-lg font-black text-[#C9B037]">#{idx + 1}</span>
+                                                </div>
+                                                <div className="px-3 py-1 bg-white/5 border border-white/5 rounded-full text-[9px] font-black uppercase text-zinc-500">{group.type}</div>
+                                            </div>
+                                            <h3 className="text-xl font-bold text-white mb-2">{group.name}</h3>
+                                            <p className="text-xs text-zinc-500 mb-6 line-clamp-2">{group.description}</p>
+                                            <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="flex items-center gap-2 text-zinc-400">
+                                                        <Users className="w-3 h-3" />
+                                                        <span className="text-xs font-bold">{group.memberCount || group.members?.length || 0} Members</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 text-zinc-400">
+                                                        <Clock className="w-3 h-3 text-[#C9B037]/60" />
+                                                        <span className="text-xs font-bold text-white/80">{group.totalMinutes || 0}m focused</span>
+                                                    </div>
+                                                </div>
+                                                <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-[#C9B037] transition-all" />
+                                            </div>
+                                        </motion.div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     ) : activeTab === "friends" && players.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-96 gap-6">
