@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
 import { Play, Pause, RotateCcw, Check, X, ChevronUp, ChevronDown, Settings, Minus, Plus, Eye, EyeOff, Square, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTimerStore } from "@/lib/store";
@@ -31,7 +30,6 @@ export function TimerCard() {
   const sessionStartTime = useTimerStore((s) => s.sessionStartTime);
 
   const { user } = useAuth();
-  const router = useRouter();
 
   const initialFocusTime = useTimerStore((state) => state.initialFocusTime);
   const initialBreakTime = useTimerStore((state) => state.initialBreakTime);
@@ -195,7 +193,7 @@ export function TimerCard() {
     return () => {
       if (unsub) unsub();
     };
-  }, [user?.uid, setInitialTime]);
+  }, [activeTaskLabel, setInitialTime, setSessionEndSound, user?.uid]);
 
   useEffect(() => {
     if (!isActive) {
@@ -245,6 +243,7 @@ export function TimerCard() {
         setIsNavFocusMode(true);
       }
     } catch (error) {
+      console.error("Failed to toggle fullscreen focus mode:", error);
       // Fall back to focus mode toggle if fullscreen is blocked by browser policy.
       toggleNavFocusMode();
     }
@@ -360,10 +359,10 @@ export function TimerCard() {
               "min-w-[120px] md:min-w-[145px] px-5 py-3 text-[13px] font-black tracking-[0.02em] text-center transition-all duration-300 rounded-xl cursor-pointer border",
               mode === m.id
                 ? m.id === "focus"
-                  ? "bg-sky-300/90 text-sky-950 border-sky-200/80 shadow-[0_6px_14px_rgba(125,211,252,0.18)]"
+                  ? "bg-sky-300/20 text-sky-50 border-sky-200/30 backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_24px_rgba(125,211,252,0.14)]"
                   : m.id === "break"
-                    ? "bg-emerald-300/90 text-emerald-950 border-emerald-200/80 shadow-[0_6px_14px_rgba(110,231,183,0.18)]"
-                    : "bg-fuchsia-300/90 text-fuchsia-950 border-fuchsia-200/80 shadow-[0_6px_14px_rgba(240,171,252,0.18)]"
+                    ? "bg-emerald-300/20 text-emerald-50 border-emerald-200/30 backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_24px_rgba(110,231,183,0.14)]"
+                    : "bg-fuchsia-300/20 text-fuchsia-50 border-fuchsia-200/30 backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_24px_rgba(240,171,252,0.14)]"
                 : "bg-black/20 text-white/75 border-white/10 hover:bg-white/[0.14] hover:text-white hover:border-white/30"
             )}
           >
@@ -572,9 +571,12 @@ export function TimerCard() {
                       )} />
                     </Button>
 
-                    {/* Settings Popup - appears above the toggle */}
+                    {/* Settings Popup - appears upper-right with connector */}
                     {isSettingsOpen && (
-                      <div className="absolute bottom-full mb-3 right-0 z-20 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      <div className="absolute left-full ml-32 bottom-0 z-20 animate-in fade-in slide-in-from-left-4 duration-300">
+                        {/* Connector Line - Horizontal from Button center to Window */}
+                        <div className="absolute -left-32 top-1/2 -translate-y-1/2 h-[2px] w-32 bg-gradient-to-r from-white/25 via-white/10 to-white/30 shadow-[0_0_12px_rgba(255,255,255,0.05)]" />
+
                         <div className="w-[280px] bg-zinc-900/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden">
 
                           {/* Step Size */}
