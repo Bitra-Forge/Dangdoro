@@ -3,15 +3,14 @@ import React, { useEffect, useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { cn } from "@/lib/utils";
-import { logOut } from "@/lib/auth";
 import { onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { uploadProfilePicture, updateProfilePictureBase64, getSessionHistory, updateUserProfile } from "@/lib/db";
+import { updateProfilePictureBase64, getSessionHistory, updateUserProfile } from "@/lib/db";
 import { getFriendsList } from "@/lib/friendship";
 import {
-    Camera, Shield, Zap, Clock, Calendar, LogOut,
-    Trophy, Share2, Pencil, Activity, Award, Flame,
-    Lock, Star, TrendingUp, Info, CheckCircle2, BarChart3,
+    Camera, Zap, Clock, Calendar,
+    Share2, Pencil, Activity, Flame,
+    TrendingUp, BarChart3,
     Users, Copy, UserCheck, ChevronRight, Timer
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -20,13 +19,11 @@ import { format, differenceInDays, startOfDay, subDays, isSameDay, startOfMonth,
 import { toast } from "sonner";
 import { AuthRequired } from "@/components/auth-required";
 import { motion, AnimatePresence } from "framer-motion";
-import Cropper from "react-easy-crop";
+import Cropper, { type Area as CropArea } from "react-easy-crop";
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { BackgroundTheme } from "@/components/background-theme";
 import {
     ComposedChart,
-    Bar,
-    Line,
     Area,
     XAxis,
     YAxis,
@@ -70,13 +67,87 @@ interface SessionData {
     id: string;
     userId: string;
     duration: number;
-    completedAt?: { seconds: number; nanoseconds: number };
+    completedAt: {
+        seconds: number;
+        nanoseconds: number;
+        toDate: () => Date;
+    };
     type: string;
+}
+
+interface UserProfileData {
+    displayName?: string;
+    nickname?: string;
+    bio?: string;
+    profileTheme?: string;
+    photoURL?: string;
+    totalPomodoros?: number;
+    totalMinutes?: number;
+    createdAt?: {
+        seconds: number;
+        nanoseconds: number;
+    };
+}
+
+interface FriendStatus {
+    status?: string;
+    direction?: string;
+    isFriend?: boolean;
+}
+
+interface FriendListItem {
+    friendId: string;
+    since?: unknown;
+    userData?: {
+        id?: string;
+        displayName?: string;
+        photoURL?: string;
+        [key: string]: unknown;
+    } | null;
+}
+
+interface ChartPoint {
+    date: string;
+    tooltipLabel: string;
+    fullDate: Date;
+    minutes: number;
+}
+
+type ThemeConfig = {
+    name: string;
+    colors: string[];
+    accent: string;
+    glow: string;
+    text?: string;
+};
+
+interface StatCardProps {
+    icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+    label: string;
+    value: string | number;
+    colorClass: string;
+    delay?: number;
+    horizontal?: boolean;
+    lottie?: string | null;
 }
 
 // --- Components ---
 
-const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal = false, lottie = null }: any) => {
+const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal = false, lottie = null }: StatCardProps) => {
+    const emberParticles = useMemo(
+        () =>
+            [...Array(15)].map((_, i) => ({
+                id: i,
+                top: `${(i * 100) / 24}%`,
+                xEnd: -140 - i * 4,
+                yStart: ((i % 7) - 3) * 10,
+                yEnd: ((i % 9) - 4) * 11,
+                duration: 1.2 + (i % 5) * 0.16,
+                delay: i * 0.1,
+            })),
+        []
+    );
+
     const getThemeAnimations = () => {
         if (colorClass.includes('red')) return {
             glow: "rgba(239,68,68,0.15)",
@@ -148,23 +219,23 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal 
                         </div>
                     </div>
                 )}
-                {colorClass.includes('red') && [...Array(15)].map((_, i) => (
+                {colorClass.includes('red') && emberParticles.map((p) => (
                     <motion.div
-                        key={i}
+                        key={p.id}
                         animate={{
-                            x: [0, -140 - Math.random() * 60],
-                            y: [(Math.random() - 0.5) * 60, (Math.random() - 0.5) * 80],
+                            x: [0, p.xEnd],
+                            y: [p.yStart, p.yEnd],
                             opacity: [0, 0.6, 0],
                             scale: [1.2, 0.2]
                         }}
                         transition={{
-                            duration: 1.2 + Math.random() * 0.8,
+                            duration: p.duration,
                             repeat: Infinity,
-                            delay: i * 0.1,
+                            delay: p.delay,
                             ease: "easeOut"
                         }}
                         className="absolute right-0 w-1 h-1 bg-orange-400 rounded-full blur-[0.6px]"
-                        style={{ top: `${(i * 100) / 24}%`, mixBlendMode: 'screen' }}
+                        style={{ top: p.top, mixBlendMode: 'screen' }}
                     />
                 ))}
             </div>
@@ -231,7 +302,7 @@ const formatFocusedTime = (totalMinutes: number) => {
     return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
 };
 
-const ProductivitySquare = ({ level, theme }: { level: number, theme: any }) => {
+const ProductivitySquare = ({ level, theme }: { level: number, theme: ThemeConfig }) => {
     // level: 0, 1, 2, 3
     const colorIndex = level - 1;
     const bgColor = level === 0 ? "bg-white/[0.03]" : "";
@@ -262,18 +333,18 @@ const ProductivitySquare = ({ level, theme }: { level: number, theme: any }) => 
 function ProfileContent() {
     const searchParams = useSearchParams();
     const targetUserId = searchParams.get("user");
-    const { user, loading: authLoading, openAuthVault } = useAuth();
-    const [userData, setUserData] = useState<any>(null);
-    const [sessions, setSessions] = useState<any[]>([]);
+    const { user, loading: authLoading } = useAuth();
+    const [userData, setUserData] = useState<UserProfileData | null>(null);
+    const [sessions, setSessions] = useState<SessionData[]>([]);
     const [loading, setLoading] = useState(true);
     const [isOwnProfile, setIsOwnProfile] = useState(true);
-    const [friendStatus, setFriendStatus] = useState<any>(null);
+    const [friendStatus, setFriendStatus] = useState<FriendStatus | null>(null);
 
     // Cropping State
     const [image, setImage] = useState<string | null>(null);
     const [crop, setCrop] = useState({ x: 0, y: 0 });
     const [zoom, setZoom] = useState(1);
-    const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+    const [croppedAreaPixels, setCroppedAreaPixels] = useState<CropArea | null>(null);
     const [showCropper, setShowCropper] = useState(false);
 
     // Edit State
@@ -285,12 +356,12 @@ function ProfileContent() {
     const [isSaving, setIsSaving] = useState(false);
 
     // Stats State
-    const [weekData, setWeekData] = useState<any[]>([]);
-    const [monthData, setMonthData] = useState<any[]>([]);
-    const [yearData, setYearData] = useState<any[]>([]);
+    const [weekData, setWeekData] = useState<ChartPoint[]>([]);
+    const [monthData, setMonthData] = useState<ChartPoint[]>([]);
+    const [yearData, setYearData] = useState<ChartPoint[]>([]);
     const [timeRange, setTimeRange] = useState<TimeRange>("days");
     const [mounted, setMounted] = useState(false);
-    const [friends, setFriends] = useState<any[]>([]);
+    const [friends, setFriends] = useState<FriendListItem[]>([]);
 
     useEffect(() => {
         setMounted(true);
@@ -429,7 +500,7 @@ function ProfileContent() {
             .sort((a, b) => b - a);
 
         let streak = 0;
-        let today = startOfDay(new Date());
+        const today = startOfDay(new Date());
         let currentRef = today;
 
         // Check if user has focused today or yesterday to continue the streak
@@ -507,7 +578,7 @@ function ProfileContent() {
         setShowCropper(true);
     };
 
-    const onCropComplete = (_: any, pixels: any) => setCroppedAreaPixels(pixels);
+    const onCropComplete = (_: CropArea, pixels: CropArea) => setCroppedAreaPixels(pixels);
 
     const handleUploadCropped = async () => {
         if (!image || !croppedAreaPixels || !user) return;
@@ -520,7 +591,7 @@ function ProfileContent() {
             setShowCropper(false);
             if (image.startsWith('blob:')) URL.revokeObjectURL(image);
             setImage(null);
-        } catch (error) { toast.error("Failed.", { id: "upload" }); }
+        } catch { toast.error("Failed.", { id: "upload" }); }
     };
 
     const handleSaveProfile = async () => {
@@ -535,14 +606,14 @@ function ProfileContent() {
             });
             toast.success("Profile saved!");
             setIsEditing(false);
-        } catch (e) {
+        } catch {
             toast.error("Failed to save.");
         } finally {
             setIsSaving(false);
         }
     };
 
-    const getCroppedImgBase64 = async (imageSrc: string, pixelCrop: any): Promise<string | null> => {
+    const getCroppedImgBase64 = async (imageSrc: string, pixelCrop: CropArea): Promise<string | null> => {
         const img = new Image();
         img.src = imageSrc;
         await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
@@ -895,11 +966,35 @@ function ProfileContent() {
                                     animate={{ opacity: 1, scale: 1 }}
                                     transition={{ delay: 0.5, duration: 0.8 }}
                                     className={cn(
-                                        "relative group bg-zinc-900/10 backdrop-blur-2xl border border-white/5 rounded-[5px] flex items-center justify-between p-3 px-5 shadow-2xl transition-all duration-500 h-full min-h-[80px]",
+                                        "relative group bg-zinc-900/10 backdrop-blur-2xl border border-white/5 rounded-[5px] flex items-center justify-between p-3 px-5 shadow-2xl transition-all duration-500 h-full min-h-[80px] overflow-hidden",
                                         isOwnProfile ? "cursor-pointer hover:bg-zinc-900/20" : "cursor-default"
                                     )}
                                     onClick={() => isOwnProfile && (window.location.href = "/friends")}
                                 >
+                                    {/* Inner Hover Light */}
+                                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none z-0">
+                                        <div className="absolute inset-0 bg-gradient-to-br from-white/[0.06] via-transparent to-transparent" />
+                                    </div>
+
+                                    {/* Theme Ambient Hover Glow */}
+                                    <div
+                                        className="absolute -inset-6 opacity-0 group-hover:opacity-100 transition-all duration-700 blur-[35px] pointer-events-none -z-10"
+                                        style={{ backgroundColor: currentTheme.glow }}
+                                    />
+
+                                    {/* Friends Card Animated Background */}
+                                    <div className="absolute inset-0 pointer-events-none z-0 opacity-0 group-hover:opacity-35 transition-opacity duration-700">
+                                        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[320px] h-[320px]">
+                                            <DotLottieReact
+                                                src="https://lottie.host/57f88543-91fb-4d6d-a8a3-5c0be150cdcf/R5RnYeBnGD.lottie"
+                                                autoplay
+                                                loop
+                                                style={{ width: "100%", height: "100%" }}
+                                            />
+                                        </div>
+                                        <div className="absolute inset-0 bg-gradient-to-r from-zinc-950/80 via-zinc-950/40 to-transparent" />
+                                    </div>
+
                                     {/* Ambient Glow */}
                                     <div className={cn(
                                         "absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent transition-opacity",
@@ -919,15 +1014,10 @@ function ProfileContent() {
                                             <UserCheck className="w-4 h-4 text-purple-400" style={{ filter: "drop-shadow(0 0 5px rgba(168,85,247,0.5))" }} />
                                         </div>
                                         <div className="flex flex-col">
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center">
                                                 <span className="text-xl font-black text-white tracking-tighter tabular-nums leading-none">
                                                     {friends.length}
                                                 </span>
-                                                {isOwnProfile && (
-                                                    <span className="text-[6px] font-black bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded-full uppercase tracking-tighter border border-purple-500/20 group-hover:bg-purple-500/20 transition-colors">
-                                                        Manage Hub
-                                                    </span>
-                                                )}
                                             </div>
                                             <span className="text-[7.5px] font-black text-zinc-600 uppercase tracking-[0.2em] mt-1 group-hover:text-zinc-400 transition-colors">
                                                 Focus Friends
@@ -935,40 +1025,22 @@ function ProfileContent() {
                                         </div>
                                     </div>
 
-                                    {/* Friends Avatars Preview */}
-                                    <div className="flex items-center -space-x-2 relative z-10">
-                                        {friends.length > 0 ? (
-                                            <>
-                                                {friends.slice(0, 4).map((friend, i) => {
-                                                    const photoURL = friend.userData?.photoURL;
-                                                    return (
-                                                        <div key={i} className="w-6 h-6 rounded-full border border-zinc-900 bg-zinc-800 overflow-hidden ring-2 ring-black/50">
-                                                            <Avatar className="w-full h-full">
-                                                                <AvatarImage src={photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${friend.friendId}`} />
-                                                                <AvatarFallback className="text-[6px]">
-                                                                    {friend.userData?.displayName?.slice(0, 1) || "F"}
-                                                                </AvatarFallback>
-                                                            </Avatar>
-                                                        </div>
-                                                    );
-                                                })}
-                                                {friends.length > 4 && (
-                                                    <div className="w-6 h-6 rounded-full border border-zinc-900 bg-zinc-800 flex items-center justify-center ring-2 ring-black/50">
-                                                        <span className="text-[6px] font-bold text-zinc-500">+{friends.length - 4}</span>
-                                                    </div>
-                                                )}
-                                                {isOwnProfile && <ChevronRight className="w-3 h-3 text-zinc-600 ml-4 group-hover:text-zinc-400 group-hover:translate-x-1 transition-all" />}
-                                            </>
-                                        ) : isOwnProfile && (
-                                            <div className="flex items-center gap-2 text-zinc-600 group-hover:text-zinc-400 transition-colors">
-                                                <span className="text-[8px] font-black uppercase tracking-widest">Connect</span>
-                                                <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-all" />
-                                            </div>
-                                        )}
-                                    </div>
+                                    {isOwnProfile && (
+                                        <div className="relative z-10">
+                                            <ChevronRight className="w-3 h-3 text-zinc-600 group-hover:text-zinc-400 group-hover:translate-x-1 transition-all" />
+                                        </div>
+                                    )}
 
                                     {/* Reactive Corner */}
                                     <div className="absolute top-1 right-1 w-1.5 h-1.5 border-r border-t border-white/5 rounded-tr-[1px]" />
+
+                                    {/* Top Gloss Sweep */}
+                                    <motion.div
+                                        className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                                        initial={{ x: "-100%" }}
+                                        whileHover={{ x: "100%" }}
+                                        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                                    />
                                 </motion.div>
                             </div>
                         </motion.div>

@@ -5,7 +5,6 @@ import { useAuth } from "@/components/AuthProvider";
 import { BackgroundTheme } from "@/components/background-theme";
 import { AuthRequired } from "@/components/auth-required";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Space_Grotesk } from "next/font/google";
 import { cn } from "@/lib/utils";
 import {
     UserPlus, X, Search, Users, Clock, Trophy, Check,
@@ -19,12 +18,8 @@ import {
 import { toast } from "sonner";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-
-const spaceGrotesk = Space_Grotesk({
-    subsets: ["latin"],
-    variable: "--font-space-grotesk",
-    weight: ["300", "400", "500", "600", "700"],
-});
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 type Tab = "friends" | "requests" | "search";
 
@@ -40,6 +35,7 @@ export default function FriendsPage() {
     const [searching, setSearching] = useState(false);
     const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
     const [requestingIds, setRequestingIds] = useState<Set<string>>(new Set());
+    const [profileImageUrl, setProfileImageUrl] = useState("");
 
     useEffect(() => {
         if (!user) return;
@@ -85,6 +81,25 @@ export default function FriendsPage() {
         setSearchTimeout(timeout);
         return () => clearTimeout(timeout);
     }, [searchQuery, user?.uid]);
+
+    useEffect(() => {
+        const loadProfileImage = async () => {
+            if (!user?.uid) {
+                setProfileImageUrl("");
+                return;
+            }
+
+            try {
+                const userDoc = await getDoc(doc(db, "users", user.uid));
+                const photoFromDoc = userDoc.exists() ? userDoc.data()?.photoURL : undefined;
+                setProfileImageUrl(photoFromDoc || user.photoURL || "");
+            } catch {
+                setProfileImageUrl(user.photoURL || "");
+            }
+        };
+
+        loadProfileImage();
+    }, [user?.uid, user?.photoURL]);
 
     const handleSendRequest = async (toUserId: string, displayName: string) => {
         if (!user || !user.uid) {
@@ -165,40 +180,144 @@ export default function FriendsPage() {
         </div>
     );
 
+    const tabs = [
+        { id: "friends", label: "Friends", icon: UserCheck, count: null },
+        { id: "requests", label: "Requests", icon: UserPlus, count: receivedRequests.length },
+        { id: "search", label: "Search", icon: Search, count: null },
+    ] as const;
+
     return (
         <BackgroundTheme>
-            <div className={cn("relative min-h-screen bg-zinc-950 flex flex-col pt-16 overflow-x-hidden", spaceGrotesk.variable, "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
-                <main className="relative z-10 flex flex-col items-center pb-48 px-4 w-full flex-1 max-w-6xl mx-auto">
-                    <header className="flex flex-col items-center text-center mb-12 w-full">
-                        <span className="text-[10px] font-black tracking-[0.4em] text-zinc-600 uppercase mb-4">Social Hub</span>
-                        <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">Friends & Connections</h1>
-                    </header>
+            <div className={cn("relative min-h-screen bg-zinc-950 flex flex-col pt-16 overflow-x-hidden font-sans")}>
+                <main className="relative z-10 flex flex-col items-center pb-48 px-3 md:px-6 w-full flex-1 max-w-[86rem] mx-auto">
+                    <div className="w-full grid grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)] gap-6 md:gap-8 items-start">
+                        <aside className="hidden md:block self-start">
+                            <div className="relative p-3 bg-zinc-900/45 backdrop-blur-2xl border border-white/10 rounded-[12px]">
+                                <div className="flex flex-col gap-2">
+                                    {tabs.map(tab => {
+                                        const Icon = tab.icon;
+                                        const isActive = activeTab === tab.id;
 
-                    <div className="flex items-center gap-2 p-2 bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-2xl mb-8 w-full max-w-xl">
-                        {[
-                            { id: "friends", label: "Friends", icon: UserCheck, count: friends.length },
-                            { id: "requests", label: "Requests", icon: UserPlus, count: receivedRequests.length },
-                            { id: "search", label: "Search", icon: Search, count: null },
-                        ].map(tab => {
-                            const Icon = tab.icon;
-                            const isActive = activeTab === tab.id;
-                            return (
-                                <button key={tab.id} onClick={() => setActiveTab(tab.id as Tab)} className={cn(
-                                    "relative flex items-center gap-2 px-3 py-2 rounded-xl transition-all duration-300 flex-1 justify-center",
-                                    isActive ? "bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)]" : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
-                                )}>
-                                    <Icon className="w-5 h-5" />
-                                    <span className="text-xs font-bold tracking-wide">{tab.label}</span>
-                                    {tab.count !== null && tab.count > 0 && <span className="ml-1 px-2 py-0.5 bg-[#C9B037] text-black rounded-full text-[10px] font-black">{tab.count}</span>}
-                                </button>
-                            );
-                        })}
-                    </div>
+                                        return (
+                                            <button
+                                                key={tab.id}
+                                                onClick={() => setActiveTab(tab.id as Tab)}
+                                                className={cn(
+                                                    "relative flex items-center gap-2.5 px-3 py-4 rounded-[10px] transition-colors duration-300 w-full",
+                                                    isActive ? "text-white" : "text-zinc-500 hover:text-zinc-200"
+                                                )}
+                                            >
+                                                {isActive && (
+                                                    <motion.div
+                                                        layoutId="friends-side-active-pill"
+                                                        transition={{ type: "spring", stiffness: 360, damping: 30 }}
+                                                        className="absolute inset-0 rounded-[10px] bg-white/10 border border-white/15 shadow-[0_8px_20px_rgba(0,0,0,0.35)]"
+                                                    />
+                                                )}
 
-                    <div className="w-full max-w-2xl">
-                        {activeTab === "friends" && <FriendsTab friends={friends} loading={loading} onRemoveFriend={handleRemoveFriend} onGoToSearch={() => setActiveTab("search")} />}
-                        {activeTab === "requests" && <RequestsTab receivedRequests={receivedRequests} sentRequests={sentRequests} onAccept={handleAcceptRequest} onDecline={handleDeclineRequest} onCancel={handleCancelRequest} />}
-                        {activeTab === "search" && <SearchTab searchQuery={searchQuery} setSearchQuery={setSearchQuery} onSearch={setSearchQuery} searching={searching} searchResults={searchResults} onSendRequest={handleSendRequest} friends={friends} sentRequests={sentRequests} requestingIds={requestingIds} />}
+                                                <motion.div
+                                                    animate={{ scale: isActive ? 1.08 : 1, opacity: isActive ? 1 : 0.85 }}
+                                                    transition={{ duration: 0.2 }}
+                                                    className="relative z-10"
+                                                >
+                                                    <Icon className="w-5 h-5" />
+                                                </motion.div>
+                                                <span className="relative z-10 text-xs font-bold tracking-wide">{tab.label}</span>
+
+                                                {tab.count !== null && tab.count > 0 && (
+                                                    <span className={cn(
+                                                        "relative z-10 ml-auto px-2 py-0.5 rounded-full text-[10px] font-black transition-colors",
+                                                        isActive ? "bg-[#C9B037] text-black" : "bg-zinc-800 text-zinc-300"
+                                                    )}>
+                                                        {tab.count}
+                                                    </span>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </aside>
+
+                        <div className="min-w-0 min-h-[620px]">
+                            <div className="md:hidden relative p-2 bg-zinc-900/45 backdrop-blur-2xl border border-white/10 rounded-[10px] mb-6 w-full overflow-hidden">
+                                <div className="relative z-10 flex items-center gap-2">
+                                    {tabs.map(tab => {
+                                        const Icon = tab.icon;
+                                        const isActive = activeTab === tab.id;
+                                        return (
+                                            <button
+                                                key={tab.id}
+                                                onClick={() => setActiveTab(tab.id as Tab)}
+                                                className={cn(
+                                                    "relative flex items-center gap-2 px-3 py-2.5 rounded-xl transition-colors duration-300 flex-1 justify-center",
+                                                    isActive ? "text-white" : "text-zinc-500 hover:text-zinc-200"
+                                                )}
+                                            >
+                                                {isActive && (
+                                                    <motion.div
+                                                        layoutId="friends-top-active-pill-mobile"
+                                                        transition={{ type: "spring", stiffness: 360, damping: 30 }}
+                                                        className="absolute inset-0 rounded-xl bg-white/10 border border-white/15 shadow-[0_8px_20px_rgba(0,0,0,0.35)]"
+                                                    />
+                                                )}
+                                                <motion.div
+                                                    animate={{ scale: isActive ? 1.08 : 1, opacity: isActive ? 1 : 0.85 }}
+                                                    transition={{ duration: 0.2 }}
+                                                    className="relative z-10"
+                                                >
+                                                    <Icon className="w-5 h-5" />
+                                                </motion.div>
+                                                <span className="relative z-10 text-xs font-bold tracking-wide">{tab.label}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.45, delay: 0.08 }}
+                                className="w-full mb-8"
+                            >
+                                <div className="flex items-center gap-4 md:gap-5">
+                                    <div className="w-20 h-20 md:w-24 md:h-24 overflow-hidden rounded-[2px] border border-emerald-400/45 shadow-[0_0_10px_rgba(16,185,129,0.22)] bg-zinc-800">
+                                        {profileImageUrl ? (
+                                            <img
+                                                src={profileImageUrl}
+                                                alt="User profile"
+                                                className="w-full h-full object-cover"
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-zinc-200 font-bold text-2xl md:text-3xl">
+                                                {(user?.displayName || "U").slice(0, 1).toUpperCase()}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="min-w-0 text-left">
+                                        <p className="text-3xl md:text-4xl font-extrabold text-white tracking-tight uppercase truncate">
+                                            {user?.displayName || "User"}
+                                        </p>
+                                        <div className="mt-2 flex items-center gap-2">
+                                            <span className="px-2 py-0.5 rounded-[2px] bg-[#C9B037] text-black text-[10px] font-black leading-none">
+                                                {friends.length}
+                                            </span>
+                                            <span className="text-[11px] font-black uppercase tracking-[0.2em] text-zinc-300">
+                                                Friends
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </motion.div>
+
+                            <div className="w-full">
+                                {activeTab === "friends" && <FriendsTab friends={friends} loading={loading} onRemoveFriend={handleRemoveFriend} onGoToSearch={() => setActiveTab("search")} />}
+                                {activeTab === "requests" && <RequestsTab receivedRequests={receivedRequests} sentRequests={sentRequests} onAccept={handleAcceptRequest} onDecline={handleDeclineRequest} onCancel={handleCancelRequest} />}
+                                {activeTab === "search" && <SearchTab searchQuery={searchQuery} setSearchQuery={setSearchQuery} onSearch={setSearchQuery} searching={searching} searchResults={searchResults} onSendRequest={handleSendRequest} friends={friends} sentRequests={sentRequests} requestingIds={requestingIds} />}
+                            </div>
+                        </div>
                     </div>
                 </main>
             </div>
@@ -207,6 +326,45 @@ export default function FriendsPage() {
 }
 
 function FriendsTab({ friends, loading, onRemoveFriend, onGoToSearch }: any) {
+    const formatFocusTime = (totalMinutes: number) => {
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        if (hours === 0) return `${minutes}m`;
+        if (minutes === 0) return `${hours}h`;
+        return `${hours}h ${minutes}m`;
+    };
+
+    const formatTimeAgo = (timestamp: any) => {
+        if (!timestamp?.toDate) return "unknown";
+        const date = timestamp.toDate() as Date;
+        const diffMs = Date.now() - date.getTime();
+        const minutes = Math.floor(diffMs / 60000);
+        if (minutes < 1) return "just now";
+        if (minutes < 60) return `${minutes}m ago`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours}h ago`;
+        const days = Math.floor(hours / 24);
+        if (days < 30) return `${days}d ago`;
+        const months = Math.floor(days / 30);
+        if (months < 12) return `${months}mo ago`;
+        const years = Math.floor(months / 12);
+        return `${years}y ago`;
+    };
+
+    const formatFriendSince = (timestamp: any) => {
+        if (!timestamp?.toDate) return "---";
+        return timestamp.toDate().getFullYear();
+    };
+
+    const isOnline = (timestamp: any) => {
+        if (!timestamp?.toDate) return false;
+        const lastActive = timestamp.toDate() as Date;
+        return Date.now() - lastActive.getTime() <= 5 * 60 * 1000;
+    };
+
+    const onlineFriends = friends.filter((friend: any) => isOnline(friend?.userData?.lastActive));
+    const offlineFriends = friends.filter((friend: any) => !isOnline(friend?.userData?.lastActive));
+
     if (loading) return <div className="flex flex-col items-center justify-center py-20 gap-4"><div className="w-10 h-10 border-4 border-[#C9B037]/20 border-t-[#C9B037] rounded-full animate-spin" /></div>;
     if (friends.length === 0) return (
         <div className="flex flex-col items-center justify-center py-20 text-center gap-6">
@@ -220,29 +378,166 @@ function FriendsTab({ friends, loading, onRemoveFriend, onGoToSearch }: any) {
     );
 
     return (
-        <div className="space-y-4">
-            {friends.map((friend: any) => {
+        <div className="space-y-10">
+            {onlineFriends.length > 0 && (
+                <section>
+                    <div className="flex items-center gap-2 mb-4">
+                        <span className="inline-block w-[2px] h-4 bg-emerald-400 rounded-full" />
+                        <span className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-400">Online</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {onlineFriends.map((friend: any) => {
+                            const userData = friend.userData;
+                            const totalMinutes = userData?.totalMinutes || 0;
+                            const profileUserId = userData?.uid || userData?.id || friend.friendId;
+                            const online = true;
+
+                            return (
+                                <motion.div
+                                    key={friend.friendId}
+                                    whileHover={{}}
+                                    className={cn(
+                                        "group relative rounded-[5px] bg-gradient-to-br from-zinc-900/70 via-zinc-900/50 to-zinc-950/70 backdrop-blur-xl border transition-all duration-500 overflow-hidden",
+                                        online
+                                            ? "border-emerald-400/45 shadow-[0_12px_34px_rgba(0,0,0,0.42),0_0_18px_rgba(16,185,129,0.22)] hover:border-emerald-300/65 hover:shadow-[0_18px_45px_rgba(0,0,0,0.5),0_0_24px_rgba(16,185,129,0.28)]"
+                                            : "border-white/8 shadow-[0_8px_26px_rgba(0,0,0,0.33)] hover:border-white/15 hover:shadow-[0_14px_36px_rgba(0,0,0,0.4)]"
+                                    )}
+                                >
+                                    <Link href={`/profile?user=${profileUserId}`} className="block p-5" aria-label={`Open ${userData?.displayName || "friend"} profile`}>
+                                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
+                                            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/[0.06] via-transparent to-transparent" />
+                                        </div>
+                                        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/25 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+                                        <div className="relative z-10 flex items-start gap-3">
+                                            <Avatar className="w-12 h-12 rounded-full overflow-hidden border border-emerald-400/70 ring-2 ring-emerald-500/35 shadow-[0_0_14px_rgba(16,185,129,0.35)]">
+                                                <AvatarImage src={userData?.photoURL} className="rounded-full object-cover" />
+                                                <AvatarFallback className="rounded-full">{userData?.displayName?.[0]}</AvatarFallback>
+                                            </Avatar>
+
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-2xl leading-none font-extrabold text-zinc-100 tracking-tight truncate" style={{ fontFamily: "__nextjs-Geist" }}>
+                                                    {userData?.displayName || "Unknown"}
+                                                </p>
+                                                <div className="mt-2 flex items-center gap-1.5 text-[12px] font-semibold">
+                                                    <span className={cn("inline-block w-1.5 h-1.5 rounded-full", online ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-zinc-500")} />
+                                                    <span className={online ? "text-emerald-400" : "text-zinc-400"}>
+                                                        {online ? "Online" : `Offline • Last seen ${formatTimeAgo(userData?.lastActive)}`}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                        </div>
+
+                                        <div className="relative z-10 mt-5 border-t border-white/10 pt-4 grid grid-cols-3 gap-2">
+                                            <div>
+                                                <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Focus Time</p>
+                                                <p className="text-lg leading-tight font-black text-zinc-100 tabular-nums">{formatFocusTime(totalMinutes)}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Sessions</p>
+                                                <p className="text-lg leading-tight font-black text-zinc-100 tabular-nums">{userData?.totalPomodoros || 0}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Friend Since</p>
+                                                <p className="text-lg leading-tight font-black text-zinc-100 tabular-nums">{formatFriendSince(friend.since)}</p>
+                                            </div>
+                                        </div>
+                                    </Link>
+
+                                    <button
+                                        onClick={() => onRemoveFriend(friend.friendId)}
+                                        className="absolute top-3 right-3 p-2 opacity-0 group-hover:opacity-100 hover:bg-red-500/10 text-zinc-600 hover:text-red-500 rounded-xl transition-all z-20"
+                                        aria-label="Remove friend"
+                                    >
+                                        <UserMinus className="w-4 h-4" />
+                                    </button>
+                                </motion.div>
+                            );
+                        })}
+                    </div>
+                </section>
+            )}
+
+            {offlineFriends.length > 0 && (
+                <section>
+                    <div className="flex items-center gap-2 mb-4">
+                        <span className="inline-block w-[2px] h-4 bg-zinc-600 rounded-full" />
+                        <span className="text-[11px] font-black uppercase tracking-[0.2em] text-zinc-500">Offline</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {offlineFriends.map((friend: any) => {
                 const userData = friend.userData;
                 const totalMinutes = userData?.totalMinutes || 0;
-                const hours = Math.floor(totalMinutes / 60);
-                const minutes = totalMinutes % 60;
                 const profileUserId = userData?.uid || userData?.id || friend.friendId;
+                const online = false;
+
                 return (
-                    <motion.div key={friend.friendId} whileHover={{ scale: 1.01, y: -2 }} className="group relative flex items-center gap-4 p-4 rounded-2xl bg-zinc-900/40 border border-white/5 hover:border-white/10 transition-all">
-                        <Link href={`/profile?user=${profileUserId}`} className="flex items-center gap-4 flex-1 min-w-0" aria-label={`Open ${userData?.displayName || "friend"} profile`}>
-                            <Avatar className="w-12 h-12 border border-white/10"><AvatarImage src={userData?.photoURL} /><AvatarFallback>{userData?.displayName?.[0]}</AvatarFallback></Avatar>
-                            <div className="flex-1 min-w-0">
-                                <p className="text-sm font-bold text-white group-hover:text-[#C9B037] transition-colors">{userData?.displayName}</p>
-                                <div className="flex items-center gap-3 mt-1">
-                                    <span className="text-[10px] text-zinc-500 flex items-center gap-1"><Clock className="w-3 h-3" /> {hours}h {minutes}m</span>
-                                    <span className="text-[10px] text-zinc-500 flex items-center gap-1"><Trophy className="w-3 h-3" /> {userData?.totalPomodoros || 0} Sessions</span>
+                    <motion.div
+                        key={friend.friendId}
+                        whileHover={{}}
+                        className={cn(
+                            "group relative rounded-[5px] bg-gradient-to-br from-zinc-900/70 via-zinc-900/50 to-zinc-950/70 backdrop-blur-xl border transition-all duration-500 overflow-hidden",
+                            online
+                                ? "border-emerald-400/45 shadow-[0_12px_34px_rgba(0,0,0,0.42),0_0_18px_rgba(16,185,129,0.22)] hover:border-emerald-300/65 hover:shadow-[0_18px_45px_rgba(0,0,0,0.5),0_0_24px_rgba(16,185,129,0.28)]"
+                                : "border-white/8 shadow-[0_8px_26px_rgba(0,0,0,0.33)] hover:border-white/15 hover:shadow-[0_14px_36px_rgba(0,0,0,0.4)]"
+                        )}
+                    >
+                        <Link href={`/profile?user=${profileUserId}`} className="block p-5" aria-label={`Open ${userData?.displayName || "friend"} profile`}>
+                            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
+                                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/[0.06] via-transparent to-transparent" />
+                            </div>
+                            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/25 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+                            <div className="relative z-10 flex items-start gap-3">
+                                <Avatar className="w-12 h-12 rounded-full overflow-hidden border border-white/20 ring-2 ring-white/10 shadow-[0_0_16px_rgba(255,255,255,0.12)]">
+                                    <AvatarImage src={userData?.photoURL} className="rounded-full object-cover" />
+                                    <AvatarFallback className="rounded-full">{userData?.displayName?.[0]}</AvatarFallback>
+                                </Avatar>
+
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-2xl leading-none font-extrabold text-zinc-100 tracking-tight truncate" style={{ fontFamily: "__nextjs-Geist" }}>
+                                        {userData?.displayName || "Unknown"}
+                                    </p>
+                                    <div className="mt-2 flex items-center gap-1.5 text-[12px] font-semibold">
+                                        <span className={cn("inline-block w-1.5 h-1.5 rounded-full", online ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-zinc-500")} />
+                                        <span className={online ? "text-emerald-400" : "text-zinc-400"}>
+                                            {online ? "Online" : `Offline • Last seen ${formatTimeAgo(userData?.lastActive)}`}
+                                        </span>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            <div className="relative z-10 mt-5 border-t border-white/10 pt-4 grid grid-cols-3 gap-2">
+                                <div>
+                                    <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Focus Time</p>
+                                    <p className="text-lg leading-tight font-black text-zinc-100 tabular-nums">{formatFocusTime(totalMinutes)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Sessions</p>
+                                    <p className="text-lg leading-tight font-black text-zinc-100 tabular-nums">{userData?.totalPomodoros || 0}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Friend Since</p>
+                                    <p className="text-lg leading-tight font-black text-zinc-100 tabular-nums">{formatFriendSince(friend.since)}</p>
                                 </div>
                             </div>
                         </Link>
-                        <button onClick={() => onRemoveFriend(friend.friendId)} className="p-2 opacity-0 group-hover:opacity-100 hover:bg-red-500/10 text-zinc-600 hover:text-red-500 rounded-xl transition-all z-10"><UserMinus className="w-4 h-4" /></button>
+
+                        <button
+                            onClick={() => onRemoveFriend(friend.friendId)}
+                            className="absolute top-3 right-3 p-2 opacity-0 group-hover:opacity-100 hover:bg-red-500/10 text-zinc-600 hover:text-red-500 rounded-xl transition-all z-20"
+                            aria-label="Remove friend"
+                        >
+                            <UserMinus className="w-4 h-4" />
+                        </button>
                     </motion.div>
                 );
-            })}
+                        })}
+                    </div>
+                </section>
+            )}
         </div>
     );
 }
