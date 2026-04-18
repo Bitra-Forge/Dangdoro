@@ -1,14 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { BackgroundTheme } from "@/components/background-theme";
 import { AuthRequired } from "@/components/auth-required";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
-    UserPlus, X, Search, Users, Clock, Trophy, Check,
-    UserCheck, Timer, ChevronRight, UserMinus
+    UserPlus, X, Search, Users, Check,
+    UserCheck, UserMinus
 } from "lucide-react";
 import {
     sendFriendRequest, acceptFriendRequest, declineFriendRequest,
@@ -17,41 +26,82 @@ import {
 } from "@/lib/friendship";
 import { toast } from "sonner";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import Image from "next/image";
+import { motion } from "framer-motion";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 type Tab = "friends" | "requests" | "search";
 
+type FirestoreLikeTimestamp = {
+    toDate?: () => Date;
+    toMillis?: () => number;
+};
+
+type MaybeTimestamp = FirestoreLikeTimestamp | Date | null | undefined;
+
+type FriendUserData = {
+    id?: string;
+    uid?: string;
+    displayName?: string;
+    photoURL?: string;
+    totalMinutes?: number;
+    totalPomodoros?: number;
+    lastActive?: MaybeTimestamp;
+};
+
+type FriendItem = {
+    friendId: string;
+    since?: MaybeTimestamp;
+    userData?: FriendUserData | null;
+};
+
+type RequestItem = {
+    id: string;
+    fromUserId: string;
+    toUserId: string;
+    createdAt?: MaybeTimestamp;
+    fromUserData?: FriendUserData | null;
+    toUserData?: FriendUserData | null;
+};
+
+type SearchUser = FriendUserData & {
+    id?: string;
+    uid?: string;
+    displayName?: string;
+};
+
 export default function FriendsPage() {
     const { user, loading: authLoading } = useAuth();
     const [activeTab, setActiveTab] = useState<Tab>("friends");
-    const [friends, setFriends] = useState<any[]>([]);
-    const [receivedRequests, setReceivedRequests] = useState<any[]>([]);
-    const [sentRequests, setSentRequests] = useState<any[]>([]);
-    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [friends, setFriends] = useState<FriendItem[]>([]);
+    const [receivedRequests, setReceivedRequests] = useState<RequestItem[]>([]);
+    const [sentRequests, setSentRequests] = useState<RequestItem[]>([]);
+    const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [loading, setLoading] = useState(true);
     const [searching, setSearching] = useState(false);
-    const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
+    const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [requestingIds, setRequestingIds] = useState<Set<string>>(new Set());
     const [profileImageUrl, setProfileImageUrl] = useState("");
+    const [unfriendDialogOpen, setUnfriendDialogOpen] = useState(false);
+    const [friendToRemoveId, setFriendToRemoveId] = useState<string | null>(null);
 
     useEffect(() => {
         if (!user) return;
 
         const unsubFriends = subscribeToFriendsList(user.uid, (friendsData) => {
-            setFriends(friendsData);
+            setFriends(friendsData as FriendItem[]);
             setLoading(false);
         });
 
         const unsubRequests = subscribeToReceivedFriendRequests(user.uid, (requests) => {
-            setReceivedRequests(requests);
+            setReceivedRequests(requests as RequestItem[]);
         });
 
         const loadSentRequests = async () => {
             const sent = await getSentFriendRequests(user.uid);
-            setSentRequests(sent);
+            setSentRequests(sent as RequestItem[]);
         };
         loadSentRequests();
 
@@ -59,10 +109,10 @@ export default function FriendsPage() {
             unsubFriends();
             unsubRequests();
         };
-    }, [user?.uid]);
+    }, [user]);
 
     useEffect(() => {
-        if (searchTimeout) clearTimeout(searchTimeout);
+        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
 
         if (!searchQuery.trim()) {
             setSearchResults([]);
@@ -74,11 +124,11 @@ export default function FriendsPage() {
         const timeout = setTimeout(async () => {
             const { searchUsers } = await import("@/lib/friendship");
             const results = await searchUsers(searchQuery, user?.uid || "", 20);
-            setSearchResults(results);
+            setSearchResults(results as SearchUser[]);
             setSearching(false);
         }, 500);
 
-        setSearchTimeout(timeout);
+        searchTimeoutRef.current = timeout;
         return () => clearTimeout(timeout);
     }, [searchQuery, user?.uid]);
 
@@ -117,7 +167,7 @@ export default function FriendsPage() {
         if (success) {
             toast.success(`Friend request sent to ${displayName}`);
             const sent = await getSentFriendRequests(user.uid);
-            setSentRequests(sent);
+            setSentRequests(sent as RequestItem[]);
         } else {
             toast.error("Failed to send friend request");
         }
@@ -157,6 +207,18 @@ export default function FriendsPage() {
         const success = await removeFriend(user.uid, friendId);
         if (success) toast.success("Friend removed");
         else toast.error("Failed to remove friend");
+    };
+
+    const requestRemoveFriend = (friendId: string) => {
+        setFriendToRemoveId(friendId);
+        setUnfriendDialogOpen(true);
+    };
+
+    const confirmRemoveFriend = async () => {
+        if (!friendToRemoveId) return;
+        await handleRemoveFriend(friendToRemoveId);
+        setUnfriendDialogOpen(false);
+        setFriendToRemoveId(null);
     };
 
     const handleCancelRequest = async (requestId: string) => {
@@ -282,11 +344,14 @@ export default function FriendsPage() {
                                 className="w-full mb-8"
                             >
                                 <div className="flex items-center gap-4 md:gap-5">
-                                    <div className="w-20 h-20 md:w-24 md:h-24 overflow-hidden rounded-[2px] border border-emerald-400/45 shadow-[0_0_10px_rgba(16,185,129,0.22)] bg-zinc-800">
+                                    <div className="w-20 h-20 md:w-24 md:h-24 overflow-hidden rounded-[2px] border-2 border-sky-900/60 shadow-[0_0_15px_rgba(12,74,110,0.25)] bg-zinc-800">
                                         {profileImageUrl ? (
-                                            <img
+                                            <Image
                                                 src={profileImageUrl}
                                                 alt="User profile"
+                                                width={96}
+                                                height={96}
+                                                unoptimized
                                                 className="w-full h-full object-cover"
                                             />
                                         ) : (
@@ -313,19 +378,112 @@ export default function FriendsPage() {
                             </motion.div>
 
                             <div className="w-full">
-                                {activeTab === "friends" && <FriendsTab friends={friends} loading={loading} onRemoveFriend={handleRemoveFriend} onGoToSearch={() => setActiveTab("search")} />}
-                                {activeTab === "requests" && <RequestsTab receivedRequests={receivedRequests} sentRequests={sentRequests} onAccept={handleAcceptRequest} onDecline={handleDeclineRequest} onCancel={handleCancelRequest} />}
-                                {activeTab === "search" && <SearchTab searchQuery={searchQuery} setSearchQuery={setSearchQuery} onSearch={setSearchQuery} searching={searching} searchResults={searchResults} onSendRequest={handleSendRequest} friends={friends} sentRequests={sentRequests} requestingIds={requestingIds} />}
+                                {activeTab === "friends" && (
+                                    <FriendsTab 
+                                        friends={friends} 
+                                        loading={loading} 
+                                        onRemoveFriend={requestRemoveFriend} 
+                                        onGoToSearch={() => setActiveTab("search")} 
+                                    />
+                                )}
+                                {activeTab === "requests" && (
+                                    <RequestsTab 
+                                        receivedRequests={receivedRequests} 
+                                        sentRequests={sentRequests} 
+                                        onAccept={handleAcceptRequest} 
+                                        onDecline={handleDeclineRequest} 
+                                        onCancel={handleCancelRequest} 
+                                    />
+                                )}
+                                {activeTab === "search" && (
+                                    <SearchTab 
+                                        searchQuery={searchQuery} 
+                                        setSearchQuery={setSearchQuery} 
+                                        searching={searching} 
+                                        searchResults={searchResults} 
+                                        onSendRequest={handleSendRequest} 
+                                        friends={friends} 
+                                        sentRequests={sentRequests} 
+                                        requestingIds={requestingIds} 
+                                    />
+                                )}
                             </div>
                         </div>
                     </div>
                 </main>
+
+                <Dialog
+                    open={unfriendDialogOpen}
+                    onOpenChange={(open) => {
+                        setUnfriendDialogOpen(open);
+                        if (!open) setFriendToRemoveId(null);
+                    }}
+                >
+                    <DialogContent className="rounded-[5px] bg-zinc-900 border border-white/10 text-zinc-100">
+                        <DialogHeader>
+                            <DialogTitle className="ubuntu-bold text-zinc-100">Unfriend user?</DialogTitle>
+                            <DialogDescription className="ubuntu-regular text-zinc-400">
+                                This will remove the friend connection for both of you.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter className="rounded-b-[5px] bg-transparent border-t border-white/10 p-3 pt-4 gap-2">
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setUnfriendDialogOpen(false);
+                                    setFriendToRemoveId(null);
+                                }}
+                                className="h-9 rounded-[5px] border-white/15 px-4 ubuntu-medium text-zinc-300 hover:bg-white/5 hover:text-white"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={confirmRemoveFriend}
+                                className="h-9 rounded-[5px] border border-red-500/30 bg-red-500/15 px-4 ubuntu-medium text-red-300 hover:bg-red-500/25 hover:text-red-200"
+                            >
+                                Unfriend
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </BackgroundTheme>
     );
 }
 
-function FriendsTab({ friends, loading, onRemoveFriend, onGoToSearch }: any) {
+function formatTimeAgo(timestamp: MaybeTimestamp) {
+    if (!timestamp) return "unknown";
+    const date = timestamp instanceof Date ? timestamp : timestamp.toDate?.();
+    if (!date) return "unknown";
+    const diffMs = Date.now() - date.getTime();
+    const minutes = Math.floor(diffMs / 60000);
+    if (minutes < 1) return "just now";
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days}d ago`;
+    const months = Math.floor(days / 30);
+    if (months < 12) return `${months}mo ago`;
+    const years = Math.floor(months / 12);
+    return `${years}y ago`;
+}
+
+type FriendsTabProps = {
+    friends: FriendItem[];
+    loading: boolean;
+    onRemoveFriend: (friendId: string) => void;
+    onGoToSearch: () => void;
+};
+
+function FriendsTab({ friends, loading, onRemoveFriend, onGoToSearch }: FriendsTabProps) {
+    const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+    useEffect(() => {
+        const intervalId = setInterval(() => setCurrentTime(Date.now()), 60_000);
+        return () => clearInterval(intervalId);
+    }, []);
+
     const formatFocusTime = (totalMinutes: number) => {
         const hours = Math.floor(totalMinutes / 60);
         const minutes = totalMinutes % 60;
@@ -334,36 +492,22 @@ function FriendsTab({ friends, loading, onRemoveFriend, onGoToSearch }: any) {
         return `${hours}h ${minutes}m`;
     };
 
-    const formatTimeAgo = (timestamp: any) => {
-        if (!timestamp?.toDate) return "unknown";
-        const date = timestamp.toDate() as Date;
-        const diffMs = Date.now() - date.getTime();
-        const minutes = Math.floor(diffMs / 60000);
-        if (minutes < 1) return "just now";
-        if (minutes < 60) return `${minutes}m ago`;
-        const hours = Math.floor(minutes / 60);
-        if (hours < 24) return `${hours}h ago`;
-        const days = Math.floor(hours / 24);
-        if (days < 30) return `${days}d ago`;
-        const months = Math.floor(days / 30);
-        if (months < 12) return `${months}mo ago`;
-        const years = Math.floor(months / 12);
-        return `${years}y ago`;
+    const formatFriendSince = (timestamp: MaybeTimestamp) => {
+        if (!timestamp) return "---";
+        const date = timestamp instanceof Date ? timestamp : timestamp.toDate?.();
+        if (!date) return "---";
+        return date.getFullYear();
     };
 
-    const formatFriendSince = (timestamp: any) => {
-        if (!timestamp?.toDate) return "---";
-        return timestamp.toDate().getFullYear();
+    const isOnline = (timestamp: MaybeTimestamp) => {
+        if (!timestamp) return false;
+        const lastActive = timestamp instanceof Date ? timestamp : timestamp.toDate?.();
+        if (!lastActive) return false;
+        return currentTime - lastActive.getTime() <= 5 * 60 * 1000;
     };
 
-    const isOnline = (timestamp: any) => {
-        if (!timestamp?.toDate) return false;
-        const lastActive = timestamp.toDate() as Date;
-        return Date.now() - lastActive.getTime() <= 5 * 60 * 1000;
-    };
-
-    const onlineFriends = friends.filter((friend: any) => isOnline(friend?.userData?.lastActive));
-    const offlineFriends = friends.filter((friend: any) => !isOnline(friend?.userData?.lastActive));
+    const onlineFriends = friends.filter((friend) => isOnline(friend?.userData?.lastActive));
+    const offlineFriends = friends.filter((friend) => !isOnline(friend?.userData?.lastActive));
 
     if (loading) return <div className="flex flex-col items-center justify-center py-20 gap-4"><div className="w-10 h-10 border-4 border-[#C9B037]/20 border-t-[#C9B037] rounded-full animate-spin" /></div>;
     if (friends.length === 0) return (
@@ -383,10 +527,10 @@ function FriendsTab({ friends, loading, onRemoveFriend, onGoToSearch }: any) {
                 <section>
                     <div className="flex items-center gap-2 mb-4">
                         <span className="inline-block w-[2px] h-4 bg-emerald-400 rounded-full" />
-                        <span className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-400">Online</span>
+                        <span className="ubuntu-bold text-[12px] font-black tracking-[0.2em] text-emerald-400">Online</span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {onlineFriends.map((friend: any) => {
+                        {onlineFriends.map((friend) => {
                             const userData = friend.userData;
                             const totalMinutes = userData?.totalMinutes || 0;
                             const profileUserId = userData?.uid || userData?.id || friend.friendId;
@@ -396,30 +540,24 @@ function FriendsTab({ friends, loading, onRemoveFriend, onGoToSearch }: any) {
                                 <motion.div
                                     key={friend.friendId}
                                     whileHover={{}}
-                                    className={cn(
-                                        "group relative rounded-[5px] bg-gradient-to-br from-zinc-900/70 via-zinc-900/50 to-zinc-950/70 backdrop-blur-xl border transition-all duration-500 overflow-hidden",
-                                        online
-                                            ? "border-emerald-400/45 shadow-[0_12px_34px_rgba(0,0,0,0.42),0_0_18px_rgba(16,185,129,0.22)] hover:border-emerald-300/65 hover:shadow-[0_18px_45px_rgba(0,0,0,0.5),0_0_24px_rgba(16,185,129,0.28)]"
-                                            : "border-white/8 shadow-[0_8px_26px_rgba(0,0,0,0.33)] hover:border-white/15 hover:shadow-[0_14px_36px_rgba(0,0,0,0.4)]"
-                                    )}
+                                    className="ubuntu-regular group relative rounded-[5px] bg-zinc-900/40 backdrop-blur-xl border border-white/5 hover:border-white/10 shadow-2xl transition-all duration-300 overflow-hidden"
                                 >
                                     <Link href={`/profile?user=${profileUserId}`} className="block p-5" aria-label={`Open ${userData?.displayName || "friend"} profile`}>
-                                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-                                            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/[0.06] via-transparent to-transparent" />
+                                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                                            <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-300/60 to-transparent shadow-[0_0_8px_rgba(110,231,183,0.3)]" />
                                         </div>
-                                        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/25 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
                                         <div className="relative z-10 flex items-start gap-3">
-                                            <Avatar className="w-12 h-12 rounded-full overflow-hidden border border-emerald-400/70 ring-2 ring-emerald-500/35 shadow-[0_0_14px_rgba(16,185,129,0.35)]">
+                                            <Avatar className="w-12 h-12 rounded-full overflow-hidden border border-white/10">
                                                 <AvatarImage src={userData?.photoURL} className="rounded-full object-cover" />
                                                 <AvatarFallback className="rounded-full">{userData?.displayName?.[0]}</AvatarFallback>
                                             </Avatar>
 
                                             <div className="min-w-0 flex-1">
-                                                <p className="text-2xl leading-none font-extrabold text-zinc-100 tracking-tight truncate" style={{ fontFamily: "__nextjs-Geist" }}>
+                                                <p className="ubuntu-bold text-xl leading-none font-extrabold text-zinc-100 tracking-tight truncate">
                                                     {userData?.displayName || "Unknown"}
                                                 </p>
-                                                <div className="mt-2 flex items-center gap-1.5 text-[12px] font-semibold">
+                                                <div className="ubuntu-medium mt-2 flex items-center gap-1.5 text-[12px] font-semibold">
                                                     <span className={cn("inline-block w-1.5 h-1.5 rounded-full", online ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-zinc-500")} />
                                                     <span className={online ? "text-emerald-400" : "text-zinc-400"}>
                                                         {online ? "Online" : `Offline • Last seen ${formatTimeAgo(userData?.lastActive)}`}
@@ -430,27 +568,33 @@ function FriendsTab({ friends, loading, onRemoveFriend, onGoToSearch }: any) {
                                         </div>
 
                                         <div className="relative z-10 mt-5 border-t border-white/10 pt-4 grid grid-cols-3 gap-2">
-                                            <div>
-                                                <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Focus Time</p>
-                                                <p className="text-lg leading-tight font-black text-zinc-100 tabular-nums">{formatFocusTime(totalMinutes)}</p>
+                                            <div className="text-center">
+                                                <p className="ubuntu-medium text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Focus Time</p>
+                                                <p className="ubuntu-bold text-base leading-tight font-black text-zinc-100 tabular-nums">{formatFocusTime(totalMinutes)}</p>
                                             </div>
-                                            <div>
-                                                <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Sessions</p>
-                                                <p className="text-lg leading-tight font-black text-zinc-100 tabular-nums">{userData?.totalPomodoros || 0}</p>
+                                            <div className="text-center">
+                                                <p className="ubuntu-medium text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Sessions</p>
+                                                <p className="ubuntu-bold text-base leading-tight font-black text-zinc-100 tabular-nums">{userData?.totalPomodoros || 0}</p>
                                             </div>
-                                            <div>
-                                                <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Friend Since</p>
-                                                <p className="text-lg leading-tight font-black text-zinc-100 tabular-nums">{formatFriendSince(friend.since)}</p>
+                                            <div className="text-center">
+                                                <p className="ubuntu-medium text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Friend Since</p>
+                                                <p className="ubuntu-bold text-base leading-tight font-black text-zinc-100 tabular-nums">{formatFriendSince(friend.since)}</p>
                                             </div>
                                         </div>
                                     </Link>
 
                                     <button
                                         onClick={() => onRemoveFriend(friend.friendId)}
-                                        className="absolute top-3 right-3 p-2 opacity-0 group-hover:opacity-100 hover:bg-red-500/10 text-zinc-600 hover:text-red-500 rounded-xl transition-all z-20"
+                                        className="absolute top-3 right-3 p-2 opacity-0 translate-y-1 scale-95 group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 text-red-500 hover:text-red-400 cursor-pointer transition-all duration-200 ease-out z-20"
                                         aria-label="Remove friend"
                                     >
-                                        <UserMinus className="w-4 h-4" />
+                                        <motion.span
+                                            whileHover={{ scale: 1.12 }}
+                                            transition={{ duration: 0.18, ease: "easeOut" }}
+                                            className="inline-flex"
+                                        >
+                                            <UserMinus className="w-4 h-4" />
+                                        </motion.span>
                                     </button>
                                 </motion.div>
                             );
@@ -463,77 +607,76 @@ function FriendsTab({ friends, loading, onRemoveFriend, onGoToSearch }: any) {
                 <section>
                     <div className="flex items-center gap-2 mb-4">
                         <span className="inline-block w-[2px] h-4 bg-zinc-600 rounded-full" />
-                        <span className="text-[11px] font-black uppercase tracking-[0.2em] text-zinc-500">Offline</span>
+                        <span className="ubuntu-bold text-[12px] font-black tracking-[0.2em] text-zinc-500">Offline</span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {offlineFriends.map((friend: any) => {
-                const userData = friend.userData;
-                const totalMinutes = userData?.totalMinutes || 0;
-                const profileUserId = userData?.uid || userData?.id || friend.friendId;
-                const online = false;
+                        {offlineFriends.map((friend) => {
+                            const userData = friend.userData;
+                            const totalMinutes = userData?.totalMinutes || 0;
+                            const profileUserId = userData?.uid || userData?.id || friend.friendId;
+                            const online = false;
 
-                return (
-                    <motion.div
-                        key={friend.friendId}
-                        whileHover={{}}
-                        className={cn(
-                            "group relative rounded-[5px] bg-gradient-to-br from-zinc-900/70 via-zinc-900/50 to-zinc-950/70 backdrop-blur-xl border transition-all duration-500 overflow-hidden",
-                            online
-                                ? "border-emerald-400/45 shadow-[0_12px_34px_rgba(0,0,0,0.42),0_0_18px_rgba(16,185,129,0.22)] hover:border-emerald-300/65 hover:shadow-[0_18px_45px_rgba(0,0,0,0.5),0_0_24px_rgba(16,185,129,0.28)]"
-                                : "border-white/8 shadow-[0_8px_26px_rgba(0,0,0,0.33)] hover:border-white/15 hover:shadow-[0_14px_36px_rgba(0,0,0,0.4)]"
-                        )}
-                    >
-                        <Link href={`/profile?user=${profileUserId}`} className="block p-5" aria-label={`Open ${userData?.displayName || "friend"} profile`}>
-                            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-                                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/[0.06] via-transparent to-transparent" />
-                            </div>
-                            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/25 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                            return (
+                                <motion.div
+                                    key={friend.friendId}
+                                    whileHover={{}}
+                                    className="ubuntu-regular group relative rounded-[5px] bg-zinc-900/40 backdrop-blur-xl border border-white/5 hover:border-white/10 shadow-2xl transition-all duration-300 overflow-hidden"
+                                >
+                                    <Link href={`/profile?user=${profileUserId}`} className="block p-5" aria-label={`Open ${userData?.displayName || "friend"} profile`}>
+                                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                                            <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-sky-300/60 to-transparent shadow-[0_0_8px_rgba(125,211,252,0.3)]" />
+                                        </div>
 
-                            <div className="relative z-10 flex items-start gap-3">
-                                <Avatar className="w-12 h-12 rounded-full overflow-hidden border border-white/20 ring-2 ring-white/10 shadow-[0_0_16px_rgba(255,255,255,0.12)]">
-                                    <AvatarImage src={userData?.photoURL} className="rounded-full object-cover" />
-                                    <AvatarFallback className="rounded-full">{userData?.displayName?.[0]}</AvatarFallback>
-                                </Avatar>
+                                        <div className="relative z-10 flex items-start gap-3">
+                                            <Avatar className="w-12 h-12 rounded-full overflow-hidden border border-white/10">
+                                                <AvatarImage src={userData?.photoURL} className="rounded-full object-cover" />
+                                                <AvatarFallback className="rounded-full">{userData?.displayName?.[0]}</AvatarFallback>
+                                            </Avatar>
 
-                                <div className="min-w-0 flex-1">
-                                    <p className="text-2xl leading-none font-extrabold text-zinc-100 tracking-tight truncate" style={{ fontFamily: "__nextjs-Geist" }}>
-                                        {userData?.displayName || "Unknown"}
-                                    </p>
-                                    <div className="mt-2 flex items-center gap-1.5 text-[12px] font-semibold">
-                                        <span className={cn("inline-block w-1.5 h-1.5 rounded-full", online ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-zinc-500")} />
-                                        <span className={online ? "text-emerald-400" : "text-zinc-400"}>
-                                            {online ? "Online" : `Offline • Last seen ${formatTimeAgo(userData?.lastActive)}`}
-                                        </span>
-                                    </div>
-                                </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="ubuntu-bold text-xl leading-none font-extrabold text-zinc-100 tracking-tight truncate">
+                                                    {userData?.displayName || "Unknown"}
+                                                </p>
+                                                <div className="ubuntu-medium mt-2 flex items-center gap-1.5 text-[12px] font-semibold">
+                                                    <span className={cn("inline-block w-1.5 h-1.5 rounded-full", online ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-zinc-500")} />
+                                                    <span className={online ? "text-emerald-400" : "text-zinc-400"}>
+                                                        {online ? "Online" : `Offline • Last seen ${formatTimeAgo(userData?.lastActive)}`}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
 
-                            </div>
+                                        <div className="relative z-10 mt-5 border-t border-white/10 pt-4 grid grid-cols-3 gap-2">
+                                            <div className="text-center">
+                                                <p className="ubuntu-medium text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Focus Time</p>
+                                                <p className="ubuntu-bold text-base leading-tight font-black text-zinc-100 tabular-nums">{formatFocusTime(totalMinutes)}</p>
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="ubuntu-medium text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Sessions</p>
+                                                <p className="ubuntu-bold text-base leading-tight font-black text-zinc-100 tabular-nums">{userData?.totalPomodoros || 0}</p>
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="ubuntu-medium text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Friend Since</p>
+                                                <p className="ubuntu-bold text-base leading-tight font-black text-zinc-100 tabular-nums">{formatFriendSince(friend.since)}</p>
+                                            </div>
+                                        </div>
+                                    </Link>
 
-                            <div className="relative z-10 mt-5 border-t border-white/10 pt-4 grid grid-cols-3 gap-2">
-                                <div>
-                                    <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Focus Time</p>
-                                    <p className="text-lg leading-tight font-black text-zinc-100 tabular-nums">{formatFocusTime(totalMinutes)}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Sessions</p>
-                                    <p className="text-lg leading-tight font-black text-zinc-100 tabular-nums">{userData?.totalPomodoros || 0}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Friend Since</p>
-                                    <p className="text-lg leading-tight font-black text-zinc-100 tabular-nums">{formatFriendSince(friend.since)}</p>
-                                </div>
-                            </div>
-                        </Link>
-
-                        <button
-                            onClick={() => onRemoveFriend(friend.friendId)}
-                            className="absolute top-3 right-3 p-2 opacity-0 group-hover:opacity-100 hover:bg-red-500/10 text-zinc-600 hover:text-red-500 rounded-xl transition-all z-20"
-                            aria-label="Remove friend"
-                        >
-                            <UserMinus className="w-4 h-4" />
-                        </button>
-                    </motion.div>
-                );
+                                    <button
+                                        onClick={() => onRemoveFriend(friend.friendId)}
+                                        className="absolute top-3 right-3 p-2 opacity-0 translate-y-1 scale-95 group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 text-red-500 hover:text-red-400 cursor-pointer transition-all duration-200 ease-out z-20"
+                                        aria-label="Remove friend"
+                                    >
+                                        <motion.span
+                                            whileHover={{ scale: 1.12 }}
+                                            transition={{ duration: 0.18, ease: "easeOut" }}
+                                            className="inline-flex"
+                                        >
+                                            <UserMinus className="w-4 h-4" />
+                                        </motion.span>
+                                    </button>
+                                </motion.div>
+                            );
                         })}
                     </div>
                 </section>
@@ -542,42 +685,157 @@ function FriendsTab({ friends, loading, onRemoveFriend, onGoToSearch }: any) {
     );
 }
 
-function RequestsTab({ receivedRequests, sentRequests, onAccept, onDecline, onCancel }: any) {
+type RequestsTabProps = {
+    receivedRequests: RequestItem[];
+    sentRequests: RequestItem[];
+    onAccept: (requestId: string, fromUserId: string) => void;
+    onDecline: (requestId: string) => void;
+    onCancel: (requestId: string) => void;
+};
+
+function RequestsTab({ receivedRequests, sentRequests, onAccept, onDecline, onCancel }: RequestsTabProps) {
     return (
-        <div className="space-y-8">
+        <div className="space-y-10">
+            {receivedRequests.length > 0 && (
+                <section>
+                    <div className="flex items-center gap-2 mb-4">
+                        <span className="inline-block w-[2px] h-4 bg-sky-400 rounded-full" />
+                        <span className="ubuntu-bold text-[12px] font-black tracking-[0.2em] text-zinc-400">Received ({receivedRequests.length})</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {receivedRequests.map((req) => {
+                            const profileUserId = req.fromUserData?.uid || req.fromUserData?.id || req.fromUserId;
+
+                            return (
+                                <motion.div
+                                    key={req.id}
+                                    whileHover={{}}
+                                    className="ubuntu-regular group relative rounded-[5px] bg-zinc-900/40 backdrop-blur-xl border border-white/5 hover:border-white/10 shadow-2xl transition-all duration-300 overflow-hidden"
+                                >
+                                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                                        <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-yellow-300/60 to-transparent shadow-[0_0_8px_rgba(253,224,71,0.3)]" />
+                                    </div>
+
+                                    <div className="relative z-10 p-5">
+                                        <Link href={`/profile?user=${profileUserId}`} className="flex items-center gap-3 rounded-[8px] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/60" aria-label={`Open ${req.fromUserData?.displayName || "user"} profile`}>
+                                            <Avatar className="w-12 h-12 rounded-full overflow-hidden border border-white/10">
+                                                <AvatarImage src={req.fromUserData?.photoURL} className="rounded-full object-cover" />
+                                                <AvatarFallback className="rounded-full">{req.fromUserData?.displayName?.[0]}</AvatarFallback>
+                                            </Avatar>
+
+                                            <div className="min-w-0 flex-1">
+                                                <p className="ubuntu-bold text-lg leading-tight font-extrabold text-zinc-100 tracking-tight truncate">
+                                                    {req.fromUserData?.displayName || "Unknown"}
+                                                </p>
+                                                <div className="mt-1 flex items-center justify-between">
+                                                    <p className="text-[11px] font-semibold text-zinc-400">Incoming request</p>
+                                                    {req.createdAt && (
+                                                        <p className="text-[10px] text-zinc-500 font-medium">{formatTimeAgo(req.createdAt)}</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </Link>
+
+                                        <div className="mt-5 grid grid-cols-2 gap-2">
+                                            <button
+                                                onClick={() => onAccept(req.id, req.fromUserId)}
+                                                className="h-10 rounded-[8px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400/90 hover:bg-emerald-500/20 hover:border-emerald-500/40 hover:text-emerald-400 transition-all font-bold text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 group/btn"
+                                            >
+                                                <Check className="w-3.5 h-3.5 transition-transform group-hover/btn:scale-110" />
+                                                <span>Accept</span>
+                                            </button>
+                                            <button
+                                                onClick={() => onDecline(req.id)}
+                                                className="h-10 rounded-[8px] bg-zinc-800/50 border border-white/5 text-zinc-400 hover:bg-red-500/10 hover:border-red-500/20 hover:text-red-400 transition-all font-bold text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 group/btn"
+                                            >
+                                                <X className="w-3.5 h-3.5 transition-transform group-hover/btn:scale-110" />
+                                                <span>Decline</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            );
+                        })}
+                    </div>
+                </section>
+            )}
+
             <section>
-                <h3 className="text-xs font-black uppercase text-zinc-600 tracking-widest mb-4 px-2">Received ({receivedRequests.length})</h3>
-                <div className="space-y-3">
-                    {receivedRequests.map((req: any) => (
-                        <div key={req.id} className="flex items-center gap-4 p-4 rounded-2xl bg-zinc-900/60 border border-white/5">
-                            <Avatar className="w-10 h-10"><AvatarImage src={req.fromUserData?.photoURL} /><AvatarFallback>{req.fromUserData?.displayName?.[0]}</AvatarFallback></Avatar>
-                            <div className="flex-1"><p className="text-sm font-bold text-white">{req.fromUserData?.displayName}</p></div>
-                            <div className="flex gap-2">
-                                <button onClick={() => onAccept(req.id, req.fromUserId)} className="p-2 bg-green-500/20 text-green-400 rounded-xl hover:bg-green-500/30 transition-all"><Check className="w-4 h-4" /></button>
-                                <button onClick={() => onDecline(req.id)} className="p-2 bg-red-500/20 text-red-500 rounded-xl hover:bg-red-500/30 transition-all"><X className="w-4 h-4" /></button>
-                            </div>
-                        </div>
-                    ))}
-                    {receivedRequests.length === 0 && <p className="text-center py-6 text-zinc-700 text-xs font-bold uppercase tracking-widest">No incoming requests</p>}
+                <div className="flex items-center gap-2 mb-4">
+                    <span className="inline-block w-[2px] h-4 bg-zinc-600 rounded-full" />
+                    <span className="ubuntu-bold text-[12px] font-black tracking-[0.2em] text-zinc-500">Sent ({sentRequests.length})</span>
                 </div>
-            </section>
-            <section>
-                <h3 className="text-xs font-black uppercase text-zinc-600 tracking-widest mb-4 px-2">Sent ({sentRequests.length})</h3>
-                <div className="space-y-3">
-                    {sentRequests.map((req: any) => (
-                        <div key={req.id} className="flex items-center gap-4 p-4 rounded-2xl bg-zinc-900/40 border border-white/5 opacity-70">
-                            <Avatar className="w-10 h-10"><AvatarImage src={req.toUserData?.photoURL} /><AvatarFallback>{req.toUserData?.displayName?.[0]}</AvatarFallback></Avatar>
-                            <div className="flex-1"><p className="text-sm font-bold text-white">{req.toUserData?.displayName}</p></div>
-                            <button onClick={() => onCancel(req.id)} className="px-3 py-1.5 bg-zinc-800 text-zinc-400 rounded-lg text-[10px] font-bold hover:bg-zinc-700">Cancel</button>
-                        </div>
-                    ))}
-                </div>
+                {sentRequests.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {sentRequests.map((req) => {
+                            const profileUserId = req.toUserData?.uid || req.toUserData?.id || req.toUserId;
+
+                            return (
+                                <motion.div
+                                    key={req.id}
+                                    whileHover={{}}
+                                    className="ubuntu-regular group relative rounded-[5px] bg-zinc-900/40 backdrop-blur-xl border border-white/5 hover:border-white/10 shadow-2xl transition-all duration-300 overflow-hidden"
+                                >
+                                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                                        <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-yellow-300/60 to-transparent shadow-[0_0_8px_rgba(253,224,71,0.3)]" />
+                                    </div>
+
+                                    <div className="relative z-10 p-5">
+                                        <Link href={`/profile?user=${profileUserId}`} className="flex items-center gap-3 rounded-[8px] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60" aria-label={`Open ${req.toUserData?.displayName || "user"} profile`}>
+                                            <Avatar className="w-12 h-12 rounded-full overflow-hidden border border-white/10">
+                                                <AvatarImage src={req.toUserData?.photoURL} className="rounded-full object-cover" />
+                                                <AvatarFallback className="rounded-full">{req.toUserData?.displayName?.[0]}</AvatarFallback>
+                                            </Avatar>
+
+                                            <div className="min-w-0 flex-1">
+                                                <p className="ubuntu-bold text-lg leading-tight font-extrabold text-zinc-100 tracking-tight truncate">
+                                                    {req.toUserData?.displayName || "Unknown"}
+                                                </p>
+                                                <div className="mt-1 flex items-center justify-between">
+                                                    <p className="text-[11px] font-semibold text-zinc-400">Pending approval</p>
+                                                    {req.createdAt && (
+                                                        <p className="text-[10px] text-zinc-500 font-medium">{formatTimeAgo(req.createdAt)}</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </Link>
+
+                                        <div className="mt-5">
+                                            <button
+                                                onClick={() => onCancel(req.id)}
+                                                className="w-full h-10 rounded-[8px] bg-zinc-800/40 border border-white/5 text-zinc-500 hover:text-red-400 hover:bg-red-500/5 hover:border-red-500/20 transition-all font-bold text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 group/btn"
+                                            >
+                                                <UserMinus className="w-3.5 h-3.5 opacity-0 scale-95 transition-all duration-200 group-hover/btn:opacity-100 group-hover/btn:scale-110" />
+                                                <span>Cancel Request</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="rounded-[10px] border border-white/10 bg-zinc-900/45 px-6 py-10 text-center">
+                        <p className="text-zinc-600 text-[11px] font-black uppercase tracking-[0.2em]">No sent requests</p>
+                    </div>
+                )}
             </section>
         </div>
     );
 }
 
-function SearchTab({ searchQuery, setSearchQuery, onSearch, searching, searchResults, onSendRequest, friends, sentRequests, requestingIds }: any) {
+type SearchTabProps = {
+    searchQuery: string;
+    setSearchQuery: (value: string) => void;
+    searching: boolean;
+    searchResults: SearchUser[];
+    onSendRequest: (toUserId: string, displayName: string) => void;
+    friends: FriendItem[];
+    sentRequests: RequestItem[];
+    requestingIds: Set<string>;
+};
+
+function SearchTab({ searchQuery, setSearchQuery, searching, searchResults, onSendRequest, friends, sentRequests, requestingIds }: SearchTabProps) {
     return (
         <div className="space-y-6">
             <div className="relative">
@@ -585,28 +843,28 @@ function SearchTab({ searchQuery, setSearchQuery, onSearch, searching, searchRes
                 <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search focusers by name..." className="w-full bg-zinc-900 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:border-[#C9B037]/40 outline-none transition-all" />
             </div>
             <div className="space-y-3">
-                {searchResults.map((res: any) => {
-                    const recipientId = res.id || res.uid;
-                    const isFriend = friends.some((f: any) => f.friendId === recipientId);
-                    const hasSentRequest = sentRequests.some((r: any) => r.toUserId === recipientId);
+                {searchResults.map((res) => {
+                    const recipientId = res.id ?? res.uid ?? "";
+                    const isFriend = friends.some((f) => f.friendId === recipientId);
+                    const hasSentRequest = sentRequests.some((r) => r.toUserId === recipientId);
                     const isRequesting = requestingIds.has(recipientId);
                     return (
-                        <div key={recipientId} className="flex items-center gap-4 p-4 bg-zinc-900/40 rounded-2xl border border-white/5">
+                        <div key={recipientId} className="ubuntu-regular flex items-center gap-4 p-4 bg-zinc-900/40 rounded-2xl border border-white/5">
                             <Avatar className="w-10 h-10"><AvatarImage src={res.photoURL} /><AvatarFallback>{res.displayName?.[0]}</AvatarFallback></Avatar>
-                            <div className="flex-1"><p className="text-sm font-bold text-white">{res.displayName}</p></div>
+                            <div className="flex-1"><p className="ubuntu-bold text-sm font-bold text-white">{res.displayName}</p></div>
                             {isFriend ? (
                                 <span className="px-3 py-1.5 bg-green-500/10 text-green-400 rounded-lg text-[10px] font-black uppercase tracking-widest">Friend</span>
                             ) : hasSentRequest ? (
                                 <span className="px-3 py-1.5 bg-yellow-500/10 text-yellow-400 rounded-lg text-[10px] font-black uppercase tracking-widest">Pending</span>
                             ) : (
-                                <button onClick={() => onSendRequest(recipientId, res.displayName)} disabled={isRequesting || !recipientId} className="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all">
+                                <button onClick={() => onSendRequest(recipientId, res.displayName ?? "Unknown")} disabled={isRequesting || !recipientId} className="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all">
                                     {isRequesting ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <UserPlus className="w-4 h-4" />}
                                 </button>
                             )}
                         </div>
                     );
                 })}
-                {searchQuery && !searching && searchResults.length === 0 && <p className="text-center py-10 text-zinc-600 text-sm">No users found matching "{searchQuery}"</p>}
+                {searchQuery && !searching && searchResults.length === 0 && <p className="text-center py-10 text-zinc-600 text-sm">No users found matching &quot;{searchQuery}&quot;</p>}
             </div>
         </div>
     );

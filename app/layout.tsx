@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Figtree, Geist_Mono, Noto_Serif } from "next/font/google";
+import { Figtree, Geist_Mono, Noto_Serif, Ubuntu } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/components/AuthProvider";
@@ -25,6 +25,12 @@ const notoSerif = Noto_Serif({
   subsets: ["latin"],
 });
 
+const ubuntu = Ubuntu({
+  variable: "--font-ubuntu",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "700"],
+});
+
 export const metadata: Metadata = {
   title: "Dangdoro",
   description: "Focus. Compete. Win. — Real-time Pomodoro Leaderboard",
@@ -41,7 +47,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${figtree.variable} ${geistMono.variable} ${notoSerif.variable} h-full antialiased`}
+      className={`${figtree.variable} ${geistMono.variable} ${notoSerif.variable} ${ubuntu.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-zinc-950 text-white">
