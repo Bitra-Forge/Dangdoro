@@ -38,6 +38,8 @@ interface TimerState {
   clearTask: () => void;
   activeGroupId: string | null;
   setActiveGroupId: (id: string | null) => void;
+  activeLiveSessionId: string | null;
+  setLiveSessionId: (id: string | null) => void;
 
   // Actions
   start: () => void;
@@ -136,6 +138,8 @@ export const useTimerStore = create<TimerState>()(
       activeTaskPriority: null,
       activeGroupId: null,
       setActiveGroupId: (id) => set({ activeGroupId: id }),
+      activeLiveSessionId: null,
+      setLiveSessionId: (id) => set({ activeLiveSessionId: id }),
       setSettingsGlassmorphism: (enabled) => set({ settingsGlassmorphism: enabled }),
 
       loadTask: (id, label, durationSeconds, priority, notes) => {

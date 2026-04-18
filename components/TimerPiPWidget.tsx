@@ -4,7 +4,10 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useTimerStore } from "@/lib/store";
 import Image from "next/image";
-import { Play, Pause, GripHorizontal, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { onSnapshot, doc, collection, query, where } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { Play, Pause, GripHorizontal, X, Flame, Users as UsersIcon } from "lucide-react";
 import Link from "next/link";
 
 // ============================================================================
@@ -473,6 +476,37 @@ export function TimerPiPWidget() {
   const initialLongBreakTime = useTimerStore((s) => s.initialLongBreakTime);
   const start = useTimerStore((s) => s.start);
   const pause = useTimerStore((s) => s.pause);
+  const activeGroupId = useTimerStore((s) => s.activeGroupId);
+  const [activeMembers, setActiveMembers] = useState<any[]>([]);
+  const [groupData, setGroupData] = useState<any>(null);
+
+  // Sync group data if active
+  useEffect(() => {
+    if (!activeGroupId) {
+      setGroupData(null);
+      setActiveMembers([]);
+      return;
+    }
+
+    const unsubGroup = onSnapshot(doc(db, "focusGroups", activeGroupId), (snap) => {
+      if (snap.exists()) setGroupData(snap.data());
+    });
+
+    const unsubLive = onSnapshot(
+      query(collection(db, "liveSessions"), where("groupId", "==", activeGroupId)),
+      (snap) => {
+        setActiveMembers(snap.docs.map(d => d.data()));
+      }
+    );
+
+    return () => {
+      unsubGroup();
+      unsubLive();
+    };
+  }, [activeGroupId]);
+
+  const synergy = activeMembers.length > 0 ? Math.min(100, activeMembers.length * 25) : 0;
+  const synergyColor = synergy > 70 ? "text-[#E8821A]" : synergy > 30 ? "text-amber-400" : "text-sky-400";
 
   // Hooks
   const { position, isDragging, handleMouseDown, handleTouchStart } = useDraggable(widgetRef);
@@ -578,6 +612,12 @@ export function TimerPiPWidget() {
                 <span className={`text-[10px] font-bold uppercase tracking-widest ${modeStyle.text}`}>
                   {MODE_LABELS[mode]}
                 </span>
+                {groupData && (
+                  <div className="flex items-center gap-1.5 ml-2 pl-2 border-l border-white/10">
+                    <Flame className={cn("w-3 h-3", synergyColor)} />
+                    <span className={cn("text-[9px] font-black", synergyColor)}>{synergy}%</span>
+                  </div>
+                )}
               </div>
 
               {/* Dismiss button */}
@@ -596,6 +636,36 @@ export function TimerPiPWidget() {
                 {formatTime(timeLeft)}
               </span>
             </Link>
+
+            {/* Group Presence Row */}
+            {activeMembers.length > 0 && (
+              <div className="flex items-center justify-center gap-1 mb-4">
+                <div className="flex -space-x-1.5">
+                  {activeMembers.slice(0, 4).map((m, i) => (
+                    <div key={i} className="relative">
+                      <div className="w-5 h-5 rounded-full border border-zinc-950 overflow-hidden bg-zinc-800">
+                        {m.userPhoto ? (
+                          <img src={m.userPhoto} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-[7px] font-bold text-zinc-500">
+                            {m.userName?.[0]}
+                          </div>
+                        )}
+                      </div>
+                      <div className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 bg-orange-500 rounded-full border border-zinc-950" />
+                    </div>
+                  ))}
+                  {activeMembers.length > 4 && (
+                    <div className="w-5 h-5 rounded-full bg-zinc-800 border border-zinc-950 flex items-center justify-center text-[7px] font-bold text-zinc-500">
+                      +{activeMembers.length - 4}
+                    </div>
+                  )}
+                </div>
+                <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest ml-1">
+                  {activeMembers.length} Live
+                </span>
+              </div>
+            )}
 
             {/* Play/Pause button */}
             <div className="flex justify-center">

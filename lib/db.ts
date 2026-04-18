@@ -137,7 +137,7 @@ export const savePomodoroSession = async (userId: string, durationMinutes: numbe
             await updateDoc(groupRef, {
                 [`memberStats.${userId}.totalMinutes`]: increment(durationMinutes),
                 [`memberStats.${userId}.lastActive`]: serverTimestamp(),
-                totalMinutes: increment(durationMinutes) // AGGREGATE
+                totalMinutes: increment(durationMinutes)
             });
         }
 
@@ -146,6 +146,48 @@ export const savePomodoroSession = async (userId: string, durationMinutes: numbe
         console.error("Error saving session:", error);
         return false;
     }
+};
+
+/**
+ * Presence Logic: Live Sessions
+ * These are temporary documents that broadcast user activity to the group.
+ */
+
+export const startLiveSession = async (userId: string, groupId: string, userName?: string, userPhoto?: string) => {
+    try {
+        const liveRef = await addDoc(collection(db, "liveSessions"), {
+            userId,
+            groupId,
+            userName: userName || "Focus Hero",
+            userPhoto: userPhoto || null,
+            startedAt: serverTimestamp(),
+            lastHeartbeat: serverTimestamp(),
+            status: "focusing"
+        });
+        return liveRef.id;
+    } catch (error) {
+        console.error("Error starting live session:", error);
+        return null;
+    }
+};
+
+export const endLiveSession = async (liveSessionId: string) => {
+    try {
+        const docRef = doc(db, "liveSessions", liveSessionId);
+        await deleteDoc(docRef);
+        return true;
+    } catch (error) {
+        console.error("Error ending live session:", error);
+        return false;
+    }
+};
+
+export const updateLiveSessionHeartbeat = async (liveSessionId: string) => {
+    try {
+        await updateDoc(doc(db, "liveSessions", liveSessionId), {
+            lastHeartbeat: serverTimestamp()
+        });
+    } catch (e) { /* ignore */ }
 };
 
 /**
@@ -180,7 +222,7 @@ export const savePartialPomodoroSession = async (userId: string, durationMinutes
             await updateDoc(groupRef, {
                 [`memberStats.${userId}.totalMinutes`]: increment(durationMinutes),
                 [`memberStats.${userId}.lastActive`]: serverTimestamp(),
-                totalMinutes: increment(durationMinutes) // AGGREGATE
+                totalMinutes: increment(durationMinutes)
             });
         }
 
@@ -569,10 +611,16 @@ export const updateProfilePictureBase64 = async (userId: string, base64Data: str
     }
 };
 
-export const updateUserSettings = async (userId: string, settings: any) => {
+export const updateUserSettings = async (userId: string, settings: Record<string, any>) => {
     try {
         const userRef = doc(db, "users", userId);
-        await updateDoc(userRef, { settings });
+        // Use dotted field paths to merge individual fields without overwriting
+        // the entire settings object (e.g. settings.focusTime, settings.sessionEndSound)
+        const dottedUpdate: Record<string, any> = {};
+        for (const [key, value] of Object.entries(settings)) {
+            dottedUpdate[`settings.${key}`] = value;
+        }
+        await updateDoc(userRef, dottedUpdate);
         return true;
     } catch (error) {
         console.error("Error updating settings:", error);

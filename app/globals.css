@@ -92,36 +92,34 @@
 }
 
 :root {
-  --background: oklch(0.1 0 0);
-  /* Pure Black */
+  --background: #0D0C0A;
   --foreground: oklch(0.98 0 0);
-  /* White */
-  --card: oklch(0.15 0 0 / 0.8);
+  --card: rgba(20, 19, 17, 0.8);
   --card-foreground: oklch(0.98 0 0);
-  --primary: oklch(0.7 0.2 230);
-  /* Vibrant Sky Blue */
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.2 0 0);
+  --primary: #E8821A;
+  --primary-foreground: #0D0C0A;
+  --secondary: #C9B037;
   --secondary-foreground: oklch(0.9 0 0);
-  --muted: oklch(0.2 0 0 / 0.5);
-  --muted-foreground: oklch(0.6 0 0);
-  --accent: oklch(0.7 0.2 230 / 0.1);
-  --accent-foreground: oklch(0.98 0 0);
-  --border: oklch(1 1 1 / 10%);
-  --input: oklch(1 1 1 / 15%);
-  --ring: oklch(0.7 0.2 230);
-  --radius: 1rem;
+  --muted: rgba(20, 19, 17, 0.5);
+  --muted-foreground: #a1a1aa;
+  --accent: rgba(232, 130, 26, 0.1);
+  --accent-foreground: #E8821A;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #E8821A;
+  --radius: 12px;
 }
 
 .dark {
-  --background: oklch(0.1 0 0);
+  --background: #0D0C0A;
   --foreground: oklch(0.98 0 0);
-  --card: oklch(0.15 0 0 / 0.8);
+  --card: rgba(20, 19, 17, 0.82);
   --card-foreground: oklch(0.98 0 0);
-  --primary: oklch(0.7 0.2 230);
-  --primary-foreground: oklch(0.1 0 0);
-  --ring: oklch(0.7 0.2 230);
+  --primary: #E8821A;
+  --primary-foreground: #0D0C0A;
+  --ring: #E8821A;
 }
+
 
 @layer base {
   * {
@@ -148,6 +146,25 @@
     animation: pulse-slow 8s ease-in-out infinite;
   }
 }
+
+@layer utilities {
+  .text-muted-gold {
+    color: #C9B037;
+  }
+  .bg-near-black {
+    background-color: #0D0C0A;
+  }
+  .border-inner {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
+  .forge-glow {
+    box-shadow: 0 0 20px rgba(232, 130, 26, 0.2);
+  }
+  .font-terminal {
+    font-family: var(--font-geist-mono), monospace;
+  }
+}
+
 
 .ubuntu-light {
   font-family: var(--font-ubuntu), sans-serif;

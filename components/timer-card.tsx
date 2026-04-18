@@ -116,14 +116,15 @@ export function TimerCard() {
   };
 
   const handleStop = async () => {
-    const startTime = sessionStartTime;
+    const { activeGroupId, sessionStartTime, mode } = useTimerStore.getState();
     stop();
 
-    if (!startTime) {
+    if (!sessionStartTime) {
+      if (activeGroupId) useTimerStore.getState().setActiveGroupId(null);
       return;
     }
 
-    const elapsedMs = Date.now() - startTime;
+    const elapsedMs = Date.now() - sessionStartTime;
     const elapsedMinutes = Math.round(elapsedMs / 60000);
 
     if (mode === "focus" && elapsedMinutes >= 1) {
@@ -135,11 +136,11 @@ export function TimerCard() {
 
       if (currentUser) {
         const { savePartialPomodoroSession } = await import("@/lib/db");
-        const activeGroupId = useTimerStore.getState().activeGroupId;
         await savePartialPomodoroSession(currentUser.uid, elapsedMinutes, activeGroupId);
       }
     }
 
+    if (activeGroupId) useTimerStore.getState().setActiveGroupId(null);
     reset();
   };
 
