@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
-    UserPlus, X, Search, Users, Check,
+    UserPlus, X, Search, Users, Check, ArrowLeft,
     UserCheck, UserMinus
 } from "lucide-react";
 import {
@@ -298,6 +298,16 @@ export default function FriendsPage() {
                                         );
                                     })}
                                 </div>
+                            </div>
+
+                            <div className="flex justify-center mt-3">
+                                <Link
+                                    href="/profile"
+                                    className="group inline-flex items-center gap-2 px-1 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-400 transition-colors hover:text-white"
+                                >
+                                    <ArrowLeft className="w-3.5 h-3.5 transition-transform duration-200 ease-out group-hover:-translate-x-1" />
+                                    Back to Profile
+                                </Link>
                             </div>
                         </aside>
 
@@ -836,35 +846,71 @@ type SearchTabProps = {
 };
 
 function SearchTab({ searchQuery, setSearchQuery, searching, searchResults, onSendRequest, friends, sentRequests, requestingIds }: SearchTabProps) {
+    const hasQuery = searchQuery.trim().length > 0;
+
     return (
         <div className="space-y-6">
-            <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
-                <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search focusers by name..." className="w-full bg-zinc-900 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:border-[#C9B037]/40 outline-none transition-all" />
+            <div className="space-y-2">
+                <div className="relative rounded-[10px] border border-white/10 bg-zinc-900/50 transition-colors focus-within:border-[#C9B037]/45">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
+                    <input
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search focusers by name..."
+                        className="w-full bg-transparent pl-12 pr-12 py-4 text-white placeholder:text-zinc-500 outline-none"
+                    />
+                    {hasQuery && (
+                        <button
+                            onClick={() => setSearchQuery("")}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-[5px] border border-white/10 bg-zinc-800/70 text-zinc-400 hover:text-white hover:bg-zinc-700/70 transition-all"
+                            aria-label="Clear search"
+                        >
+                            <X className="w-4 h-4 mx-auto" />
+                        </button>
+                    )}
+                </div>
             </div>
+
             <div className="space-y-3">
-                {searchResults.map((res) => {
+                {searching && hasQuery && (
+                    <div className="rounded-[10px] border border-white/10 bg-zinc-900/40 px-6 py-10 text-center">
+                        <p className="ubuntu-medium text-zinc-400 text-sm">Searching...</p>
+                    </div>
+                )}
+
+                {!searching && hasQuery && searchResults.map((res) => {
                     const recipientId = res.id ?? res.uid ?? "";
                     const isFriend = friends.some((f) => f.friendId === recipientId);
                     const hasSentRequest = sentRequests.some((r) => r.toUserId === recipientId);
                     const isRequesting = requestingIds.has(recipientId);
                     return (
-                        <div key={recipientId} className="ubuntu-regular flex items-center gap-4 p-4 bg-zinc-900/40 rounded-2xl border border-white/5">
+                        <div key={recipientId} className="ubuntu-regular flex items-center gap-4 p-4 bg-zinc-900/40 rounded-[10px] border border-white/5">
                             <Avatar className="w-10 h-10"><AvatarImage src={res.photoURL} /><AvatarFallback>{res.displayName?.[0]}</AvatarFallback></Avatar>
                             <div className="flex-1"><p className="ubuntu-bold text-sm font-bold text-white">{res.displayName}</p></div>
                             {isFriend ? (
-                                <span className="px-3 py-1.5 bg-green-500/10 text-green-400 rounded-lg text-[10px] font-black uppercase tracking-widest">Friend</span>
+                                <span className="px-3 py-1.5 bg-green-500/10 text-green-400 rounded-[5px] text-[10px] font-black uppercase tracking-widest">Friend</span>
                             ) : hasSentRequest ? (
-                                <span className="px-3 py-1.5 bg-yellow-500/10 text-yellow-400 rounded-lg text-[10px] font-black uppercase tracking-widest">Pending</span>
+                                <span className="px-3 py-1.5 bg-yellow-500/10 text-yellow-400 rounded-[5px] text-[10px] font-black uppercase tracking-widest">Pending</span>
                             ) : (
-                                <button onClick={() => onSendRequest(recipientId, res.displayName ?? "Unknown")} disabled={isRequesting || !recipientId} className="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all">
+                                <button onClick={() => onSendRequest(recipientId, res.displayName ?? "Unknown")} disabled={isRequesting || !recipientId} className="p-3 bg-white/5 hover:bg-white/10 text-white rounded-[5px] transition-all">
                                     {isRequesting ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <UserPlus className="w-4 h-4" />}
                                 </button>
                             )}
                         </div>
                     );
                 })}
-                {searchQuery && !searching && searchResults.length === 0 && <p className="text-center py-10 text-zinc-600 text-sm">No users found matching &quot;{searchQuery}&quot;</p>}
+
+                {hasQuery && !searching && searchResults.length === 0 && (
+                    <div className="rounded-[10px] border border-white/10 bg-zinc-900/40 px-6 py-10 text-center">
+                        <p className="ubuntu-medium text-zinc-500 text-sm">No users found matching &quot;{searchQuery}&quot;</p>
+                    </div>
+                )}
+
+                {!hasQuery && (
+                    <div className="rounded-[10px] border border-white/10 bg-zinc-900/20 px-6 py-10 text-center">
+                        <p className="ubuntu-medium text-zinc-500 text-sm">Start typing a name to discover people.</p>
+                    </div>
+                )}
             </div>
         </div>
     );
