@@ -58,7 +58,13 @@ interface TimerState {
   setSettingsGlassmorphism: (enabled: boolean) => void;
   resetToDefaults: () => void;
   backgroundImage: string;
+  backgroundSolidColor: string;
+  noneBackgroundMode: "solid" | "gradient";
+  noneBackgroundGradient: string;
   setBackgroundImage: (image: string) => void;
+  setBackgroundSolidColor: (color: string) => void;
+  setNoneBackgroundMode: (mode: "solid" | "gradient") => void;
+  setNoneBackgroundGradient: (gradient: string) => void;
   sessionEndSound: string;
   setSessionEndSound: (sound: string) => void;
   isBgPanelOpen: boolean;
@@ -130,6 +136,9 @@ export const useTimerStore = create<TimerState>()(
       completedFocusSessions: 0,
 
       backgroundImage: "BG25.png", // Default background
+      backgroundSolidColor: "#09090b",
+      noneBackgroundMode: "solid",
+      noneBackgroundGradient: "linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #334155 100%)",
       sessionEndSound: "universfield-new-notification-027-383749.mp3",
 
       activeTaskId: null,
@@ -419,12 +428,18 @@ export const useTimerStore = create<TimerState>()(
           initialBreakTime: 5 * 60,
           initialLongBreakTime: 15 * 60,
           lastUpdate: null,
+          backgroundSolidColor: "#09090b",
+          noneBackgroundMode: "solid",
+          noneBackgroundGradient: "linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #334155 100%)",
           sessionEndSound: "universfield-new-notification-027-383749.mp3",
           sessionStartTime: null,
           completedFocusSessions: 0,
         });
       },
       setBackgroundImage: (image: string) => set({ backgroundImage: image }),
+      setBackgroundSolidColor: (color: string) => set({ backgroundSolidColor: color }),
+      setNoneBackgroundMode: (mode) => set({ noneBackgroundMode: mode }),
+      setNoneBackgroundGradient: (gradient) => set({ noneBackgroundGradient: gradient }),
       setSessionEndSound: (sound: string) => set({ sessionEndSound: sound }),
       isBgPanelOpen: false,
       setIsBgPanelOpen: (open: boolean) => set({ isBgPanelOpen: open, isSoundPanelOpen: open ? false : get().isSoundPanelOpen }),

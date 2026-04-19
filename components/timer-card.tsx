@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Play, Pause, RotateCcw, Check, X, ChevronUp, ChevronDown, Settings, Minus, Plus, Eye, EyeOff, Square, Volume2 } from "lucide-react";
+import Link from "next/link";
+import { Play, Pause, RotateCcw, Check, X, ChevronUp, ChevronDown, Settings, Minus, Plus, Eye, EyeOff, Square, Volume2, Palette, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTimerStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -11,6 +12,16 @@ import { onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export function TimerCard() {
+  const BACKGROUND_COLORS = [
+    { name: "Sage", value: "#757c4f" },
+    { name: "Rose", value: "#9e5252" },
+    { name: "Midnight", value: "#8b4b23" },
+    { name: "Linen", value: "#572373" }, 
+    { name: "Sky", value: "#4d7a92" },
+    { name: "Slate", value: "#646baa" },
+    { name: "Midnight", value: "#050403" },
+  ] as const;
+
   const timeLeft = useTimerStore((s) => s.timeLeft);
   const isActive = useTimerStore((s) => s.isActive);
   const mode = useTimerStore((s) => s.mode);
@@ -27,7 +38,10 @@ export function TimerCard() {
   const toggleNavFocusMode = useTimerStore((s) => s.toggleNavFocusMode);
   const setSessionEndSound = useTimerStore((s) => s.setSessionEndSound);
   const sessionEndSound = useTimerStore((s) => s.sessionEndSound);
-  const sessionStartTime = useTimerStore((s) => s.sessionStartTime);
+  const backgroundSolidColor = useTimerStore((s) => s.backgroundSolidColor);
+  const noneBackgroundMode = useTimerStore((s) => s.noneBackgroundMode);
+  const setBackgroundSolidColor = useTimerStore((s) => s.setBackgroundSolidColor);
+  const setNoneBackgroundMode = useTimerStore((s) => s.setNoneBackgroundMode);
 
   const { user } = useAuth();
 
@@ -576,9 +590,6 @@ export function TimerCard() {
                     {/* Settings Popup - appears upper-right with connector */}
                     {isSettingsOpen && (
                       <div className="absolute left-full ml-32 bottom-0 z-20 animate-in fade-in slide-in-from-left-4 duration-300">
-                        {/* Connector Line - Horizontal from Button center to Window */}
-                        <div className="absolute -left-32 top-1/2 -translate-y-1/2 h-[2px] w-32 bg-gradient-to-r from-white/25 via-white/10 to-white/30 shadow-[0_0_12px_rgba(255,255,255,0.05)]" />
-
                         <div className="w-[280px] bg-zinc-900/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden">
 
                           {/* Step Size */}
@@ -603,6 +614,45 @@ export function TimerCard() {
                                   {val}m
                                 </button>
                               ))}
+                            </div>
+                          </div>
+
+                          {/* None Background Color */}
+                          <div className="px-5 pt-4 pb-4 border-b border-white/[0.06]">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <Palette className="w-3 h-3 text-white/30" />
+                                <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Background Colors</span>
+                              </div>
+                              <Link
+                                href="/settings#background-theme"
+                                className="inline-flex items-center gap-0.5 text-[10px] font-bold uppercase tracking-widest text-white/45 hover:text-white/80 transition-all duration-200 hover:translate-x-0.5"
+                              >
+                                <span>More</span>
+                                <ChevronRight className="h-3 w-3" />
+                              </Link>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {BACKGROUND_COLORS.map((color) => {
+                                const isActiveColor = noneBackgroundMode === "solid" && backgroundSolidColor.toLowerCase() === color.value;
+                                return (
+                                  <button
+                                    key={color.value}
+                                    onClick={() => {
+                                      setBackgroundSolidColor(color.value);
+                                      setNoneBackgroundMode("solid");
+                                    }}
+                                    title={color.name}
+                                    className={cn(
+                                      "w-7 h-7 rounded-full border transition-all duration-200 flex items-center justify-center cursor-pointer",
+                                      isActiveColor
+                                        ? "border-white scale-110"
+                                        : "border-white/15 hover:border-white/40"
+                                    )}
+                                    style={{ backgroundColor: color.value }}
+                                  />
+                                );
+                              })}
                             </div>
                           </div>
 

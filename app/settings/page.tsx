@@ -2,15 +2,14 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import {
-    Bell, Clock, LogOut, Shield, Mail, LogIn,
-    Play, Pause, Zap, Minus, Plus, RotateCcw, Save, CheckCircle2,
-    ChevronRight, Key, PlayCircle, PauseCircle, Sparkles
+    Bell, Clock, LogOut, Mail, LogIn,
+    Zap, Minus, Plus, RotateCcw,
+    ChevronRight, PlayCircle, PauseCircle, Sparkles, Palette
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { logOut } from "@/lib/auth";
 import { onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { updateUserSettings } from "@/lib/db";
 import { cn } from "@/lib/utils";
@@ -59,6 +58,32 @@ function settingsEqual(a: typeof DEFAULT_SETTINGS, b: typeof DEFAULT_SETTINGS) {
 }
 
 export default function SettingsPage() {
+    const NONE_SOLID_COLORS = [
+        { name: "Sage", value: "#757c4f" },
+        { name: "Teal Mist", value: "#2f7f7a" },
+        { name: "Sky", value: "#4d7a92" },
+        { name: "Slate", value: "#646baa" },
+        { name: "Rose", value: "#9e5252" },
+        { name: "Amber", value: "#8b4b23" },
+        { name: "Sandstone", value: "#b07a45" },
+        { name: "Violet", value: "#572373" },        
+        { name: "Mulberry", value: "#7a3f74" },
+        { name: "Midnight", value: "#050403" },
+    ] as const;
+
+    const NONE_GRADIENT_COLORS = [
+        { name: "Aurora", value: "linear-gradient(135deg, #0f172a 0%, #134e4a 55%, #164e63 100%)" },
+        { name: "Warm Dusk", value: "linear-gradient(135deg, #3f1d0f 0%, #7c2d12 50%, #9a3412 100%)" },
+        { name: "Berry Night", value: "linear-gradient(135deg, #2b1555 0%, #4c1d95 45%, #440e74 100%)" },
+        { name: "Ocean Fog", value: "linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #334155 100%)" },
+        { name: "Forest Fade", value: "linear-gradient(135deg, #052e16 0%, #14532d 50%, #3f6212 100%)" },
+        { name: "Night Steel", value: "linear-gradient(135deg, #0b1020 0%, #1b263b 52%, #2b2d42 100%)" },
+        { name: "Charcoal Plum", value: "linear-gradient(135deg, #111018 0%, #2a1f3d 50%, #3a2a5a 100%)" },
+        { name: "Midnight Pine", value: "linear-gradient(135deg, #08110e 0%, #102a24 48%, #1a3a34 100%)" },
+        { name: "Smoked Cocoa", value: "linear-gradient(135deg, #140f0c 0%, #2b1f1a 50%, #3b2a22 100%)" },
+        { name: "Deep Ink", value: "linear-gradient(135deg, #070b13 0%, #111827 50%, #212b39 100%)" },
+    ] as const;
+
     const { user, loading: authLoading, openAuthVault } = useAuth();
     const [loading, setLoading] = useState(true);
     const [savedSettings, setSavedSettings] = useState<AppSettings>({ ...DEFAULT_SETTINGS });
@@ -140,6 +165,12 @@ export default function SettingsPage() {
     const setInitialTime = useTimerStore((state) => state.setInitialTime);
     const setLongBreakEvery = useTimerStore((state) => state.setLongBreakEvery);
     const setSettingsGlassmorphism = useTimerStore((state) => state.setSettingsGlassmorphism);
+    const backgroundSolidColor = useTimerStore((state) => state.backgroundSolidColor);
+    const setBackgroundSolidColor = useTimerStore((state) => state.setBackgroundSolidColor);
+    const noneBackgroundMode = useTimerStore((state) => state.noneBackgroundMode);
+    const setNoneBackgroundMode = useTimerStore((state) => state.setNoneBackgroundMode);
+    const noneBackgroundGradient = useTimerStore((state) => state.noneBackgroundGradient);
+    const setNoneBackgroundGradient = useTimerStore((state) => state.setNoneBackgroundGradient);
 
     const handleSaveSettings = async () => {
         if (!user || !hasChanges) return;
@@ -171,7 +202,7 @@ export default function SettingsPage() {
             }
             await logOut();
             toast.success("Signed out.");
-        } catch (error: unknown) {
+        } catch {
             toast.error("Error signing out.");
         }
     };
@@ -311,6 +342,124 @@ export default function SettingsPage() {
                             </div>
                         </section>
                         {/* Premium Effects Section */}
+                        <section id="background-theme">
+                            <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-1">Appearance</h2>
+                            <div className="bg-zinc-900/50 rounded-lg overflow-hidden border border-white/5">
+                                <div className="p-6 border-b border-white/5">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center">
+                                            <Palette className="w-4 h-4 text-zinc-200" />
+                                        </div>
+                                        <div>
+                                            <div className="text-zinc-200 font-medium">Background Theme</div>
+                                            <div className="text-[9px] text-zinc-500 uppercase tracking-wider">Applies only when image background is set to None</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <button
+                                            onClick={() => setNoneBackgroundMode("solid")}
+                                            className={cn(
+                                                "px-4 py-2 rounded-lg text-xs font-bold border transition-all",
+                                                noneBackgroundMode === "solid"
+                                                    ? "bg-white text-black border-white"
+                                                    : "bg-black/20 text-zinc-400 border-white/10 hover:text-white hover:border-white/30"
+                                            )}
+                                        >
+                                            Solid
+                                        </button>
+                                        <button
+                                            onClick={() => setNoneBackgroundMode("gradient")}
+                                            className={cn(
+                                                "px-4 py-2 rounded-lg text-xs font-bold border transition-all",
+                                                noneBackgroundMode === "gradient"
+                                                    ? "bg-white text-black border-white"
+                                                    : "bg-black/20 text-zinc-400 border-white/10 hover:text-white hover:border-white/30"
+                                            )}
+                                        >
+                                            Gradient
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-6 items-start">
+                                        <div>
+                                            {noneBackgroundMode === "solid" ? (
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    {NONE_SOLID_COLORS.map((color) => {
+                                                        const selected = backgroundSolidColor.toLowerCase() === color.value;
+                                                        return (
+                                                            <button
+                                                                key={color.value}
+                                                                onClick={() => setBackgroundSolidColor(color.value)}
+                                                                title={color.name}
+                                                                className={cn(
+                                                                    "h-16 rounded-xl border transition-all flex items-center justify-center",
+                                                                    selected ? "border-white scale-[1.04]" : "border-white/25 hover:border-white/50"
+                                                                )}
+                                                                style={{ backgroundColor: color.value }}
+                                                            />
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    {NONE_GRADIENT_COLORS.map((gradient) => {
+                                                        const selected = noneBackgroundGradient === gradient.value;
+                                                        return (
+                                                            <button
+                                                                key={gradient.name}
+                                                                onClick={() => setNoneBackgroundGradient(gradient.value)}
+                                                                className={cn(
+                                                                    "group relative h-16 rounded-xl border overflow-hidden transition-all flex items-center justify-center",
+                                                                    selected ? "border-white text-white" : "border-white/20 text-zinc-300 hover:border-white/50"
+                                                                )}
+                                                                style={{ backgroundImage: gradient.value }}
+                                                                title={gradient.name}
+                                                            >
+                                                                <span className="pointer-events-none absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                                <span className="relative z-10 text-white/0 group-hover:text-white/40 text-base font-bold text-center transition-colors">
+                                                                    {gradient.name}
+                                                                </span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div className="relative rounded-2xl border border-white/25 p-6 overflow-hidden min-h-[210px] flex items-center justify-center">
+                                                <div
+                                                    className="absolute inset-0"
+                                                    style={
+                                                        noneBackgroundMode === "gradient"
+                                                            ? { backgroundImage: noneBackgroundGradient }
+                                                            : { backgroundColor: backgroundSolidColor }
+                                                    }
+                                                />
+                                                <div className="absolute inset-0 bg-black/30" />
+
+                                                <div className="relative z-10 flex flex-col items-center justify-center">
+                                                    <div
+                                                        className="text-[4rem] leading-none font-black tabular-nums bg-gradient-to-br from-white via-white/90 to-white/60 bg-clip-text text-transparent"
+                                                        style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+                                                    >
+                                                        25:00
+                                                    </div>
+                                                    <div
+                                                        className="text-xl font-semibold text-zinc-200"
+                                                        style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+                                                    >
+                                                        Pomodoro
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
                         <section>
                             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-1">Premium Effects</h2>
                             <div className="bg-zinc-900/50 rounded-lg overflow-hidden border border-white/5">

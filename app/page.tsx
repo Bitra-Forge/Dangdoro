@@ -2,10 +2,7 @@
 
 import { Space_Grotesk } from "next/font/google";
 import { TimerCard } from "@/components/timer-card";
-import { useAuth } from "@/components/AuthProvider";
-import { Button } from "@/components/ui/button";
-import { LogIn, Zap, Clock, CheckCircle2 as CheckIcon, X as CloseIcon, Flame as FireIcon, ChevronDown, ChevronUp } from "lucide-react";
-import { signInGuest } from "@/lib/auth";
+import { Clock, CheckCircle2 as CheckIcon, X as CloseIcon, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { useTimerStore } from "@/lib/store";
 import { toggleTask } from "@/lib/db";
@@ -21,15 +18,16 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export default function Home() {
-  const { user, loading } = useAuth();
   const backgroundImage = useTimerStore((state) => state.backgroundImage);
+  const backgroundSolidColor = useTimerStore((state) => state.backgroundSolidColor);
+  const noneBackgroundMode = useTimerStore((state) => state.noneBackgroundMode);
+  const noneBackgroundGradient = useTimerStore((state) => state.noneBackgroundGradient);
   const activeTaskId = useTimerStore((state) => state.activeTaskId);
   const activeTaskLabel = useTimerStore((state) => state.activeTaskLabel);
   const activeTaskNotes = useTimerStore((state) => state.activeTaskNotes);
   const activeTaskPriority = useTimerStore((state) => state.activeTaskPriority);
   const clearTask = useTimerStore((state) => state.clearTask);
   const initialFocusTime = useTimerStore((state) => state.initialFocusTime);
-  const isActive = useTimerStore((state) => state.isActive);
   const mode = useTimerStore((state) => state.mode);
 
   const [notesExpanded, setNotesExpanded] = useState(false);
@@ -57,6 +55,16 @@ export default function Home() {
       style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
       {/* Immersive Background */}
       <div className="absolute inset-0 z-0 select-none pointer-events-none transition-all duration-1000">
+        {backgroundImage === "none" && (
+          <div
+            className="absolute inset-0"
+            style={
+              noneBackgroundMode === "gradient"
+                ? { backgroundImage: noneBackgroundGradient }
+                : { backgroundColor: backgroundSolidColor }
+            }
+          />
+        )}
         {backgroundImage !== "none" && (
           <>
             <Image
