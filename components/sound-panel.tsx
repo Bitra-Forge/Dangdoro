@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useTimerStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import {
@@ -32,6 +33,26 @@ export function SoundPanel() {
   const toggleSound = useTimerStore((state) => state.toggleSound);
   const setSoundVolume = useTimerStore((state) => state.setSoundVolume);
   const toggleAllSounds = useTimerStore((state) => state.toggleAllSounds);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('[data-quick-action-trigger="true"]')) {
+        return;
+      }
+
+      if (!panelRef.current) return;
+      if (!panelRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen, setIsOpen]);
 
   if (!isOpen) return null;
 
@@ -39,6 +60,7 @@ export function SoundPanel() {
 
   return (
     <div
+      ref={panelRef}
       className={cn(
         "absolute bottom-full mb-3 left-1/2 -translate-x-1/2 w-full max-w-[450px] transition-all duration-500 transform origin-bottom z-50",
         isOpen

@@ -3,13 +3,14 @@
 import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { Play, Pause, RotateCcw, Check, X, ChevronUp, ChevronDown, Settings, Minus, Plus, Eye, EyeOff, Square, Volume2, Palette, ChevronRight } from "lucide-react";
+import { Play, Pause, RotateCcw, Check, X, ChevronUp, ChevronDown, Settings, Minus, Plus, Eye, EyeOff, Square, Volume2, Palette, ChevronRight, Grid3X3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTimerStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/AuthProvider";
 import { onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { useBackgroundTheme } from "@/lib/use-background-theme";
 
 export function TimerCard() {
   const BACKGROUND_COLORS = [
@@ -61,6 +62,7 @@ export function TimerCard() {
   const hideControlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isTimerHovered, setIsTimerHovered] = useState(false);
   const [showHoverControls, setShowHoverControls] = useState(false);
+  const { showDots, updateShowDots } = useBackgroundTheme(true);
 
   const SESSION_SOUNDS = [
     { id: "universfield-new-notification-027-383749.mp3", label: "Minimal Tech" },
@@ -587,7 +589,7 @@ export function TimerCard() {
                       )} />
                     </Button>
 
-                    {/* Settings Popup - appears upper-right with connector */}
+                    {/* Settings popup - appears upper-right with connector */}
                     {isSettingsOpen && (
                       <div className="absolute left-full ml-32 bottom-0 z-20 animate-in fade-in slide-in-from-left-4 duration-300">
                         <div className="w-[280px] bg-zinc-900/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden">
@@ -615,6 +617,29 @@ export function TimerCard() {
                                 </button>
                               ))}
                             </div>
+                          </div>
+
+                          {/* None Background Color */}
+                          <div className="px-5 pt-4 pb-4 border-b border-white/[0.06]">
+                            <button
+                              onClick={() => updateShowDots(!showDots)}
+                              className="w-full flex items-center justify-between py-1.5 transition-colors duration-200 cursor-pointer"
+                            >
+                              <span className="inline-flex items-center gap-2 text-[10px] font-bold text-white/40 uppercase tracking-widest">
+                                <Grid3X3 className="w-3 h-3 text-white/30" />
+                                Dot Grid
+                              </span>
+                              <div className={cn(
+                                "w-8 h-4 rounded-full transition-all relative",
+                                showDots ? "bg-emerald-500" : "bg-zinc-700"
+                              )}>
+                                <div className={cn(
+                                  "absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all",
+                                  showDots ? "left-4" : "left-0.5"
+                                )} />
+                              </div>
+                            </button>
+
                           </div>
 
                           {/* None Background Color */}

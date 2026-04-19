@@ -16,6 +16,7 @@ interface BackgroundThemeProps {
 export function BackgroundTheme({ children, showSettings = true, isHomePage = false }: BackgroundThemeProps = {}) {
     const { showDots, bgPalette, updateShowDots, updateBgPalette, isHydrated } = useBackgroundTheme(isHomePage);
     const [showSettingsPanel, setShowSettingsPanel] = useState(false);
+    const shouldShowFloatingSettings = showSettings && !isHomePage;
 
     if (!isHydrated) return null;
 
@@ -28,7 +29,7 @@ export function BackgroundTheme({ children, showSettings = true, isHomePage = fa
             {children}
 
             {/* Settings button & panel - only show if showSettings prop is true */}
-            {showSettings && (
+            {shouldShowFloatingSettings && (
                 <div className="fixed top-20 right-8 z-20">
                     <button
                         onClick={() => setShowSettingsPanel(v => !v)}

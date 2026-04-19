@@ -10,7 +10,6 @@ import { Navigation } from "@/components/navigation";
 import { useTimerStore } from "@/lib/store";
 import { NotesPanel } from "@/components/notes-panel";
 import { QuickTasksPanel } from "@/components/quick-tasks-panel";
-import { FloatingNotesTrigger } from "@/components/floating-notes-trigger";
 
 export function NavigationHub() {
   const pathname = usePathname();
@@ -94,7 +93,6 @@ export function NavigationHub() {
     <>
       {isHomePage && (
         <>
-          <FloatingNotesTrigger />
           <NotesPanel />
           <QuickTasksPanel />
         </>

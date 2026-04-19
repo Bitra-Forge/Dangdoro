@@ -50,7 +50,7 @@ export default function Home() {
   const p = priorityStyles[activeTaskPriority ?? "natural"] ?? priorityStyles.natural;
 
   return (
-    <BackgroundTheme showSettings={true} isHomePage={true}>
+    <BackgroundTheme showSettings={false} isHomePage={true}>
       <div className={`flex flex-col flex-1 bg-zinc-950 min-h-screen relative overflow-hidden ${spaceGrotesk.variable} font-sans`}
       style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
       {/* Immersive Background */}

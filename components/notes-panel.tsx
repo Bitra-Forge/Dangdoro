@@ -101,6 +101,10 @@ export function NotesPanel() {
     if (!isOpen) return;
 
     const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('[data-quick-action-trigger="true"]')) {
+        return;
+      }
       if (!panelRef.current) return;
       if (!panelRef.current.contains(event.target as Node)) {
         setIsOpen(false);

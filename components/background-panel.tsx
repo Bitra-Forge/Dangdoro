@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useTimerStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
@@ -24,11 +25,32 @@ export function BackgroundPanel() {
   const setIsOpen = useTimerStore((state) => state.setIsBgPanelOpen);
   const currentBg = useTimerStore((state) => state.backgroundImage);
   const setBg = useTimerStore((state) => state.setBackgroundImage);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('[data-quick-action-trigger="true"]')) {
+        return;
+      }
+
+      if (!panelRef.current) return;
+      if (!panelRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen, setIsOpen]);
 
   if (!isOpen) return null;
 
   return (
     <div
+      ref={panelRef}
       className={cn(
         "absolute bottom-full mb-4 left-0 w-full transition-all duration-500 transform origin-bottom z-50",
         isOpen 
