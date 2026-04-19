@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import {
     Bell, Clock, LogOut, Mail, LogIn,
     Zap, Minus, Plus, RotateCcw,
-    ChevronRight, PlayCircle, PauseCircle, Sparkles, Palette
+    ChevronRight, PlayCircle, PauseCircle, Sparkles, Palette, Check, WandSparkles
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { logOut } from "@/lib/auth";
@@ -68,20 +68,19 @@ export default function SettingsPage() {
         { name: "Sandstone", value: "#b07a45" },
         { name: "Violet", value: "#572373" },        
         { name: "Mulberry", value: "#7a3f74" },
-        { name: "Midnight", value: "#050403" },
     ] as const;
 
     const NONE_GRADIENT_COLORS = [
-        { name: "Aurora", value: "linear-gradient(135deg, #0f172a 0%, #134e4a 55%, #164e63 100%)" },
-        { name: "Warm Dusk", value: "linear-gradient(135deg, #3f1d0f 0%, #7c2d12 50%, #9a3412 100%)" },
-        { name: "Berry Night", value: "linear-gradient(135deg, #2b1555 0%, #4c1d95 45%, #440e74 100%)" },
-        { name: "Ocean Fog", value: "linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #334155 100%)" },
-        { name: "Forest Fade", value: "linear-gradient(135deg, #052e16 0%, #14532d 50%, #3f6212 100%)" },
-        { name: "Night Steel", value: "linear-gradient(135deg, #0b1020 0%, #1b263b 52%, #2b2d42 100%)" },
-        { name: "Charcoal Plum", value: "linear-gradient(135deg, #111018 0%, #2a1f3d 50%, #3a2a5a 100%)" },
-        { name: "Midnight Pine", value: "linear-gradient(135deg, #08110e 0%, #102a24 48%, #1a3a34 100%)" },
-        { name: "Smoked Cocoa", value: "linear-gradient(135deg, #140f0c 0%, #2b1f1a 50%, #3b2a22 100%)" },
-        { name: "Deep Ink", value: "linear-gradient(135deg, #070b13 0%, #111827 50%, #212b39 100%)" },
+        { name: "Aurora", value: "linear-gradient(135deg, #0b1120 0%, #0f2f3a 38%, #1b6e69 72%, #2c8d99 100%)" },
+        { name: "Warm Dusk", value: "linear-gradient(135deg, #2a1309 0%, #5d2411 36%, #a13f17 72%, #c35a22 100%)" },
+        { name: "Berry Night", value: "linear-gradient(135deg, #1f1143 0%, #3b1a73 35%, #6a2ec7 72%, #4f1c8b 100%)" },
+        { name: "Ocean Fog", value: "linear-gradient(135deg, #0a1328 0%, #16305f 36%, #2f5da8 72%, #4a6482 100%)" },
+        { name: "Forest Fade", value: "linear-gradient(135deg, #042311 0%, #0f4725 36%, #2e6c2f 72%, #6c7f2a 100%)" },
+        { name: "Night Steel", value: "linear-gradient(135deg, #080d1a 0%, #182536 35%, #2e425f 72%, #3f4966 100%)" },
+        { name: "Charcoal Plum", value: "linear-gradient(135deg, #0f0d16 0%, #261a38 36%, #42306a 72%, #564188 100%)" },
+        { name: "Midnight Pine", value: "linear-gradient(135deg, #06100c 0%, #0d2520 36%, #1a4a3d 72%, #2d6658 100%)" },
+        { name: "Smoked Cocoa", value: "linear-gradient(135deg, #100b09 0%, #2a1a14 36%, #4b2b1f 72%, #6a3d2a 100%)" },
+        { name: "Deep Ink", value: "linear-gradient(135deg, #050912 0%, #0f1b2f 36%, #1d334f 72%, #2f4762 100%)" },
     ] as const;
 
     const { user, loading: authLoading, openAuthVault } = useAuth();
@@ -129,18 +128,18 @@ export default function SettingsPage() {
         return () => unsub();
     }, [user]);
 
-    const handleUpdateSetting = useCallback((key: TimerSettingKey, value: number) => {
+    const handleUpdateSetting = (key: TimerSettingKey, value: number) => {
         setSettings(prev => ({ ...prev, [key]: value }));
         setInputValues(prev => ({ ...prev, [key]: String(value) }));
-    }, []);
+    };
 
-    const handleUpdateAudio = useCallback((value: string) => {
+    const handleUpdateAudio = (value: string) => {
         setSettings(prev => ({ ...prev, sessionEndSound: value }));
-    }, []);
+    };
 
-    const toggleAutoStart = useCallback((key: "autoStartBreak" | "autoStartFocus") => {
+    const toggleAutoStart = (key: "autoStartBreak" | "autoStartFocus") => {
         setSettings(prev => ({ ...prev, [key]: !prev[key] }));
-    }, []);
+    };
 
     const timerFields: TimerField[] = [
         { label: "Pomodoro", key: "focusTime", icon: Zap, color: "bg-blue-500" },
@@ -171,6 +170,38 @@ export default function SettingsPage() {
     const setNoneBackgroundMode = useTimerStore((state) => state.setNoneBackgroundMode);
     const noneBackgroundGradient = useTimerStore((state) => state.noneBackgroundGradient);
     const setNoneBackgroundGradient = useTimerStore((state) => state.setNoneBackgroundGradient);
+    const [showCustomColorPanel, setShowCustomColorPanel] = useState(false);
+    const [customColorDraft, setCustomColorDraft] = useState(backgroundSolidColor);
+    const customColorPanelRef = React.useRef<HTMLDivElement | null>(null);
+    const presetSolidValues = new Set(NONE_SOLID_COLORS.map((color) => color.value.toLowerCase()));
+    const customSolidColor = !presetSolidValues.has(backgroundSolidColor.toLowerCase());
+
+    useEffect(() => {
+        setCustomColorDraft(backgroundSolidColor);
+    }, [backgroundSolidColor]);
+
+    useEffect(() => {
+        if (!showCustomColorPanel) return;
+
+        const handleClickOutside = (event: MouseEvent) => {
+            if (customColorPanelRef.current && !customColorPanelRef.current.contains(event.target as Node)) {
+                setShowCustomColorPanel(false);
+            }
+        };
+
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [showCustomColorPanel]);
+
+    const normalizeHexColor = (value: string) => {
+        const withHash = value.startsWith("#") ? value : `#${value}`;
+        return /^#[0-9a-fA-F]{6}$/.test(withHash) ? withHash.toLowerCase() : null;
+    };
+
+    const applyCustomColor = (value: string) => {
+        setBackgroundSolidColor(value);
+        setNoneBackgroundMode("solid");
+    };
 
     const handleSaveSettings = async () => {
         if (!user || !hasChanges) return;
@@ -344,7 +375,7 @@ export default function SettingsPage() {
                         {/* Premium Effects Section */}
                         <section id="background-theme">
                             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-1">Appearance</h2>
-                            <div className="bg-zinc-900/50 rounded-lg overflow-hidden border border-white/5">
+                            <div className="relative bg-zinc-900/50 rounded-lg overflow-visible border border-white/5">
                                 <div className="p-6 border-b border-white/5">
                                     <div className="flex items-center gap-3 mb-4">
                                         <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center">
@@ -352,7 +383,6 @@ export default function SettingsPage() {
                                         </div>
                                         <div>
                                             <div className="text-zinc-200 font-medium">Background Theme</div>
-                                            <div className="text-[9px] text-zinc-500 uppercase tracking-wider">Applies only when image background is set to None</div>
                                         </div>
                                     </div>
 
@@ -381,7 +411,7 @@ export default function SettingsPage() {
                                         </button>
                                     </div>
 
-                                    <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-6 items-start">
+                                    <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-6 items-stretch">
                                         <div>
                                             {noneBackgroundMode === "solid" ? (
                                                 <div className="grid grid-cols-2 gap-3">
@@ -393,13 +423,88 @@ export default function SettingsPage() {
                                                                 onClick={() => setBackgroundSolidColor(color.value)}
                                                                 title={color.name}
                                                                 className={cn(
-                                                                    "h-16 rounded-xl border transition-all flex items-center justify-center",
-                                                                    selected ? "border-white scale-[1.04]" : "border-white/25 hover:border-white/50"
+                                                                    "relative h-16 rounded-xl transition-all flex items-center justify-center cursor-pointer",
+                                                                    selected ? "" : "hover:scale-[1.02]"
                                                                 )}
                                                                 style={{ backgroundColor: color.value }}
-                                                            />
+                                                            >
+                                                                <div
+                                                                    className={cn(
+                                                                        "absolute bottom-1.5 right-1.5 h-4 w-4 rounded-full border border-white/20 bg-black/60 text-white flex items-center justify-center shadow-md shadow-black/60 backdrop-blur-[1px] transition-all duration-200",
+                                                                        selected ? "opacity-100 scale-100" : "opacity-0 scale-75"
+                                                                    )}
+                                                                >
+                                                                    <Check className="h-2.5 w-2.5" />
+                                                                </div>
+                                                            </button>
                                                         );
                                                     })}
+
+                                                    <div className="relative" ref={customColorPanelRef}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setNoneBackgroundMode("solid");
+                                                                setShowCustomColorPanel((prev) => !prev);
+                                                            }}
+                                                            className={cn(
+                                                                "group relative h-16 w-full rounded-xl transition-all flex items-center justify-center overflow-hidden cursor-pointer",
+                                                                customSolidColor ? "" : "hover:scale-[1.02]"
+                                                            )}
+                                                            style={{ backgroundColor: backgroundSolidColor }}
+                                                            title="Custom color"
+                                                        >
+                                                            <span className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.16)_0%,rgba(255,255,255,0.05)_45%,rgba(0,0,0,0.08)_100%)]" />
+                                                            <WandSparkles className="relative z-10 h-5 w-5 text-white" />
+
+                                                            <div
+                                                                className={cn(
+                                                                    "absolute bottom-1.5 right-1.5 h-4 w-4 rounded-full border border-white/20 bg-black/60 text-white flex items-center justify-center shadow-md shadow-black/60 backdrop-blur-[1px] transition-all duration-200",
+                                                                    customSolidColor ? "opacity-100 scale-100" : "opacity-0 scale-75"
+                                                                )}
+                                                            >
+                                                                <Check className="h-2.5 w-2.5" />
+                                                            </div>
+                                                        </button>
+
+                                                        {showCustomColorPanel && (
+                                                            <div className="absolute top-[calc(100%+8px)] left-0 z-30 w-72 rounded-xl border border-white/15 bg-[#0a0d16]/95 backdrop-blur-xl p-3 shadow-2xl shadow-black/70">
+                                                                <div className="flex items-center justify-between mb-2">
+                                                                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Custom Color</div>
+                                                                    <div className="h-2.5 w-2.5 rounded-full border border-white/20" style={{ backgroundColor: backgroundSolidColor }} />
+                                                                </div>
+
+                                                                <div className="flex items-center gap-2">
+                                                                    <input
+                                                                        type="color"
+                                                                        value={backgroundSolidColor.startsWith("#") ? backgroundSolidColor : "#000000"}
+                                                                        onChange={(e) => applyCustomColor(e.target.value.toLowerCase())}
+                                                                        className="h-10 w-10 cursor-pointer rounded-full border border-white/25 bg-transparent p-0 overflow-hidden shadow-md shadow-black/40 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch]:rounded-full [&::-moz-color-swatch]:border-0 [&::-moz-color-swatch]:rounded-full"
+                                                                        aria-label="Pick custom color"
+                                                                    />
+                                                                    <input
+                                                                        type="text"
+                                                                        value={customColorDraft}
+                                                                        onChange={(e) => {
+                                                                            const raw = e.target.value;
+                                                                            setCustomColorDraft(raw);
+                                                                            const normalized = normalizeHexColor(raw);
+                                                                            if (normalized) {
+                                                                                applyCustomColor(normalized);
+                                                                            }
+                                                                        }}
+                                                                        onBlur={() => {
+                                                                            const normalized = normalizeHexColor(customColorDraft);
+                                                                            setCustomColorDraft(normalized ?? backgroundSolidColor);
+                                                                        }}
+                                                                        placeholder="#2f7f7a"
+                                                                        className="h-10 flex-1 rounded-md border border-white/15 bg-black/35 px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-500 focus:border-white/35"
+                                                                    />
+                                                                </div>
+
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             ) : (
                                                 <div className="grid grid-cols-2 gap-3">
@@ -410,16 +515,24 @@ export default function SettingsPage() {
                                                                 key={gradient.name}
                                                                 onClick={() => setNoneBackgroundGradient(gradient.value)}
                                                                 className={cn(
-                                                                    "group relative h-16 rounded-xl border overflow-hidden transition-all flex items-center justify-center",
-                                                                    selected ? "border-white text-white" : "border-white/20 text-zinc-300 hover:border-white/50"
+                                                                    "group relative h-16 rounded-xl overflow-hidden transition-all flex items-center justify-center cursor-pointer",
+                                                                    selected ? "text-white" : "text-zinc-300 hover:scale-[1.02]"
                                                                 )}
                                                                 style={{ backgroundImage: gradient.value }}
                                                                 title={gradient.name}
                                                             >
-                                                                <span className="pointer-events-none absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                                <span className="relative z-10 text-white/0 group-hover:text-white/40 text-base font-bold text-center transition-colors">
+                                                                <span className="pointer-events-none absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                                                                <span className="relative z-10 text-white/0 group-hover:text-white/40 text-base font-bold text-center transition-all duration-300">
                                                                     {gradient.name}
                                                                 </span>
+                                                                <div
+                                                                    className={cn(
+                                                                        "absolute bottom-1.5 right-1.5 h-4 w-4 rounded-full border border-white/20 bg-black/60 text-white flex items-center justify-center shadow-md shadow-black/60 backdrop-blur-[1px] z-20 transition-all duration-200",
+                                                                        selected ? "opacity-100 scale-100" : "opacity-0 scale-75"
+                                                                    )}
+                                                                >
+                                                                    <Check className="h-2.5 w-2.5" />
+                                                                </div>
                                                             </button>
                                                         );
                                                     })}
@@ -427,8 +540,8 @@ export default function SettingsPage() {
                                             )}
                                         </div>
 
-                                        <div className="space-y-4">
-                                            <div className="relative rounded-2xl border border-white/25 p-6 overflow-hidden min-h-[210px] flex items-center justify-center">
+                                        <div className="h-full">
+                                            <div className="relative rounded-2xl border border-white/25 p-6 overflow-hidden h-full min-h-[368px] flex items-center justify-center">
                                                 <div
                                                     className="absolute inset-0"
                                                     style={
