@@ -53,6 +53,8 @@ export const BG_CONFIG = {
     STORAGE_KEYS: {
         SHOW_DOTS: "dangdoro-show-dots",
         BG_PALETTE: "dangdoro-bg-palette",
+        SHOW_DOTS_GLOBAL: "dangdoro-show-dots-global",
+        BG_PALETTE_GLOBAL: "dangdoro-bg-palette-global",
     },
     DEFAULTS: {
         showDots: true,

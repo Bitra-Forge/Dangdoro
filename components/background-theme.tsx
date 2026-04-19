@@ -10,10 +10,11 @@ import { Settings, X } from "lucide-react";
 interface BackgroundThemeProps {
     children?: ReactNode;
     showSettings?: boolean;
+    isHomePage?: boolean;
 }
 
-export function BackgroundTheme({ children, showSettings = true }: BackgroundThemeProps = {}) {
-    const { showDots, bgPalette, updateShowDots, updateBgPalette, isHydrated } = useBackgroundTheme();
+export function BackgroundTheme({ children, showSettings = true, isHomePage = false }: BackgroundThemeProps = {}) {
+    const { showDots, bgPalette, updateShowDots, updateBgPalette, isHydrated } = useBackgroundTheme(isHomePage);
     const [showSettingsPanel, setShowSettingsPanel] = useState(false);
 
     if (!isHydrated) return null;
