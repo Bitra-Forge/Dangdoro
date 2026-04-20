@@ -10,7 +10,7 @@ import { getFriendsList } from "@/lib/friendship";
 import {
     Camera, Zap, Clock, Calendar,
     Share2, Pencil, Activity, Flame,
-    TrendingUp, BarChart3,
+    TrendingUp, BarChart3, LineChart, AreaChart,
     Users, Copy, UserCheck, ChevronRight, Timer, LayoutGrid
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -34,11 +34,17 @@ import {
 
 // --- Themes ---
 const THEMES: Record<string, { name: string; colors: string[]; accent: string; glow: string; text?: string }> = {
-    daybreak: {
-        name: "Daybreak",
-        colors: ["#9B8EC7", "#BDA6CE", "#F2EAE0"],
-        accent: "#F2EAE0",
-        glow: "rgba(242, 234, 224, 0.2)"
+    obsidian: {
+        name: "Obsidian Core",
+        colors: ["#0A0A0A", "#404040", "#FFFFFF"],
+        accent: "#FFFFFF",
+        glow: "rgba(255, 255, 255, 0.15)"
+    },
+    midnight: {
+        name: "Midnight",
+        colors: ["#020617", "#0F172A", "#3B82F6"],
+        accent: "#3B82F6",
+        glow: "rgba(59, 130, 246, 0.2)"
     },
     cinematic: {
         name: "Cinematic",
@@ -57,6 +63,12 @@ const THEMES: Record<string, { name: string; colors: string[]; accent: string; g
         colors: ["#A2CB8B", "#C7EABB", "#E8F5BD"],
         accent: "#E8F5BD",
         glow: "rgba(232, 245, 189, 0.2)"
+    },
+    crimson: {
+        name: "Crimson Void",
+        colors: ["#170505", "#7F1D1D", "#FCA5A5"],
+        accent: "#FCA5A5",
+        glow: "rgba(252, 165, 165, 0.2)"
     }
 };
 
@@ -352,7 +364,7 @@ function ProfileContent() {
     const [editName, setEditName] = useState("");
     const [editNickname, setEditNickname] = useState("");
     const [editBio, setEditBio] = useState("");
-    const [selectedTheme, setSelectedTheme] = useState("daybreak");
+    const [selectedTheme, setSelectedTheme] = useState("obsidian");
     const [isSaving, setIsSaving] = useState(false);
 
     // Stats State
@@ -402,7 +414,7 @@ function ProfileContent() {
                     setEditBio(data.bio || "");
                     if (data.profileTheme) {
                         const themeKey = data.profileTheme.toLowerCase();
-                        setSelectedTheme(THEMES[themeKey] ? themeKey : "daybreak");
+                        setSelectedTheme(THEMES[themeKey] ? themeKey : "obsidian");
                     }
                 }
                 setLoading(false);
@@ -683,7 +695,7 @@ function ProfileContent() {
         );
     }
 
-    const currentTheme = THEMES[selectedTheme] || THEMES.daybreak;
+    const currentTheme = THEMES[selectedTheme] || THEMES.obsidian;
 
     return (
         <BackgroundTheme>
@@ -1271,97 +1283,100 @@ function ProfileContent() {
                     >
                         {/* Chart Section */}
                         <motion.div
-                            initial={{ opacity: 0, scale: 0.98, y: 30 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            transition={{ delay: 0.2, duration: 1, ease: [0.16, 1, 0.3, 1] }}
-                            className="w-full bg-zinc-900/10 backdrop-blur-3xl border border-white/5 rounded-[10px] p-6 md:p-10 shadow-2xl relative overflow-hidden group"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: 0.8, duration: 0.8 }}
+                            onMouseMove={(e) => {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const x = e.clientX - rect.left;
+                                const y = e.clientY - rect.top;
+                                e.currentTarget.style.setProperty("--x", `${x}px`);
+                                e.currentTarget.style.setProperty("--y", `${y}px`);
+                            }}
+                            className="w-full border rounded-2xl p-6 md:p-10 flex flex-col relative overflow-hidden group/card mt-4"
+                            style={{
+                                boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5)",
+                                background: `radial-gradient(circle at 10% 10%, ${currentTheme.accent}0d, transparent 60%), #040405`,
+                                borderColor: `${currentTheme.accent}22`
+                            }}
                         >
-                            {/* Abstract Grid Background */}
-                            <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize: '50px 50px' }} />
-                            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40 pointer-events-none" />
-
-                            {/* Theme-based Ambient Glow */}
+                            {/* Ambient Glow Source */}
                             <div
-                                className="absolute -top-24 -right-24 w-64 h-64 rounded-full blur-[120px] opacity-20 transition-colors duration-1000"
-                                style={{ backgroundColor: currentTheme.accent }}
+                                className="absolute -top-[20%] -right-[10%] w-[60%] h-[60%] rounded-full opacity-[0.22] pointer-events-none transition-colors duration-1000 z-0"
+                                style={{
+                                    background: `radial-gradient(circle at center, ${currentTheme.accent}, transparent 75%)`,
+                                    filter: 'blur(90px)'
+                                }}
                             />
 
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12 relative z-10">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-3 rounded-2xl bg-zinc-900 border border-white/5 shadow-inner">
-                                        <BarChart3 className="w-5 h-5" style={{ color: currentTheme.accent }} />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
-                                            {timeRange === "days" && "7-Day System Flux"}
-                                            {timeRange === "weeks" && "8-Week Neural Pulse"}
-                                            {timeRange === "months" && "12-Month Core Load"}
-                                            <motion.span
-                                                className="inline-block w-2 h-2 rounded-full animate-pulse"
-                                                animate={{ backgroundColor: currentTheme.accent }}
-                                                transition={{ duration: 1 }}
-                                            />
-                                        </h2>
-                                    </div>
+                            {/* Top Border Light Source (Centered) */}
+                            <div className="absolute top-0 left-0 right-0 h-[1.5px] z-20" style={{
+                                background: `linear-gradient(90deg, transparent 15%, ${currentTheme.accent}aa, transparent 85%)`,
+                                boxShadow: `0 0 20px ${currentTheme.accent}33`
+                            }} />
+
+                            {/* Interactive Spotlight */}
+                            <div
+                                className="absolute inset-0 opacity-0 group-hover/card:opacity-100 transition-opacity duration-500 pointer-events-none z-0"
+                                style={{
+                                    background: `radial-gradient(circle 350px at var(--x, 0px) var(--y, 0px), ${currentTheme.accent}0d, transparent)`
+                                }}
+                            />
+
+                            {/* Inner Border Glow */}
+                            <div className="absolute inset-0 rounded-2xl border pointer-events-none z-10" style={{ borderColor: `${currentTheme.accent}11` }} />
+
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12 relative z-10 text-white">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-[3px] h-5 rounded-full" style={{ backgroundColor: currentTheme.accent, boxShadow: `0 0 12px ${currentTheme.accent}66` }} />
+                                    <AreaChart className="w-5 h-5 stroke-[2.5] opacity-60" style={{ color: currentTheme.accent }} />
+                                    <h3 className="text-[17px] font-extrabold text-white tracking-tight leading-none uppercase mt-[3px]">
+                                        {timeRange === "days" && "Last 7 Day Focus"}
+                                        {timeRange === "weeks" && "Last 8 Week Focus"}
+                                        {timeRange === "months" && "Last 12 Month Focus"}
+                                    </h3>
                                 </div>
 
-                                <div className="flex items-center gap-1.5 bg-zinc-950/60 p-1.5 rounded-[12px] border border-white/5 backdrop-blur-2xl shadow-2xl relative overflow-hidden">
+                                <div className="flex items-center gap-1.5 bg-[#040405] p-1.5 rounded-full border border-white/5 backdrop-blur-2xl shadow-xl relative overflow-hidden">
                                     {/* Subtle Ambient Glow inside tabs */}
                                     <motion.div
-                                        className="absolute inset-0 opacity-[0.03]"
+                                        className="absolute inset-0 opacity-[0.02]"
                                         animate={{ backgroundColor: currentTheme.accent }}
                                         transition={{ duration: 1 }}
                                     />
 
                                     {[
-                                        { id: "days", label: "Days", icon: Calendar },
-                                        { id: "weeks", label: "Weeks", icon: TrendingUp },
-                                        { id: "months", label: "Months", icon: BarChart3 }
+                                        { id: "days", label: "Days" },
+                                        { id: "weeks", label: "Weeks" },
+                                        { id: "months", label: "Months" }
                                     ].map((tab) => (
                                         <button
                                             key={tab.id}
                                             onClick={() => setTimeRange(tab.id as TimeRange)}
                                             className={cn(
-                                                "flex items-center gap-2.5 px-6 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] rounded-[8px] transition-all duration-500 relative group/tab",
+                                                "flex items-center justify-center px-6 py-2.5 text-[10px] font-bold uppercase tracking-widest rounded-full transition-all duration-300 relative group/tab",
                                                 timeRange === tab.id
                                                     ? "text-white"
-                                                    : "text-zinc-500 hover:text-zinc-300"
+                                                    : "text-zinc-500 hover:text-white/70"
                                             )}
                                         >
                                             {timeRange === tab.id && (
                                                 <motion.div
                                                     layoutId="activeTabHighlight"
-                                                    className="absolute inset-0 z-0 rounded-[8px]"
+                                                    className="absolute inset-0 z-0 rounded-full"
                                                     animate={{
-                                                        background: `linear-gradient(135deg, ${currentTheme.accent}EE, ${currentTheme.accent}99)`,
-                                                        boxShadow: `0 4px 15px ${currentTheme.accent}44, inset 0 0 10px rgba(255,255,255,0.2)`
+                                                        background: `linear-gradient(135deg, ${currentTheme.accent}dd, ${currentTheme.accent}88)`,
+                                                        boxShadow: `0 2px 10px ${currentTheme.accent}33, inset 0 0 8px rgba(255,255,255,0.1)`
                                                     }}
                                                     transition={{
-                                                        background: { duration: 1 },
-                                                        boxShadow: { duration: 1 },
-                                                        layout: {
-                                                            type: "spring",
-                                                            stiffness: 400,
-                                                            damping: 30,
-                                                            mass: 0.8
-                                                        }
+                                                        type: "spring",
+                                                        stiffness: 400,
+                                                        damping: 30
                                                     }}
-                                                >
-                                                    {/* Glass Reflection */}
-                                                    <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none" />
-                                                </motion.div>
+                                                />
                                             )}
 
-                                            {/* Hover Glow */}
-                                            {timeRange !== tab.id && (
-                                                <div className="absolute inset-0 opacity-0 group-hover/tab:opacity-100 transition-opacity duration-300 rounded-[8px] bg-white/[0.03]" />
-                                            )}
-
-                                            <tab.icon className={cn(
-                                                "w-3.5 h-3.5 relative z-10 transition-transform duration-500",
-                                                timeRange === tab.id ? "scale-110" : "group-hover/tab:scale-110 opacity-70"
-                                            )} />
-                                            <span className="relative z-10 font-black tracking-[0.15em]">{tab.label}</span>
+                                            <span className="relative z-10">{tab.label}</span>
                                         </button>
                                     ))}
                                 </div>
@@ -1376,10 +1391,10 @@ function ProfileContent() {
                                             initial={{ left: "0%" }}
                                             animate={{ left: "100%" }}
                                             transition={{ duration: 2.5, ease: "easeInOut" }}
-                                            className="absolute top-0 bottom-10 w-[2px] z-20 pointer-events-none"
+                                            className="absolute top-0 bottom-12 w-[1px] z-20 pointer-events-none opacity-40"
                                             style={{
                                                 background: `linear-gradient(to bottom, transparent, ${currentTheme.accent}, transparent)`,
-                                                boxShadow: `0 0 15px ${currentTheme.accent}`
+                                                boxShadow: `0 0 10px ${currentTheme.accent}44`
                                             }}
                                         />
 
@@ -1398,19 +1413,25 @@ function ProfileContent() {
                                                 >
                                                     <defs>
                                                         <linearGradient id="colorFlow_analytics" x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="0%" stopColor={currentTheme.accent} stopOpacity={0.5} style={{ transition: 'stop-color 1000ms ease-in-out' }} />
-                                                            <stop offset="50%" stopColor={currentTheme.accent} stopOpacity={0.2} style={{ transition: 'stop-color 1000ms ease-in-out' }} />
-                                                            <stop offset="100%" stopColor={currentTheme.colors[0]} stopOpacity={0.05} style={{ transition: 'stop-color 1000ms ease-in-out' }} />
+                                                            <stop offset="0%" stopColor={currentTheme.accent} stopOpacity={0.5} />
+                                                            <stop offset="40%" stopColor={currentTheme.accent} stopOpacity={0.15} />
+                                                            <stop offset="90%" stopColor={currentTheme.accent} stopOpacity={0.02} />
+                                                            <stop offset="100%" stopColor={currentTheme.accent} stopOpacity={0} />
                                                         </linearGradient>
-                                                        <linearGradient id="strokeFlow_analytics" x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="0%" stopColor={currentTheme.accent} style={{ transition: 'stop-color 1000ms ease-in-out' }} />
-                                                            <stop offset="100%" stopColor={currentTheme.colors[1] || currentTheme.accent} style={{ transition: 'stop-color 1000ms ease-in-out' }} />
+                                                        <linearGradient id="strokeFlow_analytics" x1="0" y1="0" x2="1" y2="0">
+                                                            <stop offset="0%" stopColor={currentTheme.accent} stopOpacity={0.4} style={{ transition: 'stop-color 1000ms ease-in-out' }} />
+                                                            <stop offset="50%" stopColor={currentTheme.accent} stopOpacity={1} style={{ transition: 'stop-color 1000ms ease-in-out' }} />
+                                                            <stop offset="100%" stopColor={currentTheme.accent} stopOpacity={0.4} style={{ transition: 'stop-color 1000ms ease-in-out' }} />
                                                         </linearGradient>
+                                                        <filter id="glow_analytics" x="-20%" y="-20%" width="140%" height="140%">
+                                                            <feGaussianBlur stdDeviation="3" result="blur" />
+                                                            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                                                        </filter>
                                                     </defs>
 
                                                     <CartesianGrid
-                                                        strokeDasharray="0"
-                                                        stroke="rgba(255,255,255,0.05)"
+                                                        strokeDasharray="4 4"
+                                                        stroke="rgba(255,255,255,0.03)"
                                                         vertical={false}
                                                     />
 
@@ -1418,8 +1439,8 @@ function ProfileContent() {
                                                         dataKey="date"
                                                         axisLine={false}
                                                         tickLine={false}
-                                                        tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 10, fontWeight: 900, letterSpacing: '0.05em' }}
-                                                        dy={10}
+                                                        tick={{ fill: 'rgba(255,255,255,0.25)', fontSize: 9, fontWeight: 700, letterSpacing: '0.05em' }}
+                                                        dy={15}
                                                         padding={{ left: 30, right: 30 }}
                                                     />
 
@@ -1432,20 +1453,40 @@ function ProfileContent() {
                                                                 const label = payload[0].payload.tooltipLabel || payload[0].payload.date;
                                                                 return (
                                                                     <motion.div
-                                                                        initial={{ opacity: 0, scale: 0.9, y: 5 }}
-                                                                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                                                                        className="bg-zinc-900/95 backdrop-blur-xl border border-white/10 p-4 rounded-2xl shadow-2xl relative"
+                                                                        initial={{ opacity: 0, x: -10, filter: 'blur(10px)' }}
+                                                                        animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                                                                        className="relative min-w-[120px] p-[1px] rounded-xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
                                                                     >
-                                                                        <div className="relative z-10">
-                                                                            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2">
-                                                                                {label}
-                                                                            </p>
-                                                                            <div className="flex items-baseline gap-1.5">
-                                                                                <span className="text-3xl font-black text-white tracking-tight tabular-nums">
-                                                                                    {payload[0].value}
-                                                                                </span>
-                                                                                <span className="text-[10px] font-bold uppercase text-zinc-400">Mins</span>
+                                                                        {/* Animated Border Gradient */}
+                                                                        <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-white/5" />
+
+                                                                        <div className="relative bg-zinc-900/90 backdrop-blur-3xl rounded-[11px] p-3.5">
+                                                                            {/* Left Accent Bar */}
+                                                                            <div
+                                                                                className="absolute left-0 top-3 bottom-3 w-[2px] rounded-r-full"
+                                                                                style={{ background: currentTheme.accent, boxShadow: `0 0 8px ${currentTheme.accent}` }}
+                                                                            />
+
+                                                                            <div className="flex items-center gap-3">
+                                                                                <p className="text-[10px] font-bold text-white/90 whitespace-nowrap">
+                                                                                    {label}
+                                                                                </p>
+
+                                                                                <div className="w-[1px] h-3 bg-white/10" />
+
+                                                                                <div className="flex items-baseline gap-1">
+                                                                                    <span className="text-xl font-black text-white tabular-nums leading-none">
+                                                                                        {payload[0].value}
+                                                                                    </span>
+                                                                                    <span className="text-[9px] font-black text-zinc-400 uppercase">min</span>
+                                                                                </div>
                                                                             </div>
+
+                                                                            {/* Background Glow */}
+                                                                            <div
+                                                                                className="absolute -right-3 -bottom-3 w-12 h-12 blur-2xl opacity-10 pointer-events-none rounded-full"
+                                                                                style={{ background: currentTheme.accent }}
+                                                                            />
                                                                         </div>
                                                                     </motion.div>
                                                                 );
@@ -1458,21 +1499,20 @@ function ProfileContent() {
                                                     <Area
                                                         type="monotone"
                                                         dataKey="minutes"
-                                                        stroke="url(#strokeFlow_analytics)"
-                                                        strokeWidth={3}
+                                                        stroke={currentTheme.accent}
+                                                        strokeWidth={2}
                                                         fill="url(#colorFlow_analytics)"
-                                                        fillOpacity={1}
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
                                                         animationDuration={1500}
                                                         animationEasing="ease-in-out"
-                                                        style={{ transition: 'stroke 1000ms ease-in-out' }}
                                                         activeDot={{
-                                                            r: 6,
+                                                            r: 8,
                                                             fill: "#fff",
                                                             stroke: currentTheme.accent,
-                                                            strokeWidth: 3,
+                                                            strokeWidth: 4,
                                                             style: {
-                                                                filter: `drop-shadow(0 0 10px ${currentTheme.accent})`,
-                                                                transition: 'stroke 1000ms ease-in-out'
+                                                                filter: `drop-shadow(0 0 12px ${currentTheme.accent})`
                                                             }
                                                         }}
                                                     />
