@@ -11,7 +11,7 @@ import {
     Camera, Zap, Clock, Calendar,
     Share2, Pencil, Activity, Flame,
     TrendingUp, BarChart3,
-    Users, Copy, UserCheck, ChevronRight, Timer
+    Users, Copy, UserCheck, ChevronRight, Timer, LayoutGrid
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -373,7 +373,7 @@ function ProfileContent() {
 
         const fetchData = async () => {
             setLoading(true);
-            
+
             const effectiveUserId = targetUserId || user.uid;
             const ownProfile = effectiveUserId === user.uid;
             setIsOwnProfile(ownProfile);
@@ -528,7 +528,10 @@ function ProfileContent() {
 
         for (let i = days - 1; i >= 0; i--) {
             const date = subDays(now, i);
-            const daySessions = sessions.filter(s => isSameDay(s.completedAt.toDate(), date));
+            const daySessions = sessions.filter(s => {
+                if (!s.completedAt || typeof s.completedAt.toDate !== 'function') return false;
+                return isSameDay(s.completedAt.toDate(), date);
+            });
             const totalMins = daySessions.reduce((acc, curr) => acc + curr.duration, 0);
             let level = 0;
             if (totalMins > 0) {
@@ -537,15 +540,30 @@ function ProfileContent() {
                 else level = 3;
             }
 
+            let tooltipText = `${format(date, 'MMM d')}: ${formatFocusedTime(totalMins)} focused`;
+
             grid.push({
                 date,
                 level,
                 minutes: totalMins,
-                tooltip: `${format(date, 'MMM d')}: ${formatFocusedTime(totalMins)} focused`
+                tooltip: tooltipText
             });
         }
         return grid;
     }, [sessions]);
+
+    const heatmapMonths = useMemo(() => {
+        const labels: { label: string, colIndex: number }[] = [];
+        let lastMonth: number | null = null;
+        for (let i = 0; i < productivityData.length; i += 7) {
+            const m = productivityData[i].date.getMonth();
+            if (m !== lastMonth) {
+                labels.push({ label: format(productivityData[i].date, 'MMM'), colIndex: i / 7 });
+                lastMonth = m;
+            }
+        }
+        return labels;
+    }, [productivityData]);
 
     const monthDays = useMemo(() => {
         const now = new Date();
@@ -777,7 +795,7 @@ function ProfileContent() {
                                                 Pending
                                             </Button>
                                         ) : (
-                                            <Button 
+                                            <Button
                                                 onClick={async () => {
                                                     const { sendFriendRequest } = await import("@/lib/friendship");
                                                     const success = await sendFriendRequest(user.uid, targetUserId!);
@@ -1000,12 +1018,12 @@ function ProfileContent() {
                                         "absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent transition-opacity",
                                         isOwnProfile ? "opacity-0 group-hover:opacity-100" : "opacity-0"
                                     )} />
-                                    <div 
+                                    <div
                                         className={cn(
                                             "absolute -inset-8 rounded-full transition-all duration-1000 blur-[60px] pointer-events-none z-0",
                                             isOwnProfile ? "opacity-0 group-hover:opacity-100" : "opacity-0"
-                                        )} 
-                                        style={{ backgroundColor: "rgba(168,85,247,0.1)" }} 
+                                        )}
+                                        style={{ backgroundColor: "rgba(168,85,247,0.1)" }}
                                     />
 
                                     <div className="flex items-center gap-4 relative z-10">
@@ -1054,40 +1072,97 @@ function ProfileContent() {
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             transition={{ delay: 0.6, duration: 0.8 }}
-                            className="lg:col-span-8 bg-zinc-900/10 backdrop-blur-3xl border border-white/5 rounded-[10px] p-10 flex flex-col shadow-2xl relative overflow-hidden group"
+                            onMouseMove={(e) => {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const x = e.clientX - rect.left;
+                                const y = e.clientY - rect.top;
+                                e.currentTarget.style.setProperty("--x", `${x}px`);
+                                e.currentTarget.style.setProperty("--y", `${y}px`);
+                            }}
+                            className="lg:col-span-8 border rounded-2xl p-8 flex flex-col relative overflow-hidden group/card"
+                            style={{
+                                boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5)",
+                                background: `radial-gradient(circle at 90% 10%, ${currentTheme.accent}0f, transparent 70%), #040405`,
+                                borderColor: `${currentTheme.accent}22`
+                            }}
                         >
-                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white/5 to-transparent" style={{ backgroundImage: `linear-gradient(to right, transparent, ${currentTheme.accent}33, transparent)` }} />
+                            {/* Top-Right Ambient Glow Source */}
+                            <div
+                                className="absolute -top-[15%] -right-[10%] w-[50%] h-[50%] rounded-full opacity-[0.18] pointer-events-none transition-colors duration-1000 z-0"
+                                style={{
+                                    background: `radial-gradient(circle at center, ${currentTheme.accent}, transparent 75%)`,
+                                    filter: 'blur(90px)'
+                                }}
+                            />
 
-                            <div className="flex items-center justify-between mb-10 relative z-10">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-3 rounded-[10px] bg-zinc-900 border border-white/5 shadow-inner transition-colors" style={{ borderColor: `${currentTheme.accent}11` }}>
-                                        <Activity className="w-5 h-5 group-hover:animate-pulse" style={{ color: currentTheme.accent }} />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white">Neural Activity</h3>
-                                        <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mt-0.5">Focus density over past 140 cycles</p>
-                                    </div>
+                            {/* Top Border Light Source (Centered) */}
+                            <div className="absolute top-0 left-0 right-0 h-[1.5px] z-20" style={{
+                                background: `linear-gradient(90deg, transparent 15%, ${currentTheme.accent}aa, transparent 85%)`,
+                                boxShadow: `0 0 20px ${currentTheme.accent}33`
+                            }} />
+
+                            {/* Interactive Spotlight */}
+                            <div
+                                className="absolute inset-0 opacity-0 group-hover/card:opacity-100 transition-opacity duration-500 pointer-events-none z-0"
+                                style={{
+                                    background: `radial-gradient(circle 350px at var(--x, 0px) var(--y, 0px), ${currentTheme.accent}0d, transparent)`
+                                }}
+                            />
+
+                            {/* Inner Border Glow */}
+                            <div className="absolute inset-0 rounded-2xl border pointer-events-none z-10" style={{ borderColor: `${currentTheme.accent}11` }} />
+
+                            <div className="flex items-center justify-between mb-16 relative z-10 text-white">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-[3px] h-5 rounded-full" style={{ backgroundColor: currentTheme.accent, boxShadow: `0 0 12px ${currentTheme.accent}66` }} />
+                                    <LayoutGrid className="w-5 h-5 stroke-[2.5] opacity-60" style={{ color: currentTheme.accent }} />
+                                    <h3 className="text-[15px] font-extrabold text-white tracking-tight leading-none">Focus Heatmap</h3>
                                 </div>
-                                <div className="flex items-center gap-3 bg-zinc-950/50 px-4 py-2 rounded-[10px] border border-white/5">
-                                    <span className="text-[9px] uppercase text-zinc-600 font-extrabold tracking-tighter">Low</span>
-                                    <div className="flex gap-1.5 items-center">
-                                        {currentTheme.colors.map((c, i) => (
-                                            <div key={i} className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c }} />
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[9px] uppercase text-zinc-600 font-extrabold tracking-widest mr-1">LESS</span>
+                                    <div className="flex gap-1 items-center">
+                                        {[0, 1, 2, 3].map((i) => (
+                                            <div key={i} className="w-[11px] h-[11px] rounded-[1.5px]" style={{
+                                                backgroundColor: i === 0 ? "rgba(255,255,255,0.03)" : currentTheme.accent,
+                                                opacity: i === 0 ? 1 : i === 1 ? 0.35 : i === 2 ? 0.7 : 1
+                                            }} />
                                         ))}
                                     </div>
-                                    <span className="text-[9px] uppercase text-zinc-600 font-extrabold tracking-tighter">Peak</span>
+                                    <span className="text-[9px] uppercase text-zinc-600 font-extrabold tracking-widest ml-1">MORE</span>
                                 </div>
                             </div>
 
-                            <div className="flex flex-wrap gap-2 justify-center py-6 px-4 bg-zinc-950/20 rounded-[10px] border border-white/[0.02] mb-8 relative">
-                                {/* Grid background lines */}
-                                <div className="absolute inset-0 opacity-[0.02] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+                            <div className="relative w-full h-full flex flex-col justify-end mt-4">
+                                {/* Months row */}
+                                <div className="text-[10px] font-bold text-zinc-600 mb-3 whitespace-nowrap absolute -top-8 w-full flex">
+                                    {heatmapMonths.map((m, idx) => (
+                                        <div key={idx} className="absolute" style={{ left: `calc(${m.colIndex} * (100% / 20))` }}>
+                                            {m.label}
+                                        </div>
+                                    ))}
+                                </div>
 
-                                {productivityData.map((day, i) => (
-                                    <div key={i} title={day.tooltip} className="relative z-10">
-                                        <ProductivitySquare level={day.level} theme={currentTheme} />
-                                    </div>
-                                ))}
+                                {/* Grid */}
+                                <div className="grid grid-rows-7 grid-flow-col gap-1.5 w-full h-[140px]">
+                                    {productivityData.map((day, i) => (
+                                        <div key={i} title={day.tooltip} className="w-full h-full relative group/day">
+                                            <div
+                                                className="w-full h-full rounded-[3px] transition-all duration-300 pointer-events-none relative z-10"
+                                                style={{
+                                                    backgroundColor: day.level > 0 ? currentTheme.accent : "rgba(255,255,255,0.06)",
+                                                    opacity: day.level === 0 ? 1 : day.level === 1 ? 0.35 : day.level === 2 ? 0.65 : 1,
+                                                    boxShadow: day.level > 1 ? `0 0-8px ${currentTheme.accent}33` : 'none',
+                                                }}
+                                            />
+                                            {day.level > 0 && (
+                                                <div
+                                                    className="absolute inset-0 blur-[6px] opacity-[0.15] pointer-events-none"
+                                                    style={{ backgroundColor: currentTheme.accent }}
+                                                />
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </motion.div>
 
@@ -1096,59 +1171,90 @@ function ProfileContent() {
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             transition={{ delay: 0.7, duration: 0.8 }}
-                            className="lg:col-span-4 bg-zinc-900/10 backdrop-blur-3xl border border-white/5 rounded-[10px] p-8 flex flex-col shadow-2xl relative overflow-hidden group"
+                            onMouseMove={(e) => {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const x = e.clientX - rect.left;
+                                const y = e.clientY - rect.top;
+                                e.currentTarget.style.setProperty("--x", `${x}px`);
+                                e.currentTarget.style.setProperty("--y", `${y}px`);
+                            }}
+                            className="lg:col-span-4 border rounded-2xl p-8 flex flex-col relative overflow-hidden group/card"
+                            style={{
+                                boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5)",
+                                background: `radial-gradient(circle at 10% 10%, ${currentTheme.accent}18, transparent 70%), #040405`,
+                                borderColor: `${currentTheme.accent}22`
+                            }}
                         >
-                            <div className="flex items-center justify-between mb-8 relative z-10">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-3 rounded-[10px] bg-zinc-900 border border-white/5 shadow-inner">
-                                        <Calendar className="w-5 h-5" style={{ color: currentTheme.accent }} />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white">{format(new Date(), 'MMMM')}</h3>
-                                        <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest mt-0.5">Streak TimeLine</p>
-                                    </div>
+                            {/* Top-Left Ambient Glow Source (STRONGER) */}
+                            <div
+                                className="absolute -top-[15%] -left-[15%] w-[60%] h-[60%] rounded-full opacity-[0.22] pointer-events-none transition-colors duration-1000 z-0"
+                                style={{
+                                    background: `radial-gradient(circle at center, ${currentTheme.accent}, transparent 75%)`,
+                                    filter: 'blur(80px)'
+                                }}
+                            />
+
+                            {/* Top Border Light Source (Centered) */}
+                            <div className="absolute top-0 left-0 right-0 h-[1.5px] z-20" style={{
+                                background: `linear-gradient(90deg, transparent 15%, ${currentTheme.accent}cc, transparent 85%)`,
+                                boxShadow: `0 0 20px ${currentTheme.accent}44`
+                            }} />
+
+                            {/* Interactive Spotlight */}
+                            <div
+                                className="absolute inset-0 opacity-0 group-hover/card:opacity-100 transition-opacity duration-500 pointer-events-none z-0"
+                                style={{
+                                    background: `radial-gradient(circle 350px at var(--x, 0px) var(--y, 0px), ${currentTheme.accent}0d, transparent)`
+                                }}
+                            />
+
+                            {/* Inner Border Glow */}
+                            <div className="absolute inset-0 rounded-2xl border pointer-events-none z-10" style={{ borderColor: `${currentTheme.accent}11` }} />
+
+                            <div className="flex items-center justify-between mb-16 relative z-10 w-full">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-[3px] h-5 rounded-full" style={{ backgroundColor: currentTheme.accent, boxShadow: `0 0 12px ${currentTheme.accent}66` }} />
+                                    <Calendar className="w-5 h-5 stroke-[2.5] opacity-60" style={{ color: currentTheme.accent }} />
+                                    <h3 className="text-[15px] font-extrabold text-white tracking-tight leading-none">Streak Timeline</h3>
                                 </div>
-                                <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: currentTheme.accent }} />
+                                <div className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">
+                                    {format(new Date(), 'MMMM')}
+                                </div>
                             </div>
 
-                            <div className="grid grid-cols-7 gap-2 mb-4">
+                            <div className="grid grid-cols-7 gap-2">
                                 {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                                    <div key={i} className="text-[9px] font-black text-zinc-700 text-center uppercase py-2">
+                                    <div key={i} className="text-[9px] font-black text-zinc-700 text-center uppercase pb-3">
                                         {day}
                                     </div>
                                 ))}
                                 {monthDays.map((day, i) => (
                                     <div key={i} className="aspect-square flex items-center justify-center relative">
-                                        {day ? (
+                                        {day && (
                                             <>
                                                 {/* Base day indicator */}
-                                                <div className={cn(
-                                                    "w-full h-full rounded-[10px] flex items-center justify-center text-[10px] font-black transition-all duration-500",
-                                                    day.hasActivity
-                                                        ? "text-white border"
-                                                        : "bg-white/[0.02] text-zinc-700 border border-white/[0.02]",
-                                                    day.isToday && "ring-1 ring-white/20 border-white/20"
-                                                )}
+                                                <div
+                                                    className="w-full h-full rounded-xl flex items-center justify-center text-[11px] font-bold transition-all duration-300"
                                                     style={day.hasActivity ? {
-                                                        backgroundColor: `${currentTheme.accent}22`,
-                                                        borderColor: `${currentTheme.accent}44`,
+                                                        backgroundColor: `${currentTheme.accent}15`,
+                                                        borderColor: `${currentTheme.accent}25`,
+                                                        borderWidth: '1px',
                                                         color: currentTheme.accent
-                                                    } : {}}>
+                                                    } : {
+                                                        backgroundColor: "transparent",
+                                                        borderColor: "rgba(255,255,255,0.03)",
+                                                        borderWidth: '1px',
+                                                        color: "rgba(255,255,255,0.2)"
+                                                    }}
+                                                >
                                                     {day.day}
                                                 </div>
 
-                                                {/* Activity pulse */}
-                                                {day.hasActivity && (
-                                                    <div className="absolute inset-0 blur-[8px] rounded-[10px] scale-75" style={{ backgroundColor: currentTheme.accent, opacity: 0.1 }} />
-                                                )}
-
-                                                {/* Today indicator bug */}
+                                                {/* Today indicator dot */}
                                                 {day.isToday && (
-                                                    <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_5px_white]" />
+                                                    <div className="absolute top-0 right-0 transform translate-x-[3px] -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)] z-10" />
                                                 )}
                                             </>
-                                        ) : (
-                                            <div className="w-full h-full" />
                                         )}
                                     </div>
                                 ))}
@@ -1190,8 +1296,8 @@ function ProfileContent() {
                                             {timeRange === "days" && "7-Day System Flux"}
                                             {timeRange === "weeks" && "8-Week Neural Pulse"}
                                             {timeRange === "months" && "12-Month Core Load"}
-                                            <motion.span 
-                                                className="inline-block w-2 h-2 rounded-full animate-pulse" 
+                                            <motion.span
+                                                className="inline-block w-2 h-2 rounded-full animate-pulse"
                                                 animate={{ backgroundColor: currentTheme.accent }}
                                                 transition={{ duration: 1 }}
                                             />
@@ -1364,7 +1470,7 @@ function ProfileContent() {
                                                             fill: "#fff",
                                                             stroke: currentTheme.accent,
                                                             strokeWidth: 3,
-                                                            style: { 
+                                                            style: {
                                                                 filter: `drop-shadow(0 0 10px ${currentTheme.accent})`,
                                                                 transition: 'stroke 1000ms ease-in-out'
                                                             }
