@@ -5,7 +5,7 @@ import { Bell, Check, X, User, Users } from "lucide-react";
 import { Space_Grotesk } from "next/font/google";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, updateDoc } from "firebase/firestore";
 import { acceptFriendRequest, declineFriendRequest } from "@/lib/friendship";
 import { acceptGroupInvite, declineGroupInvite, fetchUserProfiles } from "@/lib/db";
 import { cn } from "@/lib/utils";
@@ -27,8 +27,9 @@ export function NotificationsMenu() {
     const [requests, setRequests] = useState<FriendRequestItem[]>([]);
     const [groupInvites, setGroupInvites] = useState<GroupInviteItem[]>([]);
     const [profiles, setProfiles] = useState<Record<string, UserProfile>>({});
+    const [objectiveAssignments, setObjectiveAssignments] = useState<ObjectiveAssignmentItem[]>([]);
     const menuRef = useRef<HTMLDivElement>(null);
-    const totalUnread = requests.length + groupInvites.length;
+    const totalUnread = requests.length + groupInvites.length + objectiveAssignments.length;
     const hasUnread = totalUnread > 0;
 
     type UserProfile = {
@@ -50,6 +51,17 @@ export function NotificationsMenu() {
         hostId?: string;
         hostName?: string;
         privacy?: string;
+    };
+
+    type ObjectiveAssignmentItem = {
+        id: string;
+        type: "objective_assignment";
+        toUserId: string;
+        fromUserId?: string;
+        groupId?: string;
+        groupName?: string;
+        taskTitle?: string;
+        read?: boolean;
     };
 
     // Close on click outside
@@ -77,6 +89,40 @@ export function NotificationsMenu() {
             setRequests(reqs);
 
             const senderIds = reqs.map((r) => r.fromUserId).filter((id) => id && !profiles[id]);
+            if (senderIds.length > 0) {
+                const newProfiles = await fetchUserProfiles(senderIds);
+                setProfiles(prev => {
+                    const next = { ...prev };
+                    newProfiles.forEach((p: UserProfile) => {
+                        if (p && p.uid) next[p.uid] = p;
+                    });
+                    return next;
+                });
+            }
+        });
+
+        return () => unsubscribe();
+    }, [user, profiles]);
+
+    useEffect(() => {
+        if (!user || user.isAnonymous) return;
+
+        const q = query(
+            collection(db, "notifications"),
+            where("toUserId", "==", user.uid),
+            where("read", "==", false)
+        );
+
+        const unsubscribe = onSnapshot(q, async (snapshot) => {
+            const assignmentNotifs = snapshot.docs
+                .map((d) => ({ id: d.id, ...d.data() } as ObjectiveAssignmentItem))
+                .filter((n) => n.type === "objective_assignment");
+            setObjectiveAssignments(assignmentNotifs);
+
+            const senderIds = assignmentNotifs
+                .map((n) => n.fromUserId)
+                .filter((id): id is string => !!id && !profiles[id]);
+
             if (senderIds.length > 0) {
                 const newProfiles = await fetchUserProfiles(senderIds);
                 setProfiles(prev => {
@@ -160,6 +206,10 @@ export function NotificationsMenu() {
         }
     };
 
+    const handleMarkAssignmentRead = async (notificationId: string) => {
+        await updateDoc(doc(db, "notifications", notificationId), { read: true });
+    };
+
     return (
         <div className="relative" ref={menuRef}>
             <button 
@@ -182,13 +232,56 @@ export function NotificationsMenu() {
             {isOpen && (
                 <div className="absolute top-full right-0 mt-2 w-80 bg-zinc-900/95 backdrop-blur-xl border border-white/10 rounded-[15px] shadow-2xl overflow-hidden z-[60] animate-in fade-in slide-in-from-top-2 duration-300">
                     <div className="max-h-[400px] overflow-y-auto">
-                        {requests.length === 0 && groupInvites.length === 0 ? (
+                        {requests.length === 0 && groupInvites.length === 0 && objectiveAssignments.length === 0 ? (
                             <div className="p-8 flex flex-col items-center justify-center text-center opacity-40">
                                 <Bell className="w-8 h-8 mb-3 opacity-20" />
                                 <p className="text-[10px] font-bold uppercase tracking-widest">No new notifications</p>
                             </div>
                         ) : (
                             <div className="flex flex-col">
+                                {objectiveAssignments.map((notif) => {
+                                    const senderProfile = notif.fromUserId ? profiles[notif.fromUserId] : null;
+                                    return (
+                                        <div key={`assignment-${notif.id}`} className="p-4 border-b border-white/5">
+                                            <div className="flex items-center gap-3 mb-3">
+                                                <Avatar className="w-8 h-8 rounded-full border border-white/10 overflow-hidden shrink-0">
+                                                    <AvatarImage src={senderProfile?.photoURL || undefined} className="rounded-full" />
+                                                    <AvatarFallback className="rounded-full"><Check className="w-4 h-4" /></AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex flex-col min-w-0">
+                                                    <span className={cn("text-[11px] font-bold text-white truncate", spaceGrotesk.className)}>
+                                                        Assigned objective
+                                                    </span>
+                                                    <span className="text-[9px] font-bold text-muted-foreground uppercase">
+                                                        {notif.groupName || "Group"} - {notif.taskTitle || "New objective"}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    className="flex-1 h-8 rounded-lg bg-white hover:bg-zinc-200 text-black text-[10px] font-black uppercase tracking-wider cursor-pointer"
+                                                    onClick={() => {
+                                                        setIsOpen(false);
+                                                        handleMarkAssignmentRead(notif.id);
+                                                        window.location.href = "/groups";
+                                                    }}
+                                                >
+                                                    Open Groups
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="secondary"
+                                                    className="flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-[10px] font-black uppercase tracking-wider border border-white/5 cursor-pointer"
+                                                    onClick={() => handleMarkAssignmentRead(notif.id)}
+                                                >
+                                                    Dismiss
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+
                                 {groupInvites.map(invite => {
                                     const hostProfile = invite.hostId ? profiles[invite.hostId] : null;
                                     return (

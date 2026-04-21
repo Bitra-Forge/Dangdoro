@@ -196,7 +196,6 @@ export default function GroupsPage() {
     const [loading, setLoading] = useState(true);
     const [showCreateGroup, setShowCreateGroup] = useState(false);
     const [privacy, setPrivacy] = useState<GroupPrivacy>("private-invite");
-    const [groupType, setGroupType] = useState<GroupType>("friends");
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
     const [showJoinCodeModal, setShowJoinCodeModal] = useState(false);
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
@@ -650,12 +649,9 @@ export default function GroupsPage() {
                         <AnimatePresence>
                             {showCreateGroup && (
                                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                                    <CreateGroupForm 
-                                        user={user} 
-                                        friends={friends}
-                                        onClose={() => setShowCreateGroup(false)} 
-                                        groupType={groupType} 
-                                        setGroupType={setGroupType}
+                                    <CreateGroupForm
+                                        user={user}
+                                        onClose={() => setShowCreateGroup(false)}
                                         privacy={privacy}
                                         setPrivacy={setPrivacy}
                                     />
@@ -770,17 +766,16 @@ export default function GroupsPage() {
 }
 
 // ─── Create Group Form ────────────────────────────────────────────────────────
-function CreateGroupForm({ user, friends, onClose, groupType, setGroupType, privacy, setPrivacy }: any) {
+function CreateGroupForm({ user, onClose, privacy, setPrivacy }: any) {
     const [name, setName] = useState("");
     const [desc, setDesc] = useState("");
-    const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
 
-    const toggleFriend = (uid: string) => {
-        setSelectedFriendIds(prev =>
-            prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid]
-        );
-    };
+    useEffect(() => {
+        if (privacy === "private-invite") {
+            setPrivacy("private-code");
+        }
+    }, [privacy, setPrivacy]);
 
     const handleCreate = async () => {
         if (!name.trim()) return;
@@ -793,13 +788,13 @@ function CreateGroupForm({ user, friends, onClose, groupType, setGroupType, priv
             [user.uid]: { role: "host", totalMinutes: 0, joinedAt: serverTimestamp() }
         };
 
-        // For private-invite, pre-add selected friends as pending
-        const pendingInvites = privacy === "private-invite" ? selectedFriendIds : [];
+        // Legacy compatibility for older private-invite groups.
+        const pendingInvites: string[] = [];
 
         await setDoc(groupRef, {
             name,
             description: desc,
-            type: groupType,
+            type: "friends",
             hostId: user.uid,
             hostName: user.displayName || "Forge User",
             members: initialMembers,
@@ -817,19 +812,21 @@ function CreateGroupForm({ user, friends, onClose, groupType, setGroupType, priv
         onClose();
     };
 
-    const privacyOptions: { value: GroupPrivacy; label: string; desc: string; icon: any; color: string }[] = [
+    const privacyOptions: { value: Exclude<GroupPrivacy, "private-invite">; label: string; desc: string; icon: any; color: string }[] = [
         { value: "public",         label: "Public",         desc: "Discoverable by everyone",  icon: Globe,  color: "#34d399" },
         { value: "private-code",   label: "Code Access",    desc: "Entry via 6-char code",     icon: Key,    color: "#fbbf24" },
-        { value: "private-invite", label: "Invite Only",    desc: "Friends or link invite",    icon: Mail,   color: "#a78bfa" },
     ];
 
     return (
-        <div className={cn("p-6 rounded-2xl border space-y-5", settingsGlassmorphism ? "bg-zinc-900/50 border-white/10" : "bg-zinc-900 border-white/10")}>
+        <div className={cn("p-6 rounded-2xl border space-y-6", settingsGlassmorphism ? "bg-zinc-900/50 border-white/10" : "bg-zinc-900 border-white/10")}>
             <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-                <div className="w-8 h-8 rounded-lg bg-[#E8821A]/15 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-xl bg-[#E8821A]/15 flex items-center justify-center">
                     <Plus className="w-4 h-4 text-[#E8821A]" />
                 </div>
-                <h3 className="text-sm font-black text-white">Create New Group</h3>
+                <div>
+                    <h3 className="text-sm font-black text-white">Create New Group</h3>
+                    <p className="text-[10px] text-zinc-600">Friends-focused workspace for shared objectives.</p>
+                </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
@@ -843,20 +840,6 @@ function CreateGroupForm({ user, friends, onClose, groupType, setGroupType, priv
                     </div>
                 </div>
                 <div className="space-y-5">
-                    {/* Archetype */}
-                    <div>
-                        <p className="text-xs font-black uppercase text-zinc-600 tracking-widest mb-3">Archetype</p>
-                        <div className="flex gap-3">
-                            <button onClick={() => setGroupType("friends")} className={cn("flex-1 p-3 rounded-xl border transition-all text-left", groupType === "friends" ? "bg-[#E8821A]/10 border-[#E8821A]/40" : "bg-zinc-950 border-white/10")}>
-                                <UserPlus className={cn("w-5 h-5 mb-2", groupType === "friends" ? "text-[#E8821A]" : "text-zinc-500")} />
-                                <p className={cn("text-xs font-bold", groupType === "friends" ? "text-white" : "text-zinc-500")}>Friends</p>
-                            </button>
-                            <button onClick={() => setGroupType("organization")} className={cn("flex-1 p-3 rounded-xl border transition-all text-left", groupType === "organization" ? "bg-[#E8821A]/10 border-[#E8821A]/40" : "bg-zinc-950 border-white/10")}>
-                                <Briefcase className={cn("w-5 h-5 mb-2", groupType === "organization" ? "text-[#E8821A]" : "text-zinc-500")} />
-                                <p className={cn("text-xs font-bold", groupType === "organization" ? "text-white" : "text-zinc-500")}>Organization</p>
-                            </button>
-                        </div>
-                    </div>
                     {/* Privacy */}
                     <div>
                         <p className="text-xs font-black uppercase text-zinc-600 tracking-widest mb-3">Privacy</p>
@@ -881,36 +864,6 @@ function CreateGroupForm({ user, friends, onClose, groupType, setGroupType, priv
                     </div>
                 </div>
             </div>
-
-            {/* Friend picker for invite-only */}
-            <AnimatePresence>
-                {privacy === "private-invite" && friends.length > 0 && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                        <div className="border-t border-white/10 pt-5">
-                            <p className="text-xs font-black uppercase text-zinc-600 tracking-widest mb-3 flex items-center gap-2">
-                                <UserPlus className="w-3.5 h-3.5" />
-                                Invite Friends
-                                <span className="text-zinc-700 normal-case font-medium tracking-normal">(optional — they can also join via invite link)</span>
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                                {friends.filter((f: any) => f.userData).map((f: any) => {
-                                    const isSelected = selectedFriendIds.includes(f.friendId);
-                                    return (
-                                        <button key={f.friendId} onClick={() => toggleFriend(f.friendId)} className={cn("flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all", isSelected ? "bg-violet-500/20 border-violet-500/40 text-violet-300" : "bg-zinc-950 border-white/10 text-zinc-500 hover:border-white/20")}>
-                                            <Avatar className="w-5 h-5">
-                                                <AvatarImage src={f.userData?.photoURL} />
-                                                <AvatarFallback className="text-[8px]">{f.userData?.displayName?.[0]}</AvatarFallback>
-                                            </Avatar>
-                                            {f.userData?.displayName}
-                                            {isSelected && <Check className="w-3 h-3" />}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
 
             <div className="flex gap-3 pt-1">
                 <button onClick={handleCreate} className="flex-1 bg-[#E8821A] text-black font-black py-3 rounded-xl hover:brightness-110 active:scale-95 transition-all">Create Group</button>
@@ -1260,6 +1213,18 @@ function GroupDetailModal({ groupId, onClose, user, groups, friends, activeTab, 
             title, priority, assignedTo, description, status: "todo",
             createdBy: user.uid, createdAt: serverTimestamp()
         });
+        if (assignedTo !== "all" && assignedTo !== user.uid) {
+            await addDoc(collection(db, "notifications"), {
+                type: "objective_assignment",
+                toUserId: assignedTo,
+                fromUserId: user.uid,
+                groupId: group.id,
+                groupName: group.name,
+                taskTitle: title,
+                read: false,
+                createdAt: serverTimestamp(),
+            });
+        }
         if (!silent) toast.success("Objective added.");
     };
 
@@ -1615,6 +1580,7 @@ function GroupDetailModal({ groupId, onClose, user, groups, friends, activeTab, 
                                                 onDelete={handleDeleteTask}
                                                 isAdmin={isAdmin}
                                                 groupMembers={group.memberDetails}
+                                                currentUserId={user.uid}
                                                 prefillTemplate={objectiveTemplateDraft}
                                                 onPrefillHandled={() => setObjectiveTemplateDraft(null)}
                                                 onTemplateSelect={(templateId: "deep-work" | "review-respond" | "learning-sprint") => {
@@ -2312,12 +2278,20 @@ function JoinCodeModal({ onClose, onJoin }: { onClose: () => void, onJoin: (code
 
 // ─── Sprint Resonance ─────────────────────────────────────────────────────────
 // ─── Shared Tasks Panel ───────────────────────────────────────────────────────
-function SharedTasksPanel({ tasks, onAdd, onUpdate, onDelete, isAdmin, groupMembers, prefillTemplate, onPrefillHandled, onTemplateSelect }: any) {
+function SharedTasksPanel({ tasks, onAdd, onUpdate, onDelete, isAdmin, groupMembers, currentUserId, prefillTemplate, onPrefillHandled, onTemplateSelect }: any) {
     const [openAdd, setOpenAdd] = useState(false);
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
     const [prio, setPrio] = useState<any>("medium");
     const [assign, setAssign] = useState("all");
+    const [objectiveFilter, setObjectiveFilter] = useState<"all" | "mine">("all");
+    const assigneeNameById = useMemo(() => {
+        const map: Record<string, string> = {};
+        (groupMembers || []).forEach((m: any) => {
+            if (m?.uid) map[m.uid] = m.displayName || "Member";
+        });
+        return map;
+    }, [groupMembers]);
 
     useEffect(() => {
         if (!prefillTemplate) return;
@@ -2336,6 +2310,10 @@ function SharedTasksPanel({ tasks, onAdd, onUpdate, onDelete, isAdmin, groupMemb
         setDescription("");
         setOpenAdd(false);
     };
+
+    const visibleTasks = objectiveFilter === "mine"
+        ? tasks.filter((task: any) => task.assignedTo === "all" || task.assignedTo === currentUserId)
+        : tasks;
 
     return (
         <div className="space-y-4">
@@ -2380,6 +2358,14 @@ function SharedTasksPanel({ tasks, onAdd, onUpdate, onDelete, isAdmin, groupMemb
                 </motion.div>
             )}
 
+            <div className="flex items-center justify-between">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-600">Objectives</p>
+                <div className="flex p-1 bg-white/5 rounded-lg border border-white/5">
+                    <button onClick={() => setObjectiveFilter("all")} className={cn("px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all", objectiveFilter === "all" ? "bg-white/10 text-white" : "text-zinc-500")}>All</button>
+                    <button onClick={() => setObjectiveFilter("mine")} className={cn("px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all", objectiveFilter === "mine" ? "bg-white/10 text-white" : "text-zinc-500")}>Assigned to me</button>
+                </div>
+            </div>
+
             {tasks.length === 0 && !openAdd && (
                 <div className="p-8 border-2 border-dashed border-white/5 rounded-3xl space-y-6">
                     <div className="text-center space-y-2">
@@ -2416,7 +2402,7 @@ function SharedTasksPanel({ tasks, onAdd, onUpdate, onDelete, isAdmin, groupMemb
             )}
 
             <div className="grid grid-cols-1 gap-3">
-                {tasks.map((task: any, i: number) => (
+                {visibleTasks.map((task: any, i: number) => (
                     <motion.div 
                         key={task.id} 
                         initial={{ opacity: 0, x: -10 }}
@@ -2462,7 +2448,7 @@ function SharedTasksPanel({ tasks, onAdd, onUpdate, onDelete, isAdmin, groupMemb
                                 </div>
                                 <div className="flex items-center gap-1.5 text-[8px] font-bold text-zinc-600 uppercase tracking-widest">
                                     <div className="w-1 h-1 rounded-full bg-zinc-800" />
-                                    {task.assignedTo === "all" ? "Unit Objective" : "Direct Assign"}
+                                    {task.assignedTo === "all" ? "All Members" : `Assigned: ${assigneeNameById[task.assignedTo] || "Member"}`}
                                 </div>
                             </div>
                         </div>
@@ -2478,6 +2464,11 @@ function SharedTasksPanel({ tasks, onAdd, onUpdate, onDelete, isAdmin, groupMemb
                         )}
                     </motion.div>
                 ))}
+                {tasks.length > 0 && visibleTasks.length === 0 && (
+                    <div className="py-10 text-center border border-white/10 rounded-2xl bg-zinc-950/30">
+                        <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-[0.16em]">No objectives match this filter</p>
+                    </div>
+                )}
             </div>
         </div>
     );
