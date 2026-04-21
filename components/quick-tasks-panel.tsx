@@ -167,16 +167,16 @@ export function QuickTasksPanel() {
                       y: { duration: 0.2 },
                     }}
                     draggable
-                    onDragStart={(event) => {
+                    onDragStart={(event: any) => {
                       event.dataTransfer.effectAllowed = "move";
                       setDraggingTaskId(task.id);
                     }}
-                    onDragOver={(event) => {
+                    onDragOver={(event: any) => {
                       event.preventDefault();
                       event.dataTransfer.dropEffect = "move";
                       handleDragOverTask(task.id);
                     }}
-                    onDrop={(event) => {
+                    onDrop={(event: any) => {
                       event.preventDefault();
                       if (draggingTaskId && draggingTaskId !== task.id) {
                         moveTask(draggingTaskId, task.id);

@@ -11,19 +11,29 @@ interface BackgroundThemeProps {
     children?: ReactNode;
     showSettings?: boolean;
     isHomePage?: boolean;
+    disableDots?: boolean;
+    subtleOverlay?: boolean;
 }
 
-export function BackgroundTheme({ children, showSettings = true, isHomePage = false }: BackgroundThemeProps = {}) {
+export function BackgroundTheme({
+    children,
+    showSettings = true,
+    isHomePage = false,
+    disableDots = false,
+    subtleOverlay = false
+}: BackgroundThemeProps = {}) {
     const { showDots, bgPalette, updateShowDots, updateBgPalette, isHydrated } = useBackgroundTheme(isHomePage);
     const [showSettingsPanel, setShowSettingsPanel] = useState(false);
     const shouldShowFloatingSettings = showSettings && !isHomePage;
+    const effectiveShowDots = disableDots ? false : showDots;
 
     if (!isHydrated) return null;
 
     return (
         <>
             {/* Background */}
-            <AnimatedDotGrid showDots={showDots} palette={bgPalette} />
+            <AnimatedDotGrid showDots={effectiveShowDots} palette={bgPalette} />
+            {subtleOverlay && <div className="fixed inset-0 z-[1] bg-zinc-950/55 pointer-events-none" />}
             
             {/* Children content */}
             {children}

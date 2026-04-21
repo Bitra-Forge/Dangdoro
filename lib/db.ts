@@ -14,11 +14,24 @@ import {
     deleteDoc,
     onSnapshot,
     where,
-    writeBatch
+    writeBatch,
+    arrayRemove
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage, auth } from "./firebase";
 import { User, updateProfile } from "firebase/auth";
+import { trackSessionEvent } from "@/lib/session-telemetry";
+
+const LIVE_SESSION_STALE_MS = 3 * 60 * 1000;
+
+const toMillis = (ts: any): number | null => {
+    if (!ts) return null;
+    if (typeof ts.toMillis === "function") return ts.toMillis();
+    if (typeof ts.seconds === "number") return ts.seconds * 1000;
+    if (typeof ts === "number") return ts;
+    if (ts instanceof Date) return ts.getTime();
+    return null;
+};
 
 /**
  * Syncs user authentication data with the Firestore 'users' collection.
@@ -122,6 +135,9 @@ export const savePomodoroSession = async (userId: string, durationMinutes: numbe
             groupId, // Track if session happened in a group
             duration: durationMinutes,
             type: "work",
+            startedAt: null,
+            endedAt: serverTimestamp(),
+            status: "completed",
             completedAt: serverTimestamp(),
         });
 
@@ -155,6 +171,57 @@ export const savePomodoroSession = async (userId: string, durationMinutes: numbe
 
 export const startLiveSession = async (userId: string, groupId: string, userName?: string, userPhoto?: string) => {
     try {
+        interface ExistingLiveSession {
+            groupId?: string;
+            startedAt?: any;
+            lastHeartbeat?: any;
+        }
+        const existingActiveQuery = query(
+            collection(db, "liveSessions"),
+            where("userId", "==", userId),
+            limit(10)
+        );
+        const existingActiveSnap = await getDocs(existingActiveQuery);
+        if (!existingActiveSnap.empty) {
+            const existing = existingActiveSnap.docs[0];
+            const data = existing.data() as ExistingLiveSession;
+            const heartbeatMs = toMillis(data.lastHeartbeat) ?? toMillis(data.startedAt);
+            const isStale = !heartbeatMs || (Date.now() - heartbeatMs) > LIVE_SESSION_STALE_MS;
+
+            if (existingActiveSnap.docs.length > 1) {
+                await Promise.all(
+                    existingActiveSnap.docs.slice(1).map((staleDoc) => deleteDoc(staleDoc.ref))
+                );
+                trackSessionEvent("live_session_stale_cleanup", {
+                    userId,
+                    staleCount: existingActiveSnap.docs.length - 1,
+                });
+            }
+
+            if (isStale) {
+                await deleteDoc(existing.ref);
+                trackSessionEvent("live_session_stale_cleanup", {
+                    userId,
+                    staleCount: 1,
+                    reason: "heartbeat_timeout",
+                });
+            } else {
+                // Idempotent start: if already active in the same group, reuse current session.
+                if (data.groupId === groupId) {
+                    trackSessionEvent("live_session_start", { userId, groupId, reused: true });
+                    return existing.id;
+                }
+
+                // Enforce one active session per user globally.
+                trackSessionEvent("live_session_conflict", {
+                    userId,
+                    requestedGroupId: groupId,
+                    activeGroupId: data.groupId,
+                });
+                return null;
+            }
+        }
+
         const liveRef = await addDoc(collection(db, "liveSessions"), {
             userId,
             groupId,
@@ -164,9 +231,15 @@ export const startLiveSession = async (userId: string, groupId: string, userName
             lastHeartbeat: serverTimestamp(),
             status: "focusing"
         });
+        trackSessionEvent("live_session_start", { userId, groupId, reused: false });
         return liveRef.id;
     } catch (error) {
         console.error("Error starting live session:", error);
+        trackSessionEvent("group_session_sync_failed", {
+            stage: "start_live_session",
+            userId,
+            groupId,
+        });
         return null;
     }
 };
@@ -175,9 +248,14 @@ export const endLiveSession = async (liveSessionId: string) => {
     try {
         const docRef = doc(db, "liveSessions", liveSessionId);
         await deleteDoc(docRef);
+        trackSessionEvent("live_session_end", { liveSessionId });
         return true;
     } catch (error) {
         console.error("Error ending live session:", error);
+        trackSessionEvent("group_session_sync_failed", {
+            stage: "end_live_session",
+            liveSessionId,
+        });
         return false;
     }
 };
@@ -207,6 +285,9 @@ export const savePartialPomodoroSession = async (userId: string, durationMinutes
             groupId,
             duration: durationMinutes,
             type: "work",
+            startedAt: null,
+            endedAt: serverTimestamp(),
+            status: "completed",
             completedAt: serverTimestamp(),
         });
 
@@ -229,6 +310,89 @@ export const savePartialPomodoroSession = async (userId: string, durationMinutes
         return true;
     } catch (error) {
         console.error("Error saving partial session:", error);
+        return false;
+    }
+};
+
+/**
+ * Recomputes total focused minutes for a group from completed sessions.
+ * Useful as a recovery path when aggregate counters drift.
+ */
+export const recalculateGroupMinutesFromSessions = async (groupId: string) => {
+    const sessionsRef = collection(db, "sessions");
+    const q = query(
+        sessionsRef,
+        where("groupId", "==", groupId),
+        where("status", "==", "completed")
+    );
+    const snapshot = await getDocs(q);
+    const totalMinutes = snapshot.docs.reduce((acc, snap) => {
+        const data = snap.data() as any;
+        return acc + (typeof data.duration === "number" ? data.duration : 0);
+    }, 0);
+
+    await updateDoc(doc(db, "focusGroups", groupId), { totalMinutes });
+    return totalMinutes;
+};
+
+export const acceptGroupInvite = async (
+    groupId: string,
+    userId: string,
+    userDisplayName?: string | null,
+    userPhotoURL?: string | null
+) => {
+    try {
+        const groupRef = doc(db, "focusGroups", groupId);
+        const groupSnap = await getDoc(groupRef);
+        if (!groupSnap.exists()) return false;
+
+        const groupData = groupSnap.data() as {
+            members?: string[];
+            pendingInvites?: string[];
+            memberStats?: Record<string, unknown>;
+        };
+
+        const pendingInvites = Array.isArray(groupData.pendingInvites) ? groupData.pendingInvites : [];
+        const members = Array.isArray(groupData.members) ? groupData.members : [];
+        const alreadyMember = members.includes(userId);
+        const wasInvited = pendingInvites.includes(userId);
+
+        if (!alreadyMember && !wasInvited) return false;
+
+        const nextMembers = alreadyMember ? members : [...members, userId];
+        const updates: Record<string, unknown> = {
+            members: nextMembers,
+            pendingInvites: arrayRemove(userId),
+            memberCount: nextMembers.length,
+        };
+
+        if (!groupData.memberStats || !groupData.memberStats[userId]) {
+            updates[`memberStats.${userId}`] = {
+                role: "member",
+                totalMinutes: 0,
+                joinedAt: serverTimestamp(),
+                displayName: userDisplayName || "Member",
+                photoURL: userPhotoURL || null,
+            };
+        }
+
+        await updateDoc(groupRef, updates);
+        return true;
+    } catch (error) {
+        console.error("Error accepting group invite:", error);
+        return false;
+    }
+};
+
+export const declineGroupInvite = async (groupId: string, userId: string) => {
+    try {
+        const groupRef = doc(db, "focusGroups", groupId);
+        await updateDoc(groupRef, {
+            pendingInvites: arrayRemove(userId),
+        });
+        return true;
+    } catch (error) {
+        console.error("Error declining group invite:", error);
         return false;
     }
 };

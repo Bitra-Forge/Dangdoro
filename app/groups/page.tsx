@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, memo } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { BackgroundTheme } from "@/components/background-theme";
 import { AuthRequired } from "@/components/auth-required";
@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Space_Grotesk } from "next/font/google";
 import { cn } from "@/lib/utils";
 import {
-    Users, Clock, Trophy, LogOut, Check,
+    Users, Clock, LogOut, Check,
     Hourglass, Plus, Play, StopCircle, UserCheck, Sparkles,
     Timer, Target, Zap, Settings, Lock, Globe, Copy, Key,
     ListTodo, ChevronRight, Trash2, Edit2, Shield, UserX, Pause,
@@ -21,9 +21,9 @@ import { useTimerStore } from "@/lib/store";
 import {
     subscribeToFriendsList
 } from "@/lib/friendship";
-import { fetchUserProfiles, startLiveSession, endLiveSession } from "@/lib/db";
+import { fetchUserProfiles, savePartialPomodoroSession } from "@/lib/db";
+import { applyGroupSessionAction } from "@/lib/group-session";
 import { toast } from "sonner";
-import { FocusZoneCeremony } from "@/components/FocusZoneCeremony";
 import { 
     doc, setDoc, onSnapshot, deleteDoc, collection, 
     serverTimestamp, updateDoc, addDoc, arrayUnion, increment,
@@ -51,6 +51,12 @@ interface SharedTask {
     priority: "high" | "medium" | "low";
     createdBy: string;
     createdAt: any;
+}
+
+interface ObjectiveTemplateDraft {
+    title: string;
+    priority: "high" | "medium" | "low";
+    description?: string;
 }
 
 interface FocusGroup {
@@ -112,6 +118,76 @@ const PRIVACY_META: Record<GroupPrivacy, { label: string; icon: any; color: stri
     "private-invite": { label: "Invite Only",     icon: Mail,   color: "text-violet-400" },
 };
 
+const LIVE_SESSION_STALE_MS = 3 * 60 * 1000;
+
+function toMillis(ts: any): number | null {
+    if (!ts) return null;
+    if (typeof ts.toMillis === "function") return ts.toMillis();
+    if (typeof ts.seconds === "number") return ts.seconds * 1000;
+    if (typeof ts === "number") return ts;
+    if (ts instanceof Date) return ts.getTime();
+    return null;
+}
+
+function getEarliestActiveStart(memberDetails: any[] | undefined): any | null {
+    if (!memberDetails?.length) return null;
+    const activeStarts = memberDetails
+        .filter((m: any) => m.isFocusing && m.liveSessionStartedAt)
+        .map((m: any) => ({ raw: m.liveSessionStartedAt, ms: toMillis(m.liveSessionStartedAt) }))
+        .filter((item: any) => typeof item.ms === "number")
+        .sort((a: any, b: any) => a.ms - b.ms);
+    return activeStarts.length > 0 ? activeStarts[0].raw : null;
+}
+
+function resolveLiveSessionsForGroup(groupId: string, sessions: any[]): any[] {
+    const now = Date.now();
+    const filtered = sessions.filter((s: any) => {
+        if (s.groupId !== groupId) return false;
+        const heartbeatMs = toMillis(s.lastHeartbeat) ?? toMillis(s.startedAt);
+        // Keep pending/in-flight docs instead of dropping them and causing UI flicker.
+        if (!heartbeatMs) return s.status === "focusing";
+        return now - heartbeatMs <= LIVE_SESSION_STALE_MS;
+    });
+
+    // Deduplicate by userId and keep the freshest record.
+    const byUser = new Map<string, any>();
+    for (const session of filtered) {
+        const key = session.userId;
+        if (!key) continue;
+        const current = byUser.get(key);
+        if (!current) {
+            byUser.set(key, session);
+            continue;
+        }
+
+        const currentMs = toMillis(current.lastHeartbeat) ?? toMillis(current.startedAt) ?? 0;
+        const nextMs = toMillis(session.lastHeartbeat) ?? toMillis(session.startedAt) ?? 0;
+        if (nextMs >= currentMs) {
+            byUser.set(key, session);
+        }
+    }
+    return Array.from(byUser.values());
+}
+
+function normalizeLiveSessions(sessions: any[]): any[] {
+    // Keep only active focusing sessions and dedupe globally per user.
+    const active = sessions.filter((s: any) => s?.status === "focusing");
+    const byUser = new Map<string, any>();
+    for (const session of active) {
+        const userId = session?.userId;
+        if (!userId) continue;
+        const current = byUser.get(userId);
+        if (!current) {
+            byUser.set(userId, session);
+            continue;
+        }
+        const currentMs = toMillis(current.lastHeartbeat) ?? toMillis(current.startedAt) ?? 0;
+        const nextMs = toMillis(session.lastHeartbeat) ?? toMillis(session.startedAt) ?? 0;
+        if (nextMs >= currentMs) byUser.set(userId, session);
+    }
+    return Array.from(byUser.values());
+}
+
 export default function GroupsPage() {
     const { user, loading: authLoading } = useAuth();
     const [friends, setFriends] = useState<any[]>([]);
@@ -123,16 +199,13 @@ export default function GroupsPage() {
     const [groupType, setGroupType] = useState<GroupType>("friends");
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
     const [showJoinCodeModal, setShowJoinCodeModal] = useState(false);
-    const [showSweep, setShowSweep] = useState(false);
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
-    const [lastActiveStatuses, setLastActiveStatuses] = useState<Record<string, string>>({});
     const setActiveGroupId = useTimerStore(s => s.setActiveGroupId);
 
-    // sync local activeGroupId is now handled by handleToggleStatus and handleStop
+    // sync local activeGroupId is handled through explicit session actions
     const [activeModalTab, setActiveModalTab] = useState<"workspace" | "members">("workspace");
 
     const [hydratedProfiles, setHydratedProfiles] = useState<Record<string, any>>({});
-    const [ceremonyData, setCeremonyData] = useState<{ isOpen: boolean; groupName: string } | null>(null);
     const lastActiveCountRef = useRef<Record<string, number>>({});
 
     // Toast notifications for joined focusers
@@ -144,8 +217,8 @@ export default function GroupsPage() {
             if (currentActiveUsers.length > previousCount) {
                 const newUser = currentActiveUsers[currentActiveUsers.length - 1];
                 if (newUser && newUser.uid !== user?.uid) {
-                    toast.success(`${newUser.displayName} entered the Forge`, {
-                        description: `Operational synergy increasing in ${group.name}`,
+                    toast.success(`${newUser.displayName} started focusing`, {
+                        description: `Now focusing in ${group.name}`,
                         icon: <Flame className="w-4 h-4 text-orange-500" />
                     });
                 }
@@ -156,7 +229,7 @@ export default function GroupsPage() {
 
     const enrichedGroups = useMemo(() => {
         return focusGroups.map(group => {
-            const groupLiveSessions = liveSessions.filter(s => s.groupId === group.id);
+            const groupLiveSessions = resolveLiveSessionsForGroup(group.id, liveSessions);
             const memberDetails: any[] = [];
             for (const memberId of group.members) {
                 const friend = friends.find(f => f.friendId === memberId);
@@ -164,7 +237,8 @@ export default function GroupsPage() {
                 const hydration = hydratedProfiles[memberId];
                 
                 // Real-time activity is now derived from liveSessions collection
-                const isFocusing = groupLiveSessions.some(ls => ls.userId === memberId);
+                const memberLiveSession = groupLiveSessions.find(ls => ls.userId === memberId);
+                const isFocusing = !!memberLiveSession;
 
                 const role = stats.role || (group.hostId === memberId ? "host" : "member");
 
@@ -176,6 +250,7 @@ export default function GroupsPage() {
                         photoURL: firestoreProfile?.photoURL || user.photoURL,
                         ...stats,
                         isFocusing,
+                        liveSessionStartedAt: memberLiveSession?.startedAt || null,
                         role,
                         isHost: group.hostId === user.uid
                     });
@@ -184,6 +259,7 @@ export default function GroupsPage() {
                         ...friend.userData,
                         ...stats,
                         isFocusing,
+                        liveSessionStartedAt: memberLiveSession?.startedAt || null,
                         role,
                         isHost: group.hostId === memberId
                     });
@@ -192,6 +268,7 @@ export default function GroupsPage() {
                         ...hydration,
                         ...stats,
                         isFocusing,
+                        liveSessionStartedAt: memberLiveSession?.startedAt || null,
                         role,
                         isHost: group.hostId === memberId
                     });
@@ -201,6 +278,7 @@ export default function GroupsPage() {
                         displayName: "Member",
                         ...stats,
                         isFocusing,
+                        liveSessionStartedAt: memberLiveSession?.startedAt || null,
                         role,
                         isHost: group.hostId === memberId
                     });
@@ -256,7 +334,8 @@ export default function GroupsPage() {
         const unsubLive = onSnapshot(
             collection(db, "liveSessions"),
             (snapshot) => {
-                setLiveSessions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setLiveSessions(normalizeLiveSessions(raw));
             }
         );
 
@@ -266,33 +345,6 @@ export default function GroupsPage() {
             unsubLive();
         };
     }, [user?.uid]);
-
-    const timerIsActive = useTimerStore(s => s.isActive);
-    const activeGroupId = useTimerStore(s => s.activeGroupId);
-    const setLiveSessionId = useTimerStore(s => s.setLiveSessionId);
-    const activeLiveSessionId = useTimerStore(s => s.activeLiveSessionId);
-
-    useEffect(() => {
-        if (!user || user.isAnonymous) return;
-
-        const syncLiveSession = async () => {
-            if (timerIsActive && activeGroupId && !activeLiveSessionId) {
-                // START SESSION
-                const sid = await startLiveSession(user.uid, activeGroupId, user.displayName || "Member", user.photoURL || "");
-                if (sid) setLiveSessionId(sid);
-            } else if (!timerIsActive && activeLiveSessionId) {
-                // END SESSION
-                await endLiveSession(activeLiveSessionId);
-                setLiveSessionId(null);
-            } else if (timerIsActive && !activeGroupId && activeLiveSessionId) {
-                // DISCONNECTED FROM GROUP
-                await endLiveSession(activeLiveSessionId);
-                setLiveSessionId(null);
-            }
-        };
-
-        syncLiveSession();
-    }, [timerIsActive, activeGroupId, user, activeLiveSessionId]);
 
     useEffect(() => {
         const missingUids = new Set<string>();
@@ -314,27 +366,6 @@ export default function GroupsPage() {
             });
         }
     }, [focusGroups, friends, user?.uid]);
-
-    useEffect(() => {
-        if (!user) return;
-        const currentStatuses: Record<string, string> = {};
-        let triggered = false;
-
-        focusGroups.forEach(g => {
-            currentStatuses[g.id] = g.status;
-            if (g.status === "active" && lastActiveStatuses[g.id] === "idle" && g.members.includes(user.uid)) {
-                triggered = true;
-            }
-        });
-
-        if (triggered) {
-            setShowSweep(true);
-            setTimeout(() => setShowSweep(false), 2500);
-        }
-        setLastActiveStatuses(currentStatuses);
-    }, [focusGroups, user?.uid]);
-
-
 
     // All members currently focusing across user's groups
     const activeFocusers = useMemo(() => {
@@ -468,21 +499,20 @@ export default function GroupsPage() {
 
     if (!user || user.isAnonymous) return (
         <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
-            <BackgroundTheme />
+            <BackgroundTheme showSettings={false} disableDots subtleOverlay />
             <main className="relative z-10 flex flex-col items-center justify-center pt-24 pb-32 px-4 w-full flex-1">
-                <AuthRequired title="Workspace Locked" description="Sign in to create focus groups and join organizations." />
+                <AuthRequired title="Groups Locked" description="Sign in to create focus groups and join organizations." />
             </main>
         </div>
     );
 
     if (loading) return (
-        <BackgroundTheme>
+        <BackgroundTheme showSettings={false} disableDots subtleOverlay>
             <div className={cn("relative min-h-screen bg-zinc-950 flex flex-col pt-16 overflow-x-hidden", spaceGrotesk.variable, "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
                 <main className="relative z-10 flex flex-col items-center pb-48 px-4 w-full flex-1 max-w-6xl mx-auto">
                     <header className="flex flex-col items-center text-center mb-12 w-full">
-                        <span className="text-[10px] font-black tracking-[0.4em] text-zinc-600 uppercase mb-4">Collaborative Forge</span>
-                        <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">Focus Ecosystem</h1>
-                        <p className="text-zinc-500 text-sm max-w-md">Join friends or organize your team for high-intensity deep work sessions.</p>
+                        <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">Groups</h1>
+                        <p className="text-zinc-500 text-sm max-w-md">Create a group or join with a code.</p>
                     </header>
                     <div className="w-full max-w-4xl space-y-6 animate-pulse">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -501,34 +531,118 @@ export default function GroupsPage() {
     );
 
     return (
-        <BackgroundTheme>
+        <BackgroundTheme showSettings={false} disableDots subtleOverlay>
             <div className={cn("relative min-h-screen bg-zinc-950 flex flex-col pt-16 overflow-x-hidden", spaceGrotesk.variable, "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
                 <main className="relative z-10 flex flex-col items-center pb-48 px-4 w-full flex-1 max-w-6xl mx-auto">
-                    <header className="flex flex-col items-center text-center mb-12 w-full">
-                        <span className="text-[10px] font-black tracking-[0.4em] text-zinc-600 uppercase mb-4">Collaborative Forge</span>
-                        <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 transition-all">Focus Ecosystem</h1>
-                        <p className="text-zinc-500 text-sm max-w-md">Join friends or organize your team for high-intensity deep work sessions.</p>
+
+                    {/* ── Hero Header ── */}
+                    <header className="flex flex-col items-center text-center mb-12 w-full pt-10 relative">
+
+                        <motion.div
+                            initial={{ opacity: 0, y: -12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3 }}
+                            className="mb-4"
+                        >
+                            <span className="text-[10px] font-black tracking-[0.25em] text-zinc-500 uppercase">Team Focus</span>
+                        </motion.div>
+
+                        <motion.h1
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.35 }}
+                            className="text-4xl md:text-5xl font-black tracking-tight mb-3 leading-none text-white"
+                        >
+                            Groups
+                        </motion.h1>
+
+                        <motion.p
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 0.5, delay: 0.16 }}
+                            className="text-zinc-500 text-sm max-w-lg leading-relaxed"
+                        >
+                            Create a group, join with a code, and focus together.
+                        </motion.p>
+
+                        {/* Live stats strip */}
+                        {(userGroups.length > 0 || activeFocusers.length > 0) && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.4, delay: 0.25 }}
+                                className="mt-6 flex items-center gap-6 px-5 py-2.5 rounded-xl bg-zinc-900/60 border border-white/10"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[#E8821A]" />
+                                    <span className="text-[11px] font-black text-white">{userGroups.length}</span>
+                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Groups</span>
+                                </div>
+                                <div className="w-px h-4 bg-white/10" />
+                                <div className="flex items-center gap-2">
+                                    <div className={cn("w-1.5 h-1.5 rounded-full", activeFocusers.length > 0 ? "bg-orange-400" : "bg-zinc-700")} />
+                                    <span className="text-[11px] font-black text-white">{activeFocusers.length}</span>
+                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Focusing Now</span>
+                                </div>
+                                <div className="w-px h-4 bg-white/10" />
+                                <div className="flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+                                    <span className="text-[11px] font-black text-white">{publicGroups.length}</span>
+                                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Open Groups</span>
+                                </div>
+                            </motion.div>
+                        )}
                     </header>
 
                     <div className="w-full max-w-4xl space-y-6">
+                        {/* ── Action Cards ── */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <motion.button initial={false} whileHover={{ scale: 1.01, y: -2 }} whileTap={{ scale: 0.99 }} transition={{ type: "spring", stiffness: 400, damping: 25 }} onClick={() => setShowCreateGroup(!showCreateGroup)} className={cn("p-6 rounded-3xl border border-white/10 hover:bg-zinc-800/60 hover:border-[#E8821A]/30 transition-all duration-150 flex items-center gap-6 group", settingsGlassmorphism ? "bg-zinc-900/40" : "bg-zinc-900")}>
-                                <div className="w-14 h-14 rounded-2xl bg-[#E8821A]/10 flex items-center justify-center group-hover:bg-[#E8821A]/20 transition-all duration-150">
-                                    <Plus className="w-8 h-8 text-[#E8821A]" />
+                            <motion.button
+                                initial={false}
+                                whileHover={{ scale: 1.01, y: -1 }}
+                                whileTap={{ scale: 0.985 }}
+                                transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                                onClick={() => setShowCreateGroup(!showCreateGroup)}
+                                className={cn(
+                                    "p-5 rounded-2xl border transition-all duration-200 flex items-center gap-4 group",
+                                    showCreateGroup
+                                        ? "bg-[#E8821A]/10 border-[#E8821A]/40"
+                                        : settingsGlassmorphism
+                                        ? "bg-zinc-900/50 border-white/10 hover:border-[#E8821A]/35 hover:bg-zinc-800/60"
+                                        : "bg-zinc-900 border-white/10 hover:border-[#E8821A]/35 hover:bg-zinc-800/60"
+                                )}
+                            >
+                                <div className={cn(
+                                    "w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200 shrink-0",
+                                    showCreateGroup ? "bg-[#E8821A]/25" : "bg-[#E8821A]/10 group-hover:bg-[#E8821A]/20"
+                                )}>
+                                    <Plus className={cn("w-7 h-7 transition-all duration-200", showCreateGroup ? "text-[#E8821A] rotate-45" : "text-[#E8821A]")} />
                                 </div>
                                 <div className="text-left">
-                                    <h3 className="text-sm font-bold text-white">Initialize New Workspace</h3>
-                                    <p className="text-[10px] text-zinc-500">Create a social group or organization.</p>
+                                    <h3 className="text-sm font-black text-white mb-0.5">Create Group</h3>
+                                    <p className="text-[11px] text-zinc-500">Start a new focus group.</p>
                                 </div>
                             </motion.button>
 
-                            <motion.button initial={false} whileHover={{ scale: 1.01, y: -2 }} whileTap={{ scale: 0.99 }} transition={{ type: "spring", stiffness: 400, damping: 25 }} onClick={() => setShowJoinCodeModal(true)} className={cn("p-6 rounded-3xl border border-white/10 hover:bg-zinc-800/60 hover:border-[#E8821A]/30 transition-all duration-150 flex items-center gap-6 group", settingsGlassmorphism ? "bg-zinc-900/40" : "bg-zinc-900")}>
-                                <div className="w-14 h-14 rounded-2xl bg-zinc-950/50 flex items-center justify-center group-hover:bg-zinc-800 transition-all duration-150 border border-white/5">
-                                    <Key className="w-6 h-6 text-zinc-500 group-hover:text-[#E8821A]" />
+                            <motion.button
+                                initial={false}
+                                whileHover={{ scale: 1.01, y: -1 }}
+                                whileTap={{ scale: 0.985 }}
+                                transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                                onClick={() => setShowJoinCodeModal(true)}
+                                className={cn(
+                                    "p-5 rounded-2xl border transition-all duration-200 flex items-center gap-4 group",
+                                    settingsGlassmorphism
+                                        ? "bg-zinc-900/50 border-white/10 hover:border-amber-400/30 hover:bg-zinc-800/60"
+                                        : "bg-zinc-900 border-white/10 hover:border-amber-400/30 hover:bg-zinc-800/60"
+                                )}
+                            >
+                                <div className="w-12 h-12 rounded-xl bg-zinc-950/70 flex items-center justify-center group-hover:bg-amber-400/10 transition-all duration-200 border border-white/10 shrink-0">
+                                    <Key className="w-6 h-6 text-zinc-500 group-hover:text-amber-400 transition-colors duration-200" />
                                 </div>
                                 <div className="text-left">
-                                    <h3 className="text-sm font-bold text-white">Join via Entry Code</h3>
-                                    <p className="text-[10px] text-zinc-500">Enter a specific workspace code.</p>
+                                    <h3 className="text-sm font-black text-white mb-0.5">Join with Code</h3>
+                                    <p className="text-[11px] text-zinc-500">Enter a 6-character group code.</p>
                                 </div>
                             </motion.button>
                         </div>
@@ -550,34 +664,73 @@ export default function GroupsPage() {
                         </AnimatePresence>
 
                         {/* Active Focusers Banner */}
-                    {activeFocusers.length > 0 && (
-                        <ActiveFocusersBanner focusers={activeFocusers} />
-                    )}
+                        {activeFocusers.length > 0 && (
+                            <ActiveFocusersBanner focusers={activeFocusers} />
+                        )}
 
-                    <div className="space-y-12">
+                        <div className="space-y-14">
                             {userGroups.length > 0 && (
                                 <section>
-                                    <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-[#E8821A]" />
-                                        Your Active Workspaces
-                                    </h2>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {userGroups.map(group => (
-                                            <EnhancedGroupCard key={group.id} group={group} onClick={() => setSelectedGroupId(group.id)} isMember={true} />
+                                    {/* Section header */}
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-[#E8821A]" />
+                                        <h2 className="text-lg font-black text-white tracking-tight">Your Groups</h2>
+                                        <span className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-white/8 text-[9px] font-black text-zinc-500 uppercase tracking-widest">
+                                            {userGroups.length} {userGroups.length === 1 ? "group" : "groups"}
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                        {userGroups.map((group) => (
+                                            <div key={group.id}>
+                                                <EnhancedGroupCard group={group} onClick={() => setSelectedGroupId(group.id)} isMember={true} />
+                                            </div>
                                         ))}
                                     </div>
                                 </section>
                             )}
 
+                            {userGroups.length === 0 && publicGroups.length === 0 && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 12 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="flex flex-col items-center py-24 gap-6 text-center"
+                                >
+                                    <div className="relative">
+                                        <div className="w-24 h-24 rounded-3xl bg-zinc-900/80 border border-white/5 flex items-center justify-center">
+                                            <Users className="w-10 h-10 text-zinc-700" />
+                                        </div>
+                                        <div className="absolute -top-2 -right-2 w-8 h-8 rounded-xl bg-[#E8821A]/10 border border-[#E8821A]/20 flex items-center justify-center">
+                                            <Plus className="w-4 h-4 text-[#E8821A]" />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <h3 className="text-xl font-black text-white">No groups yet</h3>
+                                        <p className="text-sm text-zinc-600 max-w-xs">Create your first group or join one with an access code to start focusing together.</p>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowCreateGroup(true)}
+                                        className="px-6 py-3 bg-[#E8821A] text-black font-black text-sm rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-[0_8px_24px_rgba(232,130,26,0.3)]"
+                                    >
+                                        Create First Group
+                                    </button>
+                                </motion.div>
+                            )}
+
                             {publicGroups.length > 0 && (
                                 <section>
-                                    <h2 className="text-xl font-bold text-zinc-500 mb-6 flex items-center gap-2">
-                                        <Globe className="w-5 h-5" />
-                                        Explore Public Groups
-                                    </h2>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {publicGroups.map(group => (
-                                            <EnhancedGroupCard key={group.id} group={group} onClick={() => setSelectedGroupId(group.id)} isMember={false} />
+                                    {/* Section header */}
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <Globe className="w-5 h-5 text-zinc-600" />
+                                        <h2 className="text-lg font-black text-zinc-400 tracking-tight">Explore Public Groups</h2>
+                                        <span className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-white/8 text-[9px] font-black text-zinc-600 uppercase tracking-widest">
+                                            {publicGroups.length} open
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                        {publicGroups.map((group) => (
+                                            <div key={group.id}>
+                                                <EnhancedGroupCard group={group} onClick={() => setSelectedGroupId(group.id)} isMember={false} />
+                                            </div>
                                         ))}
                                     </div>
                                 </section>
@@ -585,10 +738,6 @@ export default function GroupsPage() {
                         </div>
                     </div>
                 </main>
-
-                <AnimatePresence>
-                    {showSweep && <SprintResonance />}
-                </AnimatePresence>
 
                 <AnimatePresence>
                     {selectedGroupId && (
@@ -602,7 +751,6 @@ export default function GroupsPage() {
                             setActiveTab={setActiveModalTab}
                             onJoin={handleJoinGroup}
                             onLeave={handleLeaveGroup}
-                            setCeremonyData={setCeremonyData}
                         />
                     )}
                 </AnimatePresence>
@@ -617,11 +765,6 @@ export default function GroupsPage() {
                 </AnimatePresence>
             </div>
 
-            <FocusZoneCeremony 
-                isOpen={ceremonyData?.isOpen || false} 
-                groupName={ceremonyData?.groupName || ""} 
-                onComplete={() => setCeremonyData(prev => prev ? { ...prev, isOpen: false } : null)} 
-            />
         </BackgroundTheme>
     );
 }
@@ -670,7 +813,7 @@ function CreateGroupForm({ user, friends, onClose, groupType, setGroupType, priv
             status: "idle",
             createdAt: serverTimestamp()
         });
-        toast.success("Workspace Established!");
+        toast.success("Group created");
         onClose();
     };
 
@@ -681,22 +824,34 @@ function CreateGroupForm({ user, friends, onClose, groupType, setGroupType, priv
     ];
 
     return (
-        <div className={cn("p-8 rounded-3xl border border-white/10 space-y-6", settingsGlassmorphism ? "bg-zinc-900/60" : "bg-zinc-900 shadow-2xl")}>
+        <div className={cn("p-6 rounded-2xl border space-y-5", settingsGlassmorphism ? "bg-zinc-900/50 border-white/10" : "bg-zinc-900 border-white/10")}>
+            <div className="flex items-center gap-3 border-b border-white/10 pb-4">
+                <div className="w-8 h-8 rounded-lg bg-[#E8821A]/15 flex items-center justify-center">
+                    <Plus className="w-4 h-4 text-[#E8821A]" />
+                </div>
+                <h3 className="text-sm font-black text-white">Create New Group</h3>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
-                    <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Workspace Name" className="w-full bg-zinc-950 border border-white/5 rounded-2xl px-5 py-4 text-white focus:border-[#E8821A]/40 outline-none transition-all" />
-                    <textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Objectives & Description" className="w-full bg-zinc-950 border border-white/5 rounded-2xl px-5 py-4 text-white focus:border-[#E8821A]/40 outline-none transition-all h-32 resize-none" />
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Group Name</label>
+                        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Morning Deep Workers" className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#E8821A]/40 outline-none transition-all placeholder:text-zinc-700" />
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Description</label>
+                        <textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Goals, schedule, what you're working on..." className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#E8821A]/40 outline-none transition-all h-28 resize-none placeholder:text-zinc-700" />
+                    </div>
                 </div>
                 <div className="space-y-5">
                     {/* Archetype */}
                     <div>
                         <p className="text-xs font-black uppercase text-zinc-600 tracking-widest mb-3">Archetype</p>
                         <div className="flex gap-3">
-                            <button onClick={() => setGroupType("friends")} className={cn("flex-1 p-4 rounded-2xl border transition-all text-left", groupType === "friends" ? "bg-[#E8821A]/10 border-[#E8821A]/40" : "bg-zinc-950 border-white/5")}>
+                            <button onClick={() => setGroupType("friends")} className={cn("flex-1 p-3 rounded-xl border transition-all text-left", groupType === "friends" ? "bg-[#E8821A]/10 border-[#E8821A]/40" : "bg-zinc-950 border-white/10")}>
                                 <UserPlus className={cn("w-5 h-5 mb-2", groupType === "friends" ? "text-[#E8821A]" : "text-zinc-500")} />
                                 <p className={cn("text-xs font-bold", groupType === "friends" ? "text-white" : "text-zinc-500")}>Friends</p>
                             </button>
-                            <button onClick={() => setGroupType("organization")} className={cn("flex-1 p-4 rounded-2xl border transition-all text-left", groupType === "organization" ? "bg-[#E8821A]/10 border-[#E8821A]/40" : "bg-zinc-950 border-white/5")}>
+                            <button onClick={() => setGroupType("organization")} className={cn("flex-1 p-3 rounded-xl border transition-all text-left", groupType === "organization" ? "bg-[#E8821A]/10 border-[#E8821A]/40" : "bg-zinc-950 border-white/10")}>
                                 <Briefcase className={cn("w-5 h-5 mb-2", groupType === "organization" ? "text-[#E8821A]" : "text-zinc-500")} />
                                 <p className={cn("text-xs font-bold", groupType === "organization" ? "text-white" : "text-zinc-500")}>Organization</p>
                             </button>
@@ -710,7 +865,7 @@ function CreateGroupForm({ user, friends, onClose, groupType, setGroupType, priv
                                 const Icon = opt.icon;
                                 const isSelected = privacy === opt.value;
                                 return (
-                                    <button key={opt.value} onClick={() => setPrivacy(opt.value)} className={cn("flex items-center gap-3 p-3 rounded-xl border transition-all text-left", isSelected ? "border-white/20 bg-white/5" : "border-white/5 bg-zinc-950 hover:bg-zinc-900")}>
+                                    <button key={opt.value} onClick={() => setPrivacy(opt.value)} className={cn("flex items-center gap-3 p-3 rounded-xl border transition-all text-left", isSelected ? "border-white/20 bg-white/5" : "border-white/10 bg-zinc-950 hover:bg-zinc-900")}>
                                         <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: isSelected ? opt.color + "22" : "transparent" }}>
                                             <Icon className="w-4 h-4" style={{ color: isSelected ? opt.color : "#52525b" }} />
                                         </div>
@@ -731,7 +886,7 @@ function CreateGroupForm({ user, friends, onClose, groupType, setGroupType, priv
             <AnimatePresence>
                 {privacy === "private-invite" && friends.length > 0 && (
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                        <div className="border-t border-white/5 pt-5">
+                        <div className="border-t border-white/10 pt-5">
                             <p className="text-xs font-black uppercase text-zinc-600 tracking-widest mb-3 flex items-center gap-2">
                                 <UserPlus className="w-3.5 h-3.5" />
                                 Invite Friends
@@ -741,7 +896,7 @@ function CreateGroupForm({ user, friends, onClose, groupType, setGroupType, priv
                                 {friends.filter((f: any) => f.userData).map((f: any) => {
                                     const isSelected = selectedFriendIds.includes(f.friendId);
                                     return (
-                                        <button key={f.friendId} onClick={() => toggleFriend(f.friendId)} className={cn("flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all", isSelected ? "bg-violet-500/20 border-violet-500/40 text-violet-300" : "bg-zinc-950 border-white/5 text-zinc-500 hover:border-white/10")}>
+                                        <button key={f.friendId} onClick={() => toggleFriend(f.friendId)} className={cn("flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-all", isSelected ? "bg-violet-500/20 border-violet-500/40 text-violet-300" : "bg-zinc-950 border-white/10 text-zinc-500 hover:border-white/20")}>
                                             <Avatar className="w-5 h-5">
                                                 <AvatarImage src={f.userData?.photoURL} />
                                                 <AvatarFallback className="text-[8px]">{f.userData?.displayName?.[0]}</AvatarFallback>
@@ -757,9 +912,9 @@ function CreateGroupForm({ user, friends, onClose, groupType, setGroupType, priv
                 )}
             </AnimatePresence>
 
-            <div className="flex gap-4 pt-2">
-                <button onClick={handleCreate} className="flex-1 bg-[#E8821A] text-black font-black py-4 rounded-2xl hover:scale-[1.02] active:scale-95 transition-all shadow-[0_4px_20px_rgba(232,130,26,0.3)]">Create Workspace</button>
-                <button onClick={onClose} className="px-8 bg-zinc-800 text-white font-bold rounded-2xl">Cancel</button>
+            <div className="flex gap-3 pt-1">
+                <button onClick={handleCreate} className="flex-1 bg-[#E8821A] text-black font-black py-3 rounded-xl hover:brightness-110 active:scale-95 transition-all">Create Group</button>
+                <button onClick={onClose} className="px-6 bg-zinc-800 text-white font-bold rounded-xl border border-white/10">Cancel</button>
             </div>
         </div>
     );
@@ -767,7 +922,6 @@ function CreateGroupForm({ user, friends, onClose, groupType, setGroupType, priv
 
 // ─── Enhanced Group Card ──────────────────────────────────────────────────────
 function EnhancedGroupCard({ group, onClick, isMember }: any) {
-    const isActive = group.status === "active";
     const isOrg = group.type === "organization";
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
     const privacyMeta = PRIVACY_META[group.privacy as GroupPrivacy] ?? PRIVACY_META["public"];
@@ -784,126 +938,102 @@ function EnhancedGroupCard({ group, onClick, isMember }: any) {
         return { hosts, admins, members };
     }, [group.memberDetails, isOrg]);
 
-    // Live sprint elapsed timer directly on the card
-    const sprintElapsed = useSprintElapsed(group.startTime, isActive);
-
     const activeFocuserCount = (group.memberDetails?.filter((m: any) => m.isFocusing).length || 0);
-
-    // Top contributors for mini activity bars  
-    const topContributors = useMemo(() => {
-        if (!group.memberDetails) return [];
-        return [...group.memberDetails]
-            .sort((a: any, b: any) => (b.totalMinutes || 0) - (a.totalMinutes || 0))
-            .slice(0, 3);
-    }, [group.memberDetails]);
-    const maxMins = topContributors[0]?.totalMinutes || 1;
+    const isActive = activeFocuserCount > 0;
+    const activeStartTime = getEarliestActiveStart(group.memberDetails) ?? group.startTime;
+    // Live sprint elapsed timer directly on the card
+    const sprintElapsed = useSprintElapsed(activeStartTime, isActive);
+    const activeRatio = memberCount > 0 ? Math.min(100, Math.round((activeFocuserCount / memberCount) * 100)) : 0;
 
     return (
         <motion.div
             initial={false}
-            whileHover={{ scale: 1.018, y: -5 }}
+            whileHover={{ scale: 1.01, y: -2 }}
             whileTap={{ scale: 0.985 }}
-            transition={{ type: "spring", stiffness: 420, damping: 28 }}
+            transition={{ type: "spring", stiffness: 380, damping: 28 }}
             onClick={onClick}
             className={cn(
-                "relative group cursor-pointer overflow-hidden rounded-[1.75rem] border transition-all duration-300 border-inner",
-                settingsGlassmorphism ? "bg-zinc-900/50 backdrop-blur-sm" : "bg-zinc-900",
+                "relative group cursor-pointer overflow-hidden rounded-2xl border transition-all duration-200",
+                settingsGlassmorphism ? "bg-zinc-900/55" : "bg-zinc-900",
                 isActive
-                    ? "border-[#E8821A]/40 shadow-[0_4px_24px_rgba(232,130,26,0.18),0_0_0_1px_rgba(232,130,26,0.08)]"
-                    : "border-white/[0.07] shadow-[0_4px_20px_rgba(0,0,0,0.35)] hover:border-white/[0.14]"
+                    ? "border-[#E8821A]/40"
+                    : isMember
+                    ? "border-white/10 hover:border-[#E8821A]/25"
+                    : "border-white/10 hover:border-white/20"
             )}
         >
-            {/* ── Active animated glow overlay ── */}
-            {isActive && (
-                <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-[#E8821A]/8 via-transparent to-amber-600/4" />
-                    <motion.div
-                        initial={{ x: "-100%", skewX: -12 }}
-                        animate={{ x: "250%" }}
-                        transition={{ duration: 3.5, repeat: Infinity, ease: "linear", repeatDelay: 2.5 }}
-                        className="absolute top-0 bottom-0 w-1/3 bg-gradient-to-r from-transparent via-[#E8821A]/12 to-transparent"
-                    />
-                </div>
-            )}
-
             {/* ── Org accent bar ── */}
             {isOrg && (
-                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#E8821A]/70 to-transparent" />
-            )}
-
-            {/* ── Pulsing active indicator (top-right) ── */}
-            {isActive && (
-                <div className="absolute top-5 right-5 z-20">
-                    <div className="relative w-7 h-7 flex items-center justify-center">
-                        <motion.div
-                            animate={{ scale: [1, 2.2], opacity: [0.45, 0] }}
-                            transition={{ duration: 1.8, repeat: Infinity, ease: "easeOut" }}
-                            className="absolute w-full h-full rounded-full bg-[#E8821A]/35"
-                        />
-                        <motion.div
-                            animate={{ scale: [1, 1.6], opacity: [0.6, 0] }}
-                            transition={{ duration: 1.8, repeat: Infinity, ease: "easeOut", delay: 0.5 }}
-                            className="absolute w-4 h-4 rounded-full bg-[#E8821A]/50"
-                        />
-                        <div className="w-2.5 h-2.5 rounded-full bg-[#E8821A] shadow-[0_0_8px_#E8821A,0_0_16px_rgba(201,176,55,0.5)]" />
-                    </div>
-                </div>
+                <div className="absolute top-0 left-0 right-0 h-[1px] bg-[#E8821A]/40" />
             )}
 
             {/* ── Card body ── */}
-            <div className="relative z-10 p-5 flex flex-col gap-3.5">
+            <div className="relative z-10 p-5 flex flex-col gap-4">
 
-                {/* Badges row */}
-                <div className="flex items-center gap-2 flex-wrap pr-8">
-                    <span className={cn(
-                        "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border",
-                        isOrg
-                            ? "bg-[#E8821A]/10 border-[#E8821A]/25 text-[#E8821A]"
-                            : "bg-indigo-500/8 border-indigo-400/20 text-indigo-400"
-                    )}>
-                        {isOrg ? <Briefcase className="w-2.5 h-2.5" /> : <Users className="w-2.5 h-2.5" />}
-                        {isOrg ? "Org" : "Friends"}
-                    </span>
-                    <span className={cn(
-                        "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/8 bg-white/4",
-                        privacyMeta.color
-                    )}>
-                        <PrivacyIcon className="w-2.5 h-2.5" />
-                        {privacyMeta.label}
-                    </span>
-                    {isActive && activeFocuserCount > 0 && (
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black bg-orange-500/12 text-orange-400 border border-orange-500/25">
-                            <Flame className="w-2.5 h-2.5" />
-                            {activeFocuserCount}
+                {/* Top row: badges + member count */}
+                <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className={cn(
+                            "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border",
+                            isOrg
+                                ? "bg-[#E8821A]/10 border-[#E8821A]/25 text-[#E8821A]"
+                                : "bg-indigo-500/8 border-indigo-400/20 text-indigo-400"
+                        )}>
+                            {isOrg ? <Briefcase className="w-2.5 h-2.5" /> : <Users className="w-2.5 h-2.5" />}
+                            {isOrg ? "Org" : "Friends"}
                         </span>
-                    )}
+                        <span className={cn(
+                            "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/8 bg-white/4",
+                            privacyMeta.color
+                        )}>
+                            <PrivacyIcon className="w-2.5 h-2.5" />
+                            {privacyMeta.label}
+                        </span>
+                    </div>
+                    <span className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black border shrink-0",
+                        isActive ? "bg-orange-500/10 text-orange-400 border-orange-500/25" : "bg-white/5 text-zinc-500 border-white/10"
+                    )}>
+                        <Flame className="w-2.5 h-2.5" />
+                        {isActive ? `${activeFocuserCount} active` : "idle"}
+                    </span>
                 </div>
 
-                {/* Name */}
+                {/* Name + host */}
                 <div>
-                    <h4 className="text-[1.125rem] font-black text-white group-hover:text-[#E8821A] transition-colors duration-200 leading-snug tracking-tight truncate">
+                    <h4 className="text-base font-black text-white group-hover:text-[#E8821A] transition-colors duration-200 leading-snug tracking-tight truncate">
                         {group.name}
                     </h4>
                     {group.description && (
-                        <p className="text-[11px] text-zinc-500 mt-0.5 line-clamp-1">{group.description}</p>
+                        <p className="text-[11px] text-zinc-500 mt-0.5 line-clamp-2">{group.description}</p>
                     )}
-                    <p className="text-[9px] text-zinc-600 font-black uppercase tracking-[0.18em] mt-1.5">
-                        by {group.hostName}
+                    <p className="text-[9px] text-zinc-600 font-black uppercase tracking-[0.18em] mt-1.5 flex items-center gap-1.5">
+                        <Crown className="w-2.5 h-2.5" /> {group.hostName}
                     </p>
                 </div>
 
-                {/* Sprint timer / focus stats — glass panel */}
+                {/* Sprint timer / focus stats */}
                 <div className={cn(
-                    "rounded-2xl px-4 py-3 flex items-center gap-3 border transition-all duration-500",
-                    isActive ? "bg-[#E8821A]/7 border-[#E8821A]/20" : "bg-zinc-950/50 border-white/5"
+                    "rounded-xl px-4 py-3 flex items-center gap-3 border",
+                    isActive ? "bg-[#E8821A]/7 border-[#E8821A]/20" : "bg-zinc-950/60 border-white/10"
                 )}>
                     {isActive ? (
                         <>
-                            <div className="flex flex-col flex-1 min-w-0">
+                            <div className="flex flex-col flex-1 min-w-0 gap-1.5">
                                 <span className="text-[8px] font-black uppercase tracking-[0.22em] text-[#E8821A]/55 mb-0.5">Sprint Running</span>
-                                <span className="text-[1.05rem] font-black text-[#E8821A] tabular-nums leading-none">
+                                <span className="text-[0.95rem] font-black text-[#E8821A] tabular-nums leading-none">
                                     {sprintElapsed > 0 ? fmtElapsed(sprintElapsed) : "Starting…"}
                                 </span>
+                                <div className="flex items-center justify-between text-[9px] font-bold uppercase tracking-wider">
+                                    <span className="text-[#E8821A]/75">{activeFocuserCount}/{memberCount} focusing</span>
+                                    <span className="text-[#E8821A]/60">{activeRatio}%</span>
+                                </div>
+                                <div className="h-1 rounded-full bg-[#E8821A]/10 overflow-hidden">
+                                    <div
+                                        className="h-full bg-gradient-to-r from-[#E8821A] to-amber-300 transition-all duration-500"
+                                        style={{ width: `${activeRatio}%` }}
+                                    />
+                                </div>
                             </div>
                             <Timer className="w-4 h-4 text-[#E8821A]/40 shrink-0" />
                         </>
@@ -911,7 +1041,7 @@ function EnhancedGroupCard({ group, onClick, isMember }: any) {
                         <>
                             <div className="flex flex-col flex-1 min-w-0">
                                 <span className="text-[8px] font-black uppercase tracking-[0.22em] text-zinc-600 mb-0.5">Total Focus</span>
-                                <span className="text-sm font-black text-zinc-400 tabular-nums leading-none">
+                                <span className="text-xs font-black text-zinc-400 tabular-nums leading-none">
                                     {totalMinutes > 0 ? fmtMinutes(totalMinutes) : "No sessions yet"}
                                 </span>
                             </div>
@@ -935,11 +1065,11 @@ function EnhancedGroupCard({ group, onClick, isMember }: any) {
                     </div>
                 )}
 
-                {/* Collective Progress Bar (against Host Goal) */}
+                {/* Goal progress */}
                 {group.settings?.goalHours && group.settings.goalHours > 0 && (
                     <div className="space-y-1.5">
                         <div className="flex justify-between items-center text-[8px] font-black uppercase tracking-widest text-zinc-600">
-                            <span>Unit Objective</span>
+                            <span>Goal Progress</span>
                             <span className="text-[#E8821A]">{Math.round((totalMinutes / 60) / group.settings.goalHours * 100)}% Complete</span>
                         </div>
                         <div className="h-1 bg-zinc-950 rounded-full overflow-hidden border border-white/5">
@@ -952,78 +1082,45 @@ function EnhancedGroupCard({ group, onClick, isMember }: any) {
                     </div>
                 )}
 
-                {/* Mini contribution bars (top 3 members, only if data exists) */}
-                {topContributors.length > 0 && topContributors[0]?.totalMinutes > 0 && (
-                    <div className="space-y-1.5 pt-0.5">
-                        {topContributors.map((m: any, i: number) => {
-                            const pct = Math.round(((m.totalMinutes || 0) / maxMins) * 100);
-                            return (
-                                <div key={m.uid || i} className="flex items-center gap-2">
-                                    <Avatar className="w-4 h-4 shrink-0 border border-white/10">
-                                        <AvatarImage src={m.photoURL} />
-                                        <AvatarFallback className="text-[6px]">{m.displayName?.[0]}</AvatarFallback>
-                                    </Avatar>
-                                    <div className="flex-1 h-[3px] bg-zinc-800/80 rounded-full overflow-hidden">
-                                        <motion.div
-                                            initial={{ width: 0 }}
-                                            animate={{ width: `${pct}%` }}
-                                            transition={{ duration: 0.8, delay: i * 0.1, ease: "easeOut" }}
-                                            className={cn(
-                                                "h-full rounded-full",
-                                                i === 0 ? "bg-gradient-to-r from-[#E8821A] to-amber-300 shadow-[0_0_6px_rgba(201,176,55,0.5)]"
-                                                : i === 1 ? "bg-gradient-to-r from-zinc-400 to-zinc-300"
-                                                : "bg-zinc-600"
-                                            )}
-                                        />
-                                    </div>
-                                    <span className="text-[8px] font-black text-zinc-600 tabular-nums w-8 text-right shrink-0">
-                                        {fmtMinutes(m.totalMinutes || 0)}
-                                    </span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-
                 {/* Bottom row: member avatars + CTA */}
-                <div className="flex items-center justify-between pt-2 border-t border-white/[0.06]">
-                    <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between pt-3 mt-1 border-t border-white/10">
+                    <div className="flex items-center gap-2.5">
                         <div className="flex -space-x-1.5">
                             {group.memberDetails?.slice(0, 5).map((m: any, i: number) => (
                                 <div key={i} className="relative">
                                     <Avatar className={cn(
-                                        "w-6 h-6 border-2 border-zinc-900 transition-all",
-                                        m.isFocusing && "ring-1 ring-[#E8821A] ring-offset-1 ring-offset-zinc-950 shadow-[0_0_8px_rgba(232,130,26,0.5)]"
+                                        "w-7 h-7 border-2 border-zinc-950 bg-zinc-900 transition-all",
+                                        m.isFocusing && "ring-1 ring-[#E8821A] ring-offset-1 ring-offset-zinc-950"
                                     )}>
                                         <AvatarImage src={m.photoURL} />
-                                        <AvatarFallback className="text-[8px]">{m.displayName?.[0]}</AvatarFallback>
+                                        <AvatarFallback className="text-[8px] bg-zinc-800">{m.displayName?.[0]}</AvatarFallback>
                                     </Avatar>
                                     {isActive && m.isFocusing && (
-                                        <motion.div 
-                                            animate={{ scale: [1, 1.4, 1], opacity: [0.5, 1, 0.5] }}
-                                            transition={{ duration: 1.5, repeat: Infinity }}
-                                            className="absolute -top-px -right-px w-1.5 h-1.5 rounded-full bg-[#E8821A] shadow-[0_0_4px_#E8821A]" 
-                                        />
+                                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#E8821A] border border-zinc-950" />
                                     )}
                                 </div>
                             ))}
                             {memberCount > 5 && (
-                                <div className="w-6 h-6 rounded-full bg-zinc-800 border-2 border-zinc-900 flex items-center justify-center text-[8px] font-bold text-zinc-500">
+                                <div className="w-7 h-7 rounded-full bg-zinc-800 border-2 border-zinc-950 flex items-center justify-center text-[8px] font-black text-zinc-400">
                                     +{memberCount - 5}
                                 </div>
                             )}
                         </div>
-                        <span className="text-[10px] text-zinc-600 font-bold">
+                        <span className="text-[10px] text-zinc-500 font-bold tracking-wide">
                             {memberCount} {memberCount === 1 ? "member" : "members"}
                         </span>
                     </div>
 
                     <div className={cn(
-                        "flex items-center gap-1 text-[10px] font-black uppercase tracking-wider transition-all duration-200 group-hover:gap-2",
-                        isActive ? "text-[#E8821A]" : "text-zinc-600 group-hover:text-[#E8821A]"
+                        "flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider transition-all duration-200 px-3 py-1.5 rounded-lg",
+                        isActive
+                            ? "bg-[#E8821A]/15 text-[#E8821A] group-hover:bg-[#E8821A]/25"
+                            : isMember
+                            ? "bg-zinc-800/70 text-zinc-400 group-hover:bg-zinc-800 group-hover:text-[#E8821A]"
+                            : "bg-white/5 text-zinc-600 group-hover:bg-white/10 group-hover:text-white"
                     )}>
-                        {isMember ? "Open" : "View"}
-                        <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform duration-200" />
+                        {isMember ? "Open" : "Join"}
+                        <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform duration-200" />
                     </div>
                 </div>
             </div>
@@ -1046,6 +1143,8 @@ function useSprintElapsed(startTime: any, isActive: boolean) {
         const getMs = (ts: any): number => {
             if (!ts) return Date.now();
             if (typeof ts.toMillis === "function") return ts.toMillis();
+            if (typeof ts === "number") return ts;
+            if (ts instanceof Date) return ts.getTime();
             if (ts.seconds) return ts.seconds * 1000;
             return Date.now();
         };
@@ -1069,33 +1168,52 @@ function fmtElapsed(secs: number) {
     return `${s}s`;
 }
 
+function getManagementGroupKey(group: any): string {
+    if (!group) return "";
+    const members = (group.memberDetails || [])
+        .map((m: any) => `${m.uid}:${m.role}:${m.totalMinutes || 0}:${m.displayName || ""}:${m.photoURL || ""}`)
+        .join("|");
+    const settings = `${group.settings?.goalHours || 0}:${group.settings?.maxMembers || 0}`;
+    return `${group.id}|${group.hostId}|${group.privacy}|${group.accessCode || ""}|${settings}|${members}`;
+}
+
 // ─── Group Detail Modal ───────────────────────────────────────────────────────
-function GroupDetailModal({ groupId, onClose, user, groups, friends, activeTab, setActiveTab, onJoin, onLeave, setCeremonyData }: any) {
+function GroupDetailModal({ groupId, onClose, user, groups, friends, activeTab, setActiveTab, onJoin, onLeave }: any) {
     const group = groups.find((g: any) => g.id === groupId);
     
     const [tasks, setTasks] = useState<SharedTask[]>([]);
     const [viewMode, setViewMode] = useState<"shared" | "personal">("shared");
     const [isManagingRoles, setIsManagingRoles] = useState(false);
     const [showInviteModal, setShowInviteModal] = useState(false);
+    const [sessionActionPending, setSessionActionPending] = useState<"start" | "pause" | "stop" | null>(null);
+    const [optimisticFocusing, setOptimisticFocusing] = useState<boolean | null>(null);
+    const [roleActionPendingId, setRoleActionPendingId] = useState<string | null>(null);
+    const [memberNowMs, setMemberNowMs] = useState(Date.now());
+    const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
+    const [objectiveTemplateDraft, setObjectiveTemplateDraft] = useState<ObjectiveTemplateDraft | null>(null);
 
     const isMember = group?.members.includes(user.uid);
     const memberStats = group?.memberStats?.[user.uid];
-    const userRole = memberStats?.role || "member";
-    const isAdmin = userRole === "host" || userRole === "admin";
-    const isActive = group?.status === "active";
+    const isUserFocusing = !!group?.memberDetails?.some((m: any) => m.uid === user.uid && m.isFocusing);
+    const effectiveIsFocusing = optimisticFocusing ?? isUserFocusing;
+    const isHost = group?.hostId === user.uid;
+    const userRole = memberStats?.role || (isHost ? "host" : "member");
+    const isAdmin = isHost || userRole === "admin";
     const isOrg = group?.type === "organization";
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
     const timerStart = useTimerStore(s => s.start);
     const timerPause = useTimerStore(s => s.pause);
+    const timerStop = useTimerStore(s => s.stop);
     const timerIsActive = useTimerStore(s => s.isActive);
     const setActiveGroupId = useTimerStore(s => s.setActiveGroupId);
-
-    // Live elapsed sprint timer
-    const sprintElapsed = useSprintElapsed(group?.startTime, isActive);
 
     const activeFocuserCount = useMemo(() => {
         return (group?.memberDetails?.filter((m: any) => m.isFocusing).length) || 0;
     }, [group?.memberDetails]);
+    const isActive = activeFocuserCount > 0;
+    const activeStartTime = getEarliestActiveStart(group?.memberDetails) ?? group?.startTime;
+    // Live elapsed sprint timer
+    const sprintElapsed = useSprintElapsed(activeStartTime, isActive);
 
     useEffect(() => {
         if (!isMember || !groupId) return;
@@ -1110,76 +1228,125 @@ function GroupDetailModal({ groupId, onClose, user, groups, friends, activeTab, 
         return [...(group.memberDetails || [])].sort((a, b) => (b.totalMinutes || 0) - (a.totalMinutes || 0));
     }, [group]);
 
+    useEffect(() => {
+        setOptimisticFocusing(null);
+    }, [group?.id, isUserFocusing]);
+
+    useEffect(() => {
+        setIsHeaderMenuOpen(false);
+    }, [group?.id, isManagingRoles]);
+
+    const shouldTickMemberElapsed = !isManagingRoles && activeTab === "workspace" && activeFocuserCount > 0;
+    useEffect(() => {
+        if (!shouldTickMemberElapsed) return;
+        const t = setInterval(() => setMemberNowMs(Date.now()), 1000);
+        return () => clearInterval(t);
+    }, [shouldTickMemberElapsed]);
+
+    const getMemberLiveElapsed = (ts: any) => {
+        const startedMs = toMillis(ts);
+        if (!startedMs) return null;
+        return fmtElapsed(Math.max(0, Math.floor((memberNowMs - startedMs) / 1000)));
+    };
+
     if (!group) return null;
 
-    const handleAddTask = async (title: string, priority: string = "medium", assignedTo: string = "all") => {
-        if (!isAdmin) return;
+    const handleAddTask = async (title: string, priority: string = "medium", assignedTo: string = "all", silent: boolean = false, description: string = "") => {
+        if (!isAdmin) {
+            toast.error("Only hosts and admins can add shared objectives.");
+            return;
+        }
         await addDoc(collection(db, `focusGroups/${groupId}/tasks`), {
-            title, priority, assignedTo, status: "todo",
+            title, priority, assignedTo, description, status: "todo",
             createdBy: user.uid, createdAt: serverTimestamp()
         });
+        if (!silent) toast.success("Objective added.");
     };
 
     const handleUpdateTask = async (taskId: string, updates: any) => {
         await updateDoc(doc(db, `focusGroups/${groupId}/tasks`, taskId), updates);
     };
 
-    const handleToggleStatus = async (groupId: string) => {
+    const handleDeleteTask = async (taskId: string) => {
+        if (!isAdmin) {
+            toast.error("Only hosts and admins can delete shared objectives.");
+            return;
+        }
+        await deleteDoc(doc(db, `focusGroups/${groupId}/tasks`, taskId));
+        toast.success("Objective deleted.");
+    };
+
+    const handleSessionAction = async (action: "start" | "pause" | "stop") => {
         if (!isMember) return;
-        
-        const isCurrentlyFocusing = memberStats?.isFocusing;
-        const newFocusingState = !isCurrentlyFocusing;
-        
-        // Determine if anyone else is currently focusing
-        const otherFocusers = group.memberDetails?.filter((m: any) => m.isFocusing && m.uid !== user.uid) || [];
-        const anyoneElseFocusing = otherFocusers.length > 0;
+        if (sessionActionPending) return;
 
-        const updates: any = {};
+        setSessionActionPending(action);
+        if (action === "start") setOptimisticFocusing(true);
+        if (action === "pause" || action === "stop") setOptimisticFocusing(false);
+        try {
+            const result = await applyGroupSessionAction({
+                group,
+                userId: user.uid,
+                action
+            });
 
-        // Determine group-level status based on NEW focusing state
-        if (newFocusingState) {
-            updates.status = "active";
-            if (!isActive) updates.startTime = serverTimestamp();
-        } else if (!anyoneElseFocusing) {
-            updates.status = "idle";
-            updates.startTime = null;
-        }
+            setActiveGroupId(result.shouldSetActiveGroupId);
 
-        if (Object.keys(updates).length > 0) {
-            await updateDoc(doc(db, "focusGroups", groupId), updates);
-        }
+            if (result.shouldStartTimer && !timerIsActive) timerStart();
+            if (result.shouldPauseTimer) timerPause();
+            if (result.shouldStopTimer) {
+                // Persist only actual focused minutes for interrupted focus runs.
+                const timerSnapshot = useTimerStore.getState();
+                if (timerSnapshot.mode === "focus" && timerSnapshot.timeLeft > 0) {
+                    const elapsedSeconds = Math.max(0, timerSnapshot.initialFocusTime - timerSnapshot.timeLeft);
+                    const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+                    if (elapsedMinutes >= 1) {
+                        await savePartialPomodoroSession(user.uid, elapsedMinutes, group.id);
+                    }
+                }
+                timerStop();
+            }
 
-        // Sync local Pomodoro timer
-        if (newFocusingState) {
-            setCeremonyData({ isOpen: true, groupName: group.name });
-            setActiveGroupId(groupId);
-            if (!timerIsActive) timerStart();
-        } else {
-            setActiveGroupId(null);
-            // We don't pause the timer here to allow the user to continue focusing individually
-        }
-        
-        if (!newFocusingState) {
-            toast.info("Disconnected from workspace.");
+            if (action === "pause") {
+                toast.info("Focus paused.");
+            } else if (action === "stop") {
+                toast.info("Focus stopped.");
+            }
+        } catch (error) {
+            console.error("Failed to update group focus session:", error);
+            setOptimisticFocusing(null);
+            toast.error("Could not update session. Please try again.");
+        } finally {
+            setSessionActionPending(null);
         }
     };
 
     const handleUpdateMemberRole = async (memberId: string, newRole: "admin" | "member") => {
         if (userRole !== "host") { toast.error("Only the host can modify officer roles."); return; }
-        await updateDoc(doc(db, "focusGroups", groupId), {
-            [`memberStats.${memberId}.role`]: newRole
-        });
-        toast.success(`Updated role to ${newRole}`);
+        setRoleActionPendingId(memberId);
+        try {
+            await updateDoc(doc(db, "focusGroups", groupId), {
+                [`memberStats.${memberId}.role`]: newRole
+            });
+            toast.success(`Updated role to ${newRole}`);
+        } finally {
+            setRoleActionPendingId(null);
+        }
     };
 
     const handleRemoveMember = async (memberId: string) => {
         if (!isAdmin) return;
         if (memberId === group.hostId) return;
-        const newMembers = group.members.filter((m: string) => m !== memberId);
-        const updateStats: any = { ...group.memberStats };
-        delete updateStats[memberId];
-        await updateDoc(doc(db, "focusGroups", groupId), { members: newMembers, memberStats: updateStats });
-        toast.info("Member extracted from unit.");
+        setRoleActionPendingId(memberId);
+        try {
+            const newMembers = group.members.filter((m: string) => m !== memberId);
+            const updateStats: any = { ...group.memberStats };
+            delete updateStats[memberId];
+            await updateDoc(doc(db, "focusGroups", groupId), { members: newMembers, memberStats: updateStats });
+            toast.info("Member extracted from unit.");
+        } finally {
+            setRoleActionPendingId(null);
+        }
     };
 
 
@@ -1188,10 +1355,20 @@ function GroupDetailModal({ groupId, onClose, user, groups, friends, activeTab, 
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-zinc-950/90 backdrop-blur-xl" onClick={onClose} />
-            <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }} className="relative w-full max-w-5xl bg-zinc-900/50 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col h-[85vh]">
+            <div className="absolute inset-0 bg-zinc-950/92 backdrop-blur-2xl" onClick={onClose} />
+            <motion.div
+                initial={{ opacity: 0, y: 40, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 40, scale: 0.97 }}
+                transition={{ type: "spring", stiffness: 380, damping: 34 }}
+                className="relative w-full max-w-5xl bg-zinc-900/60 border border-white/10 rounded-[2.5rem] shadow-[0_32px_80px_rgba(0,0,0,0.6)] overflow-hidden flex flex-col h-[85vh] backdrop-blur-sm"
+            >
                 
-                {isOrg && <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#E8821A]/60 to-transparent" />}
+                {/* Top accent bar */}
+                <div className={cn(
+                    "absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent to-transparent",
+                    isOrg ? "via-[#E8821A]/70" : "via-indigo-400/40"
+                )} />
 
                 {/* Header */}
                 <div className="p-8 border-b border-white/5 bg-gradient-to-br from-[#E8821A]/5 to-transparent">
@@ -1231,32 +1408,83 @@ function GroupDetailModal({ groupId, onClose, user, groups, friends, activeTab, 
                             <div className="flex items-center gap-3">
                                 {isMember ? (
                                     <>
-                                        {/* Dynamic Status badge in header */}
-                                        <div className={cn(
-                                            "hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl border font-black text-[9px] uppercase tracking-widest transition-all",
-                                            activeFocuserCount > 0 ? "bg-[#E8821A]/10 border-[#E8821A]/30 text-[#E8821A]" : "bg-zinc-800 border-white/5 text-zinc-500"
-                                        )}>
-                                            <div className={cn("w-1.5 h-1.5 rounded-full", activeFocuserCount > 0 ? "bg-[#E8821A] animate-pulse shadow-[0_0_8px_#E8821A]" : "bg-zinc-600")} />
-                                            {activeFocuserCount > 0 ? `${activeFocuserCount} Focusing Now` : "Status: Ready"}
+                                        <div className="flex items-center gap-2">
+                                            {!effectiveIsFocusing ? (
+                                                <button
+                                                    disabled={!!sessionActionPending}
+                                                    onClick={() => handleSessionAction("start")}
+                                                    className={cn(
+                                                        "px-6 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-2",
+                                                        sessionActionPending ? "bg-[#E8821A]/60 text-black cursor-not-allowed" : "bg-[#E8821A] text-black hover:shadow-[0_0_20px_#E8821A44]"
+                                                    )}
+                                                >
+                                                    <Play className="w-4 h-4" />
+                                                    {sessionActionPending === "start" ? "Starting..." : "Start Focus"}
+                                                </button>
+                                            ) : (
+                                                <>
+                                                    <button
+                                                        disabled={!!sessionActionPending}
+                                                        onClick={() => handleSessionAction("pause")}
+                                                        className={cn(
+                                                            "px-5 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-2 border",
+                                                            sessionActionPending ? "bg-orange-500/40 text-white border-orange-500/20 cursor-not-allowed" : "bg-orange-500 text-white border-orange-400/40 hover:bg-orange-400"
+                                                        )}
+                                                    >
+                                                        <Pause className="w-4 h-4" />
+                                                        {sessionActionPending === "pause" ? "Pausing..." : "Pause"}
+                                                    </button>
+                                                    <button
+                                                        disabled={!!sessionActionPending}
+                                                        onClick={() => handleSessionAction("stop")}
+                                                        className={cn(
+                                                            "px-5 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-2 border",
+                                                            sessionActionPending ? "bg-red-500/30 text-red-100 border-red-500/20 cursor-not-allowed" : "bg-red-500/10 text-red-300 border-red-500/40 hover:bg-red-500/20"
+                                                        )}
+                                                    >
+                                                        <StopCircle className="w-4 h-4" />
+                                                        {sessionActionPending === "stop" ? "Stopping..." : "Stop"}
+                                                    </button>
+                                                </>
+                                            )}
                                         </div>
 
-                                        <button onClick={() => handleToggleStatus(group.id)} className={cn(
-                                            "px-6 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-2 group/btn",
-                                            memberStats?.isFocusing ? "bg-orange-500 text-white shadow-[0_0_20px_rgba(249,115,22,0.3)]" : "bg-[#E8821A] text-black hover:shadow-[0_0_20px_#E8821A44]"
-                                        )}>
-                                            {memberStats?.isFocusing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                                            {memberStats?.isFocusing ? "Disconnect" : "Enter Focus Zone"}
-                                        </button>
-
-                                        {isAdmin && (group.privacy === "private-invite" || group.privacy === "public") && (
-                                            <button onClick={() => setShowInviteModal(true)} className="px-4 py-2.5 rounded-xl font-black text-xs bg-violet-500/10 text-violet-400 border border-violet-500/20 hover:bg-violet-500/20 transition-all flex items-center gap-2">
-                                                <UserPlus className="w-4 h-4" /> Invite
+                                        <div className="relative">
+                                            <button
+                                                onClick={() => setIsHeaderMenuOpen((prev) => !prev)}
+                                                title="More actions"
+                                                className="h-10 w-10 rounded-xl bg-white/5 text-zinc-300 border border-white/10 hover:bg-white/10 transition-all inline-flex items-center justify-center"
+                                            >
+                                                <MoreVertical className="w-4 h-4" />
                                             </button>
-                                        )}
-                                        <button onClick={() => onLeave(group.id)} className="p-2.5 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500/20 transition-all text-xs font-black flex items-center gap-2">
-                                            <LogOut className="w-4 h-4" /> 
-                                            <span className="hidden md:inline">Exit Unit</span>
-                                        </button>
+                                            {isHeaderMenuOpen && (
+                                                <div className="absolute right-0 top-full mt-2 min-w-[170px] rounded-xl border border-white/10 bg-zinc-900/95 backdrop-blur-xl shadow-2xl z-20 p-1.5 space-y-1">
+                                                    {isAdmin && (group.privacy === "private-invite" || group.privacy === "public") && (
+                                                        <button
+                                                            onClick={() => {
+                                                                setShowInviteModal(true);
+                                                                setIsHeaderMenuOpen(false);
+                                                            }}
+                                                            className="w-full px-3 py-2 rounded-lg text-left text-[11px] font-bold text-violet-300 hover:bg-violet-500/10 inline-flex items-center gap-2"
+                                                        >
+                                                            <UserPlus className="w-3.5 h-3.5" />
+                                                            Invite members
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        onClick={() => {
+                                                            onLeave(group.id);
+                                                            setIsHeaderMenuOpen(false);
+                                                        }}
+                                                        className="w-full px-3 py-2 rounded-lg text-left text-[11px] font-bold text-red-300 hover:bg-red-500/10 inline-flex items-center gap-2"
+                                                    >
+                                                        <LogOut className="w-3.5 h-3.5" />
+                                                        Leave group
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+
                                     </>
                                 ) : (
                                     <button onClick={() => onJoin(group.id)} className="px-6 py-3 bg-[#E8821A] text-black font-black rounded-xl hover:scale-105 active:scale-95 transition-all">Request Access</button>
@@ -1265,64 +1493,47 @@ function GroupDetailModal({ groupId, onClose, user, groups, friends, activeTab, 
                             </div>
                     </div>
 
-                    {/* Dynamic Status Display (The Forge) */}
+                    {/* Dynamic status display */}
                     <div className={cn(
-                        "relative p-6 rounded-[2.5rem] overflow-hidden transition-all duration-700",
+                        "relative p-6 rounded-[2.5rem] overflow-hidden transition-all duration-500",
                         isActive 
-                            ? "bg-orange-500/10 border border-orange-500/20 shadow-[0_0_50px_rgba(249,115,22,0.1)]" 
-                            : "bg-zinc-900/40 border border-white/5 border-dashed"
+                            ? "bg-orange-500/10 border border-orange-500/20" 
+                            : "bg-zinc-900/40 border border-white/5"
                     )}>
-                        {isActive && <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/5 blur-[100px] -mr-32 -mt-32 animate-pulse" />}
-                        
                         <div className="flex flex-col md:flex-row md:items-center gap-6 relative z-10">
                             <div className={cn(
-                                "w-16 h-16 rounded-[2rem] flex items-center justify-center transition-all duration-500",
-                                isActive ? "bg-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.4)] scale-110" : "bg-zinc-800"
+                                "w-16 h-16 rounded-[2rem] flex items-center justify-center transition-all duration-300",
+                                isActive ? "bg-orange-500" : "bg-zinc-800"
                             )}>
-                                {isActive ? <Flame className="w-8 h-8 text-white animate-bounce" /> : <Power className="w-8 h-8 text-zinc-600" />}
+                                {isActive ? <Flame className="w-8 h-8 text-white" /> : <Power className="w-8 h-8 text-zinc-600" />}
                             </div>
 
                             <div className="flex-1 space-y-1">
                                 <div className="flex items-center gap-3">
                                     <h3 className={cn("text-xl font-black tracking-tight transition-colors", isActive ? "text-orange-400" : "text-zinc-400")}>
-                                        {isActive ? "Active Focused Session" : "Group Status: Idle"}
+                                        {isActive ? "Focus session active" : "Ready to focus"}
                                     </h3>
                                     {isActive && (
                                         <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-orange-500/20 border border-orange-500/30">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+                                            <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />
                                             <span className="text-[8px] font-black uppercase text-orange-400 tracking-widest leading-none">Live Now</span>
                                         </div>
                                     )}
                                 </div>
                                 <p className="text-zinc-500 text-xs font-medium max-w-md">
                                     {isActive 
-                                        ? `You and ${activeFocuserCount} participants are currently focusing in this workspace.`
-                                        : "Start a focus session to sync with this group's active members."
+                                        ? `${activeFocuserCount} participant${activeFocuserCount === 1 ? "" : "s"} focusing right now.`
+                                        : "Start focus to join this group's active session."
                                     }
                                 </p>
                             </div>
 
                             {isActive && sprintElapsed > 0 && (
-                                <div className="flex items-center gap-6 px-8 py-4 bg-zinc-950/60 rounded-3xl border border-white/5 backdrop-blur-sm">
-                                    <div className="flex flex-col items-center">
-                                        <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-[0.2em] mb-1">Time Elapsed</span>
-                                        <span className="text-3xl font-black text-white font-terminal tracking-tighter">
-                                            {fmtElapsed(sprintElapsed)}
-                                        </span>
-                                    </div>
-                                    <div className="w-[1px] h-10 bg-white/5" />
-                                    <div className="flex flex-col items-center">
-                                        <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-[0.2em] mb-1">Synergy Rate</span>
-                                        {(() => {
-                                            const synergy = Math.min(100, (activeFocuserCount * 25));
-                                            const color = synergy > 70 ? "text-[#E8821A]" : synergy > 30 ? "text-amber-400" : "text-sky-400";
-                                            return (
-                                                <span className={cn("text-3xl font-black transition-colors duration-500", color)}>
-                                                    {synergy}%
-                                                </span>
-                                            );
-                                        })()}
-                                    </div>
+                                <div className="px-5 py-3 bg-zinc-950/60 rounded-2xl border border-white/5 backdrop-blur-sm">
+                                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.18em]">Elapsed</span>
+                                    <p className="text-2xl font-black text-white font-terminal tracking-tight mt-0.5">
+                                        {fmtElapsed(sprintElapsed)}
+                                    </p>
                                 </div>
                             )}
                         </div>
@@ -1332,7 +1543,7 @@ function GroupDetailModal({ groupId, onClose, user, groups, friends, activeTab, 
                         <div className="mt-8 flex items-center justify-between">
                             <div className="flex gap-1 p-1 bg-zinc-950/40 rounded-xl w-fit border border-white/5">
                                 {[
-                                    { id: "workspace", icon: LayoutGrid, label: "Workspace" },
+                                    { id: "workspace", icon: LayoutGrid, label: "Overview" },
                                     { id: "members",   icon: Users,      label: "Participants" }
                                 ].map(t => (
                                     <button key={t.id} onClick={() => setActiveTab(t.id as any)} className={cn("flex items-center gap-2 px-6 py-2 rounded-lg text-xs font-black transition-all", activeTab === t.id ? "bg-white/10 text-white shadow-lg" : "text-zinc-500 hover:text-zinc-300")}>
@@ -1344,24 +1555,25 @@ function GroupDetailModal({ groupId, onClose, user, groups, friends, activeTab, 
                             
                             {/* Desktop quick member scroll */}
                             <div className="hidden lg:flex items-center gap-4">
-                                <div className="h-4 w-[1px] bg-white/5 mr-2" />
-                                <div className="flex -space-x-2">
+                                <div className="h-4 w-[1px] bg-white/10 mr-2" />
+                                <div className="flex -space-x-1.5">
                                     {group.memberDetails?.slice(0, 8).map((m: any, i: number) => (
                                         <div key={i} className="relative group/avatar">
                                             <Avatar className={cn(
-                                                "w-8 h-8 border-2 border-zinc-900 transition-transform hover:scale-110",
-                                                m.isFocusing ? "ring-2 ring-orange-500 ring-offset-2 ring-offset-zinc-900" : "opacity-60 grayscale hover:grayscale-0 hover:opacity-100"
+                                                "w-8 h-8 border-2 border-zinc-950 transition-all duration-200 bg-zinc-900",
+                                                m.isFocusing ? "ring-1 ring-orange-500/70 ring-offset-1 ring-offset-zinc-900" : "opacity-85 hover:opacity-100"
                                             )}>
                                                 <AvatarImage src={m.photoURL} />
                                                 <AvatarFallback className="text-[10px] bg-zinc-800">{m.displayName?.[0]}</AvatarFallback>
                                             </Avatar>
+                                            {m.isFocusing && <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-orange-500 border border-zinc-950" />}
                                             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-2 py-1 bg-zinc-800 text-[8px] text-white rounded opacity-0 group-hover/avatar:opacity-100 transition-all pointer-events-none whitespace-nowrap z-50">
                                                 {m.displayName} {m.isFocusing && "• Focusing"}
                                             </div>
                                         </div>
                                     ))}
                                     {group.memberDetails && group.memberDetails.length > 8 && (
-                                        <div className="w-8 h-8 rounded-full bg-zinc-800 border-2 border-zinc-900 flex items-center justify-center text-[10px] font-black text-zinc-500">
+                                        <div className="w-8 h-8 rounded-full bg-zinc-800 border-2 border-zinc-950 flex items-center justify-center text-[10px] font-black text-zinc-400">
                                             +{group.memberDetails.length - 8}
                                         </div>
                                     )}
@@ -1377,10 +1589,12 @@ function GroupDetailModal({ groupId, onClose, user, groups, friends, activeTab, 
                         <GroupManagementView 
                             group={group} user={user} userRole={userRole}
                             onUpdateRole={handleUpdateMemberRole} onRemove={handleRemoveMember}
+                            roleActionPendingId={roleActionPendingId}
                         />
                     ) : isMember ? (
                         activeTab === "workspace" ? (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                                {/* Left/Main Column */}
                                 <div className="lg:col-span-2 space-y-8">
                                     <div className="space-y-6">
                                         <div className="flex items-center justify-between">
@@ -1394,32 +1608,39 @@ function GroupDetailModal({ groupId, onClose, user, groups, friends, activeTab, 
                                         </div>
 
                                         {viewMode === "shared" ? (
-                                            tasks.length > 0 ? (
-                                                <SharedTasksPanel tasks={tasks} onAdd={handleAddTask} onUpdate={handleUpdateTask} isAdmin={isAdmin} groupMembers={group.memberDetails} />
-                                            ) : (
-                                                <div className="p-8 border-2 border-dashed border-white/5 rounded-3xl space-y-6">
-                                                    <div className="text-center space-y-2">
-                                                        <p className="text-xs font-bold text-zinc-500">No active objectives for this unit.</p>
-                                                        <p className="text-[10px] text-zinc-600">Select a template to initialize:</p>
-                                                    </div>
-                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                                        {[
-                                                            { title: "Deep Work Session", icon: Sparkles },
-                                                            { title: "Review & Respond", icon: Mail },
-                                                            { title: "Learning Sprint", icon: Target }
-                                                        ].map((tpl, i) => (
-                                                            <button
-                                                                key={i}
-                                                                onClick={() => handleAddTask(tpl.title)}
-                                                                className="flex flex-col items-center gap-2 p-4 bg-zinc-900/60 border border-white/5 rounded-2xl hover:border-[#E8821A]/40 transition-all group"
-                                                            >
-                                                                <tpl.icon className="w-4 h-4 text-zinc-600 group-hover:text-[#E8821A]" />
-                                                                <span className="text-[9px] font-black uppercase text-zinc-500 tracking-wider text-center">{tpl.title}</span>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )
+                                            <SharedTasksPanel
+                                                tasks={tasks}
+                                                onAdd={handleAddTask}
+                                                onUpdate={handleUpdateTask}
+                                                onDelete={handleDeleteTask}
+                                                isAdmin={isAdmin}
+                                                groupMembers={group.memberDetails}
+                                                prefillTemplate={objectiveTemplateDraft}
+                                                onPrefillHandled={() => setObjectiveTemplateDraft(null)}
+                                                onTemplateSelect={(templateId: "deep-work" | "review-respond" | "learning-sprint") => {
+                                                    if (!isAdmin) return;
+                                                    const dateLabel = new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" });
+                                                    if (templateId === "deep-work") {
+                                                        setObjectiveTemplateDraft({
+                                                            title: `Deep work block - ${dateLabel}`,
+                                                            priority: "high",
+                                                            description: "Define one clear output and stay focused for one uninterrupted block.",
+                                                        });
+                                                    } else if (templateId === "review-respond") {
+                                                        setObjectiveTemplateDraft({
+                                                            title: `Review and respond - ${dateLabel}`,
+                                                            priority: "medium",
+                                                            description: "Process inbox/queue items and close urgent follow-ups.",
+                                                        });
+                                                    } else {
+                                                        setObjectiveTemplateDraft({
+                                                            title: `Learning sprint - ${dateLabel}`,
+                                                            priority: "medium",
+                                                            description: "Learn one concept and produce a concrete takeaway.",
+                                                        });
+                                                    }
+                                                }}
+                                            />
                                         ) : (
                                             <div className="p-12 text-center bg-zinc-900/20 border border-white/5 border-dashed rounded-[2rem] space-y-4">
                                                 <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center mx-auto text-zinc-600"><User className="w-8 h-8" /></div>
@@ -1429,9 +1650,30 @@ function GroupDetailModal({ groupId, onClose, user, groups, friends, activeTab, 
                                     </div>
                                 </div>
 
-                                {/* Sidebar */}
+                                {/* Sidebar Column */}
                                 <div className="space-y-4">
-                                    {/* Org Stats widget */}
+                                    <div className="p-4 bg-zinc-900/40 border border-white/10 rounded-xl space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-[10px] font-black uppercase text-zinc-500 tracking-[0.18em]">Weekly Goal</p>
+                                            <Target className="w-3.5 h-3.5 text-[#E8821A]/70" />
+                                        </div>
+                                        {group.settings?.goalHours && group.settings.goalHours > 0 ? (
+                                            <>
+                                                <p className="text-sm font-black text-white tabular-nums">
+                                                    {Math.round((totalGroupMinutes / 60) * 10) / 10}h / {group.settings.goalHours}h
+                                                </p>
+                                                <div className="h-1.5 bg-zinc-950 rounded-full overflow-hidden border border-white/5">
+                                                    <div
+                                                        className="h-full bg-gradient-to-r from-[#E8821A] to-amber-300 transition-all duration-500"
+                                                        style={{ width: `${Math.min(100, ((totalGroupMinutes / 60) / group.settings.goalHours) * 100)}%` }}
+                                                    />
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <p className="text-[11px] text-zinc-500">No weekly goal set yet.</p>
+                                        )}
+                                    </div>
+
                                     {isOrg && (
                                         <div className="p-5 bg-zinc-950/60 border border-[#E8821A]/15 rounded-2xl space-y-3 relative overflow-hidden">
                                             <div className="absolute top-0 right-0 w-24 h-24 bg-[#E8821A]/5 blur-3xl" />
@@ -1457,124 +1699,49 @@ function GroupDetailModal({ groupId, onClose, user, groups, friends, activeTab, 
                                         </div>
                                     )}
 
-                                    {/* Real-time Presence Feed */}
-                                    <div className="p-6 bg-zinc-900/40 border border-white/5 rounded-3xl space-y-4">
-                                        <div className="flex items-center justify-between">
-                                            <p className="text-[9px] font-black uppercase text-zinc-600 tracking-[0.2em]">Operational Status</p>
-                                            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-orange-500/10 border border-orange-500/20">
-                                                <div className="w-1 h-1 rounded-full bg-orange-500 animate-pulse" />
-                                                <span className="text-[8px] font-black text-orange-400 uppercase tracking-widest">{activeFocuserCount} Live</span>
+                                    <div className="p-4 bg-zinc-950/40 border border-white/10 rounded-xl">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <p className="text-[10px] font-black uppercase text-zinc-500 tracking-[0.18em]">Members</p>
+                                            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-orange-500/10 border border-orange-500/25">
+                                                <div className="w-1 h-1 rounded-full bg-orange-500" />
+                                                <span className="text-[9px] font-black text-orange-400 uppercase tracking-widest">{activeFocuserCount} Live</span>
                                             </div>
                                         </div>
-                                        
-                                        <div className="space-y-3">
-                                            {group.memberDetails?.filter((m: any) => m.isFocusing).length > 0 ? (
-                                                group.memberDetails?.filter((m: any) => m.isFocusing).map((m: any) => (
-                                                    <div key={m.uid} className="flex items-center gap-3 p-2 bg-zinc-950/40 rounded-2xl border border-white/5 group/presence">
-                                                        <div className="relative">
-                                                            <Avatar className="w-8 h-8 ring-2 ring-orange-500/20 ring-offset-2 ring-offset-zinc-950">
-                                                                <AvatarImage src={m.photoURL} />
-                                                                <AvatarFallback className="text-[10px] bg-zinc-900">{m.displayName?.[0]}</AvatarFallback>
-                                                            </Avatar>
-                                                            <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-zinc-950 animate-pulse shadow-[0_0_8px_#F97316]" />
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-2">
-                                                                <p className="text-[11px] font-black text-white truncate">{m.uid === user.uid ? "You" : m.displayName}</p>
-                                                                <span className="text-[8px] font-black bg-white/5 border border-white/10 px-1.5 py-0.5 rounded text-zinc-500 capitalize">{m.role}</span>
-                                                            </div>
-                                                            <div className="flex items-center gap-1">
-                                                                <span className="text-[8px] font-bold text-orange-500 uppercase tracking-widest">Focused State</span>
-                                                                <span className="text-[8px] text-zinc-600 font-bold ml-1">• {fmtMinutes(m.totalMinutes || 0)} today</span>
-                                                            </div>
-                                                        </div>
-                                                        <Flame className="w-3.5 h-3.5 text-orange-500" />
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <div className="py-6 text-center border-2 border-white/5 border-dashed rounded-3xl">
-                                                    <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-[0.2em]">All Members Idle</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Contributors leaderboard — competitive */}
-                                    <div className="p-6 bg-zinc-950/40 border border-[#E8821A]/10 rounded-3xl relative overflow-hidden">
-                                        <div className="absolute top-0 right-0 w-32 h-32 bg-[#E8821A]/5 blur-3xl -mr-10 -mt-10" />
-                                        <div className="flex items-center justify-between mb-4">
-                                            <p className="text-[9px] font-black uppercase text-zinc-600 tracking-[0.2em]">Group Leaderboard</p>
-                                            {/* User's rank chip */}
-                                            {(() => {
-                                                const myRank = sortedMembers.findIndex((m: any) => m.uid === user.uid) + 1;
-                                                return myRank > 0 ? (
-                                                    <span className={cn(
-                                                        "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border",
-                                                        myRank === 1 ? "bg-[#E8821A]/20 border-[#E8821A]/30 text-[#E8821A]" : "bg-white/5 border-white/10 text-zinc-400"
-                                                    )}>
-                                                        {myRank === 1 ? "🏆 #1" : `#${myRank} You`}
-                                                    </span>
-                                                ) : null;
-                                            })()}
-                                        </div>
-                                        
-                                        <div className="space-y-2 mb-6">
-                                            {sortedMembers.slice(0, 5).map((m: any, i: number) => {
-                                                const pct = totalGroupMinutes > 0 ? Math.round(((m.totalMinutes || 0) / totalGroupMinutes) * 100) : 0;
+                                        <div className="space-y-2 mb-4">
+                                            {sortedMembers.slice(0, 5).map((m: any) => {
+                                                const goalHours = group.settings?.goalHours || 0;
+                                                const goalPct = goalHours > 0 ? Math.round((((m.totalMinutes || 0) / 60) / goalHours) * 100) : null;
                                                 const isMe = m.uid === user.uid;
-                                                const prevMember = i > 0 ? sortedMembers[i - 1] : null;
-                                                const gap = prevMember ? (prevMember.totalMinutes || 0) - (m.totalMinutes || 0) : 0;
                                                 const isFocusing = m.isFocusing;
                                                 return (
-                                                    <div key={m.uid} className={cn("space-y-1 rounded-xl p-2 transition-all", isMe && "bg-[#E8821A]/5 border border-[#E8821A]/15")}>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className={cn("text-[9px] font-black w-4 shrink-0", i === 0 ? "text-[#E8821A]" : i === 1 ? "text-zinc-400" : "text-zinc-600")}>#{i + 1}</span>
-                                                            <Link href={`/profile?user=${m.uid}`} onClick={(e) => e.stopPropagation()} className="flex-shrink-0">
-                                                                <Avatar className="w-5 h-5 border border-white/10 hover:border-white/30 transition-all">
-                                                                    <AvatarImage src={m.photoURL} />
-                                                                    <AvatarFallback className="text-[8px]">{m.displayName?.[0]}</AvatarFallback>
-                                                                </Avatar>
-                                                            </Link>
-                                                            <span className={cn("text-xs font-bold flex-1 truncate", isMe ? "text-[#E8821A]" : "text-zinc-300")}>
-                                                                {isMe ? "You" : m.displayName}
-                                                            </span>
-                                                            {isFocusing && (
-                                                                <span className="flex items-center gap-0.5 text-[8px] font-black text-orange-400 shrink-0">
-                                                                    <Flame className="w-2.5 h-2.5" />
-                                                                </span>
-                                                            )}
-                                                            <span className="text-[10px] font-black text-white shrink-0">{fmtMinutes(m.totalMinutes || 0)}</span>
-                                                        </div>
-                                                        {totalGroupMinutes > 0 && (
-                                                            <div className="ml-6 h-1 bg-zinc-800 rounded-full overflow-hidden">
-                                                                <motion.div 
-                                                                    initial={{ width: 0 }} animate={{ width: `${pct}%` }}
-                                                                    transition={{ duration: 0.8, delay: i * 0.1, ease: "easeOut" }}
-                                                                    className={cn("h-full", isMe ? "bg-gradient-to-r from-[#E8821A] to-amber-300" : "bg-gradient-to-r from-[#E8821A]/50 to-[#E8821A]/30")}
-                                                                />
+                                                    <div key={m.uid} className={cn("rounded-lg p-2.5 border border-white/10 bg-zinc-950/40", isMe && "bg-[#E8821A]/8 border-[#E8821A]/20")}>
+                                                        <div className="flex items-center gap-3">
+                                                            <Avatar className="w-6 h-6 border border-white/10">
+                                                                <AvatarImage src={m.photoURL} />
+                                                                <AvatarFallback className="text-[8px] bg-zinc-900">{m.displayName?.[0]}</AvatarFallback>
+                                                            </Avatar>
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className={cn("text-xs font-bold truncate", isMe ? "text-white" : "text-zinc-400")}>{isMe ? "You" : m.displayName}</p>
+                                                                <p className="text-[10px] text-zinc-600 font-bold tabular-nums">{fmtMinutes(m.totalMinutes || 0)}</p>
+                                                                {isFocusing && (
+                                                                    <p className="text-[10px] text-orange-300/80 font-bold">Session: {getMemberLiveElapsed(m.liveSessionStartedAt) || "just started"}</p>
+                                                                )}
+                                                                {goalPct !== null && (
+                                                                    <p className="text-[9px] text-[#E8821A]/85 font-bold tabular-nums">{goalPct}% of weekly goal</p>
+                                                                )}
                                                             </div>
-                                                        )}
-                                                        {/* "Catch up" nudge for the user */}
-                                                        {isMe && i > 0 && gap > 0 && (
-                                                            <p className="ml-6 text-[8px] text-zinc-600 font-bold">
-                                                                {fmtMinutes(gap)} behind {sortedMembers[i-1].displayName} — keep going!
-                                                            </p>
-                                                        )}
+                                                            {isFocusing && <span className="text-[9px] font-black text-orange-400 uppercase">Live</span>}
+                                                        </div>
                                                     </div>
                                                 );
                                             })}
-                                            {sortedMembers.length === 0 && (
-                                                <p className="text-[10px] text-zinc-600 italic">No activity recorded yet.</p>
-                                            )}
                                         </div>
-
-                                        <Link href={`/leaderboard?tab=groups&groupId=${groupId}`} className="flex items-center justify-between w-full p-4 bg-white/5 rounded-2xl group/link hover:bg-white/10 transition-all border border-white/5">
-                                            <span className="text-[9px] font-black uppercase text-white tracking-[0.2em]">Full Group Leaderboard</span>
-                                            <ChevronRight className="w-4 h-4 text-zinc-500 group-hover/link:translate-x-1 transition-all" />
+                                        <Link href={`/leaderboard?tab=groups&groupId=${groupId}`} className="flex items-center justify-between w-full p-3 bg-zinc-950/40 rounded-lg border border-white/10 text-[10px] font-black uppercase text-zinc-500 hover:text-white transition-all">
+                                            <span>Full Ranking</span>
+                                            <ChevronRight className="w-3 h-3" />
                                         </Link>
                                     </div>
 
-                                    {/* Role Identity */}
                                     <div className="p-5 bg-zinc-900/40 border border-white/5 rounded-2xl flex items-center gap-4">
                                         <div className="p-2.5 bg-zinc-800 rounded-xl">
                                             {userRole === "host" ? <Crown className="w-5 h-5 text-[#E8821A]" /> : userRole === "admin" ? <Zap className="w-5 h-5 text-amber-400" /> : <User className="w-5 h-5 text-blue-400" />}
@@ -1587,16 +1754,16 @@ function GroupDetailModal({ groupId, onClose, user, groups, friends, activeTab, 
                                 </div>
                             </div>
                         ) : (
-                            // Members tab
                             <MembersTab
-                                group={group} user={user} isAdmin={isAdmin} userRole={userRole}
-                                sortedMembers={sortedMembers} totalGroupMinutes={totalGroupMinutes}
+                                group={group} user={user} isAdmin={isAdmin}
+                                sortedMembers={sortedMembers}
                                 onManageRoles={() => setIsManagingRoles(true)}
                                 onInvite={() => setShowInviteModal(true)}
+                                goalHours={group.settings?.goalHours || 0}
                             />
                         )
                     ) : (
-                        <div className="flex flex-col items-center justify-center py-20 text-center gap-8 animate-in fade-in zoom-in slide-in-from-bottom-5">
+                        <div className="flex flex-col items-center justify-center py-20 text-center gap-8">
                             <div className="w-24 h-24 rounded-full bg-[#E8821A]/5 flex items-center justify-center border border-[#E8821A]/10 relative">
                                 <Lock className="w-10 h-10 text-[#E8821A]" />
                                 <div className="absolute inset-0 rounded-full border border-[#E8821A]/20 animate-ping" />
@@ -1605,13 +1772,12 @@ function GroupDetailModal({ groupId, onClose, user, groups, friends, activeTab, 
                                 <h3 className="text-2xl font-black text-white">Unlock High-Intensity Session</h3>
                                 <p className="text-zinc-600 max-w-md">Join this {group.type} to see active objectives, real-time presence, and collective progress.</p>
                             </div>
-                            <button onClick={() => onJoin(group.id)} className="px-10 py-5 bg-[#E8821A] text-black font-black rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-[0_20px_40px_rgba(201,176,55,0.2)]">Establish Connection</button>
+                            <button onClick={() => onJoin(group.id)} className="px-10 py-5 bg-[#E8821A] text-black font-black rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-[0_20px_40px_#E8821A44]">Establish Connection</button>
                         </div>
                     )}
                 </div>
             </motion.div>
 
-            {/* Invite modal */}
             <AnimatePresence>
                 {showInviteModal && (
                     <InviteModal
@@ -1624,77 +1790,80 @@ function GroupDetailModal({ groupId, onClose, user, groups, friends, activeTab, 
     );
 }
 
+
 // ─── Members Tab ──────────────────────────────────────────────────────────────
-function MembersTab({ group, user, isAdmin, userRole, sortedMembers, totalGroupMinutes, onManageRoles, onInvite }: any) {
+function MembersTab({ group, user, isAdmin, sortedMembers, onManageRoles, onInvite, goalHours = 0 }: any) {
     const isOrg = group.type === "organization";
+    const [nowMs, setNowMs] = useState(Date.now());
+
+    useEffect(() => {
+        const hasLiveMembers = sortedMembers.some((m: any) => m.isFocusing);
+        if (!hasLiveMembers) return;
+        const t = setInterval(() => setNowMs(Date.now()), 1000);
+        return () => clearInterval(t);
+    }, [sortedMembers]);
 
     const hostMembers    = sortedMembers.filter((m: any) => m.role === "host");
     const adminMembers   = sortedMembers.filter((m: any) => m.role === "admin");
     const regularMembers = sortedMembers.filter((m: any) => m.role === "member");
 
+    const getLiveElapsed = (ts: any) => {
+        if (!ts) return null;
+        if (typeof ts.toMillis === "function") return fmtElapsed(Math.max(0, Math.floor((nowMs - ts.toMillis()) / 1000)));
+        if (typeof ts.seconds === "number") return fmtElapsed(Math.max(0, Math.floor((nowMs - ts.seconds * 1000) / 1000)));
+        return null;
+    };
+
     const Tier = ({ label, color, members }: { label: string; color: string; members: any[] }) => {
         if (!members.length) return null;
         return (
             <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                    <div className="h-px flex-1 bg-white/5" />
-                    <span className={cn("text-[9px] font-black uppercase tracking-[0.2em]", color)}>{label}</span>
-                    <div className="h-px flex-1 bg-white/5" />
+                <div className="flex items-center justify-between">
+                    <span className={cn("text-[10px] font-black uppercase tracking-[0.25em] whitespace-nowrap", color)}>{label}</span>
+                    <span className="text-[10px] text-zinc-600 font-bold">{members.length}</span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="rounded-xl border border-white/10 overflow-hidden">
                     {members.map((m: any) => {
-                        const pct = totalGroupMinutes > 0 ? Math.round(((m.totalMinutes || 0) / totalGroupMinutes) * 100) : 0;
                         const isMe = m.uid === user.uid;
-                        // lastActive is only written on session complete; for the current user
-                        // treat being a member of an active group as focusing now
                         const isFocusingNow = m.isFocusing;
                         return (
-                            <div key={m.uid} className={cn("p-4 rounded-2xl border space-y-3 relative transition-all group/card", isFocusingNow ? "bg-orange-500/5 border-orange-500/20" : "bg-zinc-900/50 border-white/5")}>
-                                {/* Focusing live badge */}
-                                {isFocusingNow && (
-                                    <div className="absolute top-3 right-3 flex items-center gap-1 bg-orange-500/20 border border-orange-500/30 rounded-full px-2 py-0.5">
-                                        <Flame className="w-2.5 h-2.5 text-orange-400" />
-                                        <span className="text-[8px] font-black text-orange-400 uppercase tracking-wider">Focusing</span>
-                                    </div>
+                            <div
+                                key={m.uid}
+                                className={cn(
+                                    "px-4 py-3 flex items-center gap-3 border-b border-white/10 last:border-b-0",
+                                    isFocusingNow ? "bg-orange-500/5" : "bg-zinc-950/40"
                                 )}
-                                <div className="flex items-center gap-3">
-                                    {/* Clickable avatar → profile */}
-                                    <Link href={`/profile?user=${m.uid}`} onClick={e => e.stopPropagation()} className="relative flex-shrink-0 group/av">
-                                        <Avatar className="w-10 h-10 border border-white/10 group-hover/av:border-white/30 transition-all">
-                                            <AvatarImage src={m.photoURL} />
-                                            <AvatarFallback>{m.displayName?.[0]}</AvatarFallback>
-                                        </Avatar>
-                                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-zinc-800 rounded-full border border-zinc-700 flex items-center justify-center opacity-0 group-hover/av:opacity-100 transition-all">
-                                            <ExternalLink className="w-2 h-2 text-zinc-400" />
-                                        </div>
-                                    </Link>
-                                    <div className="flex-1 min-w-0">
-                                        <Link href={`/profile?user=${m.uid}`} onClick={e => e.stopPropagation()} className="group/name">
-                                            <h4 className="text-sm font-bold text-white truncate flex items-center gap-1.5 group-hover/name:text-[#E8821A] transition-colors">
-                                                {m.displayName}
-                                                {isMe && <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-white/10 rounded text-zinc-400">You</span>}
-                                            </h4>
-                                        </Link>
-                                        <p className={cn("text-[9px] font-black uppercase tracking-widest flex items-center gap-1", m.role === "host" ? "text-[#E8821A]" : m.role === "admin" ? "text-amber-400" : "text-zinc-500")}>
-                                            {m.role === "host" && <Crown className="w-2.5 h-2.5" />}
-                                            {m.role === "admin" && <Zap className="w-2.5 h-2.5" />}
-                                            {m.role}
-                                        </p>
-                                    </div>
+                            >
+                                <Link href={`/profile?user=${m.uid}`} onClick={e => e.stopPropagation()} className="shrink-0">
+                                    <Avatar className="w-9 h-9 border border-white/10">
+                                        <AvatarImage src={m.photoURL} />
+                                        <AvatarFallback className="bg-zinc-900 text-[10px]">{m.displayName?.[0]}</AvatarFallback>
+                                    </Avatar>
+                                </Link>
+
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-bold text-white truncate">{isMe ? "You" : m.displayName}</p>
+                                    <p className={cn(
+                                        "text-[10px] font-bold uppercase tracking-wider",
+                                        m.role === "host" ? "text-[#E8821A]" : m.role === "admin" ? "text-amber-400" : "text-zinc-500"
+                                    )}>
+                                        {m.role}
+                                    </p>
                                 </div>
-                                {/* Contribution bar */}
-                                <div className="space-y-1">
-                                    <div className="flex justify-between">
-                                        <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-wider">Contribution</span>
-                                        <span className="text-[9px] font-black text-white">{fmtMinutes(m.totalMinutes || 0)}</span>
-                                    </div>
-                                    <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                                        <motion.div
-                                            initial={{ width: 0 }} animate={{ width: `${pct}%` }}
-                                            transition={{ duration: 0.8, ease: "easeOut" }}
-                                            className={cn("h-full rounded-full", m.role === "host" ? "bg-gradient-to-r from-[#E8821A] to-amber-300" : m.role === "admin" ? "bg-gradient-to-r from-amber-500 to-amber-400" : isFocusingNow ? "bg-gradient-to-r from-orange-500 to-orange-400" : "bg-gradient-to-r from-zinc-600 to-zinc-500")}
-                                        />
-                                    </div>
+
+                                <div className="text-right shrink-0">
+                                    <p className="text-xs font-black text-white tabular-nums">{fmtMinutes(m.totalMinutes || 0)}</p>
+                                    <p className={cn(
+                                        "text-[10px] font-bold uppercase tracking-wider",
+                                        isFocusingNow ? "text-orange-400" : "text-zinc-600"
+                                    )}>
+                                        {isFocusingNow ? (getLiveElapsed(m.liveSessionStartedAt) || "focusing") : "idle"}
+                                    </p>
+                                    {goalHours > 0 && (
+                                        <p className="text-[9px] font-bold text-[#E8821A]/80 tabular-nums">
+                                            {Math.round((((m.totalMinutes || 0) / 60) / goalHours) * 100)}% goal
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         );
@@ -1705,10 +1874,16 @@ function MembersTab({ group, user, isAdmin, userRole, sortedMembers, totalGroupM
     };
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-6">
+            {goalHours > 0 && (
+                <div className="px-4 py-3 rounded-xl border border-[#E8821A]/20 bg-[#E8821A]/8 flex items-center justify-between">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-zinc-300">Group weekly goal</p>
+                    <p className="text-xs font-black text-[#E8821A]">{goalHours}h / week</p>
+                </div>
+            )}
             {isOrg ? (
                 <>
-                    <Tier label="Command Unit" color="text-[#E8821A]" members={hostMembers} />
+                    <Tier label="Host" color="text-[#E8821A]" members={hostMembers} />
                     <Tier label="Officers" color="text-amber-400" members={adminMembers} />
                     <Tier label="Members" color="text-zinc-500" members={regularMembers} />
                 </>
@@ -1717,12 +1892,12 @@ function MembersTab({ group, user, isAdmin, userRole, sortedMembers, totalGroupM
             )}
 
             {isAdmin && (
-                <div className="flex flex-col sm:flex-row gap-3 pt-4">
-                    <button onClick={onManageRoles} className="flex-1 py-4 rounded-2xl border border-white/5 bg-white/5 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all flex items-center justify-center gap-2">
+                <div className="flex flex-col sm:flex-row gap-3 pt-3">
+                    <button onClick={onManageRoles} className="flex-1 py-3 rounded-xl border border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all flex items-center justify-center gap-2">
                         <UserPlus className="w-4 h-4 text-[#E8821A]" /> Manage Roles
                     </button>
                     {(group.privacy === "private-invite" || group.privacy === "public") && (
-                        <button onClick={onInvite} className="flex-1 py-4 rounded-2xl border border-violet-500/20 bg-violet-500/5 text-[10px] font-black uppercase tracking-widest hover:bg-violet-500/10 text-violet-400 transition-all flex items-center justify-center gap-2">
+                        <button onClick={onInvite} className="flex-1 py-3 rounded-xl border border-violet-500/30 bg-violet-500/5 text-[10px] font-black uppercase tracking-widest hover:bg-violet-500/10 text-violet-400 transition-all flex items-center justify-center gap-2">
                             <Mail className="w-4 h-4" /> Invite Members
                         </button>
                     )}
@@ -1875,7 +2050,7 @@ function InviteModal({ group, user, friends, onClose }: any) {
 }
 
 // ─── Group Management View ────────────────────────────────────────────────────
-function GroupManagementView({ group, user, onUpdateRole, onRemove, userRole }: any) {
+const GroupManagementView = memo(function GroupManagementView({ group, user, onUpdateRole, onRemove, userRole, roleActionPendingId }: any) {
     const isHost = userRole === "host";
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
 
@@ -1895,7 +2070,7 @@ function GroupManagementView({ group, user, onUpdateRole, onRemove, userRole }: 
                     <h4 className="text-sm font-bold text-white">{m.displayName}</h4>
                     {m.uid === user.uid && <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-white/10 rounded text-zinc-400">You</span>}
                     {m.isFocusing && (
-                        <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-orange-500/10 border border-orange-500/30 text-[7px] font-black uppercase text-orange-400 animate-pulse">
+                        <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-orange-500/10 border border-orange-500/30 text-[7px] font-black uppercase text-orange-400">
                             Live Focus
                         </span>
                     )}
@@ -1912,18 +2087,23 @@ function GroupManagementView({ group, user, onUpdateRole, onRemove, userRole }: 
             </div>
 
             {m.uid !== group.hostId && m.uid !== user.uid && (
-                <div className="flex items-center gap-2 opacity-0 group-hover/item:opacity-100 transition-all">
+                <div className="flex items-center gap-2 opacity-100 transition-all">
                     {isHost && (
                         <button 
                             onClick={() => onUpdateRole(m.uid, m.role === "admin" ? "member" : "admin")}
-                            className={cn("px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", m.role === "admin" ? "bg-zinc-800 text-zinc-400 hover:text-white" : "bg-amber-400/10 text-amber-400 hover:bg-amber-400/20")}
+                            disabled={roleActionPendingId === m.uid}
+                            className={cn(
+                                "px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-60 disabled:cursor-not-allowed",
+                                m.role === "admin" ? "bg-zinc-800 text-zinc-400 hover:text-white" : "bg-amber-400/10 text-amber-400 hover:bg-amber-400/20"
+                            )}
                         >
-                            {m.role === "admin" ? "Demote" : "Promote"}
+                            {roleActionPendingId === m.uid ? "Updating..." : m.role === "admin" ? "Demote" : "Promote"}
                         </button>
                     )}
                     <button 
                         onClick={() => { if (confirm(`Remove ${m.displayName}?`)) onRemove(m.uid); }}
-                        className="p-2 bg-red-400/10 text-red-400 rounded-xl hover:bg-red-400/20 transition-all"
+                        disabled={roleActionPendingId === m.uid}
+                        className="p-2 bg-red-400/10 text-red-400 rounded-xl hover:bg-red-400/20 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                         <UserX className="w-4 h-4" />
                     </button>
@@ -2009,7 +2189,7 @@ function GroupManagementView({ group, user, onUpdateRole, onRemove, userRole }: 
             {(group.privacy === "private-code" || group.privacy === "public") && group.accessCode && (
                 <div className="p-6 rounded-3xl bg-zinc-900/60 border border-white/5 flex items-center justify-between">
                     <div>
-                        <h4 className="text-sm font-bold text-white mb-1">Entry Code</h4>
+                        <h4 className="text-sm font-bold text-white mb-1">Group Code</h4>
                         <p className="text-[10px] text-zinc-600">Share to expand your unit.</p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -2022,7 +2202,13 @@ function GroupManagementView({ group, user, onUpdateRole, onRemove, userRole }: 
             )}
         </div>
     );
-}
+}, (prevProps, nextProps) => {
+    return (
+        prevProps.userRole === nextProps.userRole &&
+        prevProps.roleActionPendingId === nextProps.roleActionPendingId &&
+        getManagementGroupKey(prevProps.group) === getManagementGroupKey(nextProps.group)
+    );
+});
 
 // ─── Join Code Modal ──────────────────────────────────────────────────────────
 function JoinCodeModal({ onClose, onJoin }: { onClose: () => void, onJoin: (code: string) => void }) {
@@ -2040,26 +2226,82 @@ function JoinCodeModal({ onClose, onJoin }: { onClose: () => void, onJoin: (code
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={onClose} />
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} transition={{ type: "spring", stiffness: 400, damping: 30 }} className={cn("relative w-full max-w-md border border-white/10 rounded-3xl p-8 shadow-2xl", settingsGlassmorphism ? "bg-zinc-900/80 backdrop-blur-md" : "bg-zinc-900")}>
-                <div className="text-center mb-8">
-                    <div className="w-16 h-16 bg-[#E8821A]/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-[#E8821A]/20">
-                        <Key className="w-8 h-8 text-[#E8821A]" />
+            <div className="absolute inset-0 bg-zinc-950/95 backdrop-blur-3xl" onClick={onClose} />
+            
+            {/* Cyber background effects */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[#E8821A]/5 blur-[120px] rounded-full" />
+                <div className="absolute top-0 bottom-0 left-1/2 w-px bg-white/[0.02]" />
+                <div className="absolute left-0 right-0 top-1/2 h-px bg-white/[0.02]" />
+            </div>
+
+            <motion.div 
+                initial={{ opacity: 0, scale: 0.9, y: 30 }} 
+                animate={{ opacity: 1, scale: 1, y: 0 }} 
+                exit={{ opacity: 0, scale: 0.95, y: 20 }} 
+                transition={{ type: "spring", stiffness: 400, damping: 32 }} 
+                className={cn(
+                    "relative w-full max-w-md border border-[#E8821A]/20 rounded-[2.5rem] p-10 overflow-hidden", 
+                    settingsGlassmorphism ? "bg-zinc-900/40 backdrop-blur-md" : "bg-zinc-900 shadow-[0_32px_100px_rgba(0,0,0,0.8)]"
+                )}
+            >
+                {/* Decorative border elements */}
+                <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-[#E8821A]/30 rounded-tl-[2.5rem]" />
+                <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-[#E8821A]/30 rounded-tr-[2.5rem]" />
+                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-[#E8821A]/30 rounded-bl-[2.5rem]" />
+                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-[#E8821A]/30 rounded-br-[2.5rem]" />
+
+                <div className="text-center mb-10">
+                    <div className="relative inline-block">
+                        <div className="w-20 h-20 bg-[#E8821A]/10 rounded-[2rem] flex items-center justify-center mx-auto mb-6 border border-[#E8821A]/20 relative z-10 group">
+                            <Key className="w-10 h-10 text-[#E8821A] group-hover:scale-110 transition-transform duration-500" />
+                        </div>
+                        <motion.div 
+                            animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
+                            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                            className="absolute inset-0 bg-[#E8821A]/20 blur-2xl rounded-full"
+                        />
                     </div>
-                    <h3 className="text-2xl font-black text-white">Join Workspace</h3>
-                    <p className="text-zinc-500 text-sm mt-2">Enter the unique 6-digit access code provided by the host.</p>
+                    <h3 className="text-3xl font-black text-white tracking-tighter">Portal Entry</h3>
+                    <p className="text-zinc-500 text-xs font-bold uppercase tracking-[0.2em] mt-3">Authorize workspace connection</p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <input 
-                        autoFocus maxLength={6} value={code} 
-                        onChange={(e) => setCode(e.target.value.toUpperCase())} 
-                        placeholder="ENTER CODE" 
-                        className="w-full bg-zinc-950 border-2 border-white/5 rounded-2xl px-6 py-5 text-center text-2xl font-black tracking-[0.5em] text-[#E8821A] outline-none focus:border-[#E8821A]/50 transition-all placeholder:text-zinc-800" 
-                    />
-                    <div className="flex gap-4">
-                        <button type="submit" disabled={loading || code.length < 6} className="flex-1 bg-[#E8821A] text-black font-black py-4 rounded-2xl hover:scale-[1.02] active:scale-95 transition-all shadow-[0_10px_30px_rgba(201,176,55,0.2)] disabled:opacity-50 disabled:scale-100 disabled:shadow-none">
-                            {loading ? "Searching..." : "Connect to Unit"}
+                <form onSubmit={handleSubmit} className="space-y-8">
+                    <div className="relative group">
+                        <input 
+                            autoFocus 
+                            maxLength={6} 
+                            value={code} 
+                            onChange={(e) => setCode(e.target.value.toUpperCase())} 
+                            placeholder="CODE" 
+                            className="w-full bg-zinc-950/80 border-2 border-white/5 rounded-2xl px-6 py-6 text-center text-4xl font-black tracking-[0.4em] text-white outline-none focus:border-[#E8821A]/50 transition-all placeholder:text-zinc-800 font-terminal shadow-inner" 
+                        />
+                        <div className="absolute inset-0 rounded-2xl border border-[#E8821A]/0 group-focus-within:border-[#E8821A]/20 pointer-events-none transition-all duration-500" />
+                    </div>
+                    
+                    <div className="space-y-4">
+                        <button 
+                            type="submit" 
+                            disabled={loading || code.length < 6} 
+                            className="w-full h-16 bg-[#E8821A] text-black font-black uppercase tracking-widest text-sm rounded-2xl hover:scale-[1.02] active:scale-98 transition-all shadow-[0_12px_40px_rgba(232,130,26,0.3)] disabled:opacity-50 disabled:scale-100 disabled:shadow-none group relative overflow-hidden"
+                        >
+                            <span className="relative z-10 flex items-center justify-center gap-2">
+                                {loading ? "Decrypting..." : "Initialize Uplink"}
+                                {!loading && <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}
+                            </span>
+                            <motion.div 
+                                className="absolute inset-0 bg-white/20 translate-x-[-100%]"
+                                whileHover={{ translateX: "100%" }}
+                                transition={{ duration: 0.6 }}
+                            />
+                        </button>
+                        
+                        <button 
+                            type="button"
+                            onClick={onClose}
+                            className="w-full py-4 text-zinc-600 hover:text-zinc-400 text-[10px] font-black uppercase tracking-[0.3em] transition-colors"
+                        >
+                            Abort Mission
                         </button>
                     </div>
                 </form>
@@ -2069,45 +2311,29 @@ function JoinCodeModal({ onClose, onJoin }: { onClose: () => void, onJoin: (code
 }
 
 // ─── Sprint Resonance ─────────────────────────────────────────────────────────
-function SprintResonance() {
-    return (
-        <motion.div 
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] pointer-events-none overflow-hidden"
-        >
-            <motion.div 
-                initial={{ top: "-10%" }} animate={{ top: "110%" }}
-                transition={{ duration: 1.5, ease: "easeInOut" }}
-                className="absolute left-0 right-0 h-40 bg-gradient-to-b from-transparent via-[#E8821A]/20 to-transparent blur-3xl"
-            />
-            <motion.div 
-                initial={{ top: "-5%" }} animate={{ top: "105%" }}
-                transition={{ duration: 1.5, ease: "easeInOut" }}
-                className="absolute left-0 right-0 h-1 bg-[#E8821A]/40 shadow-[0_0_20px_#E8821A]"
-            />
-            <motion.div 
-                initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 1.2, opacity: 0 }}
-                className="absolute inset-0 flex items-center justify-center"
-            >
-                <div className="px-12 py-6 bg-zinc-950/80 backdrop-blur-3xl border border-[#E8821A]/30 rounded-[2rem] shadow-[0_0_100px_rgba(201,176,55,0.2)]">
-                    <h2 className="text-4xl font-black text-[#E8821A] tracking-[0.3em] uppercase animate-pulse">Session Started</h2>
-                </div>
-            </motion.div>
-        </motion.div>
-    );
-}
-
 // ─── Shared Tasks Panel ───────────────────────────────────────────────────────
-function SharedTasksPanel({ tasks, onAdd, onUpdate, isAdmin, groupMembers }: any) {
+function SharedTasksPanel({ tasks, onAdd, onUpdate, onDelete, isAdmin, groupMembers, prefillTemplate, onPrefillHandled, onTemplateSelect }: any) {
     const [openAdd, setOpenAdd] = useState(false);
     const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
     const [prio, setPrio] = useState<any>("medium");
     const [assign, setAssign] = useState("all");
 
+    useEffect(() => {
+        if (!prefillTemplate) return;
+        setTitle(prefillTemplate.title || "");
+        setDescription(prefillTemplate.description || "");
+        setPrio(prefillTemplate.priority || "medium");
+        setAssign("all");
+        setOpenAdd(true);
+        if (onPrefillHandled) onPrefillHandled();
+    }, [prefillTemplate, onPrefillHandled]);
+
     const handleAdd = () => {
         if (!title.trim()) return;
-        onAdd(title, prio, assign);
+        onAdd(title, prio, assign, false, description);
         setTitle("");
+        setDescription("");
         setOpenAdd(false);
     };
 
@@ -2123,6 +2349,13 @@ function SharedTasksPanel({ tasks, onAdd, onUpdate, isAdmin, groupMembers }: any
             {openAdd && (
                 <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-6 bg-zinc-900 border border-[#E8821A]/30 rounded-3xl space-y-4">
                     <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Objective title..." className="w-full bg-zinc-950 border border-white/5 rounded-xl px-4 py-3 text-white outline-none focus:border-[#E8821A]/40 transition-all" />
+                    <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Optional context for this objective..."
+                        rows={3}
+                        className="w-full resize-none bg-zinc-950 border border-white/5 rounded-xl px-4 py-3 text-white outline-none focus:border-[#E8821A]/40 transition-all"
+                    />
                     <div className="flex flex-wrap gap-4">
                         <div className="flex-1 min-w-[150px]">
                             <p className="text-[10px] font-black text-zinc-600 uppercase mb-2">Priority</p>
@@ -2147,27 +2380,104 @@ function SharedTasksPanel({ tasks, onAdd, onUpdate, isAdmin, groupMembers }: any
                 </motion.div>
             )}
 
-            <div className="space-y-2">
-                {tasks.map((task: any) => (
-                    <div key={task.id} className="flex items-center gap-4 p-4 rounded-2xl bg-zinc-900/40 border border-white/5 group hover:border-white/10 transition-all">
-                        <button onClick={() => onUpdate(task.id, { status: task.status === "done" ? "todo" : "done" })} className={cn("w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all", task.status === "done" ? "bg-[#E8821A] border-[#E8821A] text-black" : "border-white/10 text-transparent hover:border-white/30")}>
-                            <Check className="w-4 h-4" />
+            {tasks.length === 0 && !openAdd && (
+                <div className="p-8 border-2 border-dashed border-white/5 rounded-3xl space-y-6">
+                    <div className="text-center space-y-2">
+                        <p className="text-xs font-bold text-zinc-500">No active objectives for this unit.</p>
+                        <p className="text-[10px] text-zinc-600">Pick a template to prefill the objective form:</p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {[
+                            { id: "deep-work", title: "Deep Work Session", icon: Sparkles },
+                            { id: "review-respond", title: "Review & Respond", icon: Mail },
+                            { id: "learning-sprint", title: "Learning Sprint", icon: Target }
+                        ].map((tpl) => (
+                            <button
+                                key={tpl.id}
+                                disabled={!isAdmin}
+                                onClick={() => onTemplateSelect?.(tpl.id)}
+                                className={cn(
+                                    "flex flex-col items-center gap-2 p-4 bg-zinc-900/60 border border-white/5 rounded-2xl transition-all group",
+                                    isAdmin ? "hover:border-[#E8821A]/40" : "opacity-55 cursor-not-allowed"
+                                )}
+                                title={isAdmin ? `Use "${tpl.title}" template` : "Only hosts/admins can create shared objectives"}
+                            >
+                                <tpl.icon className="w-4 h-4 text-zinc-600 group-hover:text-[#E8821A]" />
+                                <span className="text-[9px] font-black uppercase text-zinc-500 tracking-wider text-center">{tpl.title}</span>
+                            </button>
+                        ))}
+                    </div>
+                    {!isAdmin && (
+                        <p className="text-center text-[10px] text-zinc-600">
+                            Shared objective templates are available to hosts and admins.
+                        </p>
+                    )}
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-3">
+                {tasks.map((task: any, i: number) => (
+                    <motion.div 
+                        key={task.id} 
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.3, delay: i * 0.05 }}
+                        className={cn(
+                            "flex items-center gap-5 p-5 rounded-2xl transition-all duration-300 border relative group/task", 
+                            task.status === "done" 
+                                ? "bg-zinc-900/20 border-white/5 opacity-60" 
+                                : "bg-zinc-900/60 border-white/10 hover:border-white/20 active:scale-[0.99]"
+                        )}
+                    >
+                        <button 
+                            onClick={() => onUpdate(task.id, { status: task.status === "done" ? "todo" : "done" })} 
+                            className={cn(
+                                "w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all duration-500 shrink-0", 
+                                task.status === "done" 
+                                    ? "bg-[#E8821A] border-[#E8821A] text-black" 
+                                    : "border-white/10 text-transparent hover:border-[#E8821A]/40 group-hover/task:rotate-90"
+                            )}
+                        >
+                            <Check className="w-4 h-4 shadow-sm" />
                         </button>
+                        
                         <div className="flex-1 min-w-0">
-                            <h4 className={cn("text-sm font-bold transition-all truncate", task.status === "done" ? "text-zinc-600 line-through" : "text-white")}>{task.title}</h4>
-                            <div className="flex items-center gap-3 mt-1">
-                                <span className={cn("text-[9px] font-black uppercase tracking-widest", task.priority === "high" ? "text-red-400" : task.priority === "medium" ? "text-yellow-400" : "text-blue-400")}>{task.priority} Priority</span>
-                                <span className="text-[8px] text-zinc-600 font-bold uppercase tracking-widest">To: {task.assignedTo === "all" ? "The Collective" : "Direct Unit"}</span>
+                            <h4 className={cn(
+                                "text-[13px] font-black tracking-tight transition-all duration-500 truncate", 
+                                task.status === "done" ? "text-zinc-600 line-through" : "text-white group-hover/task:text-[#E8821A]"
+                            )}>
+                                {task.title}
+                            </h4>
+                            {task.description && (
+                                <p className="text-[11px] text-zinc-500 mt-1 line-clamp-2">{task.description}</p>
+                            )}
+                            <div className="flex items-center gap-3 mt-1.5">
+                                <div className={cn(
+                                    "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest",
+                                    task.priority === "high" ? "bg-red-500/10 text-red-500 border border-red-500/20" : 
+                                    task.priority === "medium" ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : 
+                                    "bg-sky-500/10 text-sky-500 border border-sky-500/20"
+                                )}>
+                                    {task.priority} Priority
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[8px] font-bold text-zinc-600 uppercase tracking-widest">
+                                    <div className="w-1 h-1 rounded-full bg-zinc-800" />
+                                    {task.assignedTo === "all" ? "Unit Objective" : "Direct Assign"}
+                                </div>
                             </div>
                         </div>
+
                         {isAdmin && (
-                            <button className="p-2 opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 transition-all"><X className="w-4 h-4" /></button>
+                            <button
+                                onClick={() => onDelete(task.id)}
+                                title="Delete objective"
+                                className="w-8 h-8 rounded-lg bg-red-500/0 text-zinc-700 hover:bg-red-500/10 hover:text-red-500 transition-all flex items-center justify-center opacity-100 md:opacity-0 md:group-hover/task:opacity-100"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
                         )}
-                    </div>
+                    </motion.div>
                 ))}
-                {tasks.length === 0 && !openAdd && (
-                    <div className="py-12 text-center text-zinc-700 font-black uppercase tracking-[0.2em] text-xs">No active objectives</div>
-                )}
             </div>
         </div>
     );
@@ -2179,52 +2489,68 @@ function ActiveFocusersBanner({ focusers }: { focusers: any[] }) {
         <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="w-full rounded-2xl border border-orange-500/20 bg-gradient-to-r from-orange-500/8 via-orange-500/5 to-transparent p-4 flex items-center gap-4 overflow-hidden relative"
+            className="w-full rounded-[1.5rem] border border-orange-500/25 bg-gradient-to-r from-orange-500/10 via-orange-500/5 to-zinc-900/60 p-4 flex items-center gap-4 overflow-hidden relative shadow-[0_4px_24px_rgba(249,115,22,0.08)]"
         >
-            {/* Shimmer */}
+            {/* Shimmer sweep */}
             <motion.div
                 initial={{ x: "-100%" }}
                 animate={{ x: "200%" }}
-                transition={{ duration: 4, repeat: Infinity, ease: "linear", repeatDelay: 2 }}
+                transition={{ duration: 5, repeat: Infinity, ease: "linear", repeatDelay: 3 }}
                 className="absolute inset-0 w-1/3 bg-gradient-to-r from-transparent via-orange-400/8 to-transparent skew-x-12 pointer-events-none"
             />
 
-            <div className="flex items-center gap-2 shrink-0">
-                <div className="w-8 h-8 rounded-xl bg-orange-500/15 border border-orange-500/25 flex items-center justify-center">
-                    <Flame className="w-4 h-4 text-orange-400" />
+            {/* Live indicator */}
+            <div className="flex items-center gap-3 shrink-0">
+                <div className="relative">
+                    <div className="w-10 h-10 rounded-2xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center">
+                        <Flame className="w-5 h-5 text-orange-400" />
+                    </div>
+                    <motion.div
+                        animate={{ scale: [1, 1.6], opacity: [0.4, 0] }}
+                        transition={{ duration: 1.6, repeat: Infinity }}
+                        className="absolute inset-0 rounded-2xl bg-orange-500/25"
+                    />
                 </div>
                 <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-orange-400">{focusers.length} focusing now</p>
-                    <p className="text-[9px] text-zinc-600">across your groups</p>
+                    <p className="text-[11px] font-black uppercase tracking-widest text-orange-400 leading-none">{focusers.length} focusing now</p>
+                    <p className="text-[9px] text-zinc-600 mt-0.5">across your groups</p>
                 </div>
             </div>
 
+            <div className="w-px h-8 bg-white/8 shrink-0" />
+
+            {/* Focuser avatars */}
             <div className="flex items-center gap-0 flex-1 overflow-x-auto no-scrollbar">
-                {focusers.map((f, i) => (
+                {focusers.map((f) => (
                     <Link
                         key={f.uid}
                         href={`/profile?user=${f.uid}`}
-                        className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/5 transition-all group/focuser shrink-0"
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/5 transition-all group/focuser shrink-0"
                         title={`${f.displayName} — ${f.groupName}`}
                     >
                         <div className="relative">
-                            <Avatar className="w-7 h-7 border-2 border-orange-500/40 group-hover/focuser:border-orange-400 transition-all">
+                            <Avatar className="w-8 h-8 border-2 border-orange-500/40 group-hover/focuser:border-orange-400 transition-all shadow-[0_0_8px_rgba(249,115,22,0.3)]">
                                 <AvatarImage src={f.photoURL} />
-                                <AvatarFallback className="text-[9px]">{f.displayName?.[0]}</AvatarFallback>
+                                <AvatarFallback className="text-[9px] bg-zinc-800">{f.displayName?.[0]}</AvatarFallback>
                             </Avatar>
-                            <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-orange-400 border border-zinc-950 animate-pulse shadow-[0_0_6px_#f97316]" />
+                            <motion.div
+                                animate={{ scale: [1, 1.4], opacity: [0.7, 0] }}
+                                transition={{ duration: 1.4, repeat: Infinity }}
+                                className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-orange-400/60"
+                            />
+                            <div className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-orange-400 border border-zinc-950 shadow-[0_0_6px_#f97316]" />
                         </div>
                         <div className="hidden sm:block">
-                            <p className="text-xs font-bold text-white group-hover/focuser:text-orange-300 transition-colors">{f.displayName}</p>
+                            <p className="text-xs font-black text-white group-hover/focuser:text-orange-300 transition-colors">{f.displayName}</p>
                             <p className="text-[9px] text-zinc-600">{f.groupName}</p>
                         </div>
                     </Link>
                 ))}
             </div>
 
-            <div className="shrink-0 hidden sm:flex items-center gap-1.5 text-[9px] font-black text-zinc-600 uppercase tracking-wider">
-                <TrendingUp className="w-3 h-3" />
-                start your session!
+            <div className="shrink-0 hidden md:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-orange-500/8 border border-orange-500/15">
+                <TrendingUp className="w-3.5 h-3.5 text-orange-400" />
+                <span className="text-[9px] font-black text-orange-400 uppercase tracking-wider">Join them!</span>
             </div>
         </motion.div>
     );

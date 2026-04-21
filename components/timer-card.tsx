@@ -132,16 +132,10 @@ export function TimerCard() {
   };
 
   const handleStop = async () => {
-    const { activeGroupId, sessionStartTime, mode } = useTimerStore.getState();
+    const { activeGroupId, mode, initialFocusTime, timeLeft } = useTimerStore.getState();
     stop();
-
-    if (!sessionStartTime) {
-      if (activeGroupId) useTimerStore.getState().setActiveGroupId(null);
-      return;
-    }
-
-    const elapsedMs = Date.now() - sessionStartTime;
-    const elapsedMinutes = Math.round(elapsedMs / 60000);
+    const elapsedSeconds = mode === "focus" ? Math.max(0, initialFocusTime - timeLeft) : 0;
+    const elapsedMinutes = Math.floor(elapsedSeconds / 60);
 
     if (mode === "focus" && elapsedMinutes >= 1) {
       let currentUser = user;

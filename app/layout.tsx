@@ -9,6 +9,8 @@ import { TimerPiPWidget } from "@/components/TimerPiPWidget";
 import { GlobalAuthModal } from "@/components/GlobalAuthModal";
 import { NavigationHub } from "@/components/navigation-hub";
 import { NotificationsMenu } from "@/components/notifications-menu";
+import { GroupSessionSync } from "@/components/group-session-sync";
+import { GroupSessionMiniBar } from "@/components/group-session-mini-bar";
 
 const figtree = Figtree({
   variable: "--font-sans",
@@ -60,6 +62,8 @@ export default function RootLayout({
           {children}
           
           {/* Global timer components */}
+          <GroupSessionSync />
+          <GroupSessionMiniBar />
           <TimerTicker />
           <TimerPiPWidget />
           

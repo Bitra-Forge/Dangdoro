@@ -521,15 +521,16 @@ export function TimerPiPWidget() {
   const initialTime = mode === "focus" ? initialFocusTime : mode === "break" ? initialBreakTime : initialLongBreakTime;
   const progress = (timeLeft / initialTime) * 100;
   
-  // Show widget if: not on timer page, timer is running OR paused mid-session, not dismissed
+  // Show widget if: not on timer page, timer is running OR paused mid-session, not dismissed,
+  // and user is not in a group session (group mini bar replaces this widget).
   const hasActiveTimer = isActive || timeLeft < initialTime;
-  const shouldShow = !isOnTimerPage && hasActiveTimer && !isDismissed;
+  const shouldShow = !activeGroupId && !isOnTimerPage && hasActiveTimer && !isDismissed;
 
   // Auto-open/close Document PiP based on tab visibility (Chrome/Edge only)
   // - Open PiP when user leaves the app tab
   // - Close PiP when user returns to the app tab
   useEffect(() => {
-    if (!supportsDocumentPiP) return;
+    if (!supportsDocumentPiP || !!activeGroupId) return;
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
@@ -555,7 +556,7 @@ export function TimerPiPWidget() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [supportsDocumentPiP, openPiP, closePiP]);
+  }, [supportsDocumentPiP, activeGroupId, openPiP, closePiP]);
 
   // Reset dismissed when returning to timer page
   useEffect(() => {

@@ -57,7 +57,7 @@ function LeaderboardContent() {
                 let groupToLoad = selectedGroup;
                 
                 if (!groupToLoad && groupIdFromUrl) {
-                    const allGroups = await getGroupLeaderboard(100);
+                    const allGroups = await getGroupLeaderboard({ limitCount: 100 });
                     groupToLoad = allGroups.find(g => g.id === groupIdFromUrl);
                     if (groupToLoad) setSelectedGroup(groupToLoad);
                 }
@@ -203,7 +203,7 @@ function LeaderboardContent() {
                                     <div className="w-20 h-20 rounded-full bg-zinc-800/50 flex items-center justify-center mx-auto text-zinc-700">
                                         <Briefcase className="w-10 h-10" />
                                     </div>
-                                    <h3 className="text-xl font-bold text-zinc-400">No {activeSubTab} units found</h3>
+                                    <h3 className="text-xl font-bold text-zinc-400">No {activeSubTab} groups found</h3>
                                     <p className="text-sm text-zinc-600 max-w-xs">{activeSubTab === "joined" ? "You haven't joined any focus groups yet." : "There are no public groups matching your search."}</p>
                                 </div>
                             ) : (
