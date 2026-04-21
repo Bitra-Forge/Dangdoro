@@ -1,0 +1,165 @@
+"use client";
+
+import { useEffect, useState, useRef } from "react";
+import { Bell, Check, X, User } from "lucide-react";
+import { Space_Grotesk } from "next/font/google";
+import { useAuth } from "@/components/AuthProvider";
+import { db } from "@/lib/firebase";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { acceptFriendRequest, declineFriendRequest } from "@/lib/friendship";
+import { fetchUserProfiles } from "@/lib/db";
+import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { usePathname } from "next/navigation";
+import Link from "next/link";
+
+const spaceGrotesk = Space_Grotesk({
+    subsets: ["latin"],
+    weight: ["300", "400", "500", "600", "700"],
+});
+
+export function NotificationsMenu() {
+    const { user } = useAuth();
+    const pathname = usePathname();
+    const [isOpen, setIsOpen] = useState(false);
+    const [requests, setRequests] = useState<any[]>([]);
+    const [profiles, setProfiles] = useState<Record<string, any>>({});
+    const menuRef = useRef<HTMLDivElement>(null);
+    const hasUnread = requests.length > 0;
+
+    // Close on click outside
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        if (!user || user.isAnonymous) return;
+
+        const q = query(
+            collection(db, "friendRequests"),
+            where("toUserId", "==", user.uid),
+            where("status", "==", "pending")
+        );
+
+        const unsubscribe = onSnapshot(q, async (snapshot) => {
+            const reqs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+            setRequests(reqs);
+
+            const senderIds = reqs.map((r: any) => r.fromUserId).filter((id: string) => id && !profiles[id]);
+            if (senderIds.length > 0) {
+                const newProfiles = await fetchUserProfiles(senderIds);
+                setProfiles(prev => {
+                    const next = { ...prev };
+                    newProfiles.forEach(p => {
+                        if (p && p.uid) next[p.uid] = p;
+                    });
+                    return next;
+                });
+            }
+        });
+
+        return () => unsubscribe();
+    }, [user, profiles]);
+
+    if (pathname.startsWith("/friends")) return null;
+    if (!user || user.isAnonymous) return null;
+
+    const handleAccept = async (reqId: string, fromUserId: string) => {
+        if (await acceptFriendRequest(reqId, fromUserId, user.uid)) {
+            toast.success("Friend request accepted");
+        } else {
+            toast.error("Failed to accept friend request");
+        }
+    };
+
+    const handleDecline = async (reqId: string) => {
+        if (await declineFriendRequest(reqId)) {
+            toast.info("Friend request declined");
+        } else {
+            toast.error("Failed to decline friend request");
+        }
+    };
+
+    return (
+        <div className="relative" ref={menuRef}>
+            <button 
+                onClick={() => setIsOpen(!isOpen)}
+                className={cn(
+                    "p-2.5 rounded-2xl border backdrop-blur-sm transition-all duration-300 cursor-pointer",
+                    isOpen
+                        ? "bg-white/15 border-white/25 text-white"
+                        : "bg-zinc-900/80 border-white/10 text-zinc-400 hover:text-white hover:border-white/20"
+                )}
+            >
+                <Bell className="w-4 h-4" />
+                {hasUnread && (
+                    <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-white text-black text-[10px] font-black rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(255,255,255,0.3)] border border-black/10">
+                        {requests.length}
+                    </div>
+                )}
+            </button>
+
+            {isOpen && (
+                <div className="absolute top-full right-0 mt-2 w-80 bg-zinc-900/95 backdrop-blur-xl border border-white/10 rounded-[15px] shadow-2xl overflow-hidden z-[60] animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="max-h-[400px] overflow-y-auto">
+                        {requests.length === 0 ? (
+                            <div className="p-8 flex flex-col items-center justify-center text-center opacity-40">
+                                <Bell className="w-8 h-8 mb-3 opacity-20" />
+                                <p className="text-[10px] font-bold uppercase tracking-widest">No new notifications</p>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col">
+                                {requests.map(req => {
+                                    const profile = profiles[req.fromUserId];
+                                    return (
+                                        <div key={req.id} className="p-4 border-b border-white/5">
+                                            <Link 
+                                                href={`/profile?user=${req.fromUserId}`}
+                                                onClick={() => setIsOpen(false)}
+                                                className="flex items-center gap-3 mb-3 group/user cursor-pointer"
+                                            >
+                                                <Avatar className="w-8 h-8 rounded-full border border-white/10 overflow-hidden shrink-0">
+                                                    <AvatarImage src={profile?.photoURL} className="rounded-full" />
+                                                    <AvatarFallback className="rounded-full"><User className="w-4 h-4" /></AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex flex-col">
+                                                    <span className={cn("text-[11px] font-bold text-white", spaceGrotesk.className)}>{profile?.displayName || "Someone"}</span>
+                                                    <span className="text-[9px] font-bold text-muted-foreground uppercase">Friend Request</span>
+                                                </div>
+                                            </Link>
+                                            <div className="flex gap-2">
+                                                <Button 
+                                                    size="sm" 
+                                                    className="flex-1 h-8 rounded-lg bg-white hover:bg-zinc-200 text-black text-[10px] font-black uppercase tracking-wider cursor-pointer"
+                                                    onClick={() => handleAccept(req.id, req.fromUserId)}
+                                                >
+                                                    <Check className="w-3 h-3 mr-1" /> Accept
+                                                </Button>
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="secondary"
+                                                    className="flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-[10px] font-black uppercase tracking-wider border border-white/5 cursor-pointer"
+                                                    onClick={() => handleDecline(req.id)}
+                                                >
+                                                    <X className="w-3 h-3 mr-1" /> Decline
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}

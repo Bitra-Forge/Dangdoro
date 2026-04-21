@@ -8,6 +8,7 @@ import { TimerTicker } from "@/components/TimerTicker";
 import { TimerPiPWidget } from "@/components/TimerPiPWidget";
 import { GlobalAuthModal } from "@/components/GlobalAuthModal";
 import { NavigationHub } from "@/components/navigation-hub";
+import { NotificationsMenu } from "@/components/notifications-menu";
 
 const figtree = Figtree({
   variable: "--font-sans",
@@ -52,6 +53,10 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-zinc-950 text-white">
         <AuthProvider>
+          <div className="fixed top-8 right-8 z-[100] flex flex-col items-center gap-4">
+            <NotificationsMenu />
+          </div>
+
           {children}
           
           {/* Global timer components */}

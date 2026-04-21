@@ -11,7 +11,7 @@ import {
     Camera, Zap, Clock, Calendar,
     Share2, Pencil, Activity, Flame,
     TrendingUp, BarChart3, LineChart, AreaChart,
-    Users, Copy, UserCheck, ChevronRight, Timer, LayoutGrid
+    Users, Copy, UserCheck, ChevronRight, Timer, LayoutGrid, UserMinus
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -99,6 +99,7 @@ interface UserProfileData {
         seconds: number;
         nanoseconds: number;
     };
+    lastActive?: { toDate: () => Date; seconds?: number; } | Date | null;
 }
 
 interface FriendStatus {
@@ -348,6 +349,19 @@ function ProfileContent() {
     const { user, loading: authLoading } = useAuth();
     const [userData, setUserData] = useState<UserProfileData | null>(null);
     const [sessions, setSessions] = useState<SessionData[]>([]);
+    const [currentTime, setCurrentTime] = useState(Date.now());
+
+    useEffect(() => {
+        const interval = setInterval(() => setCurrentTime(Date.now()), 60000); // 1 minute
+        return () => clearInterval(interval);
+    }, []);
+
+    const isOnline = (timestamp: any) => {
+        if (!timestamp) return false;
+        const lastActive = timestamp instanceof Date ? timestamp : timestamp.toDate?.();
+        if (!lastActive) return false;
+        return currentTime - lastActive.getTime() <= 5 * 60 * 1000;
+    };
     const [loading, setLoading] = useState(true);
     const [isOwnProfile, setIsOwnProfile] = useState(true);
     const [friendStatus, setFriendStatus] = useState<FriendStatus | null>(null);
@@ -386,6 +400,8 @@ function ProfileContent() {
         const fetchData = async () => {
             setLoading(true);
 
+            const unsubs: (() => void)[] = [];
+
             const effectiveUserId = targetUserId || user.uid;
             const ownProfile = effectiveUserId === user.uid;
             setIsOwnProfile(ownProfile);
@@ -401,10 +417,43 @@ function ProfileContent() {
                 const status = await getFriendRequestStatus(user.uid, effectiveUserId);
                 const isFriend = await areFriends(user.uid, effectiveUserId);
                 setFriendStatus({ status: status?.status, direction: status?.direction, isFriend });
+
+                // Listen to friends collection for accepted / unfriended status
+                const friendDocRef = doc(db, "users", user.uid, "friends", effectiveUserId);
+                const unsubFriend = onSnapshot(friendDocRef, (snap) => {
+                    const isNowFriend = snap.exists();
+                    setFriendStatus(prev => {
+                        if (prev?.isFriend === isNowFriend) return prev;
+                        return { ...prev, isFriend: isNowFriend, ...(isNowFriend ? { status: undefined, direction: undefined } : {}) };
+                    });
+                });
+                unsubs.push(unsubFriend);
+
+                // Listen to friendRequests for pending requests updates
+                const { query, collection, or, and, where, onSnapshot: onSnap } = await import("firebase/firestore");
+                const requestsQuery = query(
+                    collection(db, "friendRequests"),
+                    or(
+                        and(where("fromUserId", "==", user.uid), where("toUserId", "==", effectiveUserId)),
+                        and(where("fromUserId", "==", effectiveUserId), where("toUserId", "==", user.uid))
+                    )
+                );
+                
+                const unsubReq = onSnap(requestsQuery, (snap) => {
+                    const docs = snap.docs.map(d => d.data());
+                    const req = docs.find((r: any) => r.status === "pending");
+                    if (req) {
+                        const direction = req.fromUserId === user.uid ? "sent" : "received";
+                        setFriendStatus(prev => ({ ...prev, status: "pending", direction }));
+                    } else {
+                        setFriendStatus(prev => ({ ...prev, status: undefined, direction: undefined }));
+                    }
+                });
+                unsubs.push(unsubReq);
             }
 
             // Sync user data
-            const unsub = onSnapshot(doc(db, "users", effectiveUserId), (docSnap) => {
+            const unsubData = onSnapshot(doc(db, "users", effectiveUserId), (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     setUserData(data);
@@ -496,7 +545,8 @@ function ProfileContent() {
             setMonthData(last8Weeks);
             setYearData(last12Months);
 
-            return unsub;
+            unsubs.push(unsubData);
+            return () => unsubs.forEach(fn => fn());
         };
 
         let unsubscribe: (() => void) | undefined;
@@ -790,6 +840,14 @@ function ProfileContent() {
                                                 </label>
                                             )}
                                         </Avatar>
+
+                                        {/* Online Indicator */}
+                                        <div className={cn(
+                                            "absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-5 h-5 md:w-6 md:h-6 rounded-full border-[3px] border-zinc-950 z-40 transition-colors duration-500",
+                                            isOnline(userData?.lastActive)
+                                                ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.3)]"
+                                                : "bg-zinc-600 shadow-[0_0_5px_rgba(0,0,0,0.5)]"
+                                        )} />
                                     </div>
                                 </motion.div>
 
@@ -797,15 +855,70 @@ function ProfileContent() {
                                 {!isOwnProfile ? (
                                     <div className="flex flex-col gap-2.5 w-32 md:w-40 items-center z-30">
                                         {friendStatus?.isFriend ? (
-                                            <Button disabled className="w-full h-9 rounded-full bg-green-500/20 text-green-400 font-black text-[9px] tracking-widest border border-green-500/20 uppercase">
-                                                <UserCheck className="w-2.5 h-2.5 mr-2" />
-                                                Friends
+                                            <Button 
+                                                onClick={async () => {
+                                                    const { removeFriend } = await import("@/lib/friendship");
+                                                    const success = await removeFriend(user.uid, targetUserId!);
+                                                    if (success) {
+                                                        toast.success("Friend removed");
+                                                        setFriendStatus({ ...friendStatus, isFriend: false, status: undefined, direction: undefined });
+                                                    }
+                                                }}
+                                                className="w-full h-9 rounded-full bg-green-500/20 text-green-400 font-black text-[9px] tracking-widest border border-green-500/20 uppercase hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/20 group cursor-pointer transition-colors"
+                                            >
+                                                <UserCheck className="w-2.5 h-2.5 mr-2 group-hover:hidden" />
+                                                <UserMinus className="w-2.5 h-2.5 mr-2 hidden group-hover:block" />
+                                                <span className="group-hover:hidden">Friends</span>
+                                                <span className="hidden group-hover:block">Unfriend</span>
                                             </Button>
                                         ) : friendStatus?.status === "pending" ? (
-                                            <Button disabled className="w-full h-9 rounded-full bg-yellow-500/20 text-yellow-400 font-black text-[9px] tracking-widest border border-yellow-500/20 uppercase">
-                                                <Timer className="w-2.5 h-2.5 mr-2" />
-                                                Pending
-                                            </Button>
+                                            friendStatus.direction === "sent" ? (
+                                                <Button 
+                                                    onClick={async () => {
+                                                        const { getFriendRequest, cancelFriendRequest } = await import("@/lib/friendship");
+                                                        const req = await getFriendRequest(user.uid, targetUserId!);
+                                                        if (req && await cancelFriendRequest(req.id)) {
+                                                            toast.success("Friend request cancelled");
+                                                            setFriendStatus({ ...friendStatus, status: undefined, direction: undefined });
+                                                        }
+                                                    }}
+                                                    className="w-full h-9 rounded-full font-black text-[9px] tracking-widest uppercase border transition-colors bg-yellow-500/20 text-yellow-400 border-yellow-500/20 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/20 group cursor-pointer"
+                                                >
+                                                    <Timer className="w-2.5 h-2.5 mr-2 group-hover:hidden" />
+                                                    <UserMinus className="w-2.5 h-2.5 mr-2 hidden group-hover:block" />
+                                                    <span className="group-hover:hidden">Pending</span>
+                                                    <span className="hidden group-hover:block">Cancel</span>
+                                                </Button>
+                                            ) : (
+                                                <div className="flex w-full gap-2">
+                                                    <Button 
+                                                        onClick={async () => {
+                                                            const { getFriendRequest, acceptFriendRequest } = await import("@/lib/friendship");
+                                                            const req = await getFriendRequest(targetUserId!, user.uid);
+                                                            if (req && await acceptFriendRequest(req.id, targetUserId!, user.uid)) {
+                                                                toast.success("Friend request accepted");
+                                                                // the snapshot listener will handle state update automatically
+                                                            }
+                                                        }}
+                                                        className="flex-1 h-9 rounded-full bg-green-500/20 text-green-400 hover:bg-green-500/30 border border-green-500/20 font-black text-[9px] tracking-widest uppercase cursor-pointer transition-colors"
+                                                    >
+                                                        Accept
+                                                    </Button>
+                                                    <Button 
+                                                        onClick={async () => {
+                                                            const { getFriendRequest, declineFriendRequest } = await import("@/lib/friendship");
+                                                            const req = await getFriendRequest(targetUserId!, user.uid);
+                                                            if (req && await declineFriendRequest(req.id)) {
+                                                                toast.success("Friend request declined");
+                                                                // the snapshot listener will handle state update automatically
+                                                            }
+                                                        }}
+                                                        className="flex-1 h-9 rounded-full bg-red-500/20 text-red-500 hover:bg-red-500/30 border border-red-500/20 font-black text-[9px] tracking-widest uppercase cursor-pointer transition-colors"
+                                                    >
+                                                        Decline
+                                                    </Button>
+                                                </div>
+                                            )
                                         ) : (
                                             <Button
                                                 onClick={async () => {

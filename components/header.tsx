@@ -1,11 +1,12 @@
 "use client";
 
-import { Bell, User } from "lucide-react";
+import { User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/components/AuthProvider";
+import { NotificationsMenu } from "@/components/notifications-menu";
 
 const navLinks = [
     { label: "Timer", href: "/" },
@@ -54,10 +55,7 @@ export function Header() {
                     </span>
                 </div>
 
-                <button className="relative p-2 text-muted-foreground hover:text-primary transition-all duration-500 hover:bg-primary/5 rounded-full">
-                    <Bell className="w-5 h-5" />
-                    <div className="absolute top-2 right-2 w-1.5 h-1.5 bg-destructive rounded-full" />
-                </button>
+                <NotificationsMenu />
 
                 <Link href="/profile">
                     <Avatar className="w-10 h-10 border-2 border-primary/20 p-0.5 hover:border-primary transition-colors duration-500 hover:scale-105 transform cursor-pointer">
