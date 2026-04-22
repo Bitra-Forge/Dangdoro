@@ -483,7 +483,10 @@ export const fetchUserProfiles = async (uids: string[]) => {
     const q = query(usersRef, where("uid", "in", uids.slice(0, 30)));
     const querySnapshot = await getDocs(q);
     
-    return querySnapshot.docs.map(doc => doc.data());
+    return querySnapshot.docs.map(doc => ({
+        uid: doc.id,
+        ...doc.data()
+    } as any));
 };
 
 /**

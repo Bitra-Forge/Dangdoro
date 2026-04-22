@@ -20,7 +20,14 @@ const spaceGrotesk = Space_Grotesk({
     weight: ["300", "400", "500", "600", "700"],
 });
 
+interface UserProfile {
+    uid: string;
+    displayName?: string | null;
+    photoURL?: string | null;
+}
+
 export function NotificationsMenu() {
+
     const { user } = useAuth();
     const pathname = usePathname();
     const [isOpen, setIsOpen] = useState(false);
@@ -32,11 +39,6 @@ export function NotificationsMenu() {
     const totalUnread = requests.length + groupInvites.length + objectiveAssignments.length;
     const hasUnread = totalUnread > 0;
 
-    type UserProfile = {
-        uid: string;
-        displayName?: string | null;
-        photoURL?: string | null;
-    };
 
     type FriendRequestItem = {
         id: string;
@@ -93,8 +95,8 @@ export function NotificationsMenu() {
                 const newProfiles = await fetchUserProfiles(senderIds);
                 setProfiles(prev => {
                     const next = { ...prev };
-                    newProfiles.forEach((p: UserProfile) => {
-                        if (p && p.uid) next[p.uid] = p;
+                    newProfiles.forEach((p: any) => {
+                        if (p && p.uid) next[p.uid] = p as UserProfile;
                     });
                     return next;
                 });
@@ -127,8 +129,8 @@ export function NotificationsMenu() {
                 const newProfiles = await fetchUserProfiles(senderIds);
                 setProfiles(prev => {
                     const next = { ...prev };
-                    newProfiles.forEach((p: UserProfile) => {
-                        if (p && p.uid) next[p.uid] = p;
+                    newProfiles.forEach((p: any) => {
+                        if (p && p.uid) next[p.uid] = p as UserProfile;
                     });
                     return next;
                 });
@@ -158,8 +160,8 @@ export function NotificationsMenu() {
                 const newProfiles = await fetchUserProfiles(hostIds);
                 setProfiles(prev => {
                     const next = { ...prev };
-                    newProfiles.forEach((p: UserProfile) => {
-                        if (p && p.uid) next[p.uid] = p;
+                    newProfiles.forEach((p: any) => {
+                        if (p && p.uid) next[p.uid] = p as UserProfile;
                     });
                     return next;
                 });
@@ -331,7 +333,7 @@ export function NotificationsMenu() {
                                                 className="flex items-center gap-3 mb-3 group/user cursor-pointer"
                                             >
                                                 <Avatar className="w-8 h-8 rounded-full border border-white/10 overflow-hidden shrink-0">
-                                                    <AvatarImage src={profile?.photoURL} className="rounded-full" />
+                                                    <AvatarImage src={profile?.photoURL || undefined} className="rounded-full" />
                                                     <AvatarFallback className="rounded-full"><User className="w-4 h-4" /></AvatarFallback>
                                                 </Avatar>
                                                 <div className="flex flex-col">
