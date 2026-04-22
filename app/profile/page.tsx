@@ -15,6 +15,14 @@ import {
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from "@/components/ui/dialog";
 import { format, differenceInDays, startOfDay, subDays, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, getDay, subMonths, isSameMonth, subWeeks, startOfWeek, isSameWeek } from "date-fns";
 import { toast } from "sonner";
 import { AuthRequired } from "@/components/auth-required";
@@ -360,7 +368,8 @@ function ProfileContent() {
         if (!timestamp) return false;
         const lastActive = timestamp instanceof Date ? timestamp : timestamp.toDate?.();
         if (!lastActive) return false;
-        return currentTime - lastActive.getTime() <= 5 * 60 * 1000;
+        // 10 minute threshold accounts for slow heartbeats or clock drift
+        return currentTime - lastActive.getTime() <= 10 * 60 * 1000;
     };
     const [loading, setLoading] = useState(true);
     const [isOwnProfile, setIsOwnProfile] = useState(true);
@@ -372,6 +381,7 @@ function ProfileContent() {
     const [zoom, setZoom] = useState(1);
     const [croppedAreaPixels, setCroppedAreaPixels] = useState<CropArea | null>(null);
     const [showCropper, setShowCropper] = useState(false);
+    const [unfriendConfirmOpen, setUnfriendConfirmOpen] = useState(false);
 
     // Edit State
     const [isEditing, setIsEditing] = useState(false);
@@ -856,14 +866,7 @@ function ProfileContent() {
                                     <div className="flex flex-col gap-2.5 w-32 md:w-40 items-center z-30">
                                         {friendStatus?.isFriend ? (
                                             <Button 
-                                                onClick={async () => {
-                                                    const { removeFriend } = await import("@/lib/friendship");
-                                                    const success = await removeFriend(user.uid, targetUserId!);
-                                                    if (success) {
-                                                        toast.success("Friend removed");
-                                                        setFriendStatus({ ...friendStatus, isFriend: false, status: undefined, direction: undefined });
-                                                    }
-                                                }}
+                                                onClick={() => setUnfriendConfirmOpen(true)}
                                                 className="w-full h-9 rounded-full bg-green-500/20 text-green-400 font-black text-[9px] tracking-widest border border-green-500/20 uppercase hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/20 group cursor-pointer transition-colors"
                                             >
                                                 <UserCheck className="w-2.5 h-2.5 mr-2 group-hover:hidden" />
@@ -1694,6 +1697,40 @@ function ProfileContent() {
                     )}
                 </AnimatePresence>
             </div>
+            {/* Unfriend Confirmation Dialog */}
+            <Dialog open={unfriendConfirmOpen} onOpenChange={setUnfriendConfirmOpen}>
+                <DialogContent className="rounded-[5px] bg-zinc-900 border border-white/10 text-zinc-100 max-w-[350px]">
+                    <DialogHeader>
+                        <DialogTitle className="ubuntu-bold text-zinc-100">Unfriend {userData?.displayName || "user"}?</DialogTitle>
+                        <DialogDescription className="ubuntu-regular text-zinc-400">
+                            This will remove the friend connection for both of you.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="rounded-b-[5px] bg-transparent border-t border-white/10 p-3 pt-4 gap-2 sm:justify-end flex-row">
+                        <Button
+                            variant="outline"
+                            onClick={() => setUnfriendConfirmOpen(false)}
+                            className="flex-1 sm:flex-none h-9 rounded-[5px] border-white/15 px-4 ubuntu-medium text-zinc-300 hover:bg-white/5 hover:text-white"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={async () => {
+                                const { removeFriend } = await import("@/lib/friendship");
+                                const success = await removeFriend(user.uid, targetUserId!);
+                                if (success) {
+                                    toast.success("Friend removed");
+                                    setFriendStatus({ ...friendStatus, isFriend: false, status: undefined, direction: undefined });
+                                    setUnfriendConfirmOpen(false);
+                                }
+                            }}
+                            className="flex-1 sm:flex-none h-9 rounded-[5px] border border-red-500/30 bg-red-500/15 px-4 ubuntu-medium text-red-300 hover:bg-red-500/25 hover:text-red-200"
+                        >
+                            Unfriend
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </BackgroundTheme>
     );
 }

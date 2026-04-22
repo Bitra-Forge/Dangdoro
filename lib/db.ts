@@ -806,3 +806,20 @@ export const updateUserProfile = async (userId: string, data: { displayName?: st
         return false;
     }
 };
+
+/**
+ * Updates the user's lastActive timestamp to maintain "online" status.
+ * This is used by the Heartbeat component.
+ */
+export const updateLastActive = async (userId: string) => {
+    try {
+        const userRef = doc(db, "users", userId);
+        await updateDoc(userRef, {
+            lastActive: serverTimestamp()
+        });
+        return true;
+    } catch (error) {
+        // Silently fail to avoid console clutter for a secondary feature
+        return false;
+    }
+};

@@ -513,7 +513,8 @@ function FriendsTab({ friends, loading, onRemoveFriend, onGoToSearch }: FriendsT
         if (!timestamp) return false;
         const lastActive = timestamp instanceof Date ? timestamp : timestamp.toDate?.();
         if (!lastActive) return false;
-        return currentTime - lastActive.getTime() <= 5 * 60 * 1000;
+        // 10 minute threshold accounts for slow heartbeats or clock drift
+        return currentTime - lastActive.getTime() <= 10 * 60 * 1000;
     };
 
     const onlineFriends = friends.filter((friend) => isOnline(friend?.userData?.lastActive));
