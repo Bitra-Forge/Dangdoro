@@ -600,7 +600,7 @@ export default function GroupsPage() {
                                 transition={{ type: "spring", stiffness: 400, damping: 25 }}
                                 onClick={() => setShowCreateGroup(!showCreateGroup)}
                                 className={cn(
-                                    "p-5 rounded-2xl border transition-all duration-200 flex items-center gap-4 group",
+                                    "p-5 rounded-2xl border transition-colors duration-200 flex items-center gap-4 group",
                                     showCreateGroup
                                         ? "bg-[white]/10 border-[white]/40"
                                         : settingsGlassmorphism
@@ -609,10 +609,10 @@ export default function GroupsPage() {
                                 )}
                             >
                                 <div className={cn(
-                                    "w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200 shrink-0",
+                                    "w-12 h-12 rounded-xl flex items-center justify-center transition-colors duration-200 shrink-0",
                                     showCreateGroup ? "bg-[white]/25" : "bg-[white]/10 group-hover:bg-[white]/20"
                                 )}>
-                                    <Plus className={cn("w-7 h-7 transition-all duration-200", showCreateGroup ? "text-[white] rotate-45" : "text-[white]")} />
+                                    <Plus className={cn("w-7 h-7 transition-transform duration-200", showCreateGroup ? "text-[white] rotate-45" : "text-[white]")} />
                                 </div>
                                 <div className="text-left">
                                     <h3 className="text-sm font-black text-white mb-0.5">Create Group</h3>
@@ -627,13 +627,13 @@ export default function GroupsPage() {
                                 transition={{ type: "spring", stiffness: 400, damping: 25 }}
                                 onClick={() => setShowJoinCodeModal(true)}
                                 className={cn(
-                                    "p-5 rounded-2xl border transition-all duration-200 flex items-center gap-4 group",
+                                    "p-5 rounded-2xl border transition-colors duration-200 flex items-center gap-4 group",
                                     settingsGlassmorphism
                                         ? "bg-zinc-900/50 border-white/10 hover:border-zinc-300/30 hover:bg-zinc-800/60"
                                         : "bg-zinc-900 border-white/10 hover:border-zinc-300/30 hover:bg-zinc-800/60"
                                 )}
                             >
-                                <div className="w-12 h-12 rounded-xl bg-zinc-950/70 flex items-center justify-center group-hover:bg-zinc-300/10 transition-all duration-200 border border-white/10 shrink-0">
+                                <div className="w-12 h-12 rounded-xl bg-zinc-950/70 flex items-center justify-center group-hover:bg-zinc-300/10 transition-colors duration-200 border border-white/10 shrink-0">
                                     <Key className="w-6 h-6 text-zinc-500 group-hover:text-zinc-300 transition-colors duration-200" />
                                 </div>
                                 <div className="text-left">
@@ -674,14 +674,9 @@ export default function GroupsPage() {
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                         {userGroups.map((group, i) => (
-                                            <motion.div 
-                                                key={group.id}
-                                                initial={{ opacity: 0, y: 10, scale: 0.98 }}
-                                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                                transition={{ duration: 0.2, delay: i * 0.05 }}
-                                            >
+                                            <div key={group.id}>
                                                 <EnhancedGroupCard group={group} onClick={() => setSelectedGroupId(group.id)} isMember={true} />
-                                            </motion.div>
+                                            </div>
                                         ))}
                                     </div>
                                 </section>
@@ -726,14 +721,9 @@ export default function GroupsPage() {
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                         {publicGroups.map((group, i) => (
-                                            <motion.div 
-                                                key={group.id}
-                                                initial={{ opacity: 0, y: 10, scale: 0.98 }}
-                                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                                transition={{ duration: 0.2, delay: i * 0.05 }}
-                                            >
+                                            <div key={group.id}>
                                                 <EnhancedGroupCard group={group} onClick={() => setSelectedGroupId(group.id)} isMember={false} />
-                                            </motion.div>
+                                            </div>
                                         ))}
                                     </div>
                                 </section>
@@ -912,7 +902,7 @@ const EnhancedGroupCard = memo(function EnhancedGroupCard({ group, onClick, isMe
             transition={{ type: "spring", stiffness: 500, damping: 30 }}
             onClick={onClick}
             className={cn(
-                "relative group cursor-pointer overflow-hidden rounded-2xl border transition-all duration-200",
+                "relative group cursor-pointer overflow-hidden rounded-2xl border transition-colors duration-200",
                 settingsGlassmorphism ? "bg-zinc-900/55" : "bg-zinc-900",
                 isActive
                     ? "border-[white]/40"
