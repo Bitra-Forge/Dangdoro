@@ -63,19 +63,17 @@ const getRequestTimeValue = (request: any): number => {
 };
 
 const getRequestsBetweenUsers = async (userId1: string, userId2: string): Promise<FriendRequest[]> => {
-    // Query each sender direction separately, then filter client-side.
-    // This avoids requiring a composite index on (fromUserId, toUserId).
-    const q1 = query(collection(db, "friendRequests"), where("fromUserId", "==", userId1));
-    const q2 = query(collection(db, "friendRequests"), where("fromUserId", "==", userId2));
+    // Query both directions with full pair constraints so Firestore security
+    // rules can verify the current user is always a participant.
+    const q1 = query(collection(db, "friendRequests"), where("fromUserId", "==", userId1), where("toUserId", "==", userId2));
+    const q2 = query(collection(db, "friendRequests"), where("fromUserId", "==", userId2), where("toUserId", "==", userId1));
 
     const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
 
     const docsFromUser1 = snap1.docs
-        .filter((requestDoc) => requestDoc.data().toUserId === userId2)
         .map((requestDoc) => ({ id: requestDoc.id, ...requestDoc.data() })) as FriendRequest[];
 
     const docsFromUser2 = snap2.docs
-        .filter((requestDoc) => requestDoc.data().toUserId === userId1)
         .map((requestDoc) => ({ id: requestDoc.id, ...requestDoc.data() })) as FriendRequest[];
 
     return [...docsFromUser1, ...docsFromUser2].sort((a, b) => getRequestTimeValue(b) - getRequestTimeValue(a));

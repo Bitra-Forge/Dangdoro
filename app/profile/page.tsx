@@ -458,6 +458,8 @@ function ProfileContent() {
                     } else {
                         setFriendStatus(prev => ({ ...prev, status: undefined, direction: undefined }));
                     }
+                }, (error) => {
+                    console.error("Friend request listener error:", error);
                 });
                 unsubs.push(unsubReq);
             }
