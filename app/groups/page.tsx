@@ -300,7 +300,7 @@ export default function GroupsPage() {
     );
 
     if (loading) return (
-        <BackgroundTheme showSettings={false}>
+        <BackgroundTheme>
             <div className={cn("relative min-h-screen flex flex-col pt-16 overflow-x-hidden", spaceGrotesk.variable, "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
                 <main className="relative z-10 flex flex-col items-center pb-48 px-4 w-full flex-1 max-w-6xl mx-auto">
                     <header className="flex flex-col items-center text-center mb-12 w-full">
@@ -319,7 +319,7 @@ export default function GroupsPage() {
     );
 
     return (
-        <BackgroundTheme showSettings={false}>
+        <BackgroundTheme>
             <div className={cn("relative min-h-screen flex flex-col pt-16 overflow-x-hidden", spaceGrotesk.variable, "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
                 <main className="relative z-10 flex flex-col items-center pb-48 px-4 w-full flex-1 max-w-6xl mx-auto">
 
