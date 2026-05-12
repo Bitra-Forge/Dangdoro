@@ -22,7 +22,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
 
     if (!user || user.isAnonymous) return (
         <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
-            <BackgroundTheme showSettings={false} disableDots subtleOverlay />
+            <BackgroundTheme showSettings={false} />
             <main className="relative z-10 flex flex-col items-center justify-center pt-24 pb-32 px-4 w-full flex-1">
                 <AuthRequired title="Groups Locked" description="Sign in to view focus groups." />
             </main>
@@ -30,8 +30,8 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
     );
 
     return (
-        <BackgroundTheme showSettings={false} disableDots subtleOverlay>
-            <div className={cn("relative min-h-screen bg-zinc-950 flex flex-col overflow-x-hidden", spaceGrotesk.variable, "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
+        <BackgroundTheme showSettings={false}>
+            <div className={cn("relative min-h-screen flex flex-col overflow-x-hidden", spaceGrotesk.variable, "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
                 <main className="relative z-10 flex flex-col w-full flex-1">
                     <GroupWorkspace groupId={groupId} />
                 </main>

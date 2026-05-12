@@ -298,14 +298,14 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         toast.info("Left group");
     };
 
-    if (loading) return <div className="min-h-screen flex items-center justify-center bg-zinc-950"><div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" /></div>;
-    if (!enrichedGroup || !user) return <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-950 text-white gap-4"><p>Group not found</p><Link href="/groups" className="text-sm text-zinc-500 hover:text-white">Back to Groups</Link></div>;
+    if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" /></div>;
+    if (!enrichedGroup || !user) return <div className="min-h-screen flex flex-col items-center justify-center text-white gap-4"><p>Group not found</p><Link href="/groups" className="text-sm text-zinc-500 hover:text-white">Back to Groups</Link></div>;
 
     const totalGroupMinutes = enrichedGroup.totalMinutes || sortedMembers.reduce((acc: number, m: any) => acc + (m.totalMinutes || 0), 0);
     const adminCount = sortedMembers.filter((m: any) => m.role === "host" || m.role === "admin").length;
 
     return (
-        <div className="flex flex-col min-h-screen bg-zinc-950/50 backdrop-blur-3xl overflow-hidden">
+        <div className="flex flex-col min-h-screen overflow-hidden">
             {/* Top accent bar */}
             <div className={cn(
                 "h-[2px] bg-gradient-to-r from-transparent to-transparent shrink-0",

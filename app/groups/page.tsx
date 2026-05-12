@@ -292,7 +292,7 @@ export default function GroupsPage() {
 
     if (!user || user.isAnonymous) return (
         <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
-            <BackgroundTheme showSettings={false} disableDots subtleOverlay />
+            <BackgroundTheme showSettings={false} />
             <main className="relative z-10 flex flex-col items-center justify-center pt-24 pb-32 px-4 w-full flex-1">
                 <AuthRequired title="Groups Locked" description="Sign in to create focus groups and join organizations." />
             </main>
@@ -300,8 +300,8 @@ export default function GroupsPage() {
     );
 
     if (loading) return (
-        <BackgroundTheme showSettings={false} disableDots subtleOverlay>
-            <div className={cn("relative min-h-screen bg-zinc-950 flex flex-col pt-16 overflow-x-hidden", spaceGrotesk.variable, "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
+        <BackgroundTheme showSettings={false}>
+            <div className={cn("relative min-h-screen flex flex-col pt-16 overflow-x-hidden", spaceGrotesk.variable, "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
                 <main className="relative z-10 flex flex-col items-center pb-48 px-4 w-full flex-1 max-w-6xl mx-auto">
                     <header className="flex flex-col items-center text-center mb-12 w-full">
                         <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">Groups</h1>
@@ -319,8 +319,8 @@ export default function GroupsPage() {
     );
 
     return (
-        <BackgroundTheme showSettings={false} disableDots subtleOverlay>
-            <div className={cn("relative min-h-screen bg-zinc-950 flex flex-col pt-16 overflow-x-hidden", spaceGrotesk.variable, "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
+        <BackgroundTheme showSettings={false}>
+            <div className={cn("relative min-h-screen flex flex-col pt-16 overflow-x-hidden", spaceGrotesk.variable, "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
                 <main className="relative z-10 flex flex-col items-center pb-48 px-4 w-full flex-1 max-w-6xl mx-auto">
 
                     <header className="flex flex-col items-center text-center mb-12 w-full pt-10 relative">

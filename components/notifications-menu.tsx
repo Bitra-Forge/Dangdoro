@@ -172,6 +172,7 @@ export function NotificationsMenu() {
     }, [user, profiles]);
 
     if (pathname.startsWith("/friends")) return null;
+    if (pathname.match(/^\/groups\/[^/]+/)) return null;
     if (!user || user.isAnonymous) return null;
 
     const handleAccept = async (reqId: string, fromUserId: string) => {
