@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useMemo, useEffect, memo } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
     Plus, Sparkles, Mail, Target, 
-    Play, Search, Check, Edit2, X, Save 
+    Play, Search, Check, Edit2, X, Save, Trash2, Filter
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SharedTask } from "@/lib/groups";
@@ -22,6 +22,11 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
     const [description, setDescription] = useState("");
     const [prio, setPrio] = useState<any>("medium");
     const [assign, setAssign] = useState("all");
+    const [searchTerm, setSearchTerm] = useState("");
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+    const [statusFilter, setStatusFilter] = useState<string>("all");
+    const [priorityFilter, setPriorityFilter] = useState<string>("all");
     const [objectiveFilter, setObjectiveFilter] = useState<"all" | "mine">("all");
     
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -75,12 +80,32 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
         setOpenAdd(false);
     };
 
-    const visibleTasks = objectiveFilter === "mine"
-        ? tasks.filter((task: any) => task.assignedTo === "all" || task.assignedTo === currentUserId)
-        : tasks;
+    const visibleTasks = useMemo(() => {
+        return tasks.filter((task: any) => {
+            const matchesMine = objectiveFilter === "all" || task.assignedTo === "all" || task.assignedTo === currentUserId;
+            const matchesSearch = searchTerm.trim() === "" || 
+                task.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                (task.description || "").toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesStatus = statusFilter === "all" || task.status === statusFilter;
+            const matchesPriority = priorityFilter === "all" || task.priority === priorityFilter;
+            
+            return matchesMine && matchesSearch && matchesStatus && matchesPriority;
+        });
+    }, [tasks, objectiveFilter, currentUserId, searchTerm, statusFilter, priorityFilter]);
+
+    const hasActiveFilters = searchTerm !== "" || statusFilter !== "all" || priorityFilter !== "all" || objectiveFilter !== "all";
+
+    const clearFilters = () => {
+        setSearchTerm("");
+        setStatusFilter("all");
+        setPriorityFilter("all");
+        setObjectiveFilter("all");
+        setIsSearchOpen(false);
+        setIsFiltersOpen(false);
+    };
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-6">
             {isAdmin && !openAdd && (
                 <button onClick={() => setOpenAdd(true)} className="w-full p-5 flex items-center gap-3 bg-[white]/5 border border-[white]/10 rounded-2xl group hover:bg-[white]/10 transition-all">
                     <div className="w-8 h-8 rounded-lg bg-[white]/20 flex items-center justify-center text-[white] group-hover:scale-110 transition-all"><Plus className="w-5 h-5" /></div>
@@ -122,11 +147,200 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                 </motion.div>
             )}
 
-            <div className="flex items-center justify-between">
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-600">Objectives</p>
-                <div className="flex p-1 bg-white/5 rounded-lg border border-white/5">
-                    <button onClick={() => setObjectiveFilter("all")} className={cn("px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all", objectiveFilter === "all" ? "bg-white/10 text-white" : "text-zinc-500")}>All</button>
-                    <button onClick={() => setObjectiveFilter("mine")} className={cn("px-3 py-1 rounded-md text-[10px] font-black uppercase transition-all", objectiveFilter === "mine" ? "bg-white/10 text-white" : "text-zinc-500")}>Assigned to me</button>
+            <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between gap-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-600">Objectives</p>
+                    
+                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2">
+                            <AnimatePresence mode="popLayout">
+                                {isSearchOpen ? (
+                                    <motion.div 
+                                        key="search-input"
+                                        layout
+                                        initial={{ width: 0, opacity: 0, x: 20, filter: "blur(8px)" }}
+                                        animate={{ width: "auto", opacity: 1, x: 0, filter: "blur(0px)" }}
+                                        exit={{ width: 0, opacity: 0, x: 20, filter: "blur(8px)" }}
+                                        transition={{ type: "spring", stiffness: 400, damping: 30, mass: 0.8 }}
+                                        className="relative flex items-center overflow-hidden"
+                                    >
+                                        <div className="relative flex items-center min-w-[180px] md:min-w-[280px]">
+                                            <motion.div
+                                                initial={{ x: -10, opacity: 0 }}
+                                                animate={{ x: 0, opacity: 1 }}
+                                                transition={{ delay: 0.1, type: "spring", stiffness: 500, damping: 25 }}
+                                            >
+                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                                            </motion.div>
+                                            <input 
+                                                autoFocus
+                                                value={searchTerm}
+                                                onChange={e => setSearchTerm(e.target.value)}
+                                                placeholder="Search objectives..."
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-9 py-2 text-[11px] text-white outline-none focus:border-white/20 focus:bg-white/10 transition-all shadow-lg"
+                                                onBlur={() => !searchTerm && setIsSearchOpen(false)}
+                                                onKeyDown={(e) => e.key === "Escape" && setIsSearchOpen(false)}
+                                            />
+                                            <motion.button 
+                                                onClick={() => { setSearchTerm(""); setIsSearchOpen(false); }}
+                                                className="absolute right-2 p-1.5 text-zinc-500 hover:text-white transition-colors"
+                                                whileHover={{ rotate: 90 }}
+                                                whileTap={{ scale: 0.85 }}
+                                                transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </motion.button>
+                                        </div>
+                                    </motion.div>
+                                ) : (
+                                    <motion.button 
+                                        key="search-toggle"
+                                        layout
+                                        initial={{ opacity: 0, scale: 0.5, rotate: -90 }}
+                                        animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                                        exit={{ opacity: 0, scale: 0.5, rotate: 90 }}
+                                        transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                                        whileHover={{ scale: 1.1, backgroundColor: "rgba(255,255,255,0.1)" }}
+                                        whileTap={{ scale: 0.9 }}
+                                        onClick={() => setIsSearchOpen(true)}
+                                        className={cn(
+                                            "p-2.5 rounded-xl border border-white/5 bg-white/5 text-zinc-500 hover:text-white transition-colors shadow-sm",
+                                            searchTerm && "text-white border-white/20 bg-white/10"
+                                        )}
+                                        title="Search objectives"
+                                    >
+                                        <Search className="w-4 h-4" />
+                                    </motion.button>
+                                )}
+                            </AnimatePresence>
+
+                            <motion.button 
+                                onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+                                className={cn(
+                                    "p-2.5 rounded-xl border shadow-sm flex items-center gap-2 relative overflow-hidden",
+                                    isFiltersOpen || statusFilter !== "all" || priorityFilter !== "all"
+                                        ? "bg-white/10 text-white border-white/20" 
+                                        : "bg-white/5 text-zinc-500 border-white/5 hover:text-white"
+                                )}
+                                whileHover={{ scale: 1.1, backgroundColor: "rgba(255,255,255,0.1)" }}
+                                whileTap={{ scale: 0.9 }}
+                                transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                                title="Toggle status & priority filters"
+                            >
+                                <motion.div
+                                    animate={{ rotate: isFiltersOpen ? 180 : 0 }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                                >
+                                    <Filter className="w-4 h-4" />
+                                </motion.div>
+                                <AnimatePresence>
+                                    {(statusFilter !== "all" || priorityFilter !== "all") && !isFiltersOpen && (
+                                        <motion.div 
+                                            initial={{ scale: 0 }}
+                                            animate={{ scale: 1 }}
+                                            exit={{ scale: 0 }}
+                                            className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"
+                                        />
+                                    )}
+                                </AnimatePresence>
+                            </motion.button>
+                        </div>
+
+                        <div className="flex p-1 bg-white/5 rounded-xl border border-white/5 h-fit relative">
+                            {["all", "mine"].map((val) => (
+                                <button 
+                                    key={val}
+                                    onClick={() => setObjectiveFilter(val as "all" | "mine")} 
+                                    className={cn(
+                                        "relative z-10 px-3.5 py-1.5 rounded-lg text-[10px] font-black uppercase transition-colors duration-200",
+                                        objectiveFilter === val ? "text-white" : "text-zinc-500 hover:text-zinc-300"
+                                    )}
+                                >
+                                    {objectiveFilter === val && (
+                                        <motion.div
+                                            layoutId="objective-filter-indicator"
+                                            className="absolute inset-0 bg-white/10 rounded-lg border border-white/10"
+                                            transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.8 }}
+                                        />
+                                    )}
+                                    <span className="relative z-10">{val === "all" ? "All" : "Mine"}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div 
+                    className={cn(
+                        "grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
+                        isFiltersOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                    )}
+                >
+                    <div className="overflow-hidden">
+                        <div className="flex flex-wrap items-center gap-6 pt-1 pb-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-[9px] font-black text-zinc-600 uppercase tracking-wider mr-1">Status:</span>
+                                    {["all", "todo", "in-progress", "in-review", "done"].map(s => {
+                                        const cfg = TASK_STATUS_CONFIG[s];
+                                        const isActive = statusFilter === s;
+                                        return (
+                                            <button 
+                                                key={s} 
+                                                onClick={() => setStatusFilter(s)}
+                                                className={cn(
+                                                    "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border",
+                                                    isActive 
+                                                        ? (s === "all" ? "bg-white/10 text-white border-white/20" : cfg.color)
+                                                        : "bg-transparent border-white/5 text-zinc-600 hover:text-zinc-400 hover:border-white/10"
+                                                )}
+                                            >
+                                                {s === "all" ? "All" : cfg.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className="h-4 w-[1px] bg-white/5 hidden sm:block" />
+
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-[9px] font-black text-zinc-600 uppercase tracking-wider mr-1">Priority:</span>
+                                    {["all", "low", "medium", "high"].map(p => {
+                                        const isActive = priorityFilter === p;
+                                        let activeClass = "bg-white/10 text-white border-white/20";
+                                        
+                                        if (isActive) {
+                                            if (p === "high") activeClass = "bg-red-500/20 text-red-400 border-red-500/40 shadow-[0_0_10px_rgba(239,68,68,0.1)]";
+                                            if (p === "medium") activeClass = "bg-amber-500/20 text-amber-400 border-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.1)]";
+                                            if (p === "low") activeClass = "bg-sky-500/20 text-sky-400 border-sky-500/40 shadow-[0_0_10px_rgba(14,165,233,0.1)]";
+                                        }
+
+                                        return (
+                                            <button 
+                                                key={p} 
+                                                onClick={() => setPriorityFilter(p)}
+                                                className={cn(
+                                                    "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border",
+                                                    isActive 
+                                                        ? activeClass
+                                                        : "bg-transparent border-white/5 text-zinc-600 hover:text-zinc-400 hover:border-white/10"
+                                                )}
+                                            >
+                                                {p}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                {hasActiveFilters && (
+                                    <button 
+                                        onClick={clearFilters}
+                                        className="ml-auto text-[9px] font-black text-zinc-500 hover:text-red-400 uppercase tracking-widest flex items-center gap-1.5 transition-colors"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" /> Clear
+                                    </button>
+                                )}
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -301,8 +515,17 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                     );
                 })}
                 {tasks.length > 0 && visibleTasks.length === 0 && (
-                    <div className="py-10 text-center border border-white/10 rounded-2xl bg-zinc-950/30">
-                        <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-[0.16em]">No objectives match this filter</p>
+                    <div className="py-12 flex flex-col items-center justify-center border border-white/5 rounded-2xl bg-zinc-900/20 space-y-3">
+                        <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-500">
+                            <Search className="w-5 h-5" />
+                        </div>
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.16em]">No objectives match your filters</p>
+                        <button 
+                            onClick={clearFilters}
+                            className="text-[10px] font-black text-white bg-white/5 hover:bg-white/10 px-4 py-2 rounded-xl transition-all"
+                        >
+                            Reset Filters
+                        </button>
                     </div>
                 )}
             </div>

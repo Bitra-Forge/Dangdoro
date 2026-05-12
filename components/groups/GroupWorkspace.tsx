@@ -50,7 +50,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     
     // UI State (moved from GroupDetailModal)
     const [activeTab, setActiveTab] = useState<"workspace" | "members">("workspace");
-    const [viewMode, setViewMode] = useState<"shared" | "personal">("shared");
+
     const [isManagingRoles, setIsManagingRoles] = useState(false);
     const [showInviteModal, setShowInviteModal] = useState(false);
     const [sessionActionPending, setSessionActionPending] = useState<"start" | "pause" | "stop" | null>(null);
@@ -512,13 +512,8 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                             <h3 className="text-sm font-black uppercase text-zinc-600 tracking-widest flex items-center gap-2">
                                                 <Target className="w-4 h-4" /> Focus Objectives
                                             </h3>
-                                            <div className="flex p-1 bg-white/5 rounded-lg border border-white/5">
-                                                <button onClick={() => setViewMode("shared")} className={cn("px-4 py-1.5 rounded-md text-[10px] font-black uppercase transition-all", viewMode === "shared" ? "bg-white/10 text-white shadow-md" : "text-zinc-500")}>Shared</button>
-                                                <button onClick={() => setViewMode("personal")} className={cn("px-4 py-1.5 rounded-md text-[10px] font-black uppercase transition-all", viewMode === "personal" ? "bg-white/10 text-white shadow-md" : "text-zinc-500")}>Personal</button>
-                                            </div>
                                         </div>
 
-                                        {viewMode === "shared" ? (
                                             <SharedTasksPanel
                                                 tasks={tasks}
                                                 onAdd={handleAddTask}
@@ -553,12 +548,6 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                                     }
                                                 }}
                                             />
-                                        ) : (
-                                            <div className="p-12 text-center bg-zinc-900/20 border border-white/5 border-dashed rounded-[2rem] space-y-4">
-                                                <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center mx-auto text-zinc-600"><User className="w-8 h-8" /></div>
-                                                <p className="text-sm text-zinc-500 font-medium">Personal tasks are synced from your <Link href="/tasks" className="text-[white] hover:underline">Task Dashboard</Link>.</p>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
 
