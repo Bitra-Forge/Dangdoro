@@ -11,7 +11,6 @@ import { NavigationHub } from "@/components/navigation-hub";
 import { NotificationsMenu } from "@/components/notifications-menu";
 import { Heartbeat } from "@/components/Heartbeat";
 import { GroupSessionSync } from "@/components/group-session-sync";
-import { GroupSessionMiniBar } from "@/components/group-session-mini-bar";
 
 
 const figtree = Figtree({
@@ -63,11 +62,10 @@ export default function RootLayout({
 
           {children}
           
-          {/* Global timer components */}
-          <GroupSessionSync />
-          <GroupSessionMiniBar />
-          <TimerTicker />
-          <TimerPiPWidget />
+           {/* Global timer components */}
+           <GroupSessionSync />
+           <TimerTicker />
+           <TimerPiPWidget />
           
           {/* Audio & UI components */}
           <SoundEngine />
