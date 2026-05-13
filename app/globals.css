@@ -151,6 +151,9 @@
   .text-muted-gold {
     color: #C9B037;
   }
+  .group-page-radius :where([class*="rounded-"]) {
+    border-radius: 10px !important;
+  }
   .bg-near-black {
     background-color: #0D0C0A;
   }

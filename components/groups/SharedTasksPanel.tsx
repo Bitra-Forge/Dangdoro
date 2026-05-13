@@ -95,6 +95,12 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
 
     const hasActiveFilters = searchTerm !== "" || statusFilter !== "all" || priorityFilter !== "all" || objectiveFilter !== "all";
 
+    const { incompleteTasks, completedTasks } = useMemo(() => {
+        const incomplete = visibleTasks.filter((task: any) => task.status !== "done");
+        const completed = visibleTasks.filter((task: any) => task.status === "done");
+        return { incompleteTasks: incomplete, completedTasks: completed };
+    }, [visibleTasks]);
+
     const clearFilters = () => {
         setSearchTerm("");
         setStatusFilter("all");
@@ -380,7 +386,150 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
             )}
 
             <div className="grid grid-cols-1 gap-3">
-                {visibleTasks.map((task: any, i: number) => {
+                {incompleteTasks.map((task: any, i: number) => {
+                    const isEditing = editingTaskId === task.id;
+                    const canEdit = isAdmin || task.assignedTo === currentUserId;
+                    const statusConfig = TASK_STATUS_CONFIG[task.status] || TASK_STATUS_CONFIG.todo;
+                    const StatusIcon = statusConfig.icon;
+
+                    if (isEditing) {
+                        return (
+                            <motion.div 
+                                key={task.id}
+                                initial={{ opacity: 0, scale: 0.98 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="p-5 bg-zinc-900 border border-[white]/30 rounded-2xl space-y-4 shadow-2xl z-10"
+                            >
+                                <input autoFocus value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="w-full bg-zinc-950 border border-white/5 rounded-xl px-4 py-2 text-white text-sm outline-none focus:border-[white]/40" />
+                                <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={2} className="w-full bg-zinc-950 border border-white/5 rounded-xl px-4 py-2 text-white text-xs outline-none focus:border-[white]/40 resize-none" />
+                                
+                                <div className="flex flex-wrap gap-4">
+                                    <div className="flex-1 min-w-[120px]">
+                                        <p className="text-[9px] font-black text-zinc-600 uppercase mb-1.5">Priority</p>
+                                        <div className="flex gap-1.5">
+                                            {["low", "medium", "high"].map(p => (
+                                                <button key={p} onClick={() => setEditPrio(p)} className={cn("flex-1 py-1 rounded-md border text-[9px] font-black uppercase transition-all", editPrio === p ? "bg-white/10 text-white border-white/20" : "text-zinc-600 border-white/5")}>{p}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="flex-1 min-w-[120px]">
+                                        <p className="text-[9px] font-black text-zinc-600 uppercase mb-1.5">Assignment</p>
+                                        <select value={editAssign} onChange={(e) => setEditAssign(e.target.value)} className="w-full bg-zinc-950 border border-white/5 rounded-md px-2 py-1 text-[10px] text-zinc-400 outline-none">
+                                            <option value="all">Entire Unit</option>
+                                            {groupMembers?.map((m: any) => <option key={m.uid} value={m.uid}>{m.displayName}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2 pt-1">
+                                    <button onClick={handleSaveEdit} className="flex-1 py-2 bg-white text-black font-black rounded-lg text-[10px] uppercase tracking-wider flex items-center justify-center gap-2">
+                                        <Save className="w-3 h-3" /> Save Changes
+                                    </button>
+                                    <button onClick={() => setEditingTaskId(null)} className="px-4 py-2 bg-zinc-800 text-white font-bold rounded-lg text-[10px] uppercase tracking-wider">Cancel</button>
+                                </div>
+                            </motion.div>
+                        );
+                    }
+
+                    return (
+                        <motion.div 
+                            key={task.id} 
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ duration: 0.3, delay: i * 0.05 }}
+                            className={cn(
+                                "flex flex-col gap-3 p-5 rounded-2xl transition-all duration-300 border relative group/task", 
+                                task.status === "done" 
+                                    ? "bg-zinc-900/20 border-white/5 opacity-60" 
+                                    : "bg-zinc-900/60 border-white/10 hover:border-white/20 active:scale-[0.99]"
+                            )}
+                        >
+                            <div className="flex items-start gap-4">
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <h4 className={cn(
+                                            "text-[13px] font-black tracking-tight transition-all duration-500 truncate", 
+                                            task.status === "done" ? "text-zinc-600 line-through" : "text-white group-hover/task:text-[white]"
+                                        )}>
+                                            {task.title}
+                                        </h4>
+                                        {isAdmin && (
+                                            <button onClick={() => startEditing(task)} className="opacity-0 group-hover/task:opacity-100 p-1 text-zinc-600 hover:text-white transition-all">
+                                                <Edit2 className="w-3 h-3" />
+                                            </button>
+                                        )}
+                                    </div>
+                                    {task.description && (
+                                        <p className="text-[11px] text-zinc-500 line-clamp-2">{task.description}</p>
+                                    )}
+                                </div>
+
+                                {isAdmin && (
+                                    <button
+                                        onClick={() => onDelete(task.id)}
+                                        title="Delete objective"
+                                        className="w-7 h-7 rounded-lg text-zinc-700 hover:bg-red-500/10 hover:text-red-500 transition-all flex items-center justify-center opacity-0 group-hover/task:opacity-100"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-white/5">
+                                <div className="flex items-center gap-2">
+                                    {["todo", "in-progress", "in-review", "done"].map((status) => {
+                                        const cfg = TASK_STATUS_CONFIG[status];
+                                        const isActive = task.status === status;
+                                        const Icon = cfg.icon;
+                                        
+                                        return (
+                                            <button
+                                                key={status}
+                                                disabled={!canEdit}
+                                                onClick={() => onUpdate(task.id, { status })}
+                                                className={cn(
+                                                    "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border",
+                                                    isActive 
+                                                        ? cfg.color 
+                                                        : "bg-white/5 border-transparent text-zinc-600 hover:bg-white/10 hover:text-zinc-400 disabled:hover:bg-white/5 disabled:hover:text-zinc-600"
+                                                )}
+                                                title={canEdit ? `Mark as ${cfg.label}` : "Only assignee or admins can change status"}
+                                            >
+                                                <Icon className="w-2.5 h-2.5" />
+                                                <span className={cn(isActive ? "inline" : "hidden sm:inline")}>{cfg.label}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                    <div className={cn(
+                                        "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest",
+                                        task.priority === "high" ? "bg-red-500/10 text-red-500 border border-red-500/20" : 
+                                        task.priority === "medium" ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : 
+                                        "bg-sky-500/10 text-sky-500 border border-sky-500/20"
+                                    )}>
+                                        {task.priority}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-[8px] font-bold text-zinc-600 uppercase tracking-widest">
+                                        <div className="w-1 h-1 rounded-full bg-zinc-800" />
+                                        {task.assignedTo === "all" ? "All" : assigneeNameById[task.assignedTo] || "Member"}
+                                    </div>
+                                </div>
+                            </div>
+                        </motion.div>
+                    );
+                })}
+                {incompleteTasks.length > 0 && completedTasks.length > 0 && (
+                    <div className="py-2">
+                        <div className="flex items-center gap-3">
+                            <div className="h-px flex-1 bg-white/5" />
+                            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600">Completed</span>
+                            <div className="h-px flex-1 bg-white/5" />
+                        </div>
+                    </div>
+                )}
+                {completedTasks.map((task: any, i: number) => {
                     const isEditing = editingTaskId === task.id;
                     const canEdit = isAdmin || task.assignedTo === currentUserId;
                     const statusConfig = TASK_STATUS_CONFIG[task.status] || TASK_STATUS_CONFIG.todo;

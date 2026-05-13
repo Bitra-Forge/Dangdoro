@@ -372,8 +372,10 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                             disabled={!!sessionActionPending}
                                             onClick={() => handleSessionAction("start")}
                                             className={cn(
-                                                "px-6 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-2",
-                                                sessionActionPending ? "bg-[white]/60 text-black cursor-not-allowed" : "bg-[white] text-black hover:shadow-[0_0_20px_white]"
+                                                "px-6 py-2.5 rounded-xl font-black text-xs transition-all duration-200 ease-out flex items-center gap-2",
+                                                sessionActionPending
+                                                    ? "bg-[white]/60 text-black cursor-not-allowed"
+                                                    : "bg-[white] text-black hover:shadow-[0_0_12px_rgba(255,255,255,0.35)]"
                                             )}
                                         >
                                             <Play className="w-4 h-4" />
@@ -451,14 +453,30 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
 
                 {!isManagingRoles && isMember && (
                     <div className="mt-8 flex items-center justify-between">
-                        <div className="flex gap-1 p-1 bg-zinc-950/40 rounded-xl w-fit border border-white/5">
+                        <div className="flex gap-1 p-1 bg-zinc-950/40 rounded-xl w-fit border border-white/5 relative">
                             {[
                                 { id: "workspace", icon: LayoutGrid, label: "Overview" },
                                 { id: "members",   icon: Users, label: "Participants" }
                             ].map(t => (
-                                <button key={t.id} onClick={() => setActiveTab(t.id as any)} className={cn("flex items-center gap-2 px-6 py-2 rounded-lg text-xs font-black transition-all", activeTab === t.id ? "bg-white/10 text-white shadow-lg" : "text-zinc-500 hover:text-zinc-300")}>
-                                    <t.icon className="w-4 h-4" />
-                                    <span>{t.label}</span>
+                                <button
+                                    key={t.id}
+                                    onClick={() => setActiveTab(t.id as any)}
+                                    className={cn(
+                                        "relative px-6 py-2 rounded-lg text-xs font-black transition-colors duration-200",
+                                        activeTab === t.id ? "text-white" : "text-zinc-500 hover:text-zinc-300"
+                                    )}
+                                >
+                                    {activeTab === t.id && (
+                                        <motion.div
+                                            layoutId={`group-workspace-tabs-indicator-${groupId}`}
+                                            className="absolute inset-0 bg-white/10 rounded-lg border border-white/10"
+                                            transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.8 }}
+                                        />
+                                    )}
+                                    <span className="relative z-10 flex items-center gap-2">
+                                        <t.icon className="w-4 h-4" />
+                                        <span>{t.label}</span>
+                                    </span>
                                 </button>
                             ))}
                         </div>
