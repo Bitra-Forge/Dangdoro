@@ -2,20 +2,21 @@
 
 import { useEffect, useState, useMemo, memo } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import { 
-    doc, onSnapshot, collection, query, orderBy, 
-    updateDoc, arrayUnion, increment, serverTimestamp, 
-    addDoc, deleteDoc, getDocs, where
+import {
+    doc, onSnapshot, collection, query, orderBy,
+    updateDoc, arrayUnion, increment, serverTimestamp,
+    addDoc, deleteDoc, getDocs, where, writeBatch
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useTimerStore } from "@/lib/store";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { 
     Users, Briefcase, ChevronRight, Play, Pause, 
     StopCircle, MoreVertical, UserPlus, LogOut, X, 
-    LayoutGrid, Target, Crown, Zap, User, Lock, Copy
+    LayoutGrid, Target, Crown, Zap, User, Lock, Copy, Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -42,6 +43,7 @@ interface GroupWorkspaceProps {
 
 export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const { user } = useAuth();
+    const router = useRouter();
     const [group, setGroup] = useState<FocusGroup | null>(null);
     const [liveSessions, setLiveSessions] = useState<any[]>([]);
     const [tasks, setTasks] = useState<SharedTask[]>([]);
@@ -57,6 +59,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const [optimisticFocusing, setOptimisticFocusing] = useState<boolean | null>(null);
     const [roleActionPendingId, setRoleActionPendingId] = useState<string | null>(null);
     const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [objectiveTemplateDraft, setObjectiveTemplateDraft] = useState<ObjectiveTemplateDraft | null>(null);
 
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
@@ -298,6 +301,41 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         toast.info("Left group");
     };
 
+    const handleDeleteGroup = async () => {
+        if (!user || !enrichedGroup || userRole !== "host") return;
+        
+        const deleteDocsInBatches = async (docs: Array<{ ref: any }>) => {
+            let batch = writeBatch(db);
+            let opCount = 0;
+            for (const d of docs) {
+                batch.delete(d.ref);
+                opCount += 1;
+                if (opCount >= 450) {
+                    await batch.commit();
+                    batch = writeBatch(db);
+                    opCount = 0;
+                }
+            }
+            if (opCount > 0) await batch.commit();
+        };
+
+        try {
+            const tasksSnap = await getDocs(collection(db, `focusGroups/${groupId}/tasks`));
+            await deleteDocsInBatches(tasksSnap.docs);
+
+            const liveQ = query(collection(db, "liveSessions"), where("groupId", "==", groupId));
+            const liveSnap = await getDocs(liveQ);
+            await deleteDocsInBatches(liveSnap.docs);
+
+            await deleteDoc(doc(db, "focusGroups", groupId));
+            toast.success("Group deleted.");
+            router.push("/groups");
+        } catch (error) {
+            console.error("Failed to delete group:", error);
+            toast.error("Failed to delete group.");
+        }
+    };
+
     if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" /></div>;
     if (!enrichedGroup || !user) return <div className="min-h-screen flex flex-col items-center justify-center text-white gap-4"><p>Group not found</p><Link href="/groups" className="text-sm text-zinc-500 hover:text-white">Back to Groups</Link></div>;
 
@@ -441,6 +479,18 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                                 <LogOut className="w-3.5 h-3.5" />
                                                 Leave group
                                             </button>
+                                            {userRole === "host" && (
+                                                <button
+                                                    onClick={() => {
+                                                        setIsHeaderMenuOpen(false);
+                                                        setShowDeleteConfirm(true);
+                                                    }}
+                                                    className="w-full px-3 py-2 rounded-lg text-left text-[11px] font-bold text-red-400 hover:bg-red-500/10 inline-flex items-center gap-2"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                    Delete group
+                                                </button>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -690,6 +740,46 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                         group={enrichedGroup} user={user} friends={[]} // Friends should be fetched here if needed
                         onClose={() => setShowInviteModal(false)}
                     />
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {showDeleteConfirm && enrichedGroup && (
+                    <motion.div 
+                        initial={{ opacity: 0 }} 
+                        animate={{ opacity: 1 }} 
+                        exit={{ opacity: 0 }} 
+                        className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-zinc-950/90 backdrop-blur-sm"
+                    >
+                        <motion.div 
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                            className="bg-zinc-900 border border-white/10 rounded-[10px] p-8 max-w-sm w-full shadow-2xl space-y-6"
+                        >
+                            <div className="space-y-2 text-center">
+                                <div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <Trash2 className="w-6 h-6 text-red-500" />
+                                </div>
+                                <h3 className="text-lg font-black text-white">Delete Group?</h3>
+                                <p className="text-zinc-500 text-xs">This action is permanent and will remove all tasks and member data for <span className="text-white font-bold">{enrichedGroup.name}</span>.</p>
+                            </div>
+                            <div className="flex flex-col gap-2">
+                                <button 
+                                    onClick={handleDeleteGroup}
+                                    className="w-full py-3 bg-red-500 hover:bg-red-600 text-white font-black rounded-[10px] text-xs uppercase tracking-widest transition-colors cursor-pointer"
+                                >
+                                    Delete Forever
+                                </button>
+                                <button 
+                                    onClick={() => setShowDeleteConfirm(false)}
+                                    className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-black rounded-[10px] text-xs uppercase tracking-widest transition-colors cursor-pointer"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
                 )}
             </AnimatePresence>
         </div>

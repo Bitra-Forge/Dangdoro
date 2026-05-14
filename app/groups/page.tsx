@@ -347,33 +347,37 @@ export default function GroupsPage() {
                     <div className="w-full max-w-4xl space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <motion.button
-                                whileHover={{ scale: 1.01, y: -1 }}
+                                whileHover={{ y: -1 }}
                                 whileTap={{ scale: 0.985 }}
                                 onClick={() => setShowCreateGroup(!showCreateGroup)}
                                 className={cn(
-                                    "p-5 rounded-2xl border transition-colors duration-200 flex items-center gap-4 group",
-                                    showCreateGroup ? "bg-[white]/10 border-[white]/40" : "bg-zinc-900 border-white/10 hover:border-[white]/35"
+                                    "p-5 rounded-[10px] border transition-all duration-300 flex items-center gap-4 group relative overflow-hidden cursor-pointer",
+                                    showCreateGroup 
+                                        ? "bg-white/10 border-white/20 shadow-[inset_0_0_20px_rgba(255,255,255,0.05)]" 
+                                        : "bg-zinc-900 border-zinc-800/50 hover:border-zinc-700 hover:bg-white/[0.03] hover:shadow-[0_8px_30px_rgb(0,0,0,0.4)]"
                                 )}
                             >
-                                <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center transition-colors duration-200 shrink-0", showCreateGroup ? "bg-[white]/25" : "bg-[white]/10 group-hover:bg-[white]/20")}>
-                                    <Plus className={cn("w-7 h-7 transition-transform duration-200", showCreateGroup ? "text-[white] rotate-45" : "text-[white]")} />
+                                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-[radial-gradient(circle_at_var(--mouse-x,50%)_var(--mouse-y,50%),rgba(255,255,255,0.03),transparent_70%)] pointer-events-none" />
+                                <div className={cn("w-12 h-12 rounded-[10px] flex items-center justify-center transition-colors duration-200 shrink-0", showCreateGroup ? "bg-white/20" : "bg-white/5 group-hover:bg-white/10")}>
+                                    <Plus className={cn("w-7 h-7 transition-transform duration-200 text-white", showCreateGroup && "rotate-45")} />
                                 </div>
-                                <div className="text-left">
+                                <div className="text-left relative z-10">
                                     <h3 className="text-sm font-black text-white mb-0.5">Create Group</h3>
                                     <p className="text-[11px] text-zinc-500">Start a new focus group.</p>
                                 </div>
                             </motion.button>
 
                             <motion.button
-                                whileHover={{ scale: 1.01, y: -1 }}
+                                whileHover={{ y: -1 }}
                                 whileTap={{ scale: 0.985 }}
                                 onClick={() => setShowJoinCodeModal(true)}
-                                className="p-5 rounded-2xl border border-white/10 bg-zinc-900 transition-colors duration-200 flex items-center gap-4 group hover:border-zinc-300/30"
+                                className="p-5 rounded-[10px] border border-zinc-800/50 bg-zinc-900 transition-all duration-300 flex items-center gap-4 group relative overflow-hidden hover:border-zinc-700 hover:bg-white/[0.03] hover:shadow-[0_8px_30px_rgb(0,0,0,0.4)] cursor-pointer"
                             >
-                                <div className="w-12 h-12 rounded-xl bg-zinc-950/70 flex items-center justify-center group-hover:bg-zinc-300/10 transition-colors duration-200 border border-white/10 shrink-0">
+                                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-[radial-gradient(circle_at_var(--mouse-x,50%)_var(--mouse-y,50%),rgba(255,255,255,0.03),transparent_70%)] pointer-events-none" />
+                                <div className="w-12 h-12 rounded-[10px] bg-zinc-950/70 flex items-center justify-center group-hover:bg-white/5 transition-colors duration-200 border border-white/5 shrink-0">
                                     <Key className="w-6 h-6 text-zinc-500 group-hover:text-zinc-300" />
                                 </div>
-                                <div className="text-left">
+                                <div className="text-left relative z-10">
                                     <h3 className="text-sm font-black text-white mb-0.5">Join with Code</h3>
                                     <p className="text-[11px] text-zinc-500">Enter a 6-character group code.</p>
                                 </div>
