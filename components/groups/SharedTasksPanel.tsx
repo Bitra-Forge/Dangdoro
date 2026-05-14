@@ -113,9 +113,24 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
     return (
         <div className="space-y-6">
             {isAdmin && !openAdd && (
-                <button onClick={() => setOpenAdd(true)} className="w-full p-5 flex items-center gap-3 bg-[white]/5 border border-[white]/10 rounded-2xl group hover:bg-[white]/10 transition-all">
-                    <div className="w-8 h-8 rounded-lg bg-[white]/20 flex items-center justify-center text-[white] group-hover:scale-110 transition-all"><Plus className="w-5 h-5" /></div>
-                    <span className="text-sm font-bold text-[white]/80">Create New Objective...</span>
+                <button 
+                    onClick={() => setOpenAdd(true)} 
+                    className="w-full p-5 flex items-center gap-4 bg-zinc-900 border-none rounded-[10px] group/mgt transition-all duration-300 relative overflow-hidden cursor-pointer"
+                >
+                    {/* Sharp Glass Edge Lights */}
+                    <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/30 pointer-events-none z-10" />
+                    <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
+                    
+                    {/* Minimal Spread / Depth Glow */}
+                    <div className="absolute top-0 inset-x-0 h-[4px] bg-gradient-to-b from-white/10 to-transparent z-10" />
+                    
+                    <div className="w-10 h-10 rounded-lg bg-zinc-950/50 border border-white/5 flex items-center justify-center text-zinc-500 group-hover/mgt:text-white group-hover/mgt:bg-white/5 group-hover/mgt:border-white/10 transition-all duration-300 relative z-10">
+                        <Plus className="w-5 h-5" />
+                    </div>
+                    <div className="text-left relative z-10">
+                        <h3 className="text-sm font-black text-zinc-400 group-hover/mgt:text-white transition-colors">Create New Objective</h3>
+                        <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest mt-0.5">Define a mission for the unit</p>
+                    </div>
                 </button>
             )}
 
@@ -134,7 +149,25 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                             <p className="text-[10px] font-black text-zinc-600 uppercase mb-2">Priority</p>
                             <div className="flex gap-2">
                                 {["low", "medium", "high"].map(p => (
-                                    <button key={p} onClick={() => setPrio(p)} className={cn("flex-1 py-1.5 rounded-lg border text-[10px] font-black uppercase transition-all", prio === p ? "bg-white/10 text-white" : "text-zinc-600 border-white/5")}>{p}</button>
+                                    <button 
+                                        key={p} 
+                                        onClick={() => setPrio(p)} 
+                                        className={cn(
+                                            "flex-1 py-1.5 rounded-[10px] text-[10px] font-black uppercase transition-all relative overflow-hidden cursor-pointer", 
+                                            prio === p 
+                                                ? "bg-white/10 text-white" 
+                                                : "text-zinc-600 bg-zinc-950 border border-white/5 hover:text-zinc-400"
+                                        )}
+                                    >
+                                        {/* Premium Light Effect - Sharp Edge Lights Only */}
+                                        {prio === p && (
+                                            <>
+                                                <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/30 pointer-events-none z-10" />
+                                                <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
+                                            </>
+                                        )}
+                                        <span className="relative z-10">{p}</span>
+                                    </button>
                                 ))}
                             </div>
                         </div>
@@ -147,8 +180,26 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                         </div>
                     </div>
                     <div className="flex gap-3">
-                        <button onClick={handleAdd} className="flex-1 py-3 bg-[white] text-black font-black rounded-xl text-xs">Create Objective</button>
-                        <button onClick={() => setOpenAdd(false)} className="px-6 py-3 bg-zinc-800 text-white font-bold rounded-xl text-xs">Cancel</button>
+                        <button 
+                            onClick={handleAdd} 
+                            className="flex-1 py-3 bg-white text-black font-black rounded-[10px] text-xs relative overflow-hidden hover:bg-zinc-100 transition-all cursor-pointer"
+                        >
+                            {/* Curved Light Effect for solid button */}
+                            <div className="absolute inset-x-0 top-0 h-[1px] bg-white/60 z-10" />
+                            <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/40 pointer-events-none z-10" />
+                            <div className="absolute inset-x-0 bottom-0 h-[2.5px] bg-black/[0.04] z-10" />
+                            <span className="relative z-10">Create Objective</span>
+                        </button>
+                        <button 
+                            onClick={() => setOpenAdd(false)} 
+                            className="px-8 py-3 bg-white/5 text-zinc-400 font-black rounded-[10px] text-xs relative overflow-hidden hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                        >
+                            {/* Curved Glass Edge Lights */}
+                            <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none z-10" />
+                            <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
+                            <div className="absolute top-0 inset-x-0 h-[4px] bg-gradient-to-b from-white/5 to-transparent z-10" />
+                            <span className="relative z-10">Cancel</span>
+                        </button>
                     </div>
                 </motion.div>
             )}

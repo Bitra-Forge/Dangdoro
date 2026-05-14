@@ -410,14 +410,15 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                             disabled={!!sessionActionPending}
                                             onClick={() => handleSessionAction("start")}
                                             className={cn(
-                                                "px-6 py-2.5 rounded-xl font-black text-xs transition-all duration-200 ease-out flex items-center gap-2",
+                                                "px-7 py-2.5 rounded-[10px] font-black text-xs transition-all duration-300 ease-out flex items-center gap-2 relative overflow-hidden group/btn",
                                                 sessionActionPending
-                                                    ? "bg-[white]/60 text-black cursor-not-allowed"
-                                                    : "bg-[white] text-black hover:shadow-[0_0_12px_rgba(255,255,255,0.35)]"
+                                                    ? "bg-white/60 text-black/50 cursor-not-allowed"
+                                                    : "bg-white text-black hover:shadow-[0_8px_30px_rgba(255,255,255,0.4)] cursor-pointer"
                                             )}
                                         >
-                                            <Play className="w-4 h-4" />
-                                            {sessionActionPending === "start" ? "Starting..." : "Start Focus"}
+                                            <div className="absolute inset-0 bg-gradient-to-tr from-black/5 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                                            <Play className="w-4 h-4 relative z-10 fill-current" />
+                                            <span className="relative z-10">{sessionActionPending === "start" ? "Starting..." : "Start Focus"}</span>
                                         </button>
                                     ) : (
                                         <>
@@ -425,23 +426,44 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                                 disabled={!!sessionActionPending}
                                                 onClick={() => handleSessionAction("pause")}
                                                 className={cn(
-                                                    "px-5 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-2 border",
-                                                    sessionActionPending ? "bg-indigo-500/40 text-white border-indigo-500/20 cursor-not-allowed" : "bg-indigo-500 text-white border-indigo-400/40 hover:bg-indigo-400"
+                                                    "px-6 py-2.5 rounded-[10px] font-black text-xs transition-all duration-300 flex items-center gap-2 group/btn relative overflow-hidden",
+                                                    sessionActionPending 
+                                                        ? "bg-indigo-500/40 text-white/50 cursor-not-allowed" 
+                                                        : "bg-indigo-600 text-white hover:bg-indigo-500 hover:shadow-[0_8px_25px_rgba(79,70,229,0.3)] cursor-pointer"
                                                 )}
                                             >
-                                                <Pause className="w-4 h-4" />
-                                                {sessionActionPending === "pause" ? "Pausing..." : "Pause"}
+                                                {/* Curved Glass Edge Lights (Inner Stroke) */}
+                                                <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/40 pointer-events-none z-10" />
+                                                <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/20 pointer-events-none z-10" />
+                                                
+                                                {/* Internal Depth Glow */}
+                                                <div className="absolute top-0 inset-x-0 h-[8px] bg-gradient-to-b from-white/10 to-transparent z-10" />
+                                                <div className="absolute bottom-0 inset-x-0 h-[8px] bg-gradient-to-t from-white/5 to-transparent z-10" />
+                                                
+                                                <div className="absolute inset-0 bg-gradient-to-tr from-white/15 via-transparent to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                                                <Pause className="w-4 h-4 relative z-10" />
+                                                <span className="relative z-10">{sessionActionPending === "pause" ? "Pausing..." : "Pause"}</span>
                                             </button>
                                             <button
                                                 disabled={!!sessionActionPending}
                                                 onClick={() => handleSessionAction("stop")}
                                                 className={cn(
-                                                    "px-5 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-2 border",
-                                                    sessionActionPending ? "bg-red-500/30 text-red-100 border-red-500/20 cursor-not-allowed" : "bg-red-500/10 text-red-300 border-red-500/40 hover:bg-red-500/20"
+                                                    "px-6 py-2.5 rounded-[10px] font-black text-xs transition-all duration-300 flex items-center gap-2 group/btn relative overflow-hidden border-none",
+                                                    sessionActionPending 
+                                                        ? "bg-red-500/20 text-red-200/50 cursor-not-allowed" 
+                                                        : "bg-red-500/5 text-red-400 hover:bg-red-500/10 hover:text-red-300 hover:shadow-[0_8px_25px_rgba(239,68,68,0.15)] cursor-pointer"
                                                 )}
                                             >
-                                                <StopCircle className="w-4 h-4" />
-                                                {sessionActionPending === "stop" ? "Stopping..." : "Stop"}
+                                                {/* Curved Glass Edge Lights for Stop */}
+                                                <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-red-500/30 pointer-events-none z-10" />
+                                                <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-red-500/10 pointer-events-none z-10" />
+                                                
+                                                {/* Internal Soft Red Glow */}
+                                                <div className="absolute top-0 inset-x-0 h-[8px] bg-gradient-to-b from-red-500/10 to-transparent z-10" />
+                                                
+                                                <div className="absolute inset-0 bg-gradient-to-tr from-red-500/5 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                                                <StopCircle className="w-4 h-4 relative z-10" />
+                                                <span className="relative z-10">{sessionActionPending === "stop" ? "Stopping..." : "Stop"}</span>
                                             </button>
                                         </>
                                     )}
@@ -620,6 +642,40 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                 </div>
 
                                 <div className="space-y-4">
+                                    {isAdmin && (
+                                        <div className="p-4 bg-zinc-900 border border-white/10 rounded-[10px] space-y-4">
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-[10px] font-black uppercase text-zinc-500 tracking-[0.18em]">Management</p>
+                                                <Crown className="w-3.5 h-3.5 text-amber-500/70" />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <button 
+                                                    onClick={() => setIsManagingRoles(true)}
+                                                    className="px-3 py-2.5 rounded-[10px] border-none bg-white/5 text-[9px] font-black uppercase tracking-widest hover:bg-white/10 transition-all text-white flex items-center justify-center gap-2 cursor-pointer relative overflow-hidden group/mgt"
+                                                >
+                                                    {/* Curved Glass Edge Lights */}
+                                                    <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none z-10" />
+                                                    <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
+                                                    
+                                                    {/* Internal Depth Glow */}
+                                                    <div className="absolute top-0 inset-x-0 h-[4px] bg-gradient-to-b from-white/5 to-transparent z-10" />
+                                                    
+                                                    <span className="relative z-10 text-zinc-400 group-hover/mgt:text-white transition-colors">Settings</span>
+                                                </button>
+                                                <button 
+                                                    onClick={() => setShowInviteModal(true)}
+                                                    className="px-3 py-2.5 rounded-[10px] border-none bg-white text-[9px] font-black uppercase tracking-widest hover:bg-zinc-100 transition-all text-black flex items-center justify-center gap-2 cursor-pointer relative overflow-hidden group/mgt"
+                                                >
+                                                    {/* Curved Light Effect for solid button */}
+                                                    <div className="absolute inset-x-0 top-0 h-[1px] bg-white/60 z-10" />
+                                                    <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/40 pointer-events-none z-10" />
+                                                    <div className="absolute inset-x-0 bottom-0 h-[2.5px] bg-black/[0.04] z-10" />
+                                                    <span className="relative z-10">Invite</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="p-4 bg-zinc-900/40 border border-white/10 rounded-xl space-y-3">
                                         <div className="flex items-center justify-between">
                                             <p className="text-[10px] font-black uppercase text-zinc-500 tracking-[0.18em]">Weekly Goal</p>

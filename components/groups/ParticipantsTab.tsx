@@ -43,18 +43,6 @@ export const ParticipantsTab = memo(function ParticipantsTab({ group, sortedMemb
                             </div>
                         </div>
                     )}
-                    <div className="flex items-center gap-2">
-                        {isAdmin && (
-                            <button onClick={onManageRoles} className="px-5 py-2.5 rounded-xl border border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all text-white">
-                                Settings
-                            </button>
-                        )}
-                        {isAdmin && (group.privacy === "private-invite" || group.privacy === "public") && (
-                            <button onClick={onInvite} className="px-5 py-2.5 rounded-xl border border-transparent bg-white text-[10px] font-black uppercase tracking-widest hover:bg-zinc-200 transition-all text-black shadow-[0_0_20px_rgba(255,255,255,0.15)]">
-                                <Mail className="w-3.5 h-3.5" />
-                            </button>
-                        )}
-                    </div>
                 </div>
             </div>
 
