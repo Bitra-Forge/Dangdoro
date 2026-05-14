@@ -81,14 +81,16 @@ export default function GroupsPage() {
                 const stats = group.memberStats?.[memberId] || { role: "member", totalMinutes: 0 };
                 const hydration = hydratedProfiles[memberId];
                 const memberLiveSession = groupLiveSessions.find(ls => ls.userId === memberId);
+                const liveDisplayName = memberLiveSession?.userName;
+                const livePhotoURL = memberLiveSession?.userPhoto;
                 const isFocusing = !!memberLiveSession;
                 const role = stats.role || (group.hostId === memberId ? "host" : "member");
 
                 if (memberId === user?.uid) {
                     memberDetails.push({
                         uid: user.uid,
-                        displayName: hydration?.displayName || user.displayName,
-                        photoURL: hydration?.photoURL || user.photoURL,
+                        displayName: hydration?.displayName || user.displayName || liveDisplayName || "You",
+                        photoURL: hydration?.photoURL || user.photoURL || livePhotoURL || null,
                         ...stats,
                         isFocusing,
                         liveSessionStartedAt: memberLiveSession?.startedAt || null,
@@ -98,6 +100,8 @@ export default function GroupsPage() {
                 } else if (friend?.userData) {
                     memberDetails.push({
                         ...friend.userData,
+                        displayName: friend.userData.displayName || liveDisplayName || "Member",
+                        photoURL: friend.userData.photoURL || livePhotoURL || null,
                         ...stats,
                         isFocusing,
                         liveSessionStartedAt: memberLiveSession?.startedAt || null,
@@ -107,6 +111,8 @@ export default function GroupsPage() {
                 } else if (hydration) {
                     memberDetails.push({
                         ...hydration,
+                        displayName: hydration.displayName || liveDisplayName || "Member",
+                        photoURL: hydration.photoURL || livePhotoURL || null,
                         ...stats,
                         isFocusing,
                         liveSessionStartedAt: memberLiveSession?.startedAt || null,
@@ -116,7 +122,8 @@ export default function GroupsPage() {
                 } else {
                     memberDetails.push({
                         uid: memberId,
-                        displayName: "Member",
+                        displayName: liveDisplayName || "Member",
+                        photoURL: livePhotoURL || null,
                         ...stats,
                         isFocusing,
                         liveSessionStartedAt: memberLiveSession?.startedAt || null,
@@ -453,19 +460,19 @@ function CreateGroupForm({ user, onClose, privacy, setPrivacy }: any) {
     };
 
     return (
-        <div className="p-6 bg-zinc-900 border border-white/10 rounded-3xl space-y-4">
+        <div className="p-6 bg-zinc-900 border border-white/10 rounded-[10px] space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input value={name} onChange={e => setName(e.target.value)} placeholder="Unit Name" className="bg-zinc-950 border border-white/5 rounded-xl px-4 py-3 text-white outline-none" />
+                <input value={name} onChange={e => setName(e.target.value)} placeholder="Unit Name" className="bg-zinc-950 border border-white/5 rounded-[10px] px-4 py-3 text-white outline-none" />
                 <div className="flex gap-2">
                     {["public", "private-code"].map(p => (
-                        <button key={p} onClick={() => setPrivacy(p as any)} className={cn("flex-1 py-3 rounded-xl border text-[10px] font-black uppercase", privacy === p ? "bg-white/10 text-white" : "text-zinc-600 border-white/5")}>{p}</button>
+                        <button key={p} onClick={() => setPrivacy(p as any)} className={cn("flex-1 py-3 rounded-[10px] border text-[10px] font-black uppercase", privacy === p ? "bg-white/10 text-white" : "text-zinc-600 border-white/5")}>{p}</button>
                     ))}
                 </div>
             </div>
-            <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Description" rows={2} className="w-full bg-zinc-950 border border-white/5 rounded-xl px-4 py-3 text-white outline-none" />
+            <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Description" rows={2} className="w-full bg-zinc-950 border border-white/5 rounded-[10px] px-4 py-3 text-white outline-none" />
             <div className="flex gap-3">
-                <button onClick={handleCreate} className="flex-1 py-3 bg-white text-black font-black rounded-xl">Initialize Unit</button>
-                <button onClick={onClose} className="px-6 py-3 bg-zinc-800 text-white font-bold rounded-xl">Cancel</button>
+                <button onClick={handleCreate} className="flex-1 py-3 bg-white text-black font-black rounded-[10px] cursor-pointer">Create Group</button>
+                <button onClick={onClose} className="px-6 py-3 bg-zinc-800 text-white font-bold rounded-[10px] cursor-pointer">Cancel</button>
             </div>
         </div>
     );

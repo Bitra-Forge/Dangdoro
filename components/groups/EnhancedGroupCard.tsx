@@ -2,55 +2,61 @@
 
 import { memo, useMemo } from "react";
 import { motion } from "framer-motion";
-import { 
-    Users, Briefcase, Flame, Crown, 
-    Shield, User, ChevronRight 
+import {
+    Users, Briefcase, Flame,
+    Shield, User, ChevronRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTimerStore } from "@/lib/store";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { 
-    FocusGroup, PRIVACY_META, GroupPrivacy, 
-    fmtMinutes, getEarliestActiveStart 
-} from "@/lib/groups";
+import { FocusGroup, PRIVACY_META, GroupPrivacy } from "@/lib/groups";
 import Link from "next/link";
+
+type MemberDetail = {
+    role?: "host" | "admin" | "member";
+    totalMinutes?: number;
+    isFocusing?: boolean;
+};
 
 export const EnhancedGroupCard = memo(function EnhancedGroupCard({ group, isMember }: { group: FocusGroup, isMember: boolean }) {
     const isOrg = group.type === "organization";
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
     const privacyMeta = PRIVACY_META[group.privacy as GroupPrivacy] ?? PRIVACY_META["public"];
     const PrivacyIcon = privacyMeta.icon;
-    const totalMinutes: number = group.totalMinutes || group.memberDetails?.reduce((acc: number, m: any) => acc + (m.totalMinutes || 0), 0) || 0;
+    const memberDetails = group.memberDetails as MemberDetail[] | undefined;
+    const totalMinutes: number = group.totalMinutes || memberDetails?.reduce((acc, m) => acc + (m.totalMinutes || 0), 0) || 0;
     const memberCount: number = group.members?.length || 0;
 
     const roles = useMemo(() => {
-        if (!isOrg || !group.memberDetails) return null;
-        const hosts = group.memberDetails.filter((m: any) => m.role === "host").length;
-        const admins = group.memberDetails.filter((m: any) => m.role === "admin").length;
-        const members = group.memberDetails.filter((m: any) => m.role === "member").length;
+        if (!isOrg || !memberDetails) return null;
+        const hosts = memberDetails.filter(m => m.role === "host").length;
+        const admins = memberDetails.filter(m => m.role === "admin").length;
+        const members = memberDetails.filter(m => m.role === "member").length;
         return { hosts, admins, members };
-    }, [group.memberDetails, isOrg]);
+    }, [memberDetails, isOrg]);
 
-    const activeFocuserCount = (group.memberDetails?.filter((m: any) => m.isFocusing).length || 0);
+    const activeFocuserCount = (memberDetails?.filter(m => m.isFocusing).length || 0);
     const isActive = activeFocuserCount > 0;
 
     return (
         <Link href={`/groups/${group.id}`}>
             <motion.div
                 initial={false}
-                whileHover={{ scale: 1.015, y: -2 }}
-                whileTap={{ scale: 0.985 }}
+                whileHover={{ y: -1 }}
+                whileTap={{ scale: 0.99 }}
                 transition={{ type: "spring", stiffness: 500, damping: 30 }}
                 className={cn(
-                    "relative group cursor-pointer overflow-hidden rounded-2xl border transition-colors duration-200 h-full",
+                    "relative group cursor-pointer overflow-hidden rounded-[10px] border-[0.5px] transition-all duration-300 h-full",
                     settingsGlassmorphism ? "bg-zinc-900/55" : "bg-zinc-900",
+                    "hover:shadow-[inset_0_0_12px_rgba(34,197,94,0.05)]",
                     isActive
-                        ? "border-[white]/40"
+                        ? "border-white/10"
                         : isMember
-                        ? "border-white/10 hover:border-[white]/25"
-                        : "border-white/10 hover:border-white/20"
+                        ? "border-white/5 hover:border-white/10"
+                        : "border-white/5 hover:border-white/10"
                 )}
             >
+                {/* Thin Hover Glow Effect */}
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-[radial-gradient(circle_at_var(--mouse-x,50%)_var(--mouse-y,50%),rgba(255,255,255,0.03),transparent_70%)] pointer-events-none" />
                 {isOrg && (
                     <div className="absolute top-0 left-0 right-0 h-[1px] bg-[white]/40" />
                 )}
@@ -91,9 +97,6 @@ export const EnhancedGroupCard = memo(function EnhancedGroupCard({ group, isMemb
                         {group.description && (
                             <p className="text-[11px] text-zinc-500 mt-0.5 line-clamp-2">{group.description}</p>
                         )}
-                        <p className="text-[9px] text-zinc-600 font-black uppercase tracking-[0.18em] mt-1.5 flex items-center gap-1.5">
-                            <Crown className="w-2.5 h-2.5" /> {group.hostName}
-                        </p>
                     </div>
 
                     {isOrg && roles && (roles.admins > 0 || roles.members > 0) && (
@@ -114,7 +117,7 @@ export const EnhancedGroupCard = memo(function EnhancedGroupCard({ group, isMemb
                         <div className="space-y-1.5">
                             <div className="flex justify-between items-center text-[8px] font-black uppercase tracking-widest text-zinc-600">
                                 <span>Goal Progress</span>
-                                <span className="text-[white]">{Math.round((totalMinutes / 60) / group.settings.goalHours * 100)}% Complete</span>
+                                <span className="text-[white]">{Math.min(100, Math.round((totalMinutes / 60) / group.settings.goalHours * 100))}% Complete</span>
                             </div>
                             <div className="h-1 bg-zinc-950 rounded-full overflow-hidden border border-white/5">
                                 <motion.div 
@@ -128,25 +131,12 @@ export const EnhancedGroupCard = memo(function EnhancedGroupCard({ group, isMemb
 
                     <div className="flex items-center justify-between pt-3 mt-auto border-t border-white/10">
                         <div className="flex items-center gap-2.5">
-                            <div className="flex -space-x-1.5">
-                                {group.memberDetails?.filter((m: any) => m.isFocusing).slice(0, 5).map((m: any, i: number) => (
-                                    <div key={i} className="relative group/avatar z-10">
-                                        <Avatar className="w-7 h-7 rounded-full border-2 border-zinc-950 bg-zinc-900 transition-all duration-300 ring-1 ring-cyan-500 ring-offset-1 ring-offset-zinc-950 z-10 scale-105">
-                                            <AvatarImage src={m.photoURL} className="object-cover w-full h-full rounded-full" />
-                                            <AvatarFallback className="text-[8px] bg-zinc-800 text-white rounded-full flex items-center justify-center">{m.displayName?.[0]}</AvatarFallback>
-                                        </Avatar>
-                                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-cyan-500 border border-zinc-950 shadow-[0_0_6px_rgba(6,182,212,0.6)] z-20" />
-                                    </div>
-                                ))}
-                                {activeFocuserCount > 5 && (
-                                    <div className="w-7 h-7 rounded-full bg-zinc-800 border-2 border-zinc-950 flex items-center justify-center text-[8px] font-black text-zinc-400">
-                                        +{activeFocuserCount - 5}
-                                    </div>
-                                )}
-                            </div>
                             <span className="text-[10px] text-zinc-500 font-bold tracking-wide">
                                 {activeFocuserCount > 0 ? (
-                                    <span className="text-cyan-400/80">{activeFocuserCount} {activeFocuserCount === 1 ? "active" : "active"}</span>
+                                    <span className="text-cyan-400/80 flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />
+                                        {activeFocuserCount} {activeFocuserCount === 1 ? "active" : "active"}
+                                    </span>
                                 ) : (
                                     <span>{memberCount} {memberCount === 1 ? "member" : "members"}</span>
                                 )}
@@ -174,5 +164,5 @@ export const EnhancedGroupCard = memo(function EnhancedGroupCard({ group, isMemb
            prev.group.totalMinutes === next.group.totalMinutes &&
            prev.group.settings?.goalHours === next.group.settings?.goalHours &&
            prev.group.members?.length === next.group.members?.length &&
-           (prev.group.memberDetails?.filter((m: any) => m.isFocusing).length || 0) === (next.group.memberDetails?.filter((m: any) => m.isFocusing).length || 0);
+           (prev.group.memberDetails as MemberDetail[] | undefined)?.filter(m => m.isFocusing).length === (next.group.memberDetails as MemberDetail[] | undefined)?.filter(m => m.isFocusing).length;
 });

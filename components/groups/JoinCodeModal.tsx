@@ -36,19 +36,19 @@ export function JoinCodeModal({ onClose, onJoin }: { onClose: () => void, onJoin
                 exit={{ opacity: 0, scale: 0.95, y: 20 }} 
                 transition={{ type: "spring", stiffness: 400, damping: 32 }} 
                 className={cn(
-                    "relative w-full max-w-md border border-[white]/20 rounded-[2.5rem] p-10 overflow-hidden", 
+                    "relative w-full max-w-md border border-[white]/20 rounded-[10px] p-10 overflow-hidden", 
                     settingsGlassmorphism ? "bg-zinc-900/40 backdrop-blur-md" : "bg-zinc-900 shadow-[0_32px_100px_rgba(0,0,0,0.8)]"
                 )}
             >
                 {/* Decorative border elements */}
-                <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-[white]/30 rounded-tl-[2.5rem]" />
-                <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-[white]/30 rounded-tr-[2.5rem]" />
-                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-[white]/30 rounded-bl-[2.5rem]" />
-                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-[white]/30 rounded-br-[2.5rem]" />
+                <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-[white]/30 rounded-tl-[10px]" />
+                <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-[white]/30 rounded-tr-[10px]" />
+                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-[white]/30 rounded-bl-[10px]" />
+                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-[white]/30 rounded-br-[10px]" />
 
                 <div className="text-center mb-10">
                     <div className="relative inline-block">
-                        <div className="w-20 h-20 bg-[white]/10 rounded-[2rem] flex items-center justify-center mx-auto mb-6 border border-[white]/20 relative z-10 group">
+                        <div className="w-20 h-20 bg-[white]/10 rounded-[10px] flex items-center justify-center mx-auto mb-6 border border-[white]/20 relative z-10 group">
                             <Key className="w-10 h-10 text-[white] group-hover:scale-110 transition-transform duration-500" />
                         </div>
                         <motion.div 
@@ -69,19 +69,19 @@ export function JoinCodeModal({ onClose, onJoin }: { onClose: () => void, onJoin
                             value={code} 
                             onChange={(e) => setCode(e.target.value.toUpperCase())} 
                             placeholder="CODE" 
-                            className="w-full bg-zinc-950/80 border-2 border-white/5 rounded-2xl px-6 py-6 text-center text-4xl font-black tracking-[0.4em] text-white outline-none focus:border-[white]/50 transition-all placeholder:text-zinc-800 font-terminal shadow-inner" 
+                            className="w-full bg-zinc-950/80 border-2 border-white/5 rounded-[10px] px-6 py-6 text-center text-4xl font-black tracking-[0.4em] text-white outline-none focus:border-[white]/50 transition-all placeholder:text-zinc-800 font-terminal shadow-inner" 
                         />
-                        <div className="absolute inset-0 rounded-2xl border border-[white]/0 group-focus-within:border-[white]/20 pointer-events-none transition-all duration-500" />
+                        <div className="absolute inset-0 rounded-[10px] border border-[white]/0 group-focus-within:border-[white]/20 pointer-events-none transition-all duration-500" />
                     </div>
                     
                     <div className="space-y-4">
                         <button 
                             type="submit" 
                             disabled={loading || code.length < 6} 
-                            className="w-full h-16 bg-[white] text-black font-black uppercase tracking-widest text-sm rounded-2xl hover:scale-[1.02] active:scale-98 transition-all shadow-[0_12px_40px_rgba(232,130,26,0.3)] disabled:opacity-50 disabled:scale-100 disabled:shadow-none group relative overflow-hidden"
+                            className="w-full h-16 bg-[white] text-black font-black uppercase tracking-widest text-sm rounded-[10px] hover:scale-[1.02] active:scale-98 transition-all shadow-none disabled:opacity-50 disabled:scale-100 disabled:shadow-none group relative overflow-hidden"
                         >
                             <span className="relative z-10 flex items-center justify-center gap-2">
-                                {loading ? "Decrypting..." : "Initialize Uplink"}
+                                {loading ? "Joining..." : "Join Group"}
                                 {!loading && <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}
                             </span>
                             <motion.div 
@@ -96,7 +96,7 @@ export function JoinCodeModal({ onClose, onJoin }: { onClose: () => void, onJoin
                             onClick={onClose}
                             className="w-full py-4 text-zinc-600 hover:text-zinc-400 text-[10px] font-black uppercase tracking-[0.3em] transition-colors"
                         >
-                            Abort Mission
+                            Cancel
                         </button>
                     </div>
                 </form>
