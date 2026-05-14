@@ -473,9 +473,24 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                     <button
                                         onClick={() => setIsHeaderMenuOpen((prev) => !prev)}
                                         title="More actions"
-                                        className="h-10 w-10 rounded-xl bg-white/5 text-zinc-300 border border-white/10 hover:bg-white/10 transition-all inline-flex items-center justify-center"
+                                        className={cn(
+                                            "h-10 w-10 rounded-[10px] transition-all inline-flex items-center justify-center relative overflow-hidden group/opt cursor-pointer",
+                                            isHeaderMenuOpen 
+                                                ? "bg-white/20 text-white shadow-[inset_0_0_10px_rgba(255,255,255,0.1)]" 
+                                                : "bg-white/5 text-zinc-300 hover:bg-white/10"
+                                        )}
                                     >
-                                        <MoreVertical className="w-4 h-4" />
+                                        {/* Glass highlights */}
+                                        <div className={cn(
+                                            "absolute inset-0 rounded-[10px] border-t-[0.5px] pointer-events-none transition-colors duration-300",
+                                            isHeaderMenuOpen ? "border-white/40" : "border-white/20"
+                                        )} />
+                                        <div className="absolute inset-x-0 bottom-0 h-px border-b-[0.5px] border-white/5 pointer-events-none" />
+                                        
+                                        <MoreVertical className={cn(
+                                            "w-4 h-4 transition-colors duration-300",
+                                            isHeaderMenuOpen ? "text-white scale-110" : "group-hover/opt:text-white"
+                                        )} />
                                     </button>
                                     {isHeaderMenuOpen && (
                                         <div className="absolute right-0 top-full mt-2 min-w-[170px] rounded-xl border border-white/10 bg-zinc-900/95 backdrop-blur-xl shadow-2xl z-20 p-1.5 space-y-1">

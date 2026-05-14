@@ -358,8 +358,11 @@ export default function GroupsPage() {
                                 )}
                             >
                                 <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-[radial-gradient(circle_at_var(--mouse-x,50%)_var(--mouse-y,50%),rgba(255,255,255,0.03),transparent_70%)] pointer-events-none" />
-                                <div className={cn("w-12 h-12 rounded-[10px] flex items-center justify-center transition-colors duration-200 shrink-0", showCreateGroup ? "bg-white/20" : "bg-white/5 group-hover:bg-white/10")}>
-                                    <Plus className={cn("w-7 h-7 transition-transform duration-200 text-white", showCreateGroup && "rotate-45")} />
+                                <div className={cn("w-12 h-12 rounded-full flex items-center justify-center transition-colors duration-200 shrink-0 relative overflow-hidden", showCreateGroup ? "bg-white/20" : "bg-white/5 group-hover:bg-white/10")}>
+                                    <Plus className={cn("w-7 h-7 transition-transform duration-200 text-white relative z-10", showCreateGroup && "rotate-45")} />
+                                    {/* Glass highlights for icon container */}
+                                    <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/30 pointer-events-none" />
+                                    <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/10 pointer-events-none" />
                                 </div>
                                 <div className="text-left relative z-10">
                                     <h3 className="text-sm font-black text-white mb-0.5">Create Group</h3>
@@ -374,8 +377,11 @@ export default function GroupsPage() {
                                 className="p-5 rounded-[10px] border border-zinc-800/50 bg-zinc-900 transition-all duration-300 flex items-center gap-4 group relative overflow-hidden hover:border-zinc-700 hover:bg-white/[0.03] hover:shadow-[0_8px_30px_rgb(0,0,0,0.4)] cursor-pointer"
                             >
                                 <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-[radial-gradient(circle_at_var(--mouse-x,50%)_var(--mouse-y,50%),rgba(255,255,255,0.03),transparent_70%)] pointer-events-none" />
-                                <div className="w-12 h-12 rounded-[10px] bg-zinc-950/70 flex items-center justify-center group-hover:bg-white/5 transition-colors duration-200 border border-white/5 shrink-0">
-                                    <Key className="w-6 h-6 text-zinc-500 group-hover:text-zinc-300" />
+                                <div className="w-12 h-12 rounded-full bg-zinc-950/70 flex items-center justify-center group-hover:bg-white/5 transition-colors duration-200 border border-white/5 shrink-0 relative overflow-hidden">
+                                    <Key className="w-6 h-6 text-zinc-500 group-hover:text-zinc-300 relative z-10" />
+                                    {/* Glass highlights for icon container */}
+                                    <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/30 pointer-events-none" />
+                                    <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/10 pointer-events-none" />
                                 </div>
                                 <div className="text-left relative z-10">
                                     <h3 className="text-sm font-black text-white mb-0.5">Join with Code</h3>
@@ -469,14 +475,46 @@ function CreateGroupForm({ user, onClose, privacy, setPrivacy }: any) {
                 <input value={name} onChange={e => setName(e.target.value)} placeholder="Unit Name" className="bg-zinc-950 border border-white/5 rounded-[10px] px-4 py-3 text-white outline-none" />
                 <div className="flex gap-2">
                     {["public", "private-code"].map(p => (
-                        <button key={p} onClick={() => setPrivacy(p as any)} className={cn("flex-1 py-3 rounded-[10px] border text-[10px] font-black uppercase", privacy === p ? "bg-white/10 text-white" : "text-zinc-600 border-white/5")}>{p}</button>
+                        <motion.button
+                            key={p}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => setPrivacy(p as any)}
+                            className={cn(
+                                "flex-1 py-3 rounded-[10px] text-[11px] font-black uppercase tracking-wider transition-all duration-200 relative overflow-hidden cursor-pointer",
+                                privacy === p
+                                    ? "bg-white/10 text-white"
+                                    : "text-zinc-600 hover:text-zinc-400"
+                            )}
+                        >
+                            {/* Glass highlights */}
+                            <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none" />
+                            <div className="absolute inset-x-0 bottom-0 h-px border-b-[0.5px] border-white/5 pointer-events-none" />
+                            
+                            {p}
+                        </motion.button>
                     ))}
                 </div>
             </div>
             <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Description" rows={2} className="w-full bg-zinc-950 border border-white/5 rounded-[10px] px-4 py-3 text-white outline-none" />
             <div className="flex gap-3">
-                <button onClick={handleCreate} className="flex-1 py-3 bg-white text-black font-black rounded-[10px] cursor-pointer">Create Group</button>
-                <button onClick={onClose} className="px-6 py-3 bg-zinc-800 text-white font-bold rounded-[10px] cursor-pointer">Cancel</button>
+                <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleCreate}
+                    className="flex-1 py-3 bg-white text-black font-black rounded-[10px] cursor-pointer relative overflow-hidden"
+                >
+                    Create Group
+                </motion.button>
+                <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={onClose}
+                    className="px-6 py-3 bg-zinc-800 text-white font-bold rounded-[10px] cursor-pointer relative overflow-hidden"
+                >
+                    {/* Glass highlights */}
+                    <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none" />
+                    <div className="absolute inset-x-0 bottom-0 h-px border-b-[0.5px] border-white/5 pointer-events-none" />
+                    
+                    Cancel
+                </motion.button>
             </div>
         </div>
     );

@@ -257,16 +257,22 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                         animate={{ opacity: 1, scale: 1, rotate: 0 }}
                                         exit={{ opacity: 0, scale: 0.5, rotate: 90 }}
                                         transition={{ type: "spring", stiffness: 500, damping: 25 }}
-                                        whileHover={{ scale: 1.1, backgroundColor: "rgba(255,255,255,0.1)" }}
-                                        whileTap={{ scale: 0.9 }}
+                                        whileHover={{ backgroundColor: "rgba(255,255,255,0.1)" }}
+                                        whileTap={{ scale: 0.95 }}
                                         onClick={() => setIsSearchOpen(true)}
                                         className={cn(
-                                            "p-2.5 rounded-xl border border-white/5 bg-white/5 text-zinc-500 hover:text-white transition-colors shadow-sm",
-                                            searchTerm && "text-white border-white/20 bg-white/10"
+                                            "p-2.5 rounded-[10px] border-none transition-all duration-300 shadow-sm relative overflow-hidden group/btn cursor-pointer",
+                                            searchTerm 
+                                                ? "bg-white/15 text-white" 
+                                                : "bg-white/5 text-zinc-500 hover:text-zinc-300"
                                         )}
                                         title="Search objectives"
                                     >
-                                        <Search className="w-4 h-4" />
+                                        {/* Curved Glass Edge Lights */}
+                                        <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none z-10" />
+                                        <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
+                                        
+                                        <Search className="w-4 h-4 relative z-10" />
                                     </motion.button>
                                 )}
                             </AnimatePresence>
@@ -274,19 +280,23 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                             <motion.button 
                                 onClick={() => setIsFiltersOpen(!isFiltersOpen)}
                                 className={cn(
-                                    "p-2.5 rounded-xl border shadow-sm flex items-center gap-2 relative overflow-hidden",
+                                    "p-2.5 rounded-[10px] border-none shadow-sm flex items-center gap-2 relative overflow-hidden transition-all duration-300 group/btn cursor-pointer",
                                     isFiltersOpen || statusFilter !== "all" || priorityFilter !== "all"
-                                        ? "bg-white/10 text-white border-white/20" 
-                                        : "bg-white/5 text-zinc-500 border-white/5 hover:text-white"
+                                        ? "bg-white/15 text-white" 
+                                        : "bg-white/5 text-zinc-500 hover:text-zinc-300"
                                 )}
-                                whileHover={{ scale: 1.1, backgroundColor: "rgba(255,255,255,0.1)" }}
-                                whileTap={{ scale: 0.9 }}
+                                whileTap={{ scale: 0.95 }}
                                 transition={{ type: "spring", stiffness: 400, damping: 17 }}
                                 title="Toggle status & priority filters"
                             >
+                                {/* Curved Glass Edge Lights */}
+                                <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none z-10" />
+                                <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
+
                                 <motion.div
                                     animate={{ rotate: isFiltersOpen ? 180 : 0 }}
                                     transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                                    className="relative z-10"
                                 >
                                     <Filter className="w-4 h-4" />
                                 </motion.div>
@@ -296,7 +306,7 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                             initial={{ scale: 0 }}
                                             animate={{ scale: 1 }}
                                             exit={{ scale: 0 }}
-                                            className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"
+                                            className="w-1.5 h-1.5 rounded-full bg-white animate-pulse relative z-10"
                                         />
                                     )}
                                 </AnimatePresence>

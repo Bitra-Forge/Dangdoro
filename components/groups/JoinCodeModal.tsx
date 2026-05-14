@@ -74,30 +74,30 @@ export function JoinCodeModal({ onClose, onJoin }: { onClose: () => void, onJoin
                         <div className="absolute inset-0 rounded-[10px] border border-[white]/0 group-focus-within:border-[white]/20 pointer-events-none transition-all duration-500" />
                     </div>
                     
-                    <div className="space-y-4">
-                        <button 
+                    <div className="space-y-4 pt-4">
+                        <motion.button 
+                            whileTap={{ scale: 0.98 }}
                             type="submit" 
                             disabled={loading || code.length < 6} 
-                            className="w-full h-16 bg-[white] text-black font-black uppercase tracking-widest text-sm rounded-[10px] hover:scale-[1.02] active:scale-98 transition-all shadow-none disabled:opacity-50 disabled:scale-100 disabled:shadow-none group relative overflow-hidden"
+                            className="w-full h-16 bg-[white] text-black font-black uppercase tracking-widest text-sm rounded-[10px] active:scale-98 transition-all shadow-none disabled:opacity-50 disabled:scale-100 disabled:shadow-none group relative overflow-hidden cursor-pointer"
                         >
                             <span className="relative z-10 flex items-center justify-center gap-2">
                                 {loading ? "Joining..." : "Join Group"}
                                 {!loading && <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}
                             </span>
-                            <motion.div 
-                                className="absolute inset-0 bg-white/20 translate-x-[-100%]"
-                                whileHover={{ translateX: "100%" }}
-                                transition={{ duration: 0.6 }}
-                            />
-                        </button>
+                        </motion.button>
                         
-                        <button 
+                        <motion.button 
+                            whileTap={{ scale: 0.98 }}
                             type="button"
                             onClick={onClose}
-                            className="w-full py-4 text-zinc-600 hover:text-zinc-400 text-[10px] font-black uppercase tracking-[0.3em] transition-colors"
+                            className="w-full h-14 bg-zinc-800/50 text-zinc-400 hover:text-zinc-200 text-[10px] font-black uppercase tracking-[0.3em] transition-all rounded-[10px] relative overflow-hidden cursor-pointer"
                         >
+                            {/* Glass highlights */}
+                            <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none" />
+                            <div className="absolute inset-x-0 bottom-0 h-px border-b-[0.5px] border-white/5 pointer-events-none" />
                             Cancel
-                        </button>
+                        </motion.button>
                     </div>
                 </form>
             </motion.div>
