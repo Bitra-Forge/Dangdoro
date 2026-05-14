@@ -218,15 +218,22 @@ export function NotificationsMenu() {
             <button 
                 onClick={() => setIsOpen(!isOpen)}
                 className={cn(
-                    "p-2.5 rounded-2xl border backdrop-blur-sm transition-all duration-300 cursor-pointer",
+                    "p-2.5 rounded-full backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-hidden",
                     isOpen
-                        ? "bg-white/15 border-white/25 text-white"
-                        : "bg-zinc-900/80 border-white/10 text-zinc-400 hover:text-white hover:border-white/20"
+                        ? "bg-white/15 text-white shadow-[inset_0_0_10px_rgba(255,255,255,0.1)]"
+                        : "bg-zinc-900/80 text-zinc-400 hover:text-white"
                 )}
             >
-                <Bell className="w-4 h-4" />
+                {/* Glass highlights */}
+                <div className={cn(
+                    "absolute inset-0 rounded-full border-t-[0.5px] pointer-events-none transition-colors duration-300",
+                    isOpen ? "border-white/40" : "border-white/20"
+                )} />
+                <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/10 pointer-events-none" />
+
+                <Bell className={cn("w-4 h-4 transition-transform", isOpen && "scale-110")} />
                 {hasUnread && (
-                    <div className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-white text-black text-[10px] font-black rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(255,255,255,0.3)] border border-black/10">
+                    <div className="absolute top-0 right-0 min-w-[16px] h-[16px] px-1 bg-white text-black text-[9px] font-black rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(255,255,255,0.3)] border border-black/10 z-20">
                         {totalUnread}
                     </div>
                 )}

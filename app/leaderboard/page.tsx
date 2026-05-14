@@ -153,14 +153,30 @@ function LeaderboardContent() {
                     {/* Tab Toggle */}
                     {!selectedGroup && (
                         <div className="flex flex-col items-center gap-6 mb-12 w-full max-w-2xl">
-                            <div className="flex items-center gap-2 p-1.5 bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-2xl w-full">
+                            <div className="flex items-center gap-2 p-1.5 bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-full w-full">
                                 {[
                                     { id: "global", icon: Trophy, label: "Global" },
                                     { id: "friends", icon: Users, label: "Friends" },
                                     { id: "groups", icon: Briefcase, label: "Groups" }
                                 ].map(tab => (
-                                    <button key={tab.id} onClick={() => setActiveTab(tab.id as LeaderboardTab)} className={cn("flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300", activeTab === tab.id ? "bg-white/10 text-white shadow-lg border border-white/5" : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5")}>
-                                        <tab.icon className="w-4 h-4" />
+                                    <button 
+                                        key={tab.id} 
+                                        onClick={() => setActiveTab(tab.id as LeaderboardTab)} 
+                                        className={cn(
+                                            "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full transition-all duration-300 relative overflow-hidden cursor-pointer", 
+                                            activeTab === tab.id 
+                                                ? "bg-white/10 text-white" 
+                                                : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
+                                        )}
+                                    >
+                                        {/* Glass highlights */}
+                                        <div className={cn(
+                                            "absolute inset-0 rounded-full border-t-[0.5px] pointer-events-none transition-colors duration-300",
+                                            activeTab === tab.id ? "border-white/30" : "border-white/10"
+                                        )} />
+                                        <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/5 pointer-events-none" />
+                                        
+                                        <tab.icon className={cn("w-4 h-4 transition-transform duration-300", activeTab === tab.id && "scale-110")} />
                                         <span className="text-xs font-bold">{tab.label}</span>
                                     </button>
                                 ))}
@@ -168,12 +184,25 @@ function LeaderboardContent() {
 
                             {activeTab === "groups" && (
                                 <div className="flex items-center justify-between w-full px-2">
-                                    <div className="flex gap-1 p-1 bg-zinc-950/40 rounded-xl border border-white/5">
+                                    <div className="flex gap-1 p-1 bg-zinc-950/40 rounded-full border border-white/5">
                                         {[
                                             { id: "joined", label: "My Units" },
                                             { id: "discover", label: "Discover" }
                                         ].map(t => (
-                                            <button key={t.id} onClick={() => setActiveSubTab(t.id as any)} className={cn("px-5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all", activeSubTab === t.id ? "bg-white/10 text-white shadow-md" : "text-zinc-600 hover:text-zinc-400")}>
+                                            <button 
+                                                key={t.id} 
+                                                onClick={() => setActiveSubTab(t.id as any)} 
+                                                className={cn(
+                                                    "px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all relative overflow-hidden cursor-pointer", 
+                                                    activeSubTab === t.id ? "bg-white/10 text-white" : "text-zinc-600 hover:text-zinc-400"
+                                                )}
+                                            >
+                                                {activeSubTab === t.id && (
+                                                    <>
+                                                        <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/30 pointer-events-none" />
+                                                        <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/5 pointer-events-none" />
+                                                    </>
+                                                )}
                                                 {t.label}
                                             </button>
                                         ))}
@@ -181,9 +210,39 @@ function LeaderboardContent() {
 
                                     <div className="flex items-center gap-3">
                                         <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">Sort By</span>
-                                        <div className="flex p-1 bg-zinc-950/40 rounded-xl border border-white/5">
-                                            <button onClick={() => setSortBy("minutes")} className={cn("p-1.5 rounded-lg transition-all", sortBy === "minutes" ? "bg-[#C9B037]/20 text-[#C9B037]" : "text-zinc-600")} title="Focus Time"><Clock className="w-3.5 h-3.5" /></button>
-                                            <button onClick={() => setSortBy("members")} className={cn("p-1.5 rounded-lg transition-all", sortBy === "members" ? "bg-white/10 text-white" : "text-zinc-600")} title="Member Count"><Users className="w-3.5 h-3.5" /></button>
+                                        <div className="flex p-1 bg-zinc-950/40 rounded-full border border-white/5">
+                                            <button 
+                                                onClick={() => setSortBy("minutes")} 
+                                                className={cn(
+                                                    "p-1.5 rounded-full transition-all relative overflow-hidden cursor-pointer", 
+                                                    sortBy === "minutes" ? "bg-[#C9B037]/20 text-[#C9B037]" : "text-zinc-600 hover:text-zinc-400"
+                                                )}
+                                                title="Focus Time"
+                                            >
+                                                {sortBy === "minutes" && (
+                                                    <>
+                                                        <div className="absolute inset-0 rounded-full border-t-[0.5px] border-[#C9B037]/40 pointer-events-none" />
+                                                        <div className="absolute inset-0 rounded-full border-b-[0.5px] border-[#C9B037]/10 pointer-events-none" />
+                                                    </>
+                                                )}
+                                                <Clock className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button 
+                                                onClick={() => setSortBy("members")} 
+                                                className={cn(
+                                                    "p-1.5 rounded-full transition-all relative overflow-hidden cursor-pointer", 
+                                                    sortBy === "members" ? "bg-white/10 text-white" : "text-zinc-600 hover:text-zinc-400"
+                                                )}
+                                                title="Member Count"
+                                            >
+                                                {sortBy === "members" && (
+                                                    <>
+                                                        <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/30 pointer-events-none" />
+                                                        <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/5 pointer-events-none" />
+                                                    </>
+                                                )}
+                                                <Users className="w-3.5 h-3.5" />
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
