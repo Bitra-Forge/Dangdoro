@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
     ClipboardList, Plus, Trash2, CheckCircle2, Circle,
     ChevronDown, ChevronRight, Pencil, Check, X, GripVertical,
-    Play, Clock, Maximize2, Palette, Settings
+    Play, Clock, Maximize2, Palette, Settings, Sparkles
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import {
@@ -23,6 +23,7 @@ import { BG_PALETTES as BG_PALETTES_CONFIG, BG_CONFIG } from "@/lib/background-c
 import { AnimatedDotGrid as AnimatedDotGridComponent } from "@/components/animated-dot-grid";
 import { useBackgroundTheme } from "@/lib/use-background-theme";
 import { BackgroundTheme } from "@/components/background-theme";
+import { TaskAgent } from "@/components/task-agent";
 
 // ─── Priority config ──────────────────────────────────────────────────────────
 const PRIORITIES: { value: TaskPriority; label: string; border: string; dot: string; text: string }[] = [
@@ -556,6 +557,7 @@ export default function TasksPage() {
     const [loading, setLoading] = useState(true);
     const [isCreatingGroup, setIsCreatingGroup] = useState(false);
     const [newGroupName, setNewGroupName] = useState("");
+    const [showAgent, setShowAgent] = useState(false);
 
     const [generalPos, setGeneralPos] = useState(() => {
         if (typeof window !== 'undefined') {
@@ -694,6 +696,19 @@ export default function TasksPage() {
         }
     }, [draggingTask, overGroupId, deleteReady, clonePos, dragTaskColor]);
 
+    const handleApplyAgentGroups = async (agentGroups: { name: string; color: string; tasks: { title: string; priority: "urgent" | "high" | "normal" | "natural"; durationMinutes: number | null; notes: string }[] }[]) => {
+        if (!user) return;
+        for (const g of agentGroups) {
+            const offset = (groups.length + 1) * 28;
+            const gid = await addGroup(user.uid, g.name, 360 + offset, 120 + offset, 300, 400, g.color);
+            if (gid) {
+                for (const t of g.tasks) {
+                    await addTask(user.uid, t.title, gid, t.priority, 1, t.durationMinutes, t.notes);
+                }
+            }
+        }
+    };
+
     const handleCreateGroup = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newGroupName.trim() || !user) return;
@@ -766,11 +781,18 @@ export default function TasksPage() {
                         <button type="button" onClick={() => setIsCreatingGroup(false)} className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-400 hover:text-white transition-colors"><X className="w-4 h-4" /></button>
                     </form>
                 )}
+                <button onClick={() => setShowAgent(v => !v)}
+                    className="flex items-center gap-2 px-5 py-3 bg-violet-500/10 border border-violet-500/20 text-violet-400 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-violet-500/20 transition-all backdrop-blur-xl shadow-lg">
+                    <Sparkles className="w-4 h-4" /> AI Agent
+                </button>
                 <button onClick={() => setIsCreatingGroup(v => !v)}
                     className="flex items-center gap-2 px-5 py-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-emerald-500/20 transition-all backdrop-blur-xl shadow-lg">
                     <Plus className="w-4 h-4" /> New Group
                 </button>
             </div>
+
+            {/* AI Task Agent */}
+            {showAgent && <TaskAgent onApply={handleApplyAgentGroups} onClose={() => setShowAgent(false)} />}
 
             {/* Drag clone */}
             {draggingTask && (() => {
