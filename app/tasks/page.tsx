@@ -47,9 +47,7 @@ const GROUP_COLORS = [
 ];
 const getGroupColor = (v: string) => GROUP_COLORS.find(c => c.value === v) ?? GROUP_COLORS[0];
 
-const GENERAL_STORAGE_KEY = "dangdoro-general-pos";
-const GENERAL_DIM_KEY = "dangdoro-general-dim";
-const GENERAL_COLOR_KEY = "dangdoro-general-color";
+
 
 // Background palette options (kept for compatibility with GROUP_COLORS)
 // ─── Priority picker (inline) ─────────────────────────────────────────────────
@@ -256,16 +254,15 @@ function TaskRow({ task, onDragStart }: { task: any; onDragStart: (e: React.Poin
 }
 
 // ─── Group card ───────────────────────────────────────────────────────────────
-const GENERAL_ID = "__general__";
+
 
 function GroupCard({
-    group, tasks, userId, isGeneral, isDragOver, onTaskDragStart, cardRef, onColorChange,
+    group, tasks, userId, isDragOver, onTaskDragStart, cardRef,
 }: {
     group: { id: string; name: string; positionX: number; positionY: number; width?: number; height?: number; color?: string };
-    tasks: any[]; userId: string; isGeneral: boolean; isDragOver: boolean;
+    tasks: any[]; userId: string; isDragOver: boolean;
     onTaskDragStart: (e: React.PointerEvent, task: any) => void;
     cardRef: (el: HTMLDivElement | null) => void;
-    onColorChange?: (color: string) => void;
 }) {
     const [collapsed, setCollapsed] = useState(false);
     const [newTask, setNewTask] = useState("");
@@ -330,11 +327,7 @@ function GroupCard({
         setIsDraggingCard(false);
         if (saveTimer.current) clearTimeout(saveTimer.current);
         saveTimer.current = setTimeout(() => {
-            if (isGeneral) {
-                localStorage.setItem(GENERAL_STORAGE_KEY, JSON.stringify(posRef.current));
-            } else {
-                updateGroupPosition(group.id, posRef.current.x, posRef.current.y);
-            }
+            updateGroupPosition(group.id, posRef.current.x, posRef.current.y);
         }, 400);
     };
 
@@ -357,18 +350,14 @@ function GroupCard({
         setIsResizing(false);
         if (saveTimer.current) clearTimeout(saveTimer.current);
         saveTimer.current = setTimeout(() => {
-            if (isGeneral) {
-                localStorage.setItem(GENERAL_DIM_KEY, JSON.stringify(dimRef.current));
-            } else {
-                updateGroupDimensions(group.id, dimRef.current.w, dimRef.current.h);
-            }
+            updateGroupDimensions(group.id, dimRef.current.w, dimRef.current.h);
         }, 400);
     };
 
     const handleAddTask = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newTask.trim()) return;
-        const gid = isGeneral ? null : group.id;
+        const gid = group.id;
         const dur = newDuration ? parseInt(newDuration) : null;
         const ok = await addTask(userId, newTask.trim(), gid, "natural", 1, dur, newNotes.trim());
         if (ok) { setNewTask(""); setNewDuration(""); setNewNotes(""); setShowNotesForm(false); }
@@ -387,12 +376,7 @@ function GroupCard({
     };
 
     const handleColorChange = async (color: string) => {
-        if (isGeneral) {
-            localStorage.setItem(GENERAL_COLOR_KEY, color);
-            onColorChange?.(color);
-        } else {
-            await updateGroupColor(group.id, color);
-        }
+        await updateGroupColor(group.id, color);
         setShowColorPicker(false);
     };
 
@@ -428,7 +412,7 @@ function GroupCard({
                     {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                 </button>
 
-                {isRenaming && !isGeneral ? (
+                {isRenaming ? (
                     <input autoFocus value={renameVal}
                         onChange={e => setRenameVal(e.target.value)}
                         onKeyDown={e => { if (e.key === "Enter") handleRename(); if (e.key === "Escape") setIsRenaming(false); }}
@@ -474,16 +458,14 @@ function GroupCard({
                     )}
                 </div>
 
-                {!isGeneral && (
-                    <>
-                        <button onClick={() => { setIsRenaming(true); setRenameVal(group.name); }} className="text-zinc-700 hover:text-zinc-300 transition-colors">
-                            <Pencil className="w-3 h-3" />
-                        </button>
-                        <button onClick={handleDelete} className="text-zinc-700 hover:text-red-400 transition-colors">
-                            <Trash2 className="w-3 h-3" />
-                        </button>
-                    </>
-                )}
+                <>
+                    <button onClick={() => { setIsRenaming(true); setRenameVal(group.name); }} className="text-zinc-700 hover:text-zinc-300 transition-colors">
+                        <Pencil className="w-3 h-3" />
+                    </button>
+                    <button onClick={handleDelete} className="text-zinc-700 hover:text-red-400 transition-colors">
+                        <Trash2 className="w-3 h-3" />
+                    </button>
+                </>
             </div>
 
             {/* Scrollable Body */}
@@ -559,27 +541,7 @@ export default function TasksPage() {
     const [newGroupName, setNewGroupName] = useState("");
     const [showAgent, setShowAgent] = useState(false);
 
-    const [generalPos, setGeneralPos] = useState(() => {
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem(GENERAL_STORAGE_KEY);
-            if (saved) { try { return JSON.parse(saved); } catch { } }
-        }
-        return { x: 40, y: 88 };
-    });
-    const [generalDim, setGeneralDim] = useState(() => {
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem(GENERAL_DIM_KEY);
-            if (saved) { try { return JSON.parse(saved); } catch { } }
-        }
-        return { w: 300, h: 420 };
-    });
-    const [generalColor, setGeneralColor] = useState(() => {
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem(GENERAL_COLOR_KEY);
-            if (saved) { return saved; }
-        }
-        return "zinc";
-    });
+
     
     // Use the custom hook for background theme
     const { showDots, bgPalette } = useBackgroundTheme();
@@ -621,10 +583,9 @@ export default function TasksPage() {
 
     // Helper to get task's group color
     const getTaskGroupColor = useCallback((task: any) => {
-        if (!task.groupId) return generalColor;
         const group = groups.find(g => g.id === task.groupId);
         return group?.color ?? "zinc";
-    }, [groups, generalColor]);
+    }, [groups]);
 
     const onTaskDragStart = useCallback((e: React.PointerEvent, task: any) => {
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -690,9 +651,9 @@ export default function TasksPage() {
                 setDeletingTask(null);
                 toast.success("Task deleted.");
             }, 400);
-        } else if (wasOverGroupId && wasOverGroupId !== (task.groupId ?? GENERAL_ID)) {
+        } else if (wasOverGroupId && wasOverGroupId !== task.groupId) {
             // Move task to new group (fire and forget for instant feedback)
-            moveTaskToGroup(task.id, wasOverGroupId === GENERAL_ID ? null : wasOverGroupId);
+            moveTaskToGroup(task.id, wasOverGroupId);
         }
     }, [draggingTask, overGroupId, deleteReady, clonePos, dragTaskColor]);
 
@@ -737,17 +698,7 @@ export default function TasksPage() {
         );
     }
 
-    const generalGroup = {
-        id: GENERAL_ID,
-        name: "General",
-        positionX: generalPos.x,
-        positionY: generalPos.y,
-        width: generalDim.w,
-        height: generalDim.h,
-        color: generalColor
-    };
-    const tasksByGroup = (gid: string) =>
-        gid === GENERAL_ID ? tasks.filter(t => !t.groupId) : tasks.filter(t => t.groupId === gid);
+    const tasksByGroup = (gid: string) => tasks.filter(t => t.groupId === gid);
 
     return (
         <BackgroundTheme>
@@ -757,15 +708,10 @@ export default function TasksPage() {
                 onPointerUp={draggingTask ? onCanvasPointerUp : undefined}
             >
 
-            <GroupCard
-                key={GENERAL_ID} group={generalGroup} tasks={tasksByGroup(GENERAL_ID)}
-                userId={user.uid} isGeneral isDragOver={overGroupId === GENERAL_ID}
-                onTaskDragStart={onTaskDragStart} cardRef={el => { groupRefs.current[GENERAL_ID] = el; }}
-                onColorChange={setGeneralColor}
-            />
+
             {groups.map(g => (
                 <GroupCard key={g.id} group={g} tasks={tasksByGroup(g.id)}
-                    userId={user.uid} isGeneral={false} isDragOver={overGroupId === g.id}
+                    userId={user.uid} isDragOver={overGroupId === g.id}
                     onTaskDragStart={onTaskDragStart} cardRef={el => { groupRefs.current[g.id] = el; }}
                 />
             ))}

@@ -452,6 +452,7 @@ function CreateGroupForm({ user, onClose, privacy, setPrivacy }: any) {
     const [goalType, setGoalType] = useState<GoalType>("weekly");
     const [goalHours, setGoalHours] = useState("");
     const [autoRenew, setAutoRenew] = useState(true);
+    const [customDays, setCustomDays] = useState("");
 
     useEffect(() => {
         if (privacy === "private-invite") setPrivacy("private-code");
@@ -471,6 +472,7 @@ function CreateGroupForm({ user, onClose, privacy, setPrivacy }: any) {
                 goalHours: parseInt(goalHours) || 0,
                 goalType,
                 autoRenew,
+                customDays: goalType === "custom" ? parseInt(customDays) || 7 : null,
                 maxMembers: 0,
             }
         });

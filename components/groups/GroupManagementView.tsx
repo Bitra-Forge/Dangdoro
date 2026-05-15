@@ -6,31 +6,32 @@ import { cn } from "@/lib/utils";
 import { 
     Target, Users, Copy, Crown, Zap, UserX, RefreshCw, Calendar
 } from "lucide-react";
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { fmtMinutes, getManagementGroupKey, getGoalTypeLabel, GoalType, computeNextPeriodStart } from "@/lib/groups";
+import { fmtMinutes, getManagementGroupKey, getGoalTypeLabel, GoalType } from "@/lib/groups";
 
 export const GroupManagementView = memo(function GroupManagementView({ group, user, onUpdateRole, onRemove, userRole, roleActionPendingId }: any) {
     const isHost = userRole === "host";
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
     const [goalType, setGoalType] = useState<GoalType>(group.settings?.goalType || "weekly");
     const [autoRenew, setAutoRenew] = useState(group.settings?.autoRenew ?? true);
-    const [customEndDate, setCustomEndDate] = useState<string>("");
+    const [customDays, setCustomDays] = useState<string>("");
 
     useEffect(() => {
         setGoalType(group.settings?.goalType || "weekly");
         setAutoRenew(group.settings?.autoRenew ?? true);
-    }, [group.settings?.goalType, group.settings?.autoRenew]);
+        if (group.settings?.goalType === "custom" && group.settings?.customDays) {
+            setCustomDays(String(group.settings.customDays));
+        }
+    }, [group.settings?.goalType, group.settings?.autoRenew, group.settings?.customDays]);
 
     const handleGoalTypeChange = async (newType: GoalType) => {
         setGoalType(newType);
         const updates: any = { "settings.goalType": newType };
         if (newType !== "custom") {
-            const nextStart = computeNextPeriodStart(newType);
-            updates["settings.goalStartDate"] = serverTimestamp();
-            updates["settings.goalEndDate"] = null;
+            updates["settings.customDays"] = null;
         }
         await updateDoc(doc(db, "focusGroups", group.id), updates);
         toast.success(`Goal set to ${getGoalTypeLabel(newType).toLowerCase()}`);
@@ -43,15 +44,13 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
         toast.success(newVal ? "Auto-renew enabled" : "Auto-renew disabled");
     };
 
-    const handleCustomEndDateChange = async (dateStr: string) => {
-        setCustomEndDate(dateStr);
-        if (dateStr) {
-            const endDate = new Date(dateStr);
-            endDate.setHours(23, 59, 59, 999);
+    const handleCustomDaysChange = async (daysStr: string) => {
+        setCustomDays(daysStr);
+        const days = parseInt(daysStr);
+        if (days > 0) {
             await updateDoc(doc(db, "focusGroups", group.id), {
                 "settings.goalType": "custom",
-                "settings.goalStartDate": serverTimestamp(),
-                "settings.goalEndDate": endDate.getTime(),
+                "settings.customDays": days,
             });
         }
     };
@@ -129,11 +128,14 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                             {goalType === "custom" && (
                                 <div className="flex items-center gap-3">
                                     <input
-                                        type="date"
-                                        value={customEndDate}
-                                        onChange={(e) => handleCustomEndDateChange(e.target.value)}
+                                        type="number"
+                                        min={1}
+                                        value={customDays}
+                                        onChange={(e) => handleCustomDaysChange(e.target.value)}
+                                        placeholder="e.g. 14"
                                         className="w-full bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-white focus:border-[white]/40 outline-none"
                                     />
+                                    <span className="text-zinc-600 font-bold text-xs uppercase whitespace-nowrap">Days</span>
                                 </div>
                             )}
                             {goalType !== "custom" && (
