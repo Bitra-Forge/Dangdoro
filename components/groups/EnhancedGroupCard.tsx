@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTimerStore } from "@/lib/store";
-import { FocusGroup, PRIVACY_META, GroupPrivacy } from "@/lib/groups";
+import { FocusGroup, PRIVACY_META, GroupPrivacy, getGoalTypeLabel } from "@/lib/groups";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { doc, updateDoc, arrayUnion, increment, serverTimestamp } from "firebase/firestore";
@@ -175,7 +175,7 @@ export const EnhancedGroupCard = memo(function EnhancedGroupCard({ group, isMemb
                         {group.settings?.goalHours && group.settings.goalHours > 0 && (
                             <div className="space-y-1.5">
                                 <div className="flex justify-between items-center text-[8px] font-black uppercase tracking-widest text-zinc-600">
-                                    <span>Goal Progress</span>
+                                    <span>{getGoalTypeLabel(group.settings.goalType)} Goal</span>
                                     <span className="text-[white]">{Math.min(100, Math.round((totalMinutes / 60) / group.settings.goalHours * 100))}% Complete</span>
                                 </div>
                                 <div className="h-1 bg-zinc-950 rounded-full overflow-hidden border border-white/5">

@@ -5,9 +5,9 @@ import { motion } from "framer-motion";
 import { Users, Target, Mail } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { fmtMinutes, fmtElapsed } from "@/lib/groups";
+import { fmtMinutes, fmtElapsed, getGoalTypeLabel } from "@/lib/groups";
 
-export const ParticipantsTab = memo(function ParticipantsTab({ group, sortedMembers, user, isAdmin, onManageRoles, onInvite, goalHours = 0 }: any) {
+export const ParticipantsTab = memo(function ParticipantsTab({ group, sortedMembers, user, isAdmin, onManageRoles, onInvite, goalHours = 0, goalType = "weekly" }: any) {
     const [memberNowMs, setMemberNowMs] = useState(Date.now());
 
     useEffect(() => {
@@ -38,7 +38,7 @@ export const ParticipantsTab = memo(function ParticipantsTab({ group, sortedMemb
                         <div className="px-4 py-2 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center gap-3 min-w-[120px]">
                             <Target className="w-4 h-4 text-cyan-500/70" />
                             <div className="flex flex-col">
-                                <span className="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-500">Weekly Goal</span>
+                                <span className="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-500">{getGoalTypeLabel(goalType)} Goal</span>
                                 <span className="text-sm font-black text-white leading-none">{goalHours}h</span>
                             </div>
                         </div>

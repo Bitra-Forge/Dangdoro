@@ -16,7 +16,7 @@ import { useRouter } from "next/navigation";
 import { 
     Users, Briefcase, ChevronRight, Play, Pause, 
     StopCircle, MoreVertical, UserPlus, LogOut, X, 
-    LayoutGrid, Target, Crown, Zap, User, Copy, Trash2
+    LayoutGrid, Target, Crown, Zap, User, Copy, Trash2, RefreshCw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -24,7 +24,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
     FocusGroup, SharedTask, ObjectiveTemplateDraft, 
     fmtMinutes, resolveLiveSessionsForGroup, toMillis, 
-    getEarliestActiveStart, normalizeLiveSessions
+    getEarliestActiveStart, normalizeLiveSessions,
+    getGoalTypeLabel, getGoalPeriodBounds, isPeriodExpired,
+    computeNextPeriodStart, GoalType
 } from "@/lib/groups";
 import { fetchUserProfiles, savePartialPomodoroSession } from "@/lib/db";
 import { applyGroupSessionAction } from "@/lib/group-session";
@@ -123,6 +125,22 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
             router.push("/groups");
         }
     }, [group, user, loading, router]);
+
+    // 6. Auto-renewal check
+    useEffect(() => {
+        if (!group || !user) return;
+        const goalType = group.settings?.goalType as GoalType | undefined;
+        const autoRenew = group.settings?.autoRenew ?? true;
+        if (!autoRenew) return;
+        if (isPeriodExpired(goalType, group.settings?.goalEndDate)) {
+            const nextStart = computeNextPeriodStart(goalType, group.settings?.goalEndDate);
+            updateDoc(doc(db, "focusGroups", group.id), {
+                "settings.goalStartDate": nextStart.getTime(),
+                "settings.goalEndDate": goalType === "custom" ? computeNextPeriodStart(goalType, group.settings?.goalEndDate).getTime() : null,
+                "settings.goalType": goalType || "weekly",
+            }).catch(() => {});
+        }
+    }, [group, user]);
 
     // Derived State
     const enrichedGroup = useMemo(() => {
@@ -680,7 +698,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
 
                                     <div className="p-4 bg-zinc-900/40 border border-white/10 rounded-xl space-y-3">
                                         <div className="flex items-center justify-between">
-                                            <p className="text-[10px] font-black uppercase text-zinc-500 tracking-[0.18em]">Weekly Goal</p>
+                                            <p className="text-[10px] font-black uppercase text-zinc-500 tracking-[0.18em]">{getGoalTypeLabel(enrichedGroup.settings?.goalType)} Goal</p>
                                             <Target className="w-3.5 h-3.5 text-[white]/70" />
                                         </div>
                                         {enrichedGroup.settings?.goalHours && enrichedGroup.settings.goalHours > 0 ? (
@@ -694,9 +712,14 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                                         style={{ width: `${Math.min(100, ((totalGroupMinutes / 60) / enrichedGroup.settings.goalHours) * 100)}%` }}
                                                     />
                                                 </div>
+                                                {enrichedGroup.settings?.autoRenew && (
+                                                    <p className="text-[9px] text-zinc-600 flex items-center gap-1">
+                                                        <RefreshCw className="w-2.5 h-2.5" /> Auto-renews {getGoalTypeLabel(enrichedGroup.settings.goalType).toLowerCase()}
+                                                    </p>
+                                                )}
                                             </>
                                         ) : (
-                                            <p className="text-[11px] text-zinc-500">No weekly goal set yet.</p>
+                                            <p className="text-[11px] text-zinc-500">No {getGoalTypeLabel(enrichedGroup.settings?.goalType).toLowerCase()} goal set yet.</p>
                                         )}
                                     </div>
 
@@ -774,6 +797,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                 onManageRoles={() => setIsManagingRoles(true)}
                                 onInvite={() => setShowInviteModal(true)}
                                 goalHours={enrichedGroup.settings?.goalHours || 0}
+                                goalType={enrichedGroup.settings?.goalType || "weekly"}
                             />
                          )}
                      </div>

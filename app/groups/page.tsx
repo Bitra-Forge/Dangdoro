@@ -25,7 +25,7 @@ import { motion, AnimatePresence } from "framer-motion";
 // Shared Library
 import { 
     FocusGroup, GroupPrivacy, normalizeLiveSessions, 
-    resolveLiveSessionsForGroup, generateInviteToken
+    resolveLiveSessionsForGroup, generateInviteToken, GoalType
 } from "@/lib/groups";
 
 // Extracted Components
@@ -449,6 +449,9 @@ export default function GroupsPage() {
 function CreateGroupForm({ user, onClose, privacy, setPrivacy }: any) {
     const [name, setName] = useState("");
     const [desc, setDesc] = useState("");
+    const [goalType, setGoalType] = useState<GoalType>("weekly");
+    const [goalHours, setGoalHours] = useState("");
+    const [autoRenew, setAutoRenew] = useState(true);
 
     useEffect(() => {
         if (privacy === "private-invite") setPrivacy("private-code");
@@ -463,7 +466,13 @@ function CreateGroupForm({ user, onClose, privacy, setPrivacy }: any) {
         await setDoc(groupRef, {
             name, description: desc, type: "friends", hostId: user.uid, hostName: user.displayName || "Forge User",
             members: [user.uid], memberCount: 1, privacy, accessCode, inviteToken, createdAt: serverTimestamp(),
-            memberStats: { [user.uid]: { role: "host", totalMinutes: 0, joinedAt: serverTimestamp() } }
+            memberStats: { [user.uid]: { role: "host", totalMinutes: 0, joinedAt: serverTimestamp() } },
+            settings: {
+                goalHours: parseInt(goalHours) || 0,
+                goalType,
+                autoRenew,
+                maxMembers: 0,
+            }
         });
         toast.success("Group created!");
         onClose();
@@ -496,6 +505,45 @@ function CreateGroupForm({ user, onClose, privacy, setPrivacy }: any) {
                 </div>
             </div>
             <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Description" rows={2} className="w-full bg-zinc-950 border border-white/5 rounded-[10px] px-4 py-3 text-white outline-none" />
+            
+            <div className="space-y-3">
+                <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Focus Goal</p>
+                <div className="grid grid-cols-4 gap-2">
+                    {(["daily", "weekly", "monthly", "custom"] as GoalType[]).map((type) => (
+                        <button
+                            key={type}
+                            onClick={() => setGoalType(type)}
+                            className={cn(
+                                "py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer",
+                                goalType === type
+                                    ? "bg-white text-black"
+                                    : "bg-zinc-950 text-zinc-500 hover:text-white hover:bg-zinc-800"
+                            )}
+                        >
+                            {type === "daily" ? "Day" : type === "weekly" ? "Week" : type === "monthly" ? "Month" : "Custom"}
+                        </button>
+                    ))}
+                </div>
+                <div className="flex gap-3">
+                    <input 
+                        type="number" 
+                        value={goalHours} 
+                        onChange={e => setGoalHours(e.target.value)} 
+                        placeholder="Goal hours" 
+                        className="flex-1 bg-zinc-950 border border-white/5 rounded-[10px] px-4 py-3 text-white outline-none" 
+                    />
+                    <button
+                        onClick={() => setAutoRenew(!autoRenew)}
+                        className={cn(
+                            "px-4 py-3 rounded-[10px] text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer",
+                            autoRenew ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-zinc-950 text-zinc-500 border border-white/5"
+                        )}
+                    >
+                        Auto-renew
+                    </button>
+                </div>
+            </div>
+
             <div className="flex gap-3">
                 <motion.button
                     whileTap={{ scale: 0.98 }}

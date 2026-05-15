@@ -21,6 +21,8 @@ export interface ObjectiveTemplateDraft {
     description?: string;
 }
 
+export type GoalType = "daily" | "weekly" | "monthly" | "custom";
+
 export interface FocusGroup {
     id: string;
     name: string;
@@ -49,6 +51,10 @@ export interface FocusGroup {
     createdAt: any;
     settings?: {
         goalHours: number;
+        goalType?: GoalType;
+        goalStartDate?: any;
+        goalEndDate?: any;
+        autoRenew?: boolean;
         maxMembers: number;
     };
 }
@@ -160,4 +166,97 @@ export function fmtElapsed(secs: number) {
         return `${m}m ${s}s`;
     }
     return `${h}h ${m}m ${s}s`;
+}
+
+export function getGoalTypeLabel(goalType?: GoalType): string {
+    switch (goalType) {
+        case "daily": return "Daily";
+        case "weekly": return "Weekly";
+        case "monthly": return "Monthly";
+        case "custom": return "Custom";
+        default: return "Weekly";
+    }
+}
+
+export function getGoalPeriodBounds(goalType?: GoalType, customStart?: any, customEnd?: any): { start: Date; end: Date } {
+    const now = new Date();
+    switch (goalType) {
+        case "daily": {
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+            return { start, end };
+        }
+        case "weekly": {
+            const dayOfWeek = now.getDay();
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(start);
+            end.setDate(end.getDate() + 7);
+            return { start, end };
+        }
+        case "monthly": {
+            const start = new Date(now.getFullYear(), now.getMonth(), 1);
+            const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+            return { start, end };
+        }
+        case "custom": {
+            if (customStart && customEnd) {
+                return { start: toMillis(customStart) ? new Date(toMillis(customStart)!) : now, end: toMillis(customEnd) ? new Date(toMillis(customEnd)!) : now };
+            }
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
+            return { start, end };
+        }
+        default: {
+            const dayOfWeek = now.getDay();
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(start);
+            end.setDate(end.getDate() + 7);
+            return { start, end };
+        }
+    }
+}
+
+export function computeNextPeriodStart(goalType?: GoalType, customEnd?: any): Date {
+    const now = new Date();
+    switch (goalType) {
+        case "daily": {
+            const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+            return tomorrow;
+        }
+        case "weekly": {
+            const dayOfWeek = now.getDay();
+            const nextWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + 7);
+            return nextWeek;
+        }
+        case "monthly": {
+            const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+            return nextMonth;
+        }
+        case "custom": {
+            if (customEnd) {
+                const end = toMillis(customEnd) ? new Date(toMillis(customEnd)!) : now;
+                return new Date(end.getTime() + 1);
+            }
+            return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        }
+        default: {
+            const dayOfWeek = now.getDay();
+            const nextWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + 7);
+            return nextWeek;
+        }
+    }
+}
+
+export function isPeriodExpired(goalType?: GoalType, goalEndDate?: any): boolean {
+    if (!goalType || goalType === "daily" || goalType === "weekly" || goalType === "monthly") {
+        const { end } = getGoalPeriodBounds(goalType);
+        return new Date() >= end;
+    }
+    if (goalType === "custom" && goalEndDate) {
+        const endMs = toMillis(goalEndDate);
+        if (endMs) return Date.now() >= endMs;
+    }
+    return false;
 }

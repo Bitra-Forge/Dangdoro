@@ -1,20 +1,60 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useState, useEffect } from "react";
 import { useTimerStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { 
-    Target, Users, Copy, Crown, Zap, UserX 
+    Target, Users, Copy, Crown, Zap, UserX, RefreshCw, Calendar
 } from "lucide-react";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { fmtMinutes, getManagementGroupKey } from "@/lib/groups";
+import { fmtMinutes, getManagementGroupKey, getGoalTypeLabel, GoalType, computeNextPeriodStart } from "@/lib/groups";
 
 export const GroupManagementView = memo(function GroupManagementView({ group, user, onUpdateRole, onRemove, userRole, roleActionPendingId }: any) {
     const isHost = userRole === "host";
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
+    const [goalType, setGoalType] = useState<GoalType>(group.settings?.goalType || "weekly");
+    const [autoRenew, setAutoRenew] = useState(group.settings?.autoRenew ?? true);
+    const [customEndDate, setCustomEndDate] = useState<string>("");
+
+    useEffect(() => {
+        setGoalType(group.settings?.goalType || "weekly");
+        setAutoRenew(group.settings?.autoRenew ?? true);
+    }, [group.settings?.goalType, group.settings?.autoRenew]);
+
+    const handleGoalTypeChange = async (newType: GoalType) => {
+        setGoalType(newType);
+        const updates: any = { "settings.goalType": newType };
+        if (newType !== "custom") {
+            const nextStart = computeNextPeriodStart(newType);
+            updates["settings.goalStartDate"] = serverTimestamp();
+            updates["settings.goalEndDate"] = null;
+        }
+        await updateDoc(doc(db, "focusGroups", group.id), updates);
+        toast.success(`Goal set to ${getGoalTypeLabel(newType).toLowerCase()}`);
+    };
+
+    const handleAutoRenewToggle = async () => {
+        const newVal = !autoRenew;
+        setAutoRenew(newVal);
+        await updateDoc(doc(db, "focusGroups", group.id), { "settings.autoRenew": newVal });
+        toast.success(newVal ? "Auto-renew enabled" : "Auto-renew disabled");
+    };
+
+    const handleCustomEndDateChange = async (dateStr: string) => {
+        setCustomEndDate(dateStr);
+        if (dateStr) {
+            const endDate = new Date(dateStr);
+            endDate.setHours(23, 59, 59, 999);
+            await updateDoc(doc(db, "focusGroups", group.id), {
+                "settings.goalType": "custom",
+                "settings.goalStartDate": serverTimestamp(),
+                "settings.goalEndDate": endDate.getTime(),
+            });
+        }
+    };
 
     const hostMembers    = group.memberDetails?.filter((m: any) => m.role === "host") ?? [];
     const adminMembers   = group.memberDetails?.filter((m: any) => m.role === "admin") ?? [];
@@ -42,7 +82,7 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                                     placeholder="e.g. 100" 
                                     className="w-full bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-white focus:border-[white]/40 outline-none" 
                                 />
-                                <span className="text-zinc-600 font-bold text-xs uppercase whitespace-nowrap">Hours / Weekly</span>
+                                <span className="text-zinc-600 font-bold text-xs uppercase whitespace-nowrap">Hours</span>
                             </div>
                         </div>
 
@@ -61,6 +101,68 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                                 />
                                 <span className="text-zinc-600 font-bold text-xs uppercase whitespace-nowrap">Members</span>
                             </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-6 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4">
+                            <div className="flex items-center gap-2 text-zinc-400">
+                                <Calendar className="w-4 h-4" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Goal Period</span>
+                            </div>
+                            <div className="grid grid-cols-4 gap-2">
+                                {(["daily", "weekly", "monthly", "custom"] as GoalType[]).map((type) => (
+                                    <button
+                                        key={type}
+                                        onClick={() => handleGoalTypeChange(type)}
+                                        className={cn(
+                                            "py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all",
+                                            goalType === type
+                                                ? "bg-white text-black"
+                                                : "bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800"
+                                        )}
+                                    >
+                                        {type === "daily" ? "Day" : type === "weekly" ? "Week" : type === "monthly" ? "Month" : "Custom"}
+                                    </button>
+                                ))}
+                            </div>
+                            {goalType === "custom" && (
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="date"
+                                        value={customEndDate}
+                                        onChange={(e) => handleCustomEndDateChange(e.target.value)}
+                                        className="w-full bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-white focus:border-[white]/40 outline-none"
+                                    />
+                                </div>
+                            )}
+                            {goalType !== "custom" && (
+                                <p className="text-[10px] text-zinc-600">
+                                    Resets every {goalType === "daily" ? "day" : goalType === "weekly" ? "week (Sunday)" : "month (1st)"}
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="p-6 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4">
+                            <div className="flex items-center gap-2 text-zinc-400">
+                                <RefreshCw className="w-4 h-4" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Auto Renew</span>
+                            </div>
+                            <button
+                                onClick={handleAutoRenewToggle}
+                                className={cn(
+                                    "w-full py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2",
+                                    autoRenew
+                                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                        : "bg-zinc-900 text-zinc-500 border border-white/5"
+                                )}
+                            >
+                                <RefreshCw className={cn("w-4 h-4", autoRenew && "animate-spin")} />
+                                {autoRenew ? "Enabled" : "Disabled"}
+                            </button>
+                            <p className="text-[10px] text-zinc-600">
+                                When enabled, the goal period automatically resets and progress starts fresh
+                            </p>
                         </div>
                     </div>
                     {(group.privacy === "private-code" || group.privacy === "public") && group.accessCode && (
