@@ -16,7 +16,7 @@ import { useRouter } from "next/navigation";
 import { 
     Users, Briefcase, ChevronRight, Play, Pause, 
     StopCircle, MoreVertical, UserPlus, LogOut, X, 
-    LayoutGrid, Target, Crown, Zap, User, Lock, Copy, Trash2
+    LayoutGrid, Target, Crown, Zap, User, Copy, Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -108,12 +108,21 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         const missingUids = group.members.filter(uid => !hydratedProfiles[uid]);
         if (missingUids.length > 0) {
             fetchUserProfiles(missingUids).then(profiles => {
-                const newProfiles = { ...hydratedProfiles };
-                profiles.forEach((p: any) => { newProfiles[p.uid] = p; });
-                setHydratedProfiles(newProfiles);
+                setHydratedProfiles(prev => {
+                    const next = { ...prev };
+                    profiles.forEach((p: any) => { next[p.uid] = p; });
+                    return next;
+                });
             });
         }
     }, [group, hydratedProfiles]);
+
+    // 5. Handle non-members (automatic redirect)
+    useEffect(() => {
+        if (!loading && group && user && !group.members.includes(user.uid)) {
+            router.push("/groups");
+        }
+    }, [group, user, loading, router]);
 
     // Derived State
     const enrichedGroup = useMemo(() => {
@@ -254,31 +263,6 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         }
     };
 
-    const handleJoinGroup = async () => {
-        if (!user || !enrichedGroup) return;
-        
-        if (enrichedGroup.privacy === "private-code") {
-            toast.info("Use the join button on the main page with a code.");
-            return;
-        }
-        if (enrichedGroup.privacy === "private-invite") {
-            toast.error("Invite-only workspace.");
-            return;
-        }
-
-        const groupRef = doc(db, "focusGroups", groupId);
-        await updateDoc(groupRef, {
-            members: arrayUnion(user.uid),
-            memberCount: increment(1),
-            [`memberStats.${user.uid}`]: {
-                role: "member",
-                totalMinutes: 0,
-                joinedAt: serverTimestamp()
-            }
-        });
-        toast.success(`Joined "${enrichedGroup.name}"!`);
-    };
-
     const handleLeaveGroup = async () => {
         if (!user || !enrichedGroup) return;
         const newMembers = enrichedGroup.members.filter(m => m !== user.uid);
@@ -338,6 +322,9 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
 
     if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" /></div>;
     if (!enrichedGroup || !user) return <div className="min-h-screen flex flex-col items-center justify-center text-white gap-4"><p>Group not found</p><Link href="/groups" className="text-sm text-zinc-500 hover:text-white">Back to Groups</Link></div>;
+    if (!group.members.includes(user.uid)) {
+        return null;
+    }
 
     const totalGroupMinutes = enrichedGroup.totalMinutes || sortedMembers.reduce((acc: number, m: any) => acc + (m.totalMinutes || 0), 0);
     const adminCount = sortedMembers.filter((m: any) => m.role === "host" || m.role === "admin").length;
@@ -607,7 +594,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                             roleActionPendingId={roleActionPendingId}
                         />
                     </div>
-                ) : isMember ? (
+                ) : (
                     <div className="max-w-7xl mx-auto">
                         {activeTab === "workspace" ? (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
@@ -788,20 +775,8 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                 onInvite={() => setShowInviteModal(true)}
                                 goalHours={enrichedGroup.settings?.goalHours || 0}
                             />
-                        )}
-                    </div>
-                ) : (
-                    <div className="flex flex-col items-center justify-center py-20 text-center gap-8">
-                        <div className="w-24 h-24 rounded-full bg-[white]/5 flex items-center justify-center border border-[white]/10 relative">
-                            <Lock className="w-10 h-10 text-[white]" />
-                            <div className="absolute inset-0 rounded-full border border-[white]/20 animate-ping" />
-                        </div>
-                        <div className="space-y-2">
-                            <h3 className="text-2xl font-black text-white">Unlock High-Intensity Session</h3>
-                            <p className="text-zinc-600 max-w-md">Join this {enrichedGroup.type} to see active objectives, real-time presence, and collective progress.</p>
-                        </div>
-                        <button onClick={handleJoinGroup} className="px-10 py-5 bg-[white] text-black font-black rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-[0_20px_40px_white]">Establish Connection</button>
-                    </div>
+                         )}
+                     </div>
                 )}
             </div>
 
