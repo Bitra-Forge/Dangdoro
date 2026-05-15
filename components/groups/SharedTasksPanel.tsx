@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, memo } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
     Plus, Sparkles, Mail, Target, 
@@ -17,6 +18,7 @@ const TASK_STATUS_CONFIG: Record<string, { label: string; color: string; icon: a
 };
 
 export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, onUpdate, onDelete, isAdmin, groupMembers, currentUserId, prefillTemplate, onPrefillHandled, onTemplateSelect }: any) {
+    const searchParams = useSearchParams();
     const [openAdd, setOpenAdd] = useState(false);
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
@@ -27,7 +29,7 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
     const [isFiltersOpen, setIsFiltersOpen] = useState(false);
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [priorityFilter, setPriorityFilter] = useState<string>("all");
-    const [objectiveFilter, setObjectiveFilter] = useState<"all" | "mine">("all");
+    const [objectiveFilter, setObjectiveFilter] = useState<"all" | "mine">(searchParams.get("tab") === "mine" ? "mine" : "all");
     
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
     const [editTitle, setEditTitle] = useState("");

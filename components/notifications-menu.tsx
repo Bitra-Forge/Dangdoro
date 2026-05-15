@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 
 const spaceGrotesk = Space_Grotesk({
@@ -30,6 +30,7 @@ export function NotificationsMenu() {
 
     const { user } = useAuth();
     const pathname = usePathname();
+    const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
     const [requests, setRequests] = useState<FriendRequestItem[]>([]);
     const [groupInvites, setGroupInvites] = useState<GroupInviteItem[]>([]);
@@ -218,7 +219,7 @@ export function NotificationsMenu() {
             <button 
                 onClick={() => setIsOpen(!isOpen)}
                 className={cn(
-                    "p-2.5 rounded-full backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-hidden",
+                    "p-2.5 rounded-full backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-visible",
                     isOpen
                         ? "bg-white/15 text-white shadow-[inset_0_0_10px_rgba(255,255,255,0.1)]"
                         : "bg-zinc-900/80 text-zinc-400 hover:text-white"
@@ -233,7 +234,7 @@ export function NotificationsMenu() {
 
                 <Bell className={cn("w-4 h-4 transition-transform", isOpen && "scale-110")} />
                 {hasUnread && (
-                    <div className="absolute top-0 right-0 min-w-[16px] h-[16px] px-1 bg-white text-black text-[9px] font-black rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(255,255,255,0.3)] border border-black/10 z-20">
+                    <div className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-white text-black text-[10px] font-bold rounded-full flex items-center justify-center shadow-md z-20">
                         {totalUnread}
                     </div>
                 )}
@@ -274,7 +275,11 @@ export function NotificationsMenu() {
                                                     onClick={() => {
                                                         setIsOpen(false);
                                                         handleMarkAssignmentRead(notif.id);
-                                                        window.location.href = "/groups";
+                                                        if (notif.groupId) {
+                                                            router.push(`/groups/${notif.groupId}?tab=mine`);
+                                                        } else {
+                                                            router.push("/groups");
+                                                        }
                                                     }}
                                                 >
                                                     Open Groups
