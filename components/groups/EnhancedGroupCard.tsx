@@ -257,7 +257,7 @@ export const EnhancedGroupCard = memo(function EnhancedGroupCard({ group, isMemb
                                     <Users className="w-6 h-6 text-white" />
                                 </div>
                                 <h3 className="text-xl font-black text-white">Join {group.name}?</h3>
-                                <p className="text-zinc-500 text-sm">you'll be added as a member and can start focusing with the group.</p>
+                                <p className="text-zinc-500 text-sm">you&apos;ll be added as a member and can start focusing with the group.</p>
                             </div>
 
                             <div className="flex flex-col gap-2">
