@@ -64,13 +64,7 @@ export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
             if (!res.ok) throw new Error("API error");
 
             const data = await res.json();
-            const text = data.response;
-
-            let parsed: any;
-            const jsonMatch = text.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                parsed = JSON.parse(jsonMatch[0]);
-            }
+            const parsed = data.response;
 
             if (parsed?.groups && Array.isArray(parsed.groups)) {
                 setPendingGroups(parsed.groups);
@@ -83,8 +77,14 @@ export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
                 ]);
             } else if (parsed?.message) {
                 setMessages([...newMessages, { role: "assistant", content: parsed.message }]);
+            } else if (parsed?.error) {
+                throw new Error(parsed.error);
             } else {
-                setMessages([...newMessages, { role: "assistant", content: text }]);
+                // Fallback for unexpected formats
+                setMessages([
+                    ...newMessages, 
+                    { role: "assistant", content: "I'm sorry, I couldn't organize that into tasks. Could you try rephrasing your request?" }
+                ]);
             }
         } catch {
             setMessages([
