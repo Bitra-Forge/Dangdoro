@@ -728,8 +728,8 @@ export default function TasksPage() {
                     </form>
                 )}
                 <button onClick={() => setShowAgent(v => !v)}
-                    className="flex items-center gap-2 px-5 py-3 bg-violet-500/10 border border-violet-500/20 text-violet-400 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-violet-500/20 transition-all backdrop-blur-xl shadow-lg">
-                    <Sparkles className="w-4 h-4" /> AI Agent
+                    className="flex items-center gap-2 px-5 py-3 bg-white/5 border border-white/10 text-zinc-400 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all backdrop-blur-xl shadow-lg">
+                    <Sparkles className="w-4 h-4" /> Planner
                 </button>
                 <button onClick={() => setIsCreatingGroup(v => !v)}
                     className="flex items-center gap-2 px-5 py-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-emerald-500/20 transition-all backdrop-blur-xl shadow-lg">

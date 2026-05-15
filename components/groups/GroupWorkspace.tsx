@@ -131,12 +131,10 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         if (!group || !user) return;
         const goalType = group.settings?.goalType as GoalType | undefined;
         const autoRenew = group.settings?.autoRenew ?? true;
+        const customDays = group.settings?.customDays;
         if (!autoRenew) return;
-        if (isPeriodExpired(goalType, group.settings?.goalEndDate)) {
-            const nextStart = computeNextPeriodStart(goalType, group.settings?.goalEndDate);
+        if (isPeriodExpired(goalType, customDays)) {
             updateDoc(doc(db, "focusGroups", group.id), {
-                "settings.goalStartDate": nextStart.getTime(),
-                "settings.goalEndDate": goalType === "custom" ? computeNextPeriodStart(goalType, group.settings?.goalEndDate).getTime() : null,
                 "settings.goalType": goalType || "weekly",
             }).catch(() => {});
         }

@@ -52,8 +52,7 @@ export interface FocusGroup {
     settings?: {
         goalHours: number;
         goalType?: GoalType;
-        goalStartDate?: any;
-        goalEndDate?: any;
+        customDays?: number;
         autoRenew?: boolean;
         maxMembers: number;
     };
@@ -178,7 +177,7 @@ export function getGoalTypeLabel(goalType?: GoalType): string {
     }
 }
 
-export function getGoalPeriodBounds(goalType?: GoalType, customStart?: any, customEnd?: any): { start: Date; end: Date } {
+export function getGoalPeriodBounds(goalType?: GoalType, customDays?: number): { start: Date; end: Date } {
     const now = new Date();
     switch (goalType) {
         case "daily": {
@@ -200,11 +199,9 @@ export function getGoalPeriodBounds(goalType?: GoalType, customStart?: any, cust
             return { start, end };
         }
         case "custom": {
-            if (customStart && customEnd) {
-                return { start: toMillis(customStart) ? new Date(toMillis(customStart)!) : now, end: toMillis(customEnd) ? new Date(toMillis(customEnd)!) : now };
-            }
+            const days = customDays || 7;
             const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
+            const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + days);
             return { start, end };
         }
         default: {
@@ -218,7 +215,7 @@ export function getGoalPeriodBounds(goalType?: GoalType, customStart?: any, cust
     }
 }
 
-export function computeNextPeriodStart(goalType?: GoalType, customEnd?: any): Date {
+export function computeNextPeriodStart(goalType?: GoalType, customDays?: number): Date {
     const now = new Date();
     switch (goalType) {
         case "daily": {
@@ -235,11 +232,8 @@ export function computeNextPeriodStart(goalType?: GoalType, customEnd?: any): Da
             return nextMonth;
         }
         case "custom": {
-            if (customEnd) {
-                const end = toMillis(customEnd) ? new Date(toMillis(customEnd)!) : now;
-                return new Date(end.getTime() + 1);
-            }
-            return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+            const days = customDays || 7;
+            return new Date(now.getFullYear(), now.getMonth(), now.getDate() + days);
         }
         default: {
             const dayOfWeek = now.getDay();
@@ -249,14 +243,14 @@ export function computeNextPeriodStart(goalType?: GoalType, customEnd?: any): Da
     }
 }
 
-export function isPeriodExpired(goalType?: GoalType, goalEndDate?: any): boolean {
+export function isPeriodExpired(goalType?: GoalType, customDays?: number): boolean {
     if (!goalType || goalType === "daily" || goalType === "weekly" || goalType === "monthly") {
         const { end } = getGoalPeriodBounds(goalType);
         return new Date() >= end;
     }
-    if (goalType === "custom" && goalEndDate) {
-        const endMs = toMillis(goalEndDate);
-        if (endMs) return Date.now() >= endMs;
+    if (goalType === "custom" && customDays) {
+        const { end } = getGoalPeriodBounds(goalType, customDays);
+        return new Date() >= end;
     }
     return false;
 }

@@ -534,6 +534,16 @@ function CreateGroupForm({ user, onClose, privacy, setPrivacy }: any) {
                         placeholder="Goal hours" 
                         className="flex-1 bg-zinc-950 border border-white/5 rounded-[10px] px-4 py-3 text-white outline-none" 
                     />
+                    {goalType === "custom" && (
+                        <input 
+                            type="number" 
+                            min={1}
+                            value={customDays} 
+                            onChange={e => setCustomDays(e.target.value)} 
+                            placeholder="Days" 
+                            className="w-24 bg-zinc-950 border border-white/5 rounded-[10px] px-4 py-3 text-white outline-none" 
+                        />
+                    )}
                     <button
                         onClick={() => setAutoRenew(!autoRenew)}
                         className={cn(
