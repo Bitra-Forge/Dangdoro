@@ -144,7 +144,7 @@ export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
     };
 
     return (
-        <div className="fixed right-4 top-16 bottom-20 z-40 w-[400px] animate-in slide-in-from-right-6 fade-in duration-300">
+        <div className="fixed right-4 top-4 bottom-20 z-[101] w-[400px] animate-in slide-in-from-right-6 fade-in duration-300">
             <div className="flex flex-col h-full bg-zinc-950/90 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-[0_25px_60px_rgba(0,0,0,0.8)] overflow-hidden">
 
                 {/* Header */}

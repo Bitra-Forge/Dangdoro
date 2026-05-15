@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import {
     addTask, subscribeToTasks, toggleTask, deleteTask,
     addGroup, renameGroup, deleteGroup as dbDeleteGroup,
@@ -40,13 +40,13 @@ const getPriority = (v: string) => PRIORITIES.find(p => p.value === v) ?? PRIORI
 
 // ─── Group colors config ──────────────────────────────────────────────────────
 const GROUP_COLORS = [
-    { value: "zinc", label: "Default", bg: "bg-zinc-500", border: "border-zinc-500/40", shadow: "rgba(113,113,122,0.35)", glow: "shadow-zinc-500/25" },
-    { value: "emerald", label: "Emerald", bg: "bg-emerald-500", border: "border-emerald-500/40", shadow: "rgba(16,185,129,0.35)", glow: "shadow-emerald-500/25" },
-    { value: "sky", label: "Sky", bg: "bg-sky-500", border: "border-sky-500/40", shadow: "rgba(14,165,233,0.35)", glow: "shadow-sky-500/25" },
-    { value: "violet", label: "Violet", bg: "bg-violet-500", border: "border-violet-500/40", shadow: "rgba(139,92,246,0.35)", glow: "shadow-violet-500/25" },
-    { value: "rose", label: "Rose", bg: "bg-rose-500", border: "border-rose-500/40", shadow: "rgba(244,63,94,0.35)", glow: "shadow-rose-500/25" },
-    { value: "amber", label: "Amber", bg: "bg-amber-500", border: "border-amber-500/40", shadow: "rgba(245,158,11,0.35)", glow: "shadow-amber-500/25" },
-    { value: "cyan", label: "Cyan", bg: "bg-cyan-500", border: "border-cyan-500/40", shadow: "rgba(6,182,212,0.35)", glow: "shadow-cyan-500/25" },
+    { value: "zinc", label: "Default", bg: "bg-zinc-500", border: "border-zinc-500/40", shadow: "rgba(113,113,122,0.35)", glow: "shadow-zinc-500/25", text: "text-zinc-400", resizeHover: "hover:text-zinc-500/40", resizeActive: "text-zinc-500/40" },
+    { value: "emerald", label: "Emerald", bg: "bg-emerald-500", border: "border-emerald-500/40", shadow: "rgba(16,185,129,0.35)", glow: "shadow-emerald-500/25", text: "text-emerald-400", resizeHover: "hover:text-emerald-500/40", resizeActive: "text-emerald-500/40" },
+    { value: "sky", label: "Sky", bg: "bg-sky-500", border: "border-sky-500/40", shadow: "rgba(14,165,233,0.35)", glow: "shadow-sky-500/25", text: "text-sky-400", resizeHover: "hover:text-sky-500/40", resizeActive: "text-sky-500/40" },
+    { value: "violet", label: "Violet", bg: "bg-violet-500", border: "border-violet-500/40", shadow: "rgba(139,92,246,0.35)", glow: "shadow-violet-500/25", text: "text-violet-400", resizeHover: "hover:text-violet-500/40", resizeActive: "text-violet-500/40" },
+    { value: "rose", label: "Rose", bg: "bg-rose-500", border: "border-rose-500/40", shadow: "rgba(244,63,94,0.35)", glow: "shadow-rose-500/25", text: "text-rose-400", resizeHover: "hover:text-rose-500/40", resizeActive: "text-rose-500/40" },
+    { value: "amber", label: "Amber", bg: "bg-amber-500", border: "border-amber-500/40", shadow: "rgba(245,158,11,0.35)", glow: "shadow-amber-500/25", text: "text-amber-400", resizeHover: "hover:text-amber-500/40", resizeActive: "text-amber-500/40" },
+    { value: "cyan", label: "Cyan", bg: "bg-cyan-500", border: "border-cyan-500/40", shadow: "rgba(6,182,212,0.35)", glow: "shadow-cyan-500/25", text: "text-cyan-400", resizeHover: "hover:text-cyan-500/40", resizeActive: "text-cyan-500/40" },
 ];
 const getGroupColor = (v: string) => GROUP_COLORS.find(c => c.value === v) ?? GROUP_COLORS[0];
 
@@ -545,10 +545,65 @@ function AssignedTasksCard({
     const [groupNames, setGroupNames] = useState<Record<string, string>>({});
     const [isDraggingCard, setIsDraggingCard] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
-    const posRef = useRef({ x: 40, y: 40 });
-    const dimRef = useRef({ w: 320, h: 500 });
+    const [showColorPicker, setShowColorPicker] = useState(false);
+    
+    const loadSavedColor = () => {
+        try {
+            return localStorage.getItem("assigned-tasks-color") ?? "violet";
+        } catch {}
+        return "violet";
+    };
+    
+    const [assignedColor, setAssignedColor] = useState(loadSavedColor);
+    const assignedGroupColor = getGroupColor(assignedColor);
+    
+    const loadSavedDimensions = () => {
+        try {
+            const saved = localStorage.getItem("assigned-tasks-dimensions");
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                return { w: parsed.w ?? 320, h: parsed.h ?? 500 };
+            }
+        } catch {}
+        return { w: 320, h: 500 };
+    };
+    
+    const loadSavedPosition = () => {
+        try {
+            const saved = localStorage.getItem("assigned-tasks-position");
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                return { x: parsed.x ?? 40, y: parsed.y ?? 40 };
+            }
+        } catch {}
+        return { x: 40, y: 40 };
+    };
+    
+    const posRef = useRef(loadSavedPosition());
+    const dimRef = useRef(loadSavedDimensions());
     const dragOffset = useRef({ x: 0, y: 0 });
     const cardEl = useRef<HTMLDivElement | null>(null);
+    const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    
+    const saveDimensions = () => {
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(() => {
+            localStorage.setItem("assigned-tasks-dimensions", JSON.stringify(dimRef.current));
+        }, 400);
+    };
+    
+    const savePosition = () => {
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(() => {
+            localStorage.setItem("assigned-tasks-position", JSON.stringify(posRef.current));
+        }, 400);
+    };
+    
+    const handleColorChange = (color: string) => {
+        setAssignedColor(color);
+        localStorage.setItem("assigned-tasks-color", color);
+        setShowColorPicker(false);
+    };
 
     useEffect(() => {
         const fetchGroupNames = async () => {
@@ -595,6 +650,7 @@ function AssignedTasksCard({
     const onHeaderPointerUp = () => {
         if (!isDraggingCard) return;
         setIsDraggingCard(false);
+        savePosition();
     };
 
     const onResizePointerDown = (e: React.PointerEvent) => {
@@ -613,6 +669,7 @@ function AssignedTasksCard({
     const onResizePointerUp = () => {
         if (!isResizing) return;
         setIsResizing(false);
+        saveDimensions();
     };
 
     return (
@@ -629,11 +686,11 @@ function AssignedTasksCard({
                 zIndex: isDraggingCard || isResizing ? 50 : 10
             }}
             className={cn(
-                "bg-zinc-900/70 backdrop-blur-2xl border rounded-2xl shadow-2xl flex flex-col transition-[box-shadow,border-color] duration-200",
+                "bg-zinc-900/70 backdrop-blur-2xl border rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-[box-shadow,border-color] duration-200",
                 (isDraggingCard || isResizing) 
-                    ? "border-violet-500/40 shadow-violet-500/25 scale-[1.01]" 
+                    ? cn(assignedGroupColor.border, assignedGroupColor.glow, "scale-[1.01]") 
                     : isDragOver 
-                        ? "border-violet-500/40 shadow-violet-500/25" 
+                        ? cn(assignedGroupColor.border, assignedGroupColor.glow) 
                         : "border-white/10"
             )}
         >
@@ -648,11 +705,44 @@ function AssignedTasksCard({
                     {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                 </button>
                 <span className="flex-1 text-xs font-black uppercase tracking-widest text-white truncate flex items-center gap-2">
-                    <Users className="w-3.5 h-3.5 text-violet-400" /> Assigned Tasks
+                    <Users className={cn("w-3.5 h-3.5", assignedGroupColor.text)} /> Assigned Tasks
                 </span>
-                <span className="text-[9px] font-bold text-violet-400/60 bg-violet-500/10 px-2 py-0.5 rounded-full">
-                    {activeTasks.length} active
-                </span>
+                
+                {/* Color picker */}
+                <div className="relative">
+                    {showColorPicker ? (
+                        <div className="flex items-center gap-1 bg-zinc-800/90 rounded-lg p-1 border border-white/10 shadow-lg">
+                            {GROUP_COLORS.map(c => (
+                                <button 
+                                    key={c.value}
+                                    onClick={() => handleColorChange(c.value)}
+                                    title={c.label}
+                                    className={cn(
+                                        "w-4 h-4 rounded-full transition-all flex items-center justify-center",
+                                        assignedColor === c.value 
+                                            ? "ring-2 ring-white/30 scale-110" 
+                                            : "hover:scale-110 opacity-60 hover:opacity-100"
+                                    )}
+                                >
+                                    <span className={cn("w-2.5 h-2.5 rounded-full", c.bg)} />
+                                </button>
+                            ))}
+                            <button 
+                                onClick={() => setShowColorPicker(false)}
+                                className="ml-0.5 text-zinc-500 hover:text-zinc-300 transition-colors"
+                            >
+                                <X className="w-3 h-3" />
+                            </button>
+                        </div>
+                    ) : (
+                        <button 
+                            onClick={() => setShowColorPicker(true)} 
+                            className="cursor-pointer text-zinc-700 hover:text-zinc-300 transition-colors"
+                        >
+                            <span className={cn("w-2.5 h-2.5 rounded-full block", assignedGroupColor.bg)} />
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Scrollable Body */}
@@ -668,6 +758,7 @@ function AssignedTasksCard({
                                         key={task.id} 
                                         task={task} 
                                         groupName={groupNames[task.sourceGroupId]}
+                                        groupTextColor={assignedGroupColor.text}
                                         onToggle={toggleAssignedTask}
                                         onDragStart={onTaskDragStart}
                                     />
@@ -684,6 +775,7 @@ function AssignedTasksCard({
                                                 key={task.id} 
                                                 task={task} 
                                                 groupName={groupNames[task.sourceGroupId]}
+                                                groupTextColor={assignedGroupColor.text}
                                                 onToggle={toggleAssignedTask}
                                                 onDragStart={onTaskDragStart}
                                             />
@@ -701,7 +793,7 @@ function AssignedTasksCard({
                 onPointerDown={onResizePointerDown}
                 onPointerMove={onResizePointerMove}
                 onPointerUp={onResizePointerUp}
-                className="absolute bottom-1 right-1 cursor-nwse-resize p-1 text-white/5 hover:text-violet-500/40 transition-colors"
+                className={cn("absolute bottom-1 right-1 cursor-nwse-resize p-1 text-white/5 transition-colors", isResizing ? assignedGroupColor.resizeActive : assignedGroupColor.resizeHover)}
                 title="Resize"
             >
                 <Maximize2 className="w-3 h-3 rotate-90" />
@@ -712,23 +804,32 @@ function AssignedTasksCard({
 
 // ─── Assigned Task Row ───────────────────────────────────────────────────────
 function AssignedTaskRow({ 
-    task, groupName, onToggle, onDragStart 
+    task, groupName, groupTextColor, onToggle, onDragStart 
 }: { 
     task: any; 
     groupName: string | undefined;
+    groupTextColor: string;
     onToggle: (taskId: string, groupId: string, isDone: boolean) => void;
     onDragStart: (e: React.PointerEvent, task: any) => void;
 }) {
     const router = useRouter();
     const loadTask = useTimerStore((state) => state.loadTask);
-    const [showPriority, setShowPriority] = useState(false);
-    const p = getPriority(task.priority ?? "natural");
+    const mappedPriority = 
+        task.priority === "high" ? "urgent" :
+        task.priority === "medium" ? "high" :
+        task.priority === "low" ? "normal" :
+        (task.priority ?? "natural");
+    const p = getPriority(mappedPriority);
     const isDone = task.status === "done";
 
     const handleStart = () => {
         const duration = task.durationMinutes ? task.durationMinutes * 60 : 25 * 60;
         loadTask(task.id, task.title, duration, task.priority ?? "natural", task.description ?? "");
         router.push("/");
+    };
+
+    const handleDelete = async () => {
+        await deleteDoc(doc(db, `focusGroups/${task.sourceGroupId}/tasks`, task.id));
     };
 
     return (
@@ -762,43 +863,42 @@ function AssignedTaskRow({
                 {/* Right section */}
                 <div className="flex items-center gap-1.5 ml-auto">
                     {!isDone && (
-                        <>
-                            <div className="flex items-center gap-1 overflow-hidden max-w-0 group-hover/row:max-w-[100px] transition-all duration-200 ease-out">
-                                {/* Start on timer */}
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); handleStart(); }} 
-                                    title="Start on timer"
-                                    className="p-1 rounded-md text-emerald-500/70 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors flex-shrink-0"
-                                >
-                                    <Play className="w-3 h-3 fill-current" />
-                                </button>
+                        <div className="flex items-center gap-1 overflow-hidden max-w-0 group-hover/row:max-w-[80px] transition-all duration-200 ease-out">
+                            {/* Start on timer */}
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); handleStart(); }} 
+                                title="Start on timer"
+                                className="p-1 rounded-md text-emerald-500/70 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors flex-shrink-0"
+                            >
+                                <Play className="w-3 h-3 fill-current" />
+                            </button>
 
-                                {/* Priority dot */}
-                                {!showPriority && (
-                                    <button 
-                                        onClick={(e) => { e.stopPropagation(); setShowPriority(true); }} 
-                                        className="p-1 rounded-md hover:bg-white/5 transition-colors flex-shrink-0"
-                                    >
-                                        <span className={cn("w-2.5 h-2.5 rounded-full block", p.dot)} />
-                                    </button>
-                                )}
-                            </div>
-
-                            {showPriority && (
-                                <PriorityPicker 
-                                    taskId={task.id} 
-                                    priority={task.priority ?? "natural"} 
-                                    onClose={() => setShowPriority(false)}
-                                />
-                            )}
-                        </>
+                            {/* Delete task */}
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); handleDelete(); }} 
+                                title="Delete task"
+                                className="p-1 rounded-md text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0"
+                            >
+                                <Trash2 className="w-3 h-3" />
+                            </button>
+                        </div>
+                    )}
+                    
+                    {isDone && (
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); handleDelete(); }} 
+                            title="Delete task"
+                            className="p-1 rounded-md text-zinc-700 hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover/row:opacity-100"
+                        >
+                            <Trash2 className="w-3 h-3" />
+                        </button>
                     )}
                 </div>
             </div>
 
             {/* Group name badge */}
             {groupName && (
-                <p className="ml-9 pr-3 text-[9px] font-bold text-violet-400/50 uppercase tracking-wider truncate">
+                <p className={cn("ml-9 pr-3 text-[9px] font-bold uppercase tracking-wider truncate opacity-50", groupTextColor)}>
                     {groupName}
                 </p>
             )}
