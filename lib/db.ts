@@ -689,6 +689,83 @@ export const deleteTask = async (taskId: string) => {
     }
 };
 
+export const subscribeToAssignedGroupTasks = (userId: string, callback: (tasks: any[]) => void) => {
+    if (!userId) return () => { };
+
+    let activeUnsubscribe: (() => void) | null = null;
+    let isCancelled = false;
+    let allTasks: any[] = [];
+
+    const setupListener = async () => {
+        try {
+            const groupsQ = query(
+                collection(db, "focusGroups"),
+                where("members", "array-contains", userId)
+            );
+            
+            const groupsSnap = await getDocs(groupsQ);
+            if (isCancelled) return;
+            
+            const groupIds = groupsSnap.docs.map(d => d.id);
+            if (groupIds.length === 0) {
+                callback([]);
+                return;
+            }
+
+            const unsubscribes: (() => void)[] = [];
+            const groupTaskMaps: Record<string, any[]> = {};
+
+            const updateAllTasks = () => {
+                if (isCancelled) return;
+                allTasks = [];
+                for (const tasks of Object.values(groupTaskMaps)) {
+                    allTasks.push(...tasks);
+                }
+                callback([...allTasks]);
+            };
+
+            for (const groupId of groupIds) {
+                const tasksQ = query(
+                    collection(db, `focusGroups/${groupId}/tasks`),
+                    where("assignedTo", "==", userId)
+                );
+
+                const unsub = onSnapshot(tasksQ, (snapshot) => {
+                    if (isCancelled) return;
+                    groupTaskMaps[groupId] = snapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data(),
+                        sourceGroupId: groupId,
+                        isGroupTask: true
+                    }));
+                    updateAllTasks();
+                }, (error) => {
+                    if (!isCancelled) {
+                        console.error("Error subscribing to group tasks:", error);
+                    }
+                });
+                
+                unsubscribes.push(unsub);
+            }
+
+            activeUnsubscribe = () => {
+                unsubscribes.forEach(u => u());
+            };
+        } catch (error) {
+            if (!isCancelled) {
+                console.error("Error setting up assigned tasks listener:", error);
+            }
+        }
+    };
+
+    setupListener();
+
+    return () => {
+        isCancelled = true;
+        if (activeUnsubscribe) activeUnsubscribe();
+    };
+};
+
 export const subscribeToTasks = (userId: string, callback: (tasks: any[]) => void) => {
     if (!userId) return () => { };
 

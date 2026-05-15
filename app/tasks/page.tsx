@@ -5,14 +5,17 @@ import { useRouter } from "next/navigation";
 import {
     ClipboardList, Plus, Trash2, CheckCircle2, Circle,
     ChevronDown, ChevronRight, Pencil, Check, X, GripVertical,
-    Play, Clock, Maximize2, Palette, Settings, Sparkles
+    Play, Clock, Maximize2, Palette, Settings, Sparkles, Users
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import { db } from "@/lib/firebase";
+import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import {
     addTask, subscribeToTasks, toggleTask, deleteTask,
     addGroup, renameGroup, deleteGroup as dbDeleteGroup,
     updateGroupPosition, updateGroupDimensions, moveTaskToGroup, subscribeToGroups,
-    updateTaskPriority, updateTaskField, updateGroupColor, type TaskPriority
+    updateTaskPriority, updateTaskField, updateGroupColor, type TaskPriority,
+    subscribeToAssignedGroupTasks
 } from "@/lib/db";
 import { useTimerStore } from "@/lib/store";
 import { toast } from "sonner";
@@ -531,11 +534,291 @@ function GroupCard({
     );
 }
 
+// ─── Assigned Tasks Card ─────────────────────────────────────────────────────
+function AssignedTasksCard({
+    tasks, userId, isDragOver, onTaskDragStart,
+}: {
+    tasks: any[]; userId: string; isDragOver: boolean;
+    onTaskDragStart: (e: React.PointerEvent, task: any) => void;
+}) {
+    const [collapsed, setCollapsed] = useState(false);
+    const [groupNames, setGroupNames] = useState<Record<string, string>>({});
+    const [isDraggingCard, setIsDraggingCard] = useState(false);
+    const [isResizing, setIsResizing] = useState(false);
+    const posRef = useRef({ x: 40, y: 40 });
+    const dimRef = useRef({ w: 320, h: 500 });
+    const dragOffset = useRef({ x: 0, y: 0 });
+    const cardEl = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        const fetchGroupNames = async () => {
+            const ids = [...new Set(tasks.map(t => t.sourceGroupId).filter(Boolean))];
+            if (ids.length === 0) return;
+            
+            const names: Record<string, string> = {};
+            for (const id of ids) {
+                const snap = await getDoc(doc(db, "focusGroups", id));
+                if (snap.exists()) {
+                    names[id] = snap.data().name || "Unknown Group";
+                }
+            }
+            setGroupNames(names);
+        };
+        fetchGroupNames();
+    }, [tasks]);
+
+    const activeTasks = tasks
+        .filter(t => t.status !== "done")
+        .sort((a, b) => PRIORITY_ORDER[a.priority as TaskPriority ?? "natural"] - PRIORITY_ORDER[b.priority as TaskPriority ?? "natural"]);
+    const doneTasks = tasks.filter(t => t.status === "done");
+
+    const toggleAssignedTask = async (taskId: string, groupId: string, isDone: boolean) => {
+        await updateDoc(doc(db, `focusGroups/${groupId}/tasks`, taskId), { 
+            status: isDone ? "done" : "todo", 
+            updatedAt: serverTimestamp() 
+        });
+    };
+
+    const onHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        if ((e.target as HTMLElement).closest("button")) return;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        dragOffset.current = { x: e.clientX - posRef.current.x, y: e.clientY - posRef.current.y };
+        setIsDraggingCard(true);
+    };
+    const onHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (!isDraggingCard) return;
+        const x = Math.max(0, e.clientX - dragOffset.current.x);
+        const y = Math.max(0, e.clientY - dragOffset.current.y);
+        posRef.current = { x, y };
+        if (cardEl.current) { cardEl.current.style.left = `${x}px`; cardEl.current.style.top = `${y}px`; }
+    };
+    const onHeaderPointerUp = () => {
+        if (!isDraggingCard) return;
+        setIsDraggingCard(false);
+    };
+
+    const onResizePointerDown = (e: React.PointerEvent) => {
+        e.stopPropagation();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        setIsResizing(true);
+    };
+    const onResizePointerMove = (e: React.PointerEvent) => {
+        if (!isResizing || !cardEl.current) return;
+        const newW = Math.min(600, Math.max(280, e.clientX - posRef.current.x));
+        const newH = Math.min(800, Math.max(200, e.clientY - posRef.current.y));
+        dimRef.current = { w: newW, h: newH };
+        cardEl.current.style.width = `${newW}px`;
+        if (!collapsed) cardEl.current.style.height = `${newH}px`;
+    };
+    const onResizePointerUp = () => {
+        if (!isResizing) return;
+        setIsResizing(false);
+    };
+
+    return (
+        <div
+            ref={cardEl}
+            data-group-id="assigned-tasks"
+            style={{
+                position: "absolute",
+                left: posRef.current.x,
+                top: posRef.current.y,
+                width: dimRef.current.w,
+                height: collapsed ? "auto" : dimRef.current.h,
+                willChange: "left,top,width,height",
+                zIndex: isDraggingCard || isResizing ? 50 : 10
+            }}
+            className={cn(
+                "bg-zinc-900/70 backdrop-blur-2xl border rounded-2xl shadow-2xl flex flex-col transition-[box-shadow,border-color] duration-200",
+                (isDraggingCard || isResizing) 
+                    ? "border-violet-500/40 shadow-violet-500/25 scale-[1.01]" 
+                    : isDragOver 
+                        ? "border-violet-500/40 shadow-violet-500/25" 
+                        : "border-white/10"
+            )}
+        >
+            {/* Draggable Header */}
+            <div
+                onPointerDown={onHeaderPointerDown}
+                onPointerMove={onHeaderPointerMove}
+                onPointerUp={onHeaderPointerUp}
+                className="flex items-center gap-2 px-3 py-2.5 border-b border-white/5 select-none cursor-grab active:cursor-grabbing flex-shrink-0"
+            >
+                <button onClick={() => setCollapsed(v => !v)} className="text-zinc-600 hover:text-white transition-colors">
+                    {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+                <span className="flex-1 text-xs font-black uppercase tracking-widest text-white truncate flex items-center gap-2">
+                    <Users className="w-3.5 h-3.5 text-violet-400" /> Assigned Tasks
+                </span>
+                <span className="text-[9px] font-bold text-violet-400/60 bg-violet-500/10 px-2 py-0.5 rounded-full">
+                    {activeTasks.length} active
+                </span>
+            </div>
+
+            {/* Scrollable Body */}
+            {!collapsed && (
+                <div className="flex-1 min-h-0 overflow-y-auto p-2.5" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                    <div className="space-y-0.5">
+                        {tasks.length === 0 ? (
+                            <p className="text-[10px] text-zinc-700 uppercase tracking-widest font-bold text-center py-8">No assigned tasks</p>
+                        ) : (
+                            <>
+                                {activeTasks.map(task => (
+                                    <AssignedTaskRow 
+                                        key={task.id} 
+                                        task={task} 
+                                        groupName={groupNames[task.sourceGroupId]}
+                                        onToggle={toggleAssignedTask}
+                                        onDragStart={onTaskDragStart}
+                                    />
+                                ))}
+                                {doneTasks.length > 0 && (
+                                    <>
+                                        <div className="flex items-center gap-2 my-2.5">
+                                            <div className="flex-1 h-px bg-white/5" />
+                                            <span className="text-[9px] text-zinc-700 font-bold uppercase tracking-widest">Done</span>
+                                            <div className="flex-1 h-px bg-white/5" />
+                                        </div>
+                                        {doneTasks.map(task => (
+                                            <AssignedTaskRow 
+                                                key={task.id} 
+                                                task={task} 
+                                                groupName={groupNames[task.sourceGroupId]}
+                                                onToggle={toggleAssignedTask}
+                                                onDragStart={onTaskDragStart}
+                                            />
+                                        ))}
+                                    </>
+                                )}
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Resize Handle */}
+            <div
+                onPointerDown={onResizePointerDown}
+                onPointerMove={onResizePointerMove}
+                onPointerUp={onResizePointerUp}
+                className="absolute bottom-1 right-1 cursor-nwse-resize p-1 text-white/5 hover:text-violet-500/40 transition-colors"
+                title="Resize"
+            >
+                <Maximize2 className="w-3 h-3 rotate-90" />
+            </div>
+        </div>
+    );
+}
+
+// ─── Assigned Task Row ───────────────────────────────────────────────────────
+function AssignedTaskRow({ 
+    task, groupName, onToggle, onDragStart 
+}: { 
+    task: any; 
+    groupName: string | undefined;
+    onToggle: (taskId: string, groupId: string, isDone: boolean) => void;
+    onDragStart: (e: React.PointerEvent, task: any) => void;
+}) {
+    const router = useRouter();
+    const loadTask = useTimerStore((state) => state.loadTask);
+    const [showPriority, setShowPriority] = useState(false);
+    const p = getPriority(task.priority ?? "natural");
+    const isDone = task.status === "done";
+
+    const handleStart = () => {
+        const duration = task.durationMinutes ? task.durationMinutes * 60 : 25 * 60;
+        loadTask(task.id, task.title, duration, task.priority ?? "natural", task.description ?? "");
+        router.push("/");
+    };
+
+    return (
+        <div
+            className={cn(
+                "group/row flex flex-col gap-0.5 rounded-r-xl px-2 py-2 transition-all duration-200 select-none border-l-2",
+                p.border,
+                "hover:bg-white/[0.03]",
+                !isDone && "cursor-pointer"
+            )}
+        >
+            <div className="flex items-center gap-2">
+                {/* Checkbox */}
+                <button 
+                    onClick={(e) => { e.stopPropagation(); onToggle(task.id, task.sourceGroupId, !isDone); }} 
+                    className="transition-transform active:scale-90 flex-shrink-0"
+                >
+                    {isDone
+                        ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                        : <Circle className="w-4 h-4 text-zinc-700 hover:text-emerald-500/60 transition-colors" />}
+                </button>
+
+                {/* Title */}
+                <span className={cn(
+                    "flex-1 text-sm font-medium leading-tight min-w-0 truncate transition-colors",
+                    isDone ? "text-zinc-600 line-through" : "text-zinc-200"
+                )}>
+                    {task.title}
+                </span>
+
+                {/* Right section */}
+                <div className="flex items-center gap-1.5 ml-auto">
+                    {!isDone && (
+                        <>
+                            <div className="flex items-center gap-1 overflow-hidden max-w-0 group-hover/row:max-w-[100px] transition-all duration-200 ease-out">
+                                {/* Start on timer */}
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); handleStart(); }} 
+                                    title="Start on timer"
+                                    className="p-1 rounded-md text-emerald-500/70 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors flex-shrink-0"
+                                >
+                                    <Play className="w-3 h-3 fill-current" />
+                                </button>
+
+                                {/* Priority dot */}
+                                {!showPriority && (
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); setShowPriority(true); }} 
+                                        className="p-1 rounded-md hover:bg-white/5 transition-colors flex-shrink-0"
+                                    >
+                                        <span className={cn("w-2.5 h-2.5 rounded-full block", p.dot)} />
+                                    </button>
+                                )}
+                            </div>
+
+                            {showPriority && (
+                                <PriorityPicker 
+                                    taskId={task.id} 
+                                    priority={task.priority ?? "natural"} 
+                                    onClose={() => setShowPriority(false)}
+                                />
+                            )}
+                        </>
+                    )}
+                </div>
+            </div>
+
+            {/* Group name badge */}
+            {groupName && (
+                <p className="ml-9 pr-3 text-[9px] font-bold text-violet-400/50 uppercase tracking-wider truncate">
+                    {groupName}
+                </p>
+            )}
+
+            {/* Description */}
+            {task.description && !isDone && (
+                <p className="ml-9 pr-3 text-[10px] font-medium text-zinc-600 whitespace-pre-wrap line-clamp-2 italic">
+                    {task.description}
+                </p>
+            )}
+        </div>
+    );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function TasksPage() {
     const { user, loading: authLoading } = useAuth();
     const [tasks, setTasks] = useState<any[]>([]);
     const [groups, setGroups] = useState<any[]>([]);
+    const [assignedTasks, setAssignedTasks] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [isCreatingGroup, setIsCreatingGroup] = useState(false);
     const [newGroupName, setNewGroupName] = useState("");
@@ -575,7 +858,8 @@ export default function TasksPage() {
                 setLoading(false);
             });
             const u2 = subscribeToGroups(user.uid, setGroups);
-            cleanup = () => { u1(); u2(); };
+            const u3 = subscribeToAssignedGroupTasks(user.uid, setAssignedTasks);
+            cleanup = () => { u1(); u2(); u3(); };
         };
         run();
         return () => { if (cleanup) cleanup(); };
@@ -715,6 +999,16 @@ export default function TasksPage() {
                     onTaskDragStart={onTaskDragStart} cardRef={el => { groupRefs.current[g.id] = el; }}
                 />
             ))}
+
+            {/* Assigned Tasks Group */}
+            {assignedTasks.length > 0 && (
+                <AssignedTasksCard 
+                    tasks={assignedTasks} 
+                    userId={user.uid}
+                    isDragOver={false}
+                    onTaskDragStart={onTaskDragStart}
+                />
+            )}
 
             {/* FAB */}
             <div className="fixed bottom-8 right-8 z-30 flex flex-col items-end gap-3">
