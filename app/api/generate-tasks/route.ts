@@ -2,47 +2,47 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { SYSTEM_PROMPT } from "@/lib/prompts";
 
 const PREFERRED_FREE_MODELS = [
+  "google/gemini-2.0-flash-exp:free",
+  "google/gemini-flash-1.5-8b:free",
   "meta-llama/llama-3.1-70b-instruct:free",
   "meta-llama/llama-3.1-8b-instruct:free",
-  "google/gemini-flash-1.5-8b:free",
   "mistralai/pixtral-12b:free",
+  "qwen/qwen-2.5-72b-instruct:free",
 ];
 
-async function getFreeModel(): Promise<string> {
+async function getCandidateModels(): Promise<string[]> {
+  const candidates = [...PREFERRED_FREE_MODELS];
   try {
-    // Next.js will cache this response for 30 minutes across all instances
     const res = await fetch("https://openrouter.ai/api/v1/models", {
       next: { revalidate: 1800 },
     });
     
-    if (!res.ok) throw new Error("Failed to fetch models");
-    const data = await res.json();
-    
-    const availableFreeModels = new Set(
-      data.data
-        .filter((m: any) => m.pricing?.prompt === "0" && m.pricing?.completion === "0")
-        .map((m: any) => m.id)
-    );
+    if (res.ok) {
+      const data = await res.json();
+      const availableFreeModels = new Set(
+        data.data
+          .filter((m: any) => m.pricing?.prompt === "0" && m.pricing?.completion === "0")
+          .map((m: any) => m.id)
+      );
 
-    // Pick the first preferred model that is actually available
-    for (const modelId of PREFERRED_FREE_MODELS) {
-      if (availableFreeModels.has(modelId)) return modelId;
+      // Add all currently available free models that aren't already in our preferred list
+      data.data.forEach((m: any) => {
+        if (m.pricing?.prompt === "0" && m.pricing?.completion === "0" && !candidates.includes(m.id)) {
+          candidates.push(m.id);
+        }
+      });
+      
+      // Re-sort to prioritize our preferred ones that are actually available
+      return candidates.filter(id => availableFreeModels.has(id));
     }
-
-    // Fallback to any free model if preferred ones aren't available
-    const anyFreeModel = data.data.find((m: any) => m.pricing?.prompt === "0" && m.pricing?.completion === "0");
-    if (anyFreeModel) return anyFreeModel.id;
-
   } catch (error) {
-    console.error("Error fetching free models:", error);
+    console.error("Error fetching free models from OpenRouter:", error);
   }
-
-  return "meta-llama/llama-3.1-8b-instruct:free";
+  return candidates;
 }
 
 function cleanJsonResponse(text: string) {
   try {
-    // Try to find JSON block in case model included markdown fences or filler text
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return { error: "No valid response format found" };
     
@@ -54,28 +54,24 @@ function cleanJsonResponse(text: string) {
   }
 }
 
-export async function POST(req: Request) {
-  const apiKey = process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return Response.json({ error: "API key not configured" }, { status: 500 });
-  }
+async function tryGeminiFallback(messages: any[]) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
 
-  try {
-    const { messages } = await req.json();
-    const isGeminiOnly = process.env.GEMINI_API_KEY && !process.env.OPENROUTER_API_KEY;
+  // List of models to try in order of preference
+  const geminiModels = ["gemini-2.0-flash-exp", "gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.0-pro"];
+  
+  for (const modelName of geminiModels) {
+    try {
+      console.log(`Attempting Gemini fallback with model: ${modelName}`);
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: modelName });
 
-    if (isGeminiOnly) {
-      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-      // gemini-1.0-pro is the most widely available fallback model
-      const model = genAI.getGenerativeModel({ model: "gemini-1.0-pro" });
-
-      // Gemini history must alternate User/Model and start with User
       const chatHistory = messages.slice(0, -1).map((m: any) => ({
         role: m.role === "user" ? "user" : "model",
         parts: [{ text: m.content }],
       }));
 
-      // Ensure history starts with 'user'
       while (chatHistory.length > 0 && chatHistory[0].role !== "user") {
         chatHistory.shift();
       }
@@ -91,41 +87,82 @@ export async function POST(req: Request) {
       const lastMessage = messages[messages.length - 1];
       const result = await chat.sendMessage(SYSTEM_PROMPT + "\n\nUser: " + lastMessage.content);
       const text = result.response.text();
-      return Response.json({ response: cleanJsonResponse(text) });
+      return cleanJsonResponse(text);
+    } catch (err) {
+      console.error(`Gemini fallback failed for ${modelName}:`, err);
+      continue;
+    }
+  }
+  return null;
+}
+
+export async function POST(req: Request) {
+  const openRouterKey = process.env.OPENROUTER_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
+
+  if (!openRouterKey && !geminiKey) {
+    return Response.json({ error: "No API keys configured" }, { status: 500 });
+  }
+
+  try {
+    const { messages } = await req.json();
+
+    // 1. Try OpenRouter if key is available
+    if (openRouterKey) {
+      const modelIds = await getCandidateModels();
+      
+      // Try up to 3 different models
+      const modelsToTry = modelIds.slice(0, 3);
+      
+      for (const modelId of modelsToTry) {
+        try {
+          console.log(`Attempting OpenRouter with model: ${modelId}`);
+          const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${openRouterKey}`,
+              "Content-Type": "application/json",
+              "HTTP-Referer": "https://dangdoro.app",
+              "X-Title": "Dangdoro",
+            },
+            body: JSON.stringify({
+              model: modelId,
+              messages: [
+                { role: "system", content: SYSTEM_PROMPT },
+                ...messages,
+              ],
+              max_tokens: 4096,
+              temperature: 0.7,
+              response_format: { type: "json_object" }
+            }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            const content = data.choices[0].message.content;
+            return Response.json({ response: cleanJsonResponse(content) });
+          }
+          
+          const errText = await response.text();
+          console.warn(`OpenRouter model ${modelId} failed: ${response.status} ${errText}`);
+        } catch (err) {
+          console.error(`Error during OpenRouter call for ${modelId}:`, err);
+        }
+      }
     }
 
-    const modelId = await getFreeModel();
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://dangdoro.app",
-        "X-Title": "Dangdoro",
-      },
-      body: JSON.stringify({
-        model: modelId,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          ...messages,
-        ],
-        max_tokens: 4096,
-        temperature: 0.7,
-        response_format: { type: "json_object" } // Tell OpenRouter we want JSON if supported
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`OpenRouter error: ${response.status} ${errText}`);
+    // 2. Try Gemini Fallback
+    if (geminiKey) {
+      const result = await tryGeminiFallback(messages);
+      if (result) {
+        return Response.json({ response: result });
+      }
     }
 
-    const data = await response.json();
-    const content = data.choices[0].message.content;
-    return Response.json({ response: cleanJsonResponse(content) });
+    throw new Error("All AI providers and models failed");
 
   } catch (error) {
-    console.error("AI API error:", error);
-    return Response.json({ error: "Failed to generate response" }, { status: 500 });
+    console.error("AI API Final Error:", error);
+    return Response.json({ error: "Failed to generate response after multiple attempts" }, { status: 500 });
   }
 }
