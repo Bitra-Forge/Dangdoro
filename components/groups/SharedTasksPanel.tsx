@@ -451,7 +451,7 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
             <div className="grid grid-cols-1 gap-3">
                 {incompleteTasks.map((task: any, i: number) => {
                     const isEditing = editingTaskId === task.id;
-                    const canEdit = isAdmin || task.assignedTo === currentUserId;
+                    const canEdit = isAdmin || task.assignedTo === currentUserId || task.assignedTo === "all";
                     const statusConfig = TASK_STATUS_CONFIG[task.status] || TASK_STATUS_CONFIG.todo;
                     const StatusIcon = statusConfig.icon;
 
@@ -594,7 +594,7 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                 )}
                 {completedTasks.map((task: any, i: number) => {
                     const isEditing = editingTaskId === task.id;
-                    const canEdit = isAdmin || task.assignedTo === currentUserId;
+                    const canEdit = isAdmin || task.assignedTo === currentUserId || task.assignedTo === "all";
                     const statusConfig = TASK_STATUS_CONFIG[task.status] || TASK_STATUS_CONFIG.todo;
                     const StatusIcon = statusConfig.icon;
 
