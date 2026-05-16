@@ -59,6 +59,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const [showInviteModal, setShowInviteModal] = useState(false);
     const [sessionActionPending, setSessionActionPending] = useState<"start" | "pause" | "stop" | null>(null);
     const [optimisticFocusing, setOptimisticFocusing] = useState<boolean | null>(null);
+    const [isPaused, setIsPaused] = useState(false);
     const [roleActionPendingId, setRoleActionPendingId] = useState<string | null>(null);
     const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -216,8 +217,18 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         if (sessionActionPending) return;
 
         setSessionActionPending(action);
-        if (action === "start") setOptimisticFocusing(true);
-        if (action === "pause" || action === "stop") setOptimisticFocusing(false);
+        const willBePaused = action === "pause" ? !isPaused : false;
+        if (action === "start") {
+            setOptimisticFocusing(true);
+            setIsPaused(false);
+        }
+        if (action === "pause") {
+            setIsPaused(willBePaused);
+        }
+        if (action === "stop") {
+            setOptimisticFocusing(false);
+            setIsPaused(false);
+        }
         try {
             const result = await applyGroupSessionAction({
                 group: enrichedGroup,
@@ -229,6 +240,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
 
             if (result.shouldStartTimer && !timerIsActive) timerStart();
             if (result.shouldPauseTimer) timerPause();
+            if (action === "pause" && !willBePaused && !timerIsActive) timerStart();
             if (result.shouldStopTimer) {
                 const timerSnapshot = useTimerStore.getState();
                 if (timerSnapshot.mode === "focus" && timerSnapshot.timeLeft > 0) {
@@ -241,10 +253,11 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                 timerStop();
             }
 
-            toast.info(`Focus ${action}ed.`);
+            toast.info(action === "pause" ? (willBePaused ? `Focus paused.` : `Focus resumed.`) : `Focus ${action}ed.`);
         } catch (error) {
             console.error("Failed to update group focus session:", error);
             setOptimisticFocusing(null);
+            setIsPaused(false);
             toast.error("Could not update session.");
         } finally {
             setSessionActionPending(null);
@@ -369,18 +382,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                         <span className="text-[10px] font-black uppercase text-emerald-400 tracking-widest leading-none mt-[1px]">Live</span>
                                     </div>
                                 )}
-                            </h2>
-                            {!isManagingRoles && (
-                                <span className={cn(
-                                    "flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border",
-                                    isOrg 
-                                        ? "bg-[white]/10 text-[white] border-[white]/20" 
-                                        : "bg-blue-500/10 text-blue-400 border-blue-400/20"
-                                )}>
-                                    {isOrg ? <Briefcase className="w-2.5 h-2.5" /> : <Users className="w-2.5 h-2.5" />}
-                                    {enrichedGroup.type}
-                                </span>
-                            )}
+                        </h2>
                             {enrichedGroup.privacy === "private-code" && enrichedGroup.hostId === user.uid && (
                                 <div className="flex items-center gap-2 ml-2 p-1.5 bg-zinc-950/60 rounded-xl border border-white/5">
                                     <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-2">Code:</span>
@@ -393,14 +395,6 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                         </div>
                         <div className="flex items-center gap-3 ml-12">
                             <p className="text-zinc-500 text-sm max-w-xl line-clamp-1">{isManagingRoles ? `Configure authorization and hierarchy for ${enrichedGroup.name}` : enrichedGroup.description}</p>
-                            {!isManagingRoles && isActive && (
-                                <>
-                                    <div className="w-1 h-1 rounded-full bg-zinc-700" />
-                                    <p className="text-xs text-emerald-400/80 font-bold">{activeFocuserCount} focusing</p>
-                                    <div className="w-1 h-1 rounded-full bg-zinc-700" />
-                                    <p className="text-xs text-zinc-300 font-terminal tracking-tight bg-white/5 px-2 py-0.5 rounded-md border border-white/10"><LiveElapsedTimer startTime={activeStartTime} isActive={isActive} /></p>
-                                </>
-                            )}
                         </div>
                     </div>
                     
@@ -429,23 +423,24 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                                 disabled={!!sessionActionPending}
                                                 onClick={() => handleSessionAction("pause")}
                                                 className={cn(
-                                                    "px-6 py-2.5 rounded-[10px] font-black text-xs transition-all duration-300 flex items-center gap-2 group/btn relative overflow-hidden",
-                                                    sessionActionPending 
-                                                        ? "bg-indigo-500/40 text-white/50 cursor-not-allowed" 
-                                                        : "bg-indigo-600 text-white hover:bg-indigo-500 hover:shadow-[0_8px_25px_rgba(79,70,229,0.3)] cursor-pointer"
+                                                    "px-6 py-2.5 rounded-[10px] font-black text-xs transition-all duration-300 flex items-center gap-2 group/btn relative overflow-hidden border-none",
+                                                    isPaused
+                                                        ? "bg-amber-500/5 text-amber-400 cursor-default"
+                                                        : sessionActionPending 
+                                                            ? "bg-amber-500/20 text-amber-200/50 cursor-not-allowed" 
+                                                            : "bg-amber-500/5 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 hover:shadow-[0_8px_25px_rgba(245,158,11,0.15)] cursor-pointer"
                                                 )}
                                             >
-                                                {/* Curved Glass Edge Lights (Inner Stroke) */}
-                                                <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/40 pointer-events-none z-10" />
-                                                <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/20 pointer-events-none z-10" />
+                                                {/* Curved Glass Edge Lights for Pause */}
+                                                <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-amber-500/30 pointer-events-none z-10" />
+                                                <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-amber-500/10 pointer-events-none z-10" />
                                                 
-                                                {/* Internal Depth Glow */}
-                                                <div className="absolute top-0 inset-x-0 h-[8px] bg-gradient-to-b from-white/10 to-transparent z-10" />
-                                                <div className="absolute bottom-0 inset-x-0 h-[8px] bg-gradient-to-t from-white/5 to-transparent z-10" />
+                                                {/* Internal Soft Amber Glow */}
+                                                <div className="absolute top-0 inset-x-0 h-[8px] bg-gradient-to-b from-amber-500/10 to-transparent z-10" />
                                                 
-                                                <div className="absolute inset-0 bg-gradient-to-tr from-white/15 via-transparent to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                                                <Pause className="w-4 h-4 relative z-10" />
-                                                <span className="relative z-10">{sessionActionPending === "pause" ? "Pausing..." : "Pause"}</span>
+                                                <div className="absolute inset-0 bg-gradient-to-tr from-amber-500/5 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                                                {isPaused ? <Play className="w-4 h-4 relative z-10 fill-current" /> : <Pause className="w-4 h-4 relative z-10" />}
+                                                <span className="relative z-10">{isPaused ? "Resume" : sessionActionPending === "pause" ? "Pausing..." : "Pause"}</span>
                                             </button>
                                             <button
                                                 disabled={!!sessionActionPending}

@@ -5,7 +5,6 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/components/AuthProvider";
 import { SoundEngine } from "@/components/SoundEngine";
 import { TimerTicker } from "@/components/TimerTicker";
-import { TimerPiPWidget } from "@/components/TimerPiPWidget";
 import { GlobalAuthModal } from "@/components/GlobalAuthModal";
 import { NavigationHub } from "@/components/navigation-hub";
 import { NotificationsMenu } from "@/components/notifications-menu";
@@ -65,7 +64,6 @@ export default function RootLayout({
            {/* Global timer components */}
            <GroupSessionSync />
            <TimerTicker />
-           <TimerPiPWidget />
           
           {/* Audio & UI components */}
           <SoundEngine />
