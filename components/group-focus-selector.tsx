@@ -69,7 +69,24 @@ export function GroupFocusSelector() {
 
     const unsub = onSnapshot(q, (snap) => {
       const fetched = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FocusGroup[];
-      setGroups(fetched);
+      const sorted = fetched.sort((a, b) => {
+        const aMins = a.totalMinutes ?? 0;
+        const bMins = b.totalMinutes ?? 0;
+        if (bMins !== aMins) return bMins - aMins;
+
+        const aLastActive = a.memberStats?.[user.uid]?.lastActive;
+        const bLastActive = b.memberStats?.[user.uid]?.lastActive;
+        const toMillis = (ts: any): number => {
+          if (!ts) return 0;
+          if (typeof ts.toMillis === "function") return ts.toMillis();
+          if (typeof ts.seconds === "number") return ts.seconds * 1000;
+          return 0;
+        };
+        const bTime = toMillis(bLastActive);
+        const aTime = toMillis(aLastActive);
+        return bTime - aTime;
+      });
+      setGroups(sorted);
     });
 
     return unsub;
