@@ -62,7 +62,7 @@ export function GroupSessionSync() {
     setActiveGroupId,
     setLiveSessionId,
     timerIsActive,
-    user,
+    user?.uid,
   ]);
 
   useEffect(() => {

@@ -10,6 +10,8 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { BackgroundTheme } from "@/components/background-theme";
+import { GroupFocusSelector } from "@/components/group-focus-selector";
+import { FloatingFocusAvatars } from "@/components/floating-focus-avatars";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -82,6 +84,13 @@ export default function Home() {
       </div>
 
       <main className="relative z-10 flex flex-col items-center justify-center pt-24 pb-32 px-4 w-full flex-1">
+
+        <FloatingFocusAvatars />
+
+        {/* Group Focus Selector - Top Left */}
+        <div className="fixed top-24 left-10 z-40 animate-in slide-in-from-left-12 fade-in duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)]">
+          <GroupFocusSelector />
+        </div>
 
         {/* Premium Active Task Card - Top Right */}
         {activeTaskLabel && (
