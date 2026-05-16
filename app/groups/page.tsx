@@ -462,7 +462,7 @@ function CreateGroupForm({ user, onClose, privacy, setPrivacy }: any) {
         if (!name.trim()) return;
         const groupRef = doc(collection(db, "focusGroups"));
         const accessCode = privacy === "private-code" ? Math.random().toString(36).substring(2, 8).toUpperCase() : null;
-        const inviteToken = privacy === "private-invite" ? generateInviteToken() : null;
+        const inviteToken = (privacy === "private-invite" || privacy === "public") ? generateInviteToken() : null;
         
         await setDoc(groupRef, {
             name, description: desc, type: "friends", hostId: user.uid, hostName: user.displayName || "Forge User",

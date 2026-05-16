@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { 
     X, Link2, CheckCircle2, Copy, Zap, 
@@ -20,6 +20,17 @@ export function InviteModal({ group, user, friends, onClose }: any) {
     const [sending, setSending] = useState(false);
     const [copied, setCopied] = useState(false);
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
+    
+    // Auto-generate invite token for public/private-invite groups if missing
+    useEffect(() => {
+        if (!group || !user) return;
+        if (group.privacy === "private-code") return;
+        if (group.inviteToken) return;
+        if (group.hostId !== user.uid) return;
+        
+        const newToken = generateInviteToken();
+        updateDoc(doc(db, "focusGroups", group.id), { inviteToken: newToken }).catch(() => {});
+    }, [group?.id, group?.inviteToken, group?.privacy, group?.hostId, user?.uid]);
     
     const inviteLink = group.inviteToken ? buildInviteLink(group.inviteToken) : null;
     
@@ -62,9 +73,9 @@ export function InviteModal({ group, user, friends, onClose }: any) {
     };
 
     return (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={onClose} />
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={onClose}>
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                onClick={e => e.stopPropagation()}
                 className={cn("relative w-full max-w-lg border border-white/10 rounded-3xl shadow-2xl overflow-hidden", settingsGlassmorphism ? "bg-zinc-900/80 backdrop-blur-md" : "bg-zinc-900")}
             >
                 {/* Header */}
