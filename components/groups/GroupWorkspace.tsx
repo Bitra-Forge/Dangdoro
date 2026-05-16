@@ -173,7 +173,8 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const isAdmin = userRole === "host" || userRole === "admin";
     const isOrg = enrichedGroup?.type === "organization";
     const activeFocuserCount = enrichedGroup?.memberDetails?.filter((m: any) => m.isFocusing).length || 0;
-    const isActive = activeFocuserCount > 0;
+    const activeOrPausedCount = enrichedGroup?.memberDetails?.filter((m: any) => m.isFocusing || (m.uid === user?.uid && optimisticFocusing)).length || 0;
+    const isActive = activeFocuserCount > 0 || (user && optimisticFocusing);
     const activeStartTime = getEarliestActiveStart(enrichedGroup?.memberDetails) ?? enrichedGroup?.startTime;
     const sortedMembers = useMemo(() => {
         if (!enrichedGroup) return [];
@@ -569,21 +570,30 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                         <div className="hidden lg:flex items-center gap-4">
                             <div className="h-4 w-[1px] bg-white/10 mr-2" />
                             <div className="flex -space-x-2">
-                                {enrichedGroup.memberDetails?.filter((m: any) => m.isFocusing).slice(0, 8).map((m: any, i: number) => (
-                                    <div key={i} className="relative group/avatar">
-                                        <Avatar className={cn(
-                                            "w-9 h-9 rounded-full border-2 border-zinc-950 transition-all duration-300 bg-zinc-900 z-10 scale-105",
-                                            "ring-2 ring-cyan-500 ring-offset-2 ring-offset-zinc-950 hover:scale-110"
-                                        )}>
-                                            <AvatarImage src={m.photoURL} className="object-cover w-full h-full rounded-full" />
-                                            <AvatarFallback className="text-[10px] bg-zinc-800 text-white rounded-full flex items-center justify-center">{m.displayName?.[0]}</AvatarFallback>
-                                        </Avatar>
-                                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-cyan-500 border-2 border-zinc-950 shadow-[0_0_8px_rgba(6,182,212,0.6)] z-20" />
-                                    </div>
-                                ))}
-                                {activeFocuserCount > 8 && (
+                                {enrichedGroup.memberDetails?.filter((m: any) => m.isFocusing || (m.uid === user?.uid && optimisticFocusing)).slice(0, 8).map((m: any, i: number) => {
+                                    const isCurrentUser = m.uid === user?.uid;
+                                    const isActuallyFocusing = m.isFocusing || (isCurrentUser && optimisticFocusing);
+                                    const isPausedState = isCurrentUser && isPaused;
+                                    
+                                    return (
+                                        <div key={i} className="relative group/avatar">
+                                            <Avatar className={cn(
+                                                "w-9 h-9 rounded-full border-2 border-zinc-950 transition-all duration-300 bg-zinc-900 z-10 scale-105",
+                                                isActuallyFocusing && !isPausedState ? "ring-2 ring-cyan-500 ring-offset-2 ring-offset-zinc-950 hover:scale-110" : "ring-2 ring-amber-500/50 ring-offset-2 ring-offset-zinc-950 opacity-70"
+                                            )}>
+                                                <AvatarImage src={m.photoURL} className="object-cover w-full h-full rounded-full" />
+                                                <AvatarFallback className="text-[10px] bg-zinc-800 text-white rounded-full flex items-center justify-center">{m.displayName?.[0]}</AvatarFallback>
+                                            </Avatar>
+                                            <div className={cn(
+                                                "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-zinc-950 z-20",
+                                                isActuallyFocusing && !isPausedState ? "bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.6)]" : "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.4)]"
+                                            )} />
+                                        </div>
+                                    );
+                                })}
+                                {activeOrPausedCount > 8 && (
                                     <div className="w-9 h-9 rounded-full bg-zinc-800 border-2 border-zinc-950 flex items-center justify-center text-[10px] font-black text-zinc-400 z-0">
-                                        +{activeFocuserCount - 8}
+                                        +{activeOrPausedCount - 8}
                                     </div>
                                 )}
                             </div>
@@ -746,7 +756,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                             <p className="text-[10px] font-black uppercase text-zinc-500 tracking-[0.18em]">Members</p>
                                             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/25">
                                                 <div className="w-1 h-1 rounded-full bg-indigo-500" />
-                                                <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">{activeFocuserCount} Live</span>
+                                                <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">{activeOrPausedCount} Live</span>
                                             </div>
                                         </div>
                                         <div className="space-y-2 mb-4">

@@ -124,15 +124,6 @@ export const EnhancedGroupCard = memo(function EnhancedGroupCard({ group, isMemb
                         <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 flex-wrap">
                                 <span className={cn(
-                                    "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border",
-                                    isOrg
-                                        ? "bg-[white]/10 border-[white]/25 text-[white]"
-                                        : "bg-indigo-500/8 border-indigo-400/20 text-indigo-400"
-                                )}>
-                                    {isOrg ? <Briefcase className="w-2.5 h-2.5" /> : <Users className="w-2.5 h-2.5" />}
-                                    {isOrg ? "Org" : "Friends"}
-                                </span>
-                                <span className={cn(
                                     "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/8 bg-white/4",
                                     privacyMeta.color
                                 )}>
