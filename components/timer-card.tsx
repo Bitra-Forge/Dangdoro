@@ -25,6 +25,7 @@ export function TimerCard() {
 
   const timeLeft = useTimerStore((s) => s.timeLeft);
   const isActive = useTimerStore((s) => s.isActive);
+  const isPaused = useTimerStore((s) => s.isPaused);
   const mode = useTimerStore((s) => s.mode);
   const start = useTimerStore((s) => s.start);
   const pause = useTimerStore((s) => s.pause);
@@ -539,9 +540,9 @@ export function TimerCard() {
                         : "bg-white/90 text-black border border-white/90 hover:bg-white"
                     )}
                     style={{ fontSize: "17px", fontFamily: "'Space Grotesk', sans-serif" }}
-                    title={isActive ? "Pause" : "Start"}
+                    title={isActive ? "Pause" : isPaused ? "Resume" : "Start"}
                   >
-                    {isActive ? "Pause" : "Start"}
+                    {isActive ? "Pause" : isPaused ? "Resume" : "Start"}
                   </Button>
 
                   {isActive && (

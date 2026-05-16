@@ -40,6 +40,7 @@ interface TimerState {
   setActiveGroupId: (id: string | null) => void;
   activeLiveSessionId: string | null;
   setLiveSessionId: (id: string | null) => void;
+  isPaused: boolean;
 
   // Actions
   start: () => void;
@@ -149,6 +150,7 @@ export const useTimerStore = create<TimerState>()(
       setActiveGroupId: (id) => set({ activeGroupId: id }),
       activeLiveSessionId: null,
       setLiveSessionId: (id) => set({ activeLiveSessionId: id }),
+      isPaused: false,
       setSettingsGlassmorphism: (enabled) => set({ settingsGlassmorphism: enabled }),
 
       loadTask: (id, label, durationSeconds, priority, notes) => {
@@ -174,6 +176,7 @@ export const useTimerStore = create<TimerState>()(
 
         set({
           isActive: true,
+          isPaused: false,
           lastUpdate: Date.now(),
           sessionStartTime: Date.now(),
           ...(mode === "focus" || mode === "long-break"
@@ -181,13 +184,14 @@ export const useTimerStore = create<TimerState>()(
             : {}),
         });
       },
-      pause: () => set({ isActive: false, lastUpdate: null }),
+      pause: () => set({ isActive: false, isPaused: true, lastUpdate: null }),
       stop: () => {
         const { mode, settingsFocusTime, settingsBreakTime, settingsLongBreakTime } = get();
         const baseline = mode === "focus" ? settingsFocusTime : mode === "break" ? settingsBreakTime : settingsLongBreakTime;
 
         set({
           isActive: false,
+          isPaused: false,
           lastUpdate: null,
           sessionStartTime: null,
           timeLeft: baseline,
@@ -202,6 +206,7 @@ export const useTimerStore = create<TimerState>()(
 
         set({
           isActive: false,
+          isPaused: false,
           lastUpdate: null,
           sessionStartTime: null,
           completedFocusSessions: 0,

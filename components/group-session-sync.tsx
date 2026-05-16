@@ -4,12 +4,13 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
 import { useTimerStore } from "@/lib/store";
-import { endLiveSession, startLiveSession, updateLiveSessionHeartbeat } from "@/lib/db";
+import { endLiveSession, startLiveSession, updateLiveSessionHeartbeat, updateLiveSessionStatus } from "@/lib/db";
 import { trackSessionEvent } from "@/lib/session-telemetry";
 
 export function GroupSessionSync() {
   const { user } = useAuth();
   const timerIsActive = useTimerStore((s) => s.isActive);
+  const isPaused = useTimerStore((s) => s.isPaused);
   const activeGroupId = useTimerStore((s) => s.activeGroupId);
   const pauseTimer = useTimerStore((s) => s.pause);
   const setActiveGroupId = useTimerStore((s) => s.setActiveGroupId);
@@ -35,10 +36,11 @@ export function GroupSessionSync() {
             setActiveGroupId(null);
             pauseTimer();
           }
-        } else if (!timerIsActive && activeLiveSessionId) {
-          await endLiveSession(activeLiveSessionId);
-          setLiveSessionId(null);
-        } else if (timerIsActive && !activeGroupId && activeLiveSessionId) {
+        } else if (activeLiveSessionId && activeGroupId) {
+          // Update status based on pause state
+          const newStatus = isPaused ? "paused" : "focusing";
+          await updateLiveSessionStatus(activeLiveSessionId, newStatus);
+        } else if (!activeGroupId && activeLiveSessionId) {
           await endLiveSession(activeLiveSessionId);
           setLiveSessionId(null);
         } else {
@@ -58,6 +60,7 @@ export function GroupSessionSync() {
   }, [
     activeGroupId,
     activeLiveSessionId,
+    isPaused,
     pauseTimer,
     setActiveGroupId,
     setLiveSessionId,
@@ -66,7 +69,7 @@ export function GroupSessionSync() {
   ]);
 
   useEffect(() => {
-    if (!timerIsActive || !activeLiveSessionId) {
+    if (!activeLiveSessionId) {
       return;
     }
 
@@ -77,7 +80,7 @@ export function GroupSessionSync() {
     }, 30000);
 
     return () => clearInterval(heartbeat);
-  }, [activeLiveSessionId, timerIsActive]);
+  }, [activeLiveSessionId]);
 
   return null;
 }

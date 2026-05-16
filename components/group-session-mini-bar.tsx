@@ -24,6 +24,7 @@ function fmtElapsedFromMs(ms: number) {
 export function GroupSessionMiniBar() {
   const activeGroupId = useTimerStore((s) => s.activeGroupId);
   const isActive = useTimerStore((s) => s.isActive);
+  const isPaused = useTimerStore((s) => s.isPaused);
   const mode = useTimerStore((s) => s.mode);
   const timeLeft = useTimerStore((s) => s.timeLeft);
   const initialFocusTime = useTimerStore((s) => s.initialFocusTime);
@@ -48,6 +49,8 @@ export function GroupSessionMiniBar() {
     return fmtElapsedFromMs(elapsedSeconds * 1000);
   }, [initialFocusTime, isActive, mode, timeLeft]);
 
+  const isPausedState = !isActive && isPaused;
+
   if (!activeGroupId) return null;
 
   return (
@@ -59,7 +62,10 @@ export function GroupSessionMiniBar() {
           <p className="text-sm font-black text-white truncate flex items-center justify-center gap-2">
             <span>{groupName}</span> 
             <span className="text-zinc-600">•</span>
-            <span className="text-cyan-400 font-bold font-terminal tracking-tight">{elapsed}</span>
+            <span className={cn(
+              "font-bold font-terminal tracking-tight",
+              isPausedState ? "text-amber-400" : "text-cyan-400"
+            )}>{elapsed}</span>
           </p>
         </div>
         
@@ -74,7 +80,9 @@ export function GroupSessionMiniBar() {
               "flex-1 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all shadow-sm",
               isActive
                 ? "bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700 hover:text-white"
-                : "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/30"
+                : isPausedState
+                  ? "bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30"
+                  : "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/30"
             )}
           >
             {isActive ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}

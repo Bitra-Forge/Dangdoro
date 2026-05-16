@@ -18,6 +18,8 @@ export const ParticipantsTab = memo(function ParticipantsTab({ group, sortedMemb
     }, [sortedMembers]);
 
     const liveMembers = sortedMembers.filter((m: any) => m.isFocusing);
+    const pausedMembers = sortedMembers.filter((m: any) => m.isFocusing && m.sessionStatus === "paused");
+    const activeOrPausedMembers = sortedMembers.filter((m: any) => m.isFocusing);
 
     return (
         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
@@ -46,9 +48,9 @@ export const ParticipantsTab = memo(function ParticipantsTab({ group, sortedMemb
                 </div>
             </div>
 
-            {liveMembers.length > 0 ? (
+            {activeOrPausedMembers.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {liveMembers.map((m: any, i: number) => (
+                    {activeOrPausedMembers.map((m: any, i: number) => (
                         <motion.div 
                             key={m.uid}
                             initial={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -81,11 +83,12 @@ const UserCard = memo(function UserCard({ m, isMe, memberNowMs }: any) {
         return fmtElapsed(Math.max(0, Math.floor((memberNowMs - startedMs) / 1000)));
     }, [m.isFocusing, m.liveSessionStartedAt, memberNowMs]);
 
-    const isLive = m.isFocusing;
+    const isLive = m.isFocusing && m.sessionStatus !== "paused";
+    const isPaused = m.isFocusing && m.sessionStatus === "paused";
     return (
         <div className={cn(
             "relative overflow-hidden flex flex-col items-center justify-center text-center transition-all duration-300 group rounded-[1.5rem]",
-            isLive ? "bg-white/[0.03] border border-cyan-500/30 shadow-[0_4px_20px_rgba(6,182,212,0.15)] min-h-[180px]" : "bg-zinc-950/60 border border-white/5 opacity-70 hover:opacity-100 min-h-[160px]"
+            isLive ? "bg-white/[0.03] border border-cyan-500/30 shadow-[0_4px_20px_rgba(6,182,212,0.15)] min-h-[180px]" : isPaused ? "bg-white/[0.03] border border-amber-500/30 shadow-[0_4px_20px_rgba(245,158,11,0.15)] min-h-[180px]" : "bg-zinc-950/60 border border-white/5 opacity-70 hover:opacity-100 min-h-[160px]"
         )}>
             {isLive && (
                 <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20">
@@ -93,11 +96,17 @@ const UserCard = memo(function UserCard({ m, isMe, memberNowMs }: any) {
                     <span className="text-[8px] font-black uppercase text-cyan-400 tracking-widest leading-none">Live</span>
                 </div>
             )}
+            {isPaused && (
+                <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
+                    <span className="text-[8px] font-black uppercase text-amber-400 tracking-widest leading-none">Paused</span>
+                </div>
+            )}
 
             <div className="flex flex-col items-center z-10 w-full px-4 mt-4">
                 <Avatar className={cn(
                     "w-12 h-12 border-2 mb-2 transition-all duration-500",
-                    isLive ? "border-cyan-500 shadow-lg shadow-cyan-500/20" : "border-zinc-800"
+                    isLive ? "border-cyan-500 shadow-lg shadow-cyan-500/20" : isPaused ? "border-amber-500 shadow-lg shadow-amber-500/20" : "border-zinc-800"
                 )}>
                     <AvatarImage src={m.photoURL} />
                     <AvatarFallback className="text-lg bg-zinc-800">{m.displayName?.[0]}</AvatarFallback>
@@ -110,10 +119,13 @@ const UserCard = memo(function UserCard({ m, isMe, memberNowMs }: any) {
             </div>
             
             <div className="mt-auto w-full p-3 border-t border-white/5 bg-black/20">
-                {isLive ? (
+                {isLive || isPaused ? (
                     <>
                         <p className="text-[8px] text-zinc-500 uppercase tracking-widest font-bold mb-0.5">Session Timer</p>
-                        <p className="text-base font-black text-white tabular-nums tracking-tight">{elapsedText || "0s"}</p>
+                        <p className={cn(
+                            "text-base font-black tabular-nums tracking-tight",
+                            isPaused ? "text-amber-400" : "text-white"
+                        )}>{elapsedText || "0s"}</p>
                     </>
                 ) : (
                     <>

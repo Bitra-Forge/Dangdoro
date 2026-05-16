@@ -268,6 +268,15 @@ export const updateLiveSessionHeartbeat = async (liveSessionId: string) => {
     } catch (e) { /* ignore */ }
 };
 
+export const updateLiveSessionStatus = async (liveSessionId: string, status: "focusing" | "paused") => {
+    try {
+        await updateDoc(doc(db, "liveSessions", liveSessionId), {
+            status,
+            lastHeartbeat: serverTimestamp()
+        });
+    } catch (e) { /* ignore */ }
+};
+
 /**
  * Saves a partially completed Pomodoro session (user stopped early).
  * The duration reflects actual time spent, not the full configured duration.

@@ -4,6 +4,7 @@ import { memo } from "react";
 import { motion } from "framer-motion";
 import { Flame } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
 
 export const ActiveFocusersBanner = memo(function ActiveFocusersBanner({ focusers }: { focusers: any[] }) {
     return (
@@ -42,15 +43,21 @@ export const ActiveFocusersBanner = memo(function ActiveFocusersBanner({ focuser
 
             {/* Avatars */}
             <div className="flex -space-x-2 overflow-hidden flex-1">
-                {focusers.slice(0, 10).map((f: any, i: number) => (
-                    <div key={f.uid} className="relative">
-                        <Avatar className="w-8 h-8 rounded-full border-2 border-zinc-950 bg-zinc-900">
-                            <AvatarImage src={f.photoURL} />
-                            <AvatarFallback className="text-[8px] bg-zinc-800 text-white">{f.displayName?.[0]}</AvatarFallback>
-                        </Avatar>
-                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-indigo-500 border border-zinc-950" />
-                    </div>
-                ))}
+                {focusers.slice(0, 10).map((f: any, i: number) => {
+                    const isPaused = f.status === "paused";
+                    return (
+                        <div key={f.uid} className="relative">
+                            <Avatar className="w-8 h-8 rounded-full border-2 border-zinc-950 bg-zinc-900">
+                                <AvatarImage src={f.photoURL} />
+                                <AvatarFallback className="text-[8px] bg-zinc-800 text-white">{f.displayName?.[0]}</AvatarFallback>
+                            </Avatar>
+                            <div className={cn(
+                                "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-zinc-950",
+                                isPaused ? "bg-amber-500" : "bg-indigo-500"
+                            )} />
+                        </div>
+                    );
+                })}
                 {focusers.length > 10 && (
                     <div className="w-8 h-8 rounded-full bg-zinc-800 border-2 border-zinc-950 flex items-center justify-center text-[8px] font-black text-zinc-500">
                         +{focusers.length - 10}
