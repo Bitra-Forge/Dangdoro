@@ -4,7 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { 
     X, Link2, CheckCircle2, Copy, Zap, 
-    Users, Search, Check, Mail, Send 
+    Users, Search, Check, Mail, Send, Key
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTimerStore } from "@/lib/store";
@@ -102,43 +102,81 @@ export function InviteModal({ group, user, friends, onClose }: any) {
                         </div>
                     )}
 
-                    {/* Friend picker */}
-                    {nonMemberFriends.length > 0 && (
+                    {/* Access Code section for private-code groups */}
+                    {group.privacy === "private-code" && (
                         <div className="space-y-3">
                             <p className="text-[10px] font-black uppercase text-zinc-600 tracking-widest flex items-center gap-2">
-                                <Users className="w-3.5 h-3.5" /> Invite Friends
+                                <Key className="w-3.5 h-3.5" /> Group Code
                             </p>
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
-                                <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search friends..." className="w-full bg-zinc-950 border border-white/5 rounded-xl pl-10 pr-4 py-3 text-sm text-white outline-none focus:border-white/15 transition-all" />
-                            </div>
-                            <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
-                                {filtered.map((f: any) => {
-                                    const isSelected = selectedFriends.includes(f.friendId);
-                                    const isPending = group.pendingInvites?.includes(f.friendId);
-                                    return (
-                                        <button key={f.friendId} onClick={() => !isPending && toggleFriend(f.friendId)} disabled={isPending} className={cn("w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left", isSelected ? "bg-violet-500/15 border-violet-500/30" : isPending ? "bg-zinc-900/60 border-white/5 opacity-60 cursor-default" : "bg-zinc-900/40 border-white/5 hover:border-white/10")}>
-                                            <Avatar className="w-9 h-9 border border-white/10">
-                                                <AvatarImage src={f.userData?.photoURL} />
-                                                <AvatarFallback>{f.userData?.displayName?.[0]}</AvatarFallback>
-                                            </Avatar>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-bold text-white truncate">{f.userData?.displayName}</p>
-                                                {isPending && <p className="text-[10px] text-violet-400 font-bold uppercase tracking-wider">Invite pending</p>}
-                                            </div>
-                                            {isSelected && <Check className="w-4 h-4 text-violet-400 shrink-0" />}
-                                            {isPending && <Mail className="w-4 h-4 text-violet-400/50 shrink-0" />}
-                                        </button>
-                                    );
-                                })}
-                                {filtered.length === 0 && (
-                                    <p className="text-center py-6 text-xs text-zinc-600 font-bold uppercase tracking-wider">
-                                        {searchTerm ? "No matching friends" : "All friends are already members"}
-                                    </p>
-                                )}
+                            <div className="flex gap-2">
+                                <div className="flex-1 bg-zinc-950 border border-white/5 rounded-xl px-4 py-3 flex items-center overflow-hidden">
+                                    <code className="text-sm font-black text-white tracking-wider">
+                                        {group.accessCode ?? "No code available"}
+                                    </code>
+                                </div>
+                                <button 
+                                    onClick={() => { 
+                                        if (group.accessCode) {
+                                            navigator.clipboard.writeText(group.accessCode);
+                                            toast.success("Code copied!");
+                                        }
+                                    }} 
+                                    disabled={!group.accessCode} 
+                                    className={cn("px-4 py-3 rounded-xl border font-black text-xs transition-all flex items-center gap-2", copied ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-400" : "bg-white/5 border-white/10 text-white hover:bg-white/10")}
+                                >
+                                    <Copy className="w-4 h-4" />
+                                    Copy
+                                </button>
                             </div>
                         </div>
                     )}
+
+                    {/* Separator */}
+                    <div className="border-t border-white/5" />
+
+                    {/* Friend picker */}
+                    <div className="space-y-3">
+                        <p className="text-[10px] font-black uppercase text-zinc-600 tracking-widest flex items-center gap-2">
+                            <Users className="w-3.5 h-3.5" /> Invite Friends
+                        </p>
+                        {nonMemberFriends.length > 0 ? (
+                            <>
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
+                                    <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search friends..." className="w-full bg-zinc-950 border border-white/5 rounded-xl pl-10 pr-4 py-3 text-sm text-white outline-none focus:border-white/15 transition-all" />
+                                </div>
+                                <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                                    {filtered.map((f: any) => {
+                                        const isSelected = selectedFriends.includes(f.friendId);
+                                        const isPending = group.pendingInvites?.includes(f.friendId);
+                                        return (
+                                            <button key={f.friendId} onClick={() => !isPending && toggleFriend(f.friendId)} disabled={isPending} className={cn("w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left", isSelected ? "bg-violet-500/15 border-violet-500/30" : isPending ? "bg-zinc-900/60 border-white/5 opacity-60 cursor-default" : "bg-zinc-900/40 border-white/5 hover:border-white/10")}>
+                                                <Avatar className="w-9 h-9 border border-white/10">
+                                                    <AvatarImage src={f.userData?.photoURL} />
+                                                    <AvatarFallback>{f.userData?.displayName?.[0]}</AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-bold text-white truncate">{f.userData?.displayName}</p>
+                                                    {isPending && <p className="text-[10px] text-violet-400 font-bold uppercase tracking-wider">Invite pending</p>}
+                                                </div>
+                                                {isSelected && <Check className="w-4 h-4 text-violet-400 shrink-0" />}
+                                                {isPending && <Mail className="w-4 h-4 text-violet-400/50 shrink-0" />}
+                                            </button>
+                                        );
+                                    })}
+                                    {filtered.length === 0 && (
+                                        <p className="text-center py-6 text-xs text-zinc-600 font-bold uppercase tracking-wider">
+                                            {searchTerm ? "No matching friends" : "All friends are already members"}
+                                        </p>
+                                    )}
+                                </div>
+                            </>
+                        ) : (
+                            <p className="text-center py-6 text-xs text-zinc-600 font-bold uppercase tracking-wider">
+                                No friends to invite
+                            </p>
+                        )}
+                    </div>
                 </div>
 
                 {/* Footer */}

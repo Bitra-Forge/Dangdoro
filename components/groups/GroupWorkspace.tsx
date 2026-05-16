@@ -16,7 +16,7 @@ import { useRouter } from "next/navigation";
 import { 
     Users, Briefcase, ChevronRight, Play, Pause, 
     StopCircle, MoreVertical, UserPlus, LogOut, X, 
-    LayoutGrid, Target, Crown, Zap, User, Copy, Trash2, RefreshCw
+    LayoutGrid, Target, Crown, Zap, User, Trash2, RefreshCw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -30,6 +30,7 @@ import {
 } from "@/lib/groups";
 import { fetchUserProfiles, savePartialPomodoroSession } from "@/lib/db";
 import { applyGroupSessionAction } from "@/lib/group-session";
+import { getFriendsList } from "@/lib/friendship";
 
 // Sub-components
 import { LiveElapsedTimer } from "./LiveElapsedTimer";
@@ -64,6 +65,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [objectiveTemplateDraft, setObjectiveTemplateDraft] = useState<ObjectiveTemplateDraft | null>(null);
+    const [friends, setFriends] = useState<any[]>([]);
 
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
     const timerStart = useTimerStore(s => s.start);
@@ -141,6 +143,12 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         }
     }, [group, user]);
 
+    // 7. Fetch friends list
+    useEffect(() => {
+        if (!user) return;
+        getFriendsList(user.uid).then(setFriends);
+    }, [user]);
+
     // Derived State
     const enrichedGroup = useMemo(() => {
         if (!group || !user) return null;
@@ -154,9 +162,9 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
 
             return {
                 uid: memberId,
-                displayName: hydration?.displayName || (memberId === user.uid ? user.displayName : "Member"),
-                photoURL: hydration?.photoURL || (memberId === user.uid ? user.photoURL : null),
                 ...stats,
+                displayName: hydration?.displayName || stats.displayName || (memberId === user.uid ? user.displayName : "Member"),
+                photoURL: hydration?.photoURL || stats.photoURL || (memberId === user.uid ? user.photoURL : null),
                 isFocusing,
                 liveSessionStartedAt: memberLiveSession?.startedAt || null,
                 role,
@@ -384,15 +392,6 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                     </div>
                                 )}
                         </h2>
-                            {enrichedGroup.privacy === "private-code" && enrichedGroup.hostId === user.uid && (
-                                <div className="flex items-center gap-2 ml-2 p-1.5 bg-zinc-950/60 rounded-xl border border-white/5">
-                                    <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-2">Code:</span>
-                                    <code className="text-sm font-black text-[white] bg-[white]/5 px-2 py-0.5 rounded-lg border border-[white]/20">{enrichedGroup.accessCode}</code>
-                                    <button onClick={() => { navigator.clipboard.writeText(enrichedGroup.accessCode || ""); toast.success("Code copied"); }} className="p-1 px-2 hover:bg-white/10 rounded-lg text-zinc-500 hover:text-white transition-all">
-                                        <Copy className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
-                            )}
                         </div>
                         <div className="flex items-center gap-3 ml-12">
                             <p className="text-zinc-500 text-sm max-w-xl line-clamp-1">{isManagingRoles ? `Configure authorization and hierarchy for ${enrichedGroup.name}` : enrichedGroup.description}</p>
@@ -810,7 +809,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
             <AnimatePresence>
                 {showInviteModal && enrichedGroup && user && (
                     <InviteModal
-                        group={enrichedGroup} user={user} friends={[]} // Friends should be fetched here if needed
+                        group={enrichedGroup} user={user} friends={friends}
                         onClose={() => setShowInviteModal(false)}
                     />
                 )}
