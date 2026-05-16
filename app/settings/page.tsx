@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import {
     Bell, Clock, LogOut, Mail, LogIn,
     Zap, Minus, Plus, RotateCcw,
-    ChevronRight, PlayCircle, PauseCircle, Sparkles, Palette, Check, WandSparkles
+    ChevronRight, PlayCircle, PauseCircle, Sparkles, Palette, Check, WandSparkles, Grid3X3
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { logOut } from "@/lib/auth";
@@ -15,6 +15,8 @@ import { updateUserSettings } from "@/lib/db";
 import { cn } from "@/lib/utils";
 import { useTimerStore } from "@/lib/store";
 import { BackgroundTheme } from "@/components/background-theme";
+import { BG_PALETTES } from "@/lib/background-config";
+import { useBackgroundTheme } from "@/lib/use-background-theme";
 
 type AppSettings = typeof DEFAULT_SETTINGS;
 
@@ -58,6 +60,8 @@ function settingsEqual(a: typeof DEFAULT_SETTINGS, b: typeof DEFAULT_SETTINGS) {
 }
 
 export default function SettingsPage() {
+    const { showDots, bgPalette, updateShowDots, updateBgPalette } = useBackgroundTheme(false);
+    
     const NONE_SOLID_COLORS = [
         { name: "Sage", value: "#757c4f" },
         { name: "Teal Mist", value: "#2f7f7a" },
@@ -372,7 +376,7 @@ export default function SettingsPage() {
                                 ))}
                             </div>
                         </section>
-                        {/* Premium Effects Section */}
+                        {/* Appearance Section */}
                         <section id="background-theme">
                             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-1">Appearance</h2>
                             <div className="relative bg-zinc-900/50 rounded-lg overflow-visible border border-white/5">
@@ -382,7 +386,7 @@ export default function SettingsPage() {
                                             <Palette className="w-4 h-4 text-zinc-200" />
                                         </div>
                                         <div>
-                                            <div className="text-zinc-200 font-medium">Background Theme</div>
+                                            <div className="text-zinc-200 font-medium">Pomodoro Theme</div>
                                         </div>
                                     </div>
 
@@ -573,34 +577,63 @@ export default function SettingsPage() {
                             </div>
                         </section>
 
+                        {/* Background Section */}
                         <section>
-                            <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-1">Premium Effects</h2>
-                            <div className="bg-zinc-900/50 rounded-lg overflow-hidden border border-white/5">
+                            <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-1">Background</h2>
+                            <div className="relative bg-zinc-900/50 rounded-lg overflow-visible border border-white/5">
                                 <button
-                                    onClick={() => setSettings(prev => ({ ...prev, glassmorphism: !prev.glassmorphism }))}
+                                    onClick={() => updateShowDots(!showDots)}
                                     className="w-full text-left p-6 transition-colors hover:bg-white/[0.01]"
                                 >
                                     <div className="flex items-center justify-between gap-4">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-lg bg-[#C9B037]/20 flex items-center justify-center border border-[#C9B037]/20">
-                                                <Sparkles className="w-5 h-5 text-[#C9B037]" />
-                                            </div>
-                                            <div>
-                                                <div className="text-zinc-200 font-medium">UI Transparency (Glassmorphism)</div>
-                                                <div className="text-[9px] text-zinc-500 uppercase tracking-wider mt-1">Enable cinematic frosted-glass backgrounds. Disable for solid high-contrast mode.</div>
-                                            </div>
+                                        <div>
+                                            <div className="text-zinc-200 font-medium">Dot Grid</div>
+                                            <div className="text-[9px] text-zinc-500 uppercase tracking-wider mt-1">Show animated dot pattern on the background</div>
                                         </div>
                                         <div className={cn(
                                             "relative w-12 h-7 rounded-full transition-colors flex-shrink-0",
-                                            settings.glassmorphism ? "bg-[#C9B037]" : "bg-zinc-700"
+                                            showDots ? "bg-emerald-500" : "bg-zinc-700"
                                         )}>
                                             <div className={cn(
                                                 "absolute left-1 top-1 w-5 h-5 rounded-full bg-white transition-transform",
-                                                settings.glassmorphism ? "translate-x-5" : "translate-x-0"
+                                                showDots ? "translate-x-5" : "translate-x-0"
                                             )} />
                                         </div>
                                     </div>
                                 </button>
+
+                                <div className="p-6 border-t border-white/5">
+                                    <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3">
+                                        Color Palette
+                                    </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                        {(Object.keys(BG_PALETTES) as (keyof typeof BG_PALETTES)[]).map((key) => {
+                                            const palette = BG_PALETTES[key];
+                                            const orbs = palette.orbs;
+                                            const color1 = orbs.length > 0 ? `rgb(${orbs[0].color})` : "rgb(100,100,100)";
+                                            const color2 = orbs.length > 1 ? `rgb(${orbs[1].color})` : color1;
+                                            
+                                            return (
+                                                <button
+                                                    key={key}
+                                                    onClick={() => updateBgPalette(key)}
+                                                    className={cn(
+                                                        "px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all text-left flex items-center gap-2",
+                                                        bgPalette === key
+                                                            ? "bg-white/15 text-white border border-white/20"
+                                                            : "bg-white/5 text-zinc-500 hover:text-zinc-300 border border-transparent hover:bg-white/10"
+                                                    )}
+                                                >
+                                                    <span className="flex -space-x-1">
+                                                        <span className="w-3 h-3 rounded-full border border-white/20" style={{ backgroundColor: color1 }} />
+                                                        <span className="w-3 h-3 rounded-full border border-white/20" style={{ backgroundColor: color2 }} />
+                                                    </span>
+                                                    {palette.name}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
                             </div>
                         </section>
 
