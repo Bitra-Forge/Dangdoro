@@ -51,8 +51,9 @@ export function getGroupStatusRules(
 
 export function getClientTimerEffects(groupId: string, action: SessionAction): GroupSessionActionResult {
   const isStarting = action === "start";
+  const isPauseOrResume = action === "pause";
   return {
-    shouldSetActiveGroupId: isStarting ? groupId : null,
+    shouldSetActiveGroupId: isStarting || isPauseOrResume ? groupId : null,
     shouldStartTimer: isStarting,
     shouldPauseTimer: action === "pause",
     shouldStopTimer: action === "stop",

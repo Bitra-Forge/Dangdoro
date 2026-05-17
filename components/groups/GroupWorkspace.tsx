@@ -179,7 +179,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
 
     const isMember = enrichedGroup?.members.includes(user?.uid || "");
     const isInGroupSession = activeGroupId === groupId;
-    const effectiveIsFocusing = isInGroupSession;
+    const effectiveIsFocusing = isInGroupSession || isPaused;
     const userRole = enrichedGroup?.memberStats?.[user?.uid || ""]?.role || (enrichedGroup?.hostId === user?.uid ? "host" : "member");
     const isAdmin = userRole === "host" || userRole === "admin";
     const isOrg = enrichedGroup?.type === "organization";
@@ -567,16 +567,16 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                         <div className="hidden lg:flex items-center gap-4">
                             <div className="h-4 w-[1px] bg-white/10 mr-2" />
                             <div className="flex -space-x-2">
-                                {enrichedGroup.memberDetails?.filter((m: any) => m.isFocusing || (m.uid === user?.uid && (optimisticFocusing || isPaused))).slice(0, 8).map((m: any, i: number) => {
+                                {enrichedGroup.memberDetails?.filter((m: any) => m.isFocusing || (m.uid === user?.uid && (optimisticFocusing || isPaused || effectiveIsFocusing))).slice(0, 8).map((m: any, i: number) => {
                                     const isCurrentUser = m.uid === user?.uid;
-                                    const isActuallyFocusing = m.isFocusing && m.sessionStatus !== "paused";
+                                    const isActuallyFocusing = m.isFocusing && m.sessionStatus !== "paused" && !(isCurrentUser && isPaused);
                                     const isPausedState = (isCurrentUser && isPaused) || (!isCurrentUser && m.sessionStatus === "paused");
                                     
                                     return (
                                         <div key={i} className="relative group/avatar">
                                             <Avatar className={cn(
                                                 "w-9 h-9 rounded-full border-2 border-zinc-950 transition-all duration-300 bg-zinc-900 z-10 scale-105",
-                                                isActuallyFocusing ? "ring-2 ring-cyan-500 ring-offset-2 ring-offset-zinc-950 hover:scale-110" : "ring-2 ring-amber-500/50 ring-offset-2 ring-offset-zinc-950"
+                                                isActuallyFocusing ? "ring-2 ring-cyan-500 ring-offset-2 ring-offset-zinc-950 hover:scale-110" : isPausedState ? "ring-2 ring-amber-500 ring-offset-2 ring-offset-zinc-950" : "ring-2 ring-amber-500/50 ring-offset-2 ring-offset-zinc-950"
                                             )}>
                                                 <AvatarImage src={m.photoURL} className="object-cover w-full h-full rounded-full" />
                                                 <AvatarFallback className="text-[10px] bg-zinc-800 text-white rounded-full flex items-center justify-center">{m.displayName?.[0]}</AvatarFallback>
