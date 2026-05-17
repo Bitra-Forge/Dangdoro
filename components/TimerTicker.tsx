@@ -60,6 +60,8 @@ export function TimerTicker() {
   const settingsAutoStartFocus = useTimerStore((s) => s.settingsAutoStartFocus);
 
   const activeGroupId = useTimerStore((s) => s.activeGroupId);
+  const stop = useTimerStore((s) => s.stop);
+  const setActiveGroupId = useTimerStore((s) => s.setActiveGroupId);
 
   const { user } = useAuth();
 
@@ -84,6 +86,20 @@ export function TimerTicker() {
 
     if (typeof window === "undefined") return;
 
+    // If in a group session, stop the session entirely instead of advancing
+    if (activeGroupId) {
+      // Save focus session for authenticated users
+      if (mode === "focus" && user) {
+        const durationMinutes = Math.floor(initialFocusTime / 60);
+        savePomodoroSession(user.uid, durationMinutes, activeGroupId)
+          .then(() => toast.success(`Group focus session completed! Contribution recorded.`))
+          .catch(() => toast.error("Failed to save session."));
+      }
+      stop();
+      setActiveGroupId(null);
+      return;
+    }
+
     // Save focus session for authenticated users
     if (mode === "focus" && user) {
       const durationMinutes = Math.floor(initialFocusTime / 60);
@@ -100,7 +116,7 @@ export function TimerTicker() {
 
     // Move to the next pomodoro phase
     advanceSession();
-  }, [timeLeft, isActive, mode, user, initialFocusTime, sessionEndSound, advanceSession, settingsAutoStartBreak, settingsAutoStartFocus]);
+  }, [timeLeft, isActive, mode, user, initialFocusTime, sessionEndSound, advanceSession, settingsAutoStartBreak, settingsAutoStartFocus, activeGroupId, stop, setActiveGroupId]);
 
   return null;
 }

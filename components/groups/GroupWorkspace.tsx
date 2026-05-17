@@ -420,29 +420,29 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                         </button>
                                     ) : (
                                         <>
-                                            <button
-                                                disabled={!!sessionActionPending}
-                                                onClick={() => handleSessionAction("pause")}
-                                                className={cn(
-                                                    "px-6 py-2.5 rounded-[10px] font-black text-xs transition-all duration-300 flex items-center gap-2 group/btn relative overflow-hidden border-none",
-                                                    isPaused
-                                                        ? "bg-amber-500/5 text-amber-400 cursor-default"
-                                                        : sessionActionPending 
-                                                            ? "bg-amber-500/20 text-amber-200/50 cursor-not-allowed" 
-                                                            : "bg-amber-500/5 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 hover:shadow-[0_8px_25px_rgba(245,158,11,0.15)] cursor-pointer"
-                                                )}
-                                            >
-                                                {/* Curved Glass Edge Lights for Pause */}
-                                                <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-amber-500/30 pointer-events-none z-10" />
-                                                <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-amber-500/10 pointer-events-none z-10" />
-                                                
-                                                {/* Internal Soft Amber Glow */}
-                                                <div className="absolute top-0 inset-x-0 h-[8px] bg-gradient-to-b from-amber-500/10 to-transparent z-10" />
-                                                
-                                                <div className="absolute inset-0 bg-gradient-to-tr from-amber-500/5 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300 pointer-events-none" />
-                                                {isPaused ? <Play className="w-4 h-4 relative z-10 fill-current" /> : <Pause className="w-4 h-4 relative z-10" />}
-                                                <span className="relative z-10">{isPaused ? "Resume" : sessionActionPending === "pause" ? "Pausing..." : "Pause"}</span>
-                                            </button>
+                                             <button
+                                                 disabled={!!sessionActionPending}
+                                                 onClick={() => handleSessionAction("pause")}
+                                                 className={cn(
+                                                     "px-6 py-2.5 rounded-[10px] font-black text-xs transition-all duration-300 flex items-center gap-2 group/btn relative overflow-hidden border-none",
+                                                     isPaused
+                                                         ? "bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 cursor-pointer"
+                                                         : sessionActionPending 
+                                                             ? "bg-amber-500/20 text-amber-200/50 cursor-not-allowed" 
+                                                             : "bg-amber-500/5 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 hover:shadow-[0_8px_25px_rgba(245,158,11,0.15)] cursor-pointer"
+                                                 )}
+                                             >
+                                                 {/* Curved Glass Edge Lights */}
+                                                 <div className={cn("absolute inset-0 rounded-[10px] border-t-[0.5px] pointer-events-none z-10", isPaused ? "border-cyan-500/30" : "border-amber-500/30")} />
+                                                 <div className={cn("absolute inset-0 rounded-[10px] border-b-[0.5px] pointer-events-none z-10", isPaused ? "border-cyan-500/10" : "border-amber-500/10")} />
+                                                 
+                                                 {/* Internal Soft Glow */}
+                                                 <div className={cn("absolute top-0 inset-x-0 h-[8px] bg-gradient-to-b to-transparent z-10", isPaused ? "from-cyan-500/10" : "from-amber-500/10")} />
+                                                 
+                                                 <div className={cn("absolute inset-0 bg-gradient-to-tr to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300 pointer-events-none", isPaused ? "from-cyan-500/5" : "from-amber-500/5")} />
+                                                 {isPaused ? <Play className="w-4 h-4 relative z-10 fill-current" /> : <Pause className="w-4 h-4 relative z-10" />}
+                                                 <span className="relative z-10">{isPaused ? "Resume" : sessionActionPending === "pause" ? "Pausing..." : "Pause"}</span>
+                                             </button>
                                             <button
                                                 disabled={!!sessionActionPending}
                                                 onClick={() => handleSessionAction("stop")}
