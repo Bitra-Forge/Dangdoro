@@ -64,47 +64,67 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
             {isHost && (
                 <div className="space-y-6">
                     <div>
-                        <h3 className="text-xl font-bold text-white mb-1">Unit Configuration</h3>
-                        <p className="text-xs text-zinc-500 uppercase tracking-widest font-bold">Manage core parameters.</p>
+                        <h3 className="text-lg font-bold text-white mb-1">Unit Configuration</h3>
+                        <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Manage core parameters.</p>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-6 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4">
+                        <div className="p-5 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4">
                             <div className="flex items-center gap-2 text-zinc-400">
                                 <Target className="w-4 h-4" />
                                 <span className="text-[10px] font-black uppercase tracking-widest">Focus Goal (Hours)</span>
                             </div>
                             <div className="flex items-center gap-4">
-                                <input 
-                                    type="number" 
-                                    value={group.settings?.goalHours || ""} 
-                                    onChange={(e) => updateDoc(doc(db, "focusGroups", group.id), { "settings.goalHours": parseInt(e.target.value) || 0 })}
-                                    placeholder="e.g. 100" 
-                                    className="w-full bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-white focus:border-[white]/40 outline-none" 
-                                />
+                                <div className="flex items-center gap-2 flex-1">
+                                    <input 
+                                        type="number" 
+                                        value={group.settings?.goalHours || ""} 
+                                        onChange={(e) => updateDoc(doc(db, "focusGroups", group.id), { "settings.goalHours": parseInt(e.target.value) || 0 })}
+                                        placeholder="e.g. 100" 
+                                        className="w-full bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-[white]/40 outline-none appearance-none" 
+                                    />
+                                    <div className="flex flex-col gap-1">
+                                        <button onClick={() => updateDoc(doc(db, "focusGroups", group.id), { "settings.goalHours": (group.settings?.goalHours || 0) + 1 })} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all">
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                                        </button>
+                                        <button onClick={() => updateDoc(doc(db, "focusGroups", group.id), { "settings.goalHours": Math.max(0, (group.settings?.goalHours || 0) - 1) })} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all">
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                        </button>
+                                    </div>
+                                </div>
                                 <span className="text-zinc-600 font-bold text-xs uppercase whitespace-nowrap">Hours</span>
                             </div>
                         </div>
 
-                        <div className="p-6 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4">
+                        <div className="p-5 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4">
                             <div className="flex items-center gap-2 text-zinc-400">
                                 <Users className="w-4 h-4" />
                                 <span className="text-[10px] font-black uppercase tracking-widest">Unit Capacity</span>
                             </div>
                             <div className="flex items-center gap-4">
-                                <input 
-                                    type="number" 
-                                    value={group.settings?.maxMembers || ""} 
-                                    onChange={(e) => updateDoc(doc(db, "focusGroups", group.id), { "settings.maxMembers": parseInt(e.target.value) || 0 })}
-                                    placeholder="No Limit" 
-                                    className="w-full bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-white focus:border-[white]/40 outline-none" 
-                                />
+                                <div className="flex items-center gap-2 flex-1">
+                                    <input 
+                                        type="number" 
+                                        value={group.settings?.maxMembers || ""} 
+                                        onChange={(e) => updateDoc(doc(db, "focusGroups", group.id), { "settings.maxMembers": parseInt(e.target.value) || 0 })}
+                                        placeholder="No Limit" 
+                                        className="w-full bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-[white]/40 outline-none appearance-none" 
+                                    />
+                                    <div className="flex flex-col gap-1">
+                                        <button onClick={() => updateDoc(doc(db, "focusGroups", group.id), { "settings.maxMembers": (group.settings?.maxMembers || 0) + 1 })} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all">
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                                        </button>
+                                        <button onClick={() => updateDoc(doc(db, "focusGroups", group.id), { "settings.maxMembers": Math.max(0, (group.settings?.maxMembers || 0) - 1) })} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all">
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                        </button>
+                                    </div>
+                                </div>
                                 <span className="text-zinc-600 font-bold text-xs uppercase whitespace-nowrap">Members</span>
                             </div>
                         </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-6 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4">
+                        <div className="p-5 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4">
                             <div className="flex items-center gap-2 text-zinc-400">
                                 <Calendar className="w-4 h-4" />
                                 <span className="text-[10px] font-black uppercase tracking-widest">Goal Period</span>
@@ -127,14 +147,24 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                             </div>
                             {goalType === "custom" && (
                                 <div className="flex items-center gap-3">
-                                    <input
-                                        type="number"
-                                        min={1}
-                                        value={customDays}
-                                        onChange={(e) => handleCustomDaysChange(e.target.value)}
-                                        placeholder="e.g. 14"
-                                        className="w-full bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-white focus:border-[white]/40 outline-none"
-                                    />
+                                    <div className="flex items-center gap-2 flex-1">
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            value={customDays}
+                                            onChange={(e) => handleCustomDaysChange(e.target.value)}
+                                            placeholder="e.g. 14"
+                                            className="w-full bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-[white]/40 outline-none appearance-none"
+                                        />
+                                        <div className="flex flex-col gap-1">
+                                            <button onClick={() => handleCustomDaysChange(String(parseInt(customDays || "0") + 1))} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all">
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                                            </button>
+                                            <button onClick={() => handleCustomDaysChange(String(Math.max(1, parseInt(customDays || "1") - 1)))} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all">
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                            </button>
+                                        </div>
+                                    </div>
                                     <span className="text-zinc-600 font-bold text-xs uppercase whitespace-nowrap">Days</span>
                                 </div>
                             )}
@@ -145,7 +175,7 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                             )}
                         </div>
 
-                        <div className="p-6 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4">
+                        <div className="p-5 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4">
                             <div className="flex items-center gap-2 text-zinc-400">
                                 <RefreshCw className="w-4 h-4" />
                                 <span className="text-[10px] font-black uppercase tracking-widest">Auto Renew</span>
@@ -168,15 +198,15 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                         </div>
                     </div>
                     {(group.privacy === "private-code" || group.privacy === "public") && group.accessCode && (
-                        <div className="p-6 rounded-3xl bg-zinc-900/60 border border-white/5 flex items-center justify-between">
+                        <div className="p-5 rounded-3xl bg-zinc-900/60 border border-white/5 flex items-center justify-between">
                             <div>
-                                <h4 className="text-sm font-bold text-white mb-1">Group Code</h4>
+                                <h4 className="text-xs font-bold text-white mb-1">Group Code</h4>
                                 <p className="text-[10px] text-zinc-600">Share to expand your unit.</p>
                             </div>
                             <div className="flex items-center gap-3">
-                                <code className="text-xl font-black text-[white] tracking-[0.2em] bg-zinc-950 px-4 py-2 rounded-xl border border-[white]/30">{group.accessCode}</code>
-                                <button onClick={() => { navigator.clipboard.writeText(group.accessCode || ""); toast.success("Copied!"); }} className="p-3 bg-white/5 text-white rounded-xl hover:bg-white/10 transition-all">
-                                    <Copy className="w-5 h-5" />
+                                <code className="text-sm font-black text-[white] tracking-[0.2em] bg-zinc-950 px-4 py-2 rounded-xl border border-[white]/30">{group.accessCode}</code>
+                                <button onClick={() => { navigator.clipboard.writeText(group.accessCode || ""); toast.success("Copied!"); }} className="p-2.5 bg-white/5 text-white rounded-xl hover:bg-white/10 transition-all">
+                                    <Copy className="w-4 h-4" />
                                 </button>
                             </div>
                         </div>
@@ -186,8 +216,8 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
 
             <div className="space-y-6">
                 <div>
-                    <h3 className="text-xl font-bold text-white mb-1">Unit Hierarchy</h3>
-                    <p className="text-xs text-zinc-500 uppercase tracking-widest font-bold">Manage Roles & Access</p>
+                    <h3 className="text-lg font-bold text-white mb-1">Unit Hierarchy</h3>
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Manage Roles & Access</p>
                 </div>
                 <Section label="Command Unit" color="text-[white]" members={hostMembers} user={user} group={group} isHost={isHost} roleActionPendingId={roleActionPendingId} onUpdateRole={onUpdateRole} onRemove={onRemove} />
                 <Section label="Officers" color="text-zinc-300" members={adminMembers} user={user} group={group} isHost={isHost} roleActionPendingId={roleActionPendingId} onUpdateRole={onUpdateRole} onRemove={onRemove} />
@@ -206,15 +236,15 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
 
 const MemberRow = memo(function MemberRow({ m, user, group, isHost, roleActionPendingId, onUpdateRole, onRemove }: any) {
     return (
-        <div className="p-5 bg-zinc-900/40 border border-white/5 rounded-2xl flex items-center gap-5 group/item hover:bg-zinc-900/60 transition-all">
-            <Avatar className="w-12 h-12 border-2 border-zinc-950">
+        <div className="p-4 bg-zinc-900/40 border border-white/5 rounded-2xl flex items-center gap-4 group/item hover:bg-zinc-900/60 transition-all">
+            <Avatar className="w-10 h-10 border-2 border-zinc-950">
                 <AvatarImage src={m.photoURL} />
                 <AvatarFallback>{m.displayName?.[0]}</AvatarFallback>
             </Avatar>
             
             <div className="flex-1">
                 <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-bold text-white">{m.displayName}</h4>
+                    <h4 className="text-xs font-bold text-white">{m.displayName}</h4>
                     {m.uid === user.uid && <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-white/10 rounded text-zinc-400">You</span>}
                     {m.isFocusing && (
                         <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/30 text-[7px] font-black uppercase text-indigo-400">

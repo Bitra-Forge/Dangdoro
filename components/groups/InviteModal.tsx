@@ -161,17 +161,17 @@ export function InviteModal({ group, user, friends, onClose }: any) {
                                         const isSelected = selectedFriends.includes(f.friendId);
                                         const isPending = group.pendingInvites?.includes(f.friendId);
                                         return (
-                                            <button key={f.friendId} onClick={() => !isPending && toggleFriend(f.friendId)} disabled={isPending} className={cn("w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left", isSelected ? "bg-violet-500/15 border-violet-500/30" : isPending ? "bg-zinc-900/60 border-white/5 opacity-60 cursor-default" : "bg-zinc-900/40 border-white/5 hover:border-white/10")}>
+                                            <button key={f.friendId} onClick={() => !isPending && toggleFriend(f.friendId)} disabled={isPending} className={cn("w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left cursor-pointer", isSelected ? "bg-white/10 border-white/20" : isPending ? "bg-zinc-900/60 border-white/5 opacity-60 cursor-default" : "bg-zinc-900/40 border-white/5 hover:border-white/10 hover:bg-white/5")}>
                                                 <Avatar className="w-9 h-9 border border-white/10">
                                                     <AvatarImage src={f.userData?.photoURL} />
                                                     <AvatarFallback>{f.userData?.displayName?.[0]}</AvatarFallback>
                                                 </Avatar>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-sm font-bold text-white truncate">{f.userData?.displayName}</p>
-                                                    {isPending && <p className="text-[10px] text-violet-400 font-bold uppercase tracking-wider">Invite pending</p>}
+                                                    {isPending && <p className="text-[10px] text-orange-400 font-bold uppercase tracking-wider">Invite pending</p>}
                                                 </div>
-                                                {isSelected && <Check className="w-4 h-4 text-violet-400 shrink-0" />}
-                                                {isPending && <Mail className="w-4 h-4 text-violet-400/50 shrink-0" />}
+                                                {isSelected && <Check className="w-4 h-4 text-white shrink-0" />}
+                                                {isPending && <Mail className="w-4 h-4 text-orange-400/50 shrink-0" />}
                                             </button>
                                         );
                                     })}
@@ -193,7 +193,7 @@ export function InviteModal({ group, user, friends, onClose }: any) {
                 {/* Footer */}
                 {selectedFriends.length > 0 && (
                     <div className="p-4 border-t border-white/5 flex gap-3">
-                        <button onClick={handleSendInvites} disabled={sending} className="flex-1 py-3 bg-violet-500 text-white font-black rounded-xl text-sm hover:bg-violet-400 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                        <button onClick={handleSendInvites} disabled={sending} className="flex-1 py-3 bg-white/10 backdrop-blur-md border border-white/20 text-white font-black rounded-xl text-sm hover:bg-white/20 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
                             <Send className="w-4 h-4" />
                             {sending ? "Sending..." : `Invite ${selectedFriends.length} friend${selectedFriends.length > 1 ? "s" : ""}`}
                         </button>

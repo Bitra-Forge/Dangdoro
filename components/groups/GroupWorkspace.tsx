@@ -368,12 +368,15 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     return (
         <div className="flex flex-col min-h-screen overflow-hidden">
             {/* Top accent bar */}
+            {!isManagingRoles && (
             <div className={cn(
                 "h-[2px] bg-gradient-to-r from-transparent to-transparent shrink-0",
                 isOrg ? "via-[white]/70" : "via-indigo-400/40"
             )} />
+            )}
 
             {/* Header */}
+            {!isManagingRoles && (
             <div className="p-8 border-b border-white/5 bg-gradient-to-br from-[white]/5 to-transparent">
                 <div className="flex justify-between items-start mb-6">
                     <div className="flex-1">
@@ -598,6 +601,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                     </div>
                 )}
             </div>
+            )}
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
