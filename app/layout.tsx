@@ -70,7 +70,7 @@ export default function RootLayout({
           <GlobalAuthModal />
           <NavigationHub />
           
-          <Toaster position="top-center" richColors closeButton />
+          <Toaster position="top-center" richColors closeButton duration={2000} />
           <Heartbeat />
         </AuthProvider>
       </body>

@@ -578,11 +578,11 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                     return (
                                         <div key={i} className="relative group/avatar">
                                             <Avatar className={cn(
-                                                "w-9 h-9 rounded-full border-2 border-zinc-950 transition-all duration-300 bg-zinc-900 z-10 scale-105",
+                                                "w-9 h-9 rounded-xl overflow-hidden border-[0.5px] border-white/10 transition-all duration-300 bg-zinc-900 z-10 scale-105",
                                                 isActuallyFocusing ? "ring-2 ring-cyan-500 ring-offset-2 ring-offset-zinc-950 hover:scale-110" : isPausedState ? "ring-2 ring-amber-500 ring-offset-2 ring-offset-zinc-950" : "ring-2 ring-amber-500/50 ring-offset-2 ring-offset-zinc-950"
                                             )}>
-                                                <AvatarImage src={m.photoURL} className="object-cover w-full h-full rounded-full" />
-                                                <AvatarFallback className="text-[10px] bg-zinc-800 text-white rounded-full flex items-center justify-center">{m.displayName?.[0]}</AvatarFallback>
+                                                <AvatarImage src={m.photoURL} className="object-cover w-full h-full rounded-xl scale-[1.01]" />
+                                                <AvatarFallback className="text-[10px] bg-zinc-800 text-white rounded-xl flex items-center justify-center">{m.displayName?.[0]}</AvatarFallback>
                                             </Avatar>
                                             <div className={cn(
                                                 "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-zinc-950 z-20",

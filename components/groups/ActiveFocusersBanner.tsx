@@ -11,7 +11,7 @@ export const ActiveFocusersBanner = memo(function ActiveFocusersBanner({ focuser
         <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="w-full rounded-[1.5rem] border border-indigo-500/25 bg-gradient-to-r from-indigo-500/10 via-indigo-500/5 to-zinc-900/60 p-4 flex items-center gap-4 overflow-hidden relative shadow-[0_4px_24px_rgba(249,115,22,0.08)]"
+            className="w-full rounded-[10px] border border-indigo-500/25 bg-gradient-to-r from-indigo-500/10 via-indigo-500/5 to-zinc-900/60 p-4 flex items-center gap-4 overflow-hidden relative shadow-[0_4px_24px_rgba(249,115,22,0.08)]"
         >
             {/* Shimmer sweep */}
             <motion.div
@@ -47,9 +47,9 @@ export const ActiveFocusersBanner = memo(function ActiveFocusersBanner({ focuser
                     const isPaused = f.status === "paused";
                     return (
                         <div key={f.uid} className="relative">
-                            <Avatar className="w-8 h-8 rounded-full border-2 border-zinc-950 bg-zinc-900">
-                                <AvatarImage src={f.photoURL} />
-                                <AvatarFallback className="text-[8px] bg-zinc-800 text-white">{f.displayName?.[0]}</AvatarFallback>
+                            <Avatar className="w-8 h-8 rounded-xl overflow-hidden border border-zinc-950 bg-zinc-900">
+                                <AvatarImage src={f.photoURL} className="rounded-xl" />
+                                <AvatarFallback className="text-[8px] bg-zinc-800 text-white rounded-xl">{f.displayName?.[0]}</AvatarFallback>
                             </Avatar>
                             <div className={cn(
                                 "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-zinc-950",
@@ -59,20 +59,10 @@ export const ActiveFocusersBanner = memo(function ActiveFocusersBanner({ focuser
                     );
                 })}
                 {focusers.length > 10 && (
-                    <div className="w-8 h-8 rounded-full bg-zinc-800 border-2 border-zinc-950 flex items-center justify-center text-[8px] font-black text-zinc-500">
+                    <div className="w-8 h-8 rounded-xl bg-zinc-800 border border-zinc-950 flex items-center justify-center text-[8px] font-black text-zinc-500">
                         +{focusers.length - 10}
                     </div>
                 )}
-            </div>
-
-            <div className="flex flex-col items-end gap-1.5 shrink-0 ml-4">
-                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white/5 border border-white/5">
-                    <div className="w-1 h-1 rounded-full bg-indigo-400 animate-pulse" />
-                    <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest">Active Units</span>
-                </div>
-                <div className="text-[10px] font-bold text-zinc-600 tracking-tight">
-                    Synchronized focus in progress
-                </div>
             </div>
         </motion.div>
     );
