@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTimerStore } from "@/lib/store";
 import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useTransform, useAnimationFrame } from "framer-motion";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 
@@ -22,24 +22,33 @@ interface LiveSession {
 /**
  * Deep equality check for sessions to prevent unnecessary state updates
  * Includes startedAt to ensure elapsed time resets correctly when users restart timers.
+ * Matches sessions by ID to handle unordered Firestore snapshots.
  */
 function sessionsEqual(a: LiveSession[], b: LiveSession[]): boolean {
   if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    const s1 = a[i];
-    const s2 = b[i];
-    if (s1.id !== s2.id) return false;
+
+  const byId = new Map<string, LiveSession>();
+  for (const s of b) byId.set(s.id, s);
+
+  for (const s1 of a) {
+    const s2 = byId.get(s1.id);
+    if (!s2) return false;
     if (s1.userId !== s2.userId) return false;
     if (s1.userName !== s2.userName) return false;
     if (s1.userPhoto !== s2.userPhoto) return false;
     if (s1.status !== s2.status) return false;
-    
-    // Check startedAt (handle Firestore timestamp objects)
+
     const t1 = toMillis(s1.startedAt);
     const t2 = toMillis(s2.startedAt);
     if (t1 !== t2) return false;
   }
   return true;
+}
+
+function isPendingServerTimestamp(ts: any): boolean {
+  if (!ts) return false;
+  if (typeof ts === "object" && "_methodName" in ts && ts._methodName === "serverTimestamp") return true;
+  return false;
 }
 
 function toMillis(ts: any): number {
@@ -130,21 +139,65 @@ function OrbitalAvatarComponent({
 }) {
   const router = useRouter();
   const [hovered, setHovered] = useState(false);
-  
+  const isPaused = useTimerStore((s) => s.isPaused);
+
   // Local "now" for tooltip countdown — only ticks when hovered to save resources
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    if (!hovered) return;
+    if (!hovered || isPaused) return;
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [hovered]);
+  }, [hovered, isPaused]);
 
   // All visual properties derived from userId — completely stable
   const startAngleVal = useMemo(() => stableAngle(session.userId), [session.userId]);
   const speed = useMemo(() => stableSpeed(session.userId), [session.userId]);
   const accent = useMemo(() => ACCENT_COLORS[stableColorIndex(session.userId)], [session.userId]);
-  const orbit = useMemo(() => generateOrbitKeyframes(startAngleVal, 80), [startAngleVal]);
+
+  // Motion values for orbit position — properly pause/resume
+  const elapsedRef = useRef(0);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+
+  useAnimationFrame((time, delta) => {
+    if (isPaused) return;
+    elapsedRef.current += delta / 1000;
+    const angle = startAngleVal + (elapsedRef.current / speed) * Math.PI * 2;
+    x.set(Math.cos(angle) * ORBIT_RX);
+    y.set(Math.sin(angle) * ORBIT_RY);
+  });
+
+  // Glow animation motion values
+  const glowElapsedRef = useRef(0);
+  const glowOpacity = useMotionValue(0.06);
+  const glowScale = useMotionValue(1.15);
+
+  useAnimationFrame((_, delta) => {
+    if (isPaused) return;
+    const duration = hovered ? 1.5 : 3.5;
+    glowElapsedRef.current += delta / 1000;
+    const t = (glowElapsedRef.current % duration) / duration;
+    const [minO, maxO] = hovered ? [0.3, 0.5] : [0.06, 0.15];
+    const [minS, maxS] = hovered ? [1.4, 1.6] : [1.15, 1.3];
+    const wave = (Math.sin(t * Math.PI * 2 - Math.PI / 2) + 1) / 2;
+    glowOpacity.set(minO + (maxO - minO) * wave);
+    glowScale.set(minS + (maxS - minS) * wave);
+  });
+
+  // Dot pulse animation motion values
+  const dotElapsedRef = useRef(0);
+  const dotScale = useMotionValue(1);
+  const dotOpacity = useMotionValue(0.8);
+
+  useAnimationFrame((_, delta) => {
+    if (isPaused) return;
+    dotElapsedRef.current += delta / 1000;
+    const t = (dotElapsedRef.current % 2) / 2;
+    const wave = (Math.sin(t * Math.PI * 2 - Math.PI / 2) + 1) / 2;
+    dotScale.set(1 + 0.35 * wave);
+    dotOpacity.set(0.8 + 0.2 * wave);
+  });
 
   const startedAtMs = toMillis(session.startedAt);
   const elapsedSecs = startedAtMs ? Math.floor((now - startedAtMs) / 1000) : 0;
@@ -187,11 +240,7 @@ function OrbitalAvatarComponent({
       }}
     >
       <motion.div
-        animate={{ x: orbit.x, y: orbit.y }}
-        transition={{
-          x: { duration: speed, repeat: Infinity, ease: "linear" },
-          y: { duration: speed, repeat: Infinity, ease: "linear" },
-        }}
+        style={{ x, y }}
         onHoverStart={() => setHovered(true)}
         onHoverEnd={() => setHovered(false)}
         className="cursor-pointer"
@@ -200,15 +249,7 @@ function OrbitalAvatarComponent({
         <div className="relative">
           {/* Outer glow — breathing */}
           <motion.div
-            animate={{
-              opacity: hovered ? [0.3, 0.5, 0.3] : [0.06, 0.15, 0.06],
-              scale: hovered ? [1.4, 1.6, 1.4] : [1.15, 1.3, 1.15],
-            }}
-            transition={{
-              duration: hovered ? 1.5 : 3.5,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
+            style={{ opacity: glowOpacity, scale: glowScale }}
             className={cn("absolute inset-0 rounded-full blur-lg", accent.glow)}
           />
 
@@ -257,8 +298,7 @@ function OrbitalAvatarComponent({
 
           {/* Active dot */}
           <motion.div
-            animate={{ scale: [1, 1.35, 1], opacity: [0.8, 1, 0.8] }}
-            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            style={{ scale: dotScale, opacity: dotOpacity }}
             className="absolute -bottom-0.5 -right-0.5 z-10"
           >
             <div className={cn("w-2.5 h-2.5 rounded-full ring-[2px] ring-zinc-950/80", accent.dot)} />
@@ -278,7 +318,7 @@ function OrbitalAvatarComponent({
                   <div className={cn("absolute top-0 left-2.5 right-2.5 h-[1.5px] rounded-full opacity-50", accent.glow)} />
                   <p className="text-[11px] font-bold text-zinc-100 tracking-tight">{session.userName}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", accent.dot)} />
+                    <div className={cn("w-1.5 h-1.5 rounded-full", isPaused ? "" : "animate-pulse", accent.dot)} />
                     <p className={cn("text-[10px] font-bold tabular-nums", accent.text)}>
                       {fmtElapsed(elapsedSecs)} focused
                     </p>
@@ -310,6 +350,7 @@ const OrbitalAvatar = React.memo(OrbitalAvatarComponent, (prev, next) => {
 
 export function FloatingFocusAvatars() {
   const activeGroupId = useTimerStore((s) => s.activeGroupId);
+  const activeLiveSessionId = useTimerStore((s) => s.activeLiveSessionId);
   const [rawSessions, setRawSessions] = useState<LiveSession[]>([]);
   const [now, setNow] = useState(Date.now());
   const [userPhotos, setUserPhotos] = useState<Record<string, string>>({});
@@ -320,7 +361,7 @@ export function FloatingFocusAvatars() {
     return () => clearInterval(interval);
   }, []);
 
-  // Firestore listener — ONLY re-subscribes when group changes
+  // Firestore listener — re-subscribes when group or session changes
   useEffect(() => {
     if (!activeGroupId) {
       setRawSessions([]);
@@ -333,41 +374,30 @@ export function FloatingFocusAvatars() {
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      const fetched = snap.docs.map((d) => ({ id: d.id, ...d.data() } as LiveSession));
-      // Only update state if data actually changed (excluding heartbeats)
-      setRawSessions((prev) => sessionsEqual(prev, fetched) ? prev : fetched);
+      const fetched = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() } as LiveSession))
+        .sort((a, b) => a.userId.localeCompare(b.userId));
+      setRawSessions(fetched);
     });
 
     return unsub;
-  }, [activeGroupId]);
+  }, [activeGroupId, activeLiveSessionId]);
 
   // Derive visible sessions: filter stale + sort by userId for stability
-  const [sessions, setSessions] = useState<LiveSession[]>([]);
-  const prevSessionsRef = useRef<LiveSession[]>([]);
-
-  useEffect(() => {
+  const sessions = useMemo(() => {
     const STALE_MS = 3 * 60 * 1000;
-    const next = rawSessions
-      .filter((s) => now - toMillis(s.lastHeartbeat) <= STALE_MS)
+    return rawSessions
+      .filter((s) => {
+        if (isPendingServerTimestamp(s.lastHeartbeat)) return true;
+        const hbMs = toMillis(s.lastHeartbeat);
+        if (!hbMs) return false;
+        return now - hbMs <= STALE_MS;
+      })
       .sort((a, b) => a.userId.localeCompare(b.userId));
-
-    if (!sessionsEqual(prevSessionsRef.current, next)) {
-      prevSessionsRef.current = next;
-      setSessions(next);
-    }
   }, [rawSessions, now]);
 
   // Track which user IDs are currently visible to fetch their photos
-  const [sessionUserIdsKey, setSessionUserIdsKey] = useState("");
-  const prevUserIdsKeyRef = useRef("");
-
-  useEffect(() => {
-    const currentKey = sessions.map((s) => s.userId).join(",");
-    if (currentKey !== prevUserIdsKeyRef.current) {
-      prevUserIdsKeyRef.current = currentKey;
-      setSessionUserIdsKey(currentKey);
-    }
-  }, [sessions]);
+  const sessionUserIdsKey = useMemo(() => sessions.map((s) => s.userId).join(","), [sessions]);
 
   // Fetch latest user photos whenever the set of visible users changes
   useEffect(() => {
