@@ -130,19 +130,28 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         }
     }, [group, user, loading, router]);
 
-    // 6. Auto-renewal check
-    useEffect(() => {
-        if (!group || !user) return;
-        const goalType = group.settings?.goalType as GoalType | undefined;
-        const autoRenew = group.settings?.autoRenew ?? true;
-        const customDays = group.settings?.customDays;
-        if (!autoRenew) return;
-        if (isPeriodExpired(goalType, customDays)) {
-            updateDoc(doc(db, "focusGroups", group.id), {
-                "settings.goalType": goalType || "weekly",
-            }).catch(() => {});
-        }
-    }, [group, user]);
+  // 6. Auto-renewal check
+  useEffect(() => {
+    if (!group || !user) return;
+    const goalType = group.settings?.goalType as GoalType | undefined;
+    const autoRenew = group.settings?.autoRenew ?? true;
+    const customDays = group.settings?.customDays;
+    if (!autoRenew) return;
+    if (isPeriodExpired(goalType, customDays)) {
+      // Reset progress for the new period
+      const resetStats: any = {};
+      if (group.memberStats) {
+        Object.keys(group.memberStats).forEach(key => {
+          resetStats[key] = { ...(group.memberStats as any)[key], totalMinutes: 0 };
+        });
+      }
+      updateDoc(doc(db, "focusGroups", group.id), {
+        totalMinutes: 0,
+        memberStats: resetStats,
+        "settings.goalType": goalType || "weekly",
+      }).catch(() => {});
+    }
+  }, [group, user]);
 
     // 7. Fetch friends list
     useEffect(() => {

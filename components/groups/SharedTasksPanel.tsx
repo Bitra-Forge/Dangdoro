@@ -471,7 +471,21 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                         <p className="text-[9px] font-black text-zinc-600 uppercase mb-1.5">Priority</p>
                                         <div className="flex gap-1.5">
                                             {["low", "medium", "high"].map(p => (
-                                                <button key={p} onClick={() => setEditPrio(p)} className={cn("flex-1 py-1 rounded-md border text-[9px] font-black uppercase transition-all", editPrio === p ? "bg-white/10 text-white border-white/20" : "text-zinc-600 border-white/5")}>{p}</button>
+                                                <button key={p} onClick={() => setEditPrio(p)} className={cn(
+                                                    "flex-1 py-2 rounded-[10px] border text-[10px] font-black uppercase transition-all relative overflow-hidden cursor-pointer",
+                                                    editPrio === p 
+                                                        ? "bg-white/10 text-white border-white/20" 
+                                                        : "text-zinc-600 border-white/5 hover:text-zinc-400"
+                                                )}>
+                                                    {editPrio === p && (
+                                                        <>
+                                                            <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none z-10" />
+                                                            <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
+                                                            <div className="absolute top-0 inset-x-0 h-[4px] bg-gradient-to-b from-white/5 to-transparent z-10" />
+                                                        </>
+                                                    )}
+                                                    <span className="relative z-10">{p}</span>
+                                                </button>
                                             ))}
                                         </div>
                                     </div>
@@ -484,11 +498,21 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                     </div>
                                 </div>
 
-                                <div className="flex gap-2 pt-1">
-                                    <button onClick={handleSaveEdit} className="flex-1 py-2 bg-white text-black font-black rounded-lg text-[10px] uppercase tracking-wider flex items-center justify-center gap-2">
-                                        <Save className="w-3 h-3" /> Save Changes
+                                <div className="flex gap-3 pt-1">
+                                    <button onClick={handleSaveEdit} className="flex-1 py-3 bg-white text-black font-black rounded-[10px] text-xs relative overflow-hidden hover:bg-zinc-100 transition-all cursor-pointer">
+                                        {/* Curved Light Effect for solid button */}
+                                        <div className="absolute inset-x-0 top-0 h-[1px] bg-white/60 z-10" />
+                                        <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/40 pointer-events-none z-10" />
+                                        <div className="absolute inset-x-0 bottom-0 h-[2.5px] bg-black/[0.04] z-10" />
+                                        <span className="relative z-10 flex items-center justify-center gap-2"><Save className="w-3 h-3" /> Save Changes</span>
                                     </button>
-                                    <button onClick={() => setEditingTaskId(null)} className="px-4 py-2 bg-zinc-800 text-white font-bold rounded-lg text-[10px] uppercase tracking-wider">Cancel</button>
+                                    <button onClick={() => setEditingTaskId(null)} className="px-8 py-3 bg-white/5 text-zinc-400 font-black rounded-[10px] text-xs relative overflow-hidden hover:bg-white/10 hover:text-white transition-all cursor-pointer">
+                                        {/* Curved Glass Edge Lights */}
+                                        <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none z-10" />
+                                        <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
+                                        <div className="absolute top-0 inset-x-0 h-[4px] bg-gradient-to-b from-white/5 to-transparent z-10" />
+                                        <span className="relative z-10">Cancel</span>
+                                    </button>
                                 </div>
                             </motion.div>
                         );
@@ -614,7 +638,21 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                         <p className="text-[9px] font-black text-zinc-600 uppercase mb-1.5">Priority</p>
                                         <div className="flex gap-1.5">
                                             {["low", "medium", "high"].map(p => (
-                                                <button key={p} onClick={() => setEditPrio(p)} className={cn("flex-1 py-1 rounded-md border text-[9px] font-black uppercase transition-all", editPrio === p ? "bg-white/10 text-white border-white/20" : "text-zinc-600 border-white/5")}>{p}</button>
+                                                <button key={p} onClick={() => setEditPrio(p)} className={cn(
+                                                    "flex-1 py-2 rounded-[10px] border text-[10px] font-black uppercase transition-all relative overflow-hidden cursor-pointer",
+                                                    editPrio === p 
+                                                        ? "bg-white/10 text-white border-white/20" 
+                                                        : "text-zinc-600 border-white/5 hover:text-zinc-400"
+                                                )}>
+                                                    {editPrio === p && (
+                                                        <>
+                                                            <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none z-10" />
+                                                            <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
+                                                            <div className="absolute top-0 inset-x-0 h-[4px] bg-gradient-to-b from-white/5 to-transparent z-10" />
+                                                        </>
+                                                    )}
+                                                    <span className="relative z-10">{p}</span>
+                                                </button>
                                             ))}
                                         </div>
                                     </div>
@@ -627,11 +665,21 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                     </div>
                                 </div>
 
-                                <div className="flex gap-2 pt-1">
-                                    <button onClick={handleSaveEdit} className="flex-1 py-2 bg-white text-black font-black rounded-lg text-[10px] uppercase tracking-wider flex items-center justify-center gap-2">
-                                        <Save className="w-3 h-3" /> Save Changes
+                                <div className="flex gap-3 pt-1">
+                                    <button onClick={handleSaveEdit} className="flex-1 py-3 bg-white text-black font-black rounded-[10px] text-xs relative overflow-hidden hover:bg-zinc-100 transition-all cursor-pointer">
+                                        {/* Curved Light Effect for solid button */}
+                                        <div className="absolute inset-x-0 top-0 h-[1px] bg-white/60 z-10" />
+                                        <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/40 pointer-events-none z-10" />
+                                        <div className="absolute inset-x-0 bottom-0 h-[2.5px] bg-black/[0.04] z-10" />
+                                        <span className="relative z-10 flex items-center justify-center gap-2"><Save className="w-3 h-3" /> Save Changes</span>
                                     </button>
-                                    <button onClick={() => setEditingTaskId(null)} className="px-4 py-2 bg-zinc-800 text-white font-bold rounded-lg text-[10px] uppercase tracking-wider">Cancel</button>
+                                    <button onClick={() => setEditingTaskId(null)} className="px-8 py-3 bg-white/5 text-zinc-400 font-black rounded-[10px] text-xs relative overflow-hidden hover:bg-white/10 hover:text-white transition-all cursor-pointer">
+                                        {/* Curved Glass Edge Lights */}
+                                        <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none z-10" />
+                                        <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
+                                        <div className="absolute top-0 inset-x-0 h-[4px] bg-gradient-to-b from-white/5 to-transparent z-10" />
+                                        <span className="relative z-10">Cancel</span>
+                                    </button>
                                 </div>
                             </motion.div>
                         );
