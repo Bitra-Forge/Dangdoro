@@ -195,7 +195,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const activeFocuserCount = enrichedGroup?.memberDetails?.filter((m: any) => m.isFocusing).length || 0;
     const activeOrPausedCount = enrichedGroup?.memberDetails?.filter((m: any) => m.isFocusing || (m.uid === user?.uid && (optimisticFocusing || isPaused))).length || 0;
     const isActive = activeFocuserCount > 0 || (user && optimisticFocusing);
-    const activeStartTime = getEarliestActiveStart(enrichedGroup?.memberDetails) ?? enrichedGroup?.startTime;
+    const activeStartTime = getEarliestActiveStart(enrichedGroup?.memberDetails);
     const sortedMembers = useMemo(() => {
         if (!enrichedGroup) return [];
         return [...(enrichedGroup.memberDetails || [])].sort((a, b) => (b.totalMinutes || 0) - (a.totalMinutes || 0));

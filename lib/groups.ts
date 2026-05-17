@@ -36,12 +36,8 @@ export interface FocusGroup {
         totalMinutes: number;
         joinedAt: any;
         lastActive?: any;
-        isFocusing?: boolean;
-        sessionStartedAt?: any;
     }>;
     memberDetails?: any[];
-    startTime: any;
-    status: "active" | "paused" | "idle";
     maxMembers?: number;
     privacy: GroupPrivacy;
     accessCode?: string;
