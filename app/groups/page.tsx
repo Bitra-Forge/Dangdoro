@@ -344,7 +344,8 @@ export default function GroupsPage() {
                         </motion.p>
                     </header>
 
-                    <div className="w-full max-w-4xl space-y-6">
+                    <div className="w-full max-w-6xl space-y-6">
+                        <div className="mx-auto max-w-xl space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <motion.button
                                 whileHover={{ y: -1 }}
@@ -399,6 +400,7 @@ export default function GroupsPage() {
                         </AnimatePresence>
 
                         {activeFocusers.length > 0 && <ActiveFocusersBanner focusers={activeFocusers} />}
+                        </div>
 
                         <div className="space-y-14">
                             {userGroups.length > 0 && (
@@ -410,7 +412,7 @@ export default function GroupsPage() {
                                             {userGroups.length} {userGroups.length === 1 ? "group" : "groups"}
                                         </span>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                         {userGroups.map((group) => (
                                             <EnhancedGroupCard key={group.id} group={group} isMember={true} />
                                         ))}
@@ -427,7 +429,7 @@ export default function GroupsPage() {
                                             {publicGroups.length} open
                                         </span>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                         {publicGroups.map((group) => (
                                             <EnhancedGroupCard key={group.id} group={group} isMember={false} />
                                         ))}
