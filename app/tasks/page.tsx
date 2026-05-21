@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import {
     ClipboardList, Plus, Trash2, CheckCircle2, Circle,
     ChevronDown, ChevronRight, Pencil, Check, X, GripVertical,
-    Play, Clock, Maximize2, Palette, Settings, Sparkles, Users
+    Play, Clock, Maximize2, Palette, Settings, Sparkles, Users,
+    ArrowUpDown
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
@@ -15,7 +16,7 @@ import {
     addGroup, renameGroup, deleteGroup as dbDeleteGroup,
     updateGroupPosition, updateGroupDimensions, moveTaskToGroup, subscribeToGroups,
     updateTaskPriority, updateTaskField, updateGroupColor, type TaskPriority,
-    subscribeToAssignedGroupTasks
+    subscribeToAssignedGroupTasks, updateGroupSort, updateTaskPositionAndGroup
 } from "@/lib/db";
 import { useTimerStore } from "@/lib/store";
 import { toast } from "sonner";
@@ -161,7 +162,7 @@ function TaskRow({ task, onDragStart }: { task: any; onDragStart: (e: React.Poin
                 {/* Drag handle */}
                 <span 
                     onPointerDown={(e) => onDragStart(e, task)}
-                    className="cursor-grab active:cursor-grabbing text-zinc-700 hover:text-zinc-400 transition-colors touch-none flex-shrink-0"
+                    className="cursor-grab active:cursor-grabbing text-zinc-700 hover:text-zinc-400 transition-all duration-200 touch-none flex-shrink-0 opacity-0 group-hover/row:opacity-100"
                 >
                     <GripVertical className="w-3 h-3" />
                 </span>
@@ -261,11 +262,14 @@ function TaskRow({ task, onDragStart }: { task: any; onDragStart: (e: React.Poin
 
 function GroupCard({
     group, tasks, userId, isDragOver, onTaskDragStart, cardRef,
+    overTaskId, overTaskPosition
 }: {
-    group: { id: string; name: string; positionX: number; positionY: number; width?: number; height?: number; color?: string };
+    group: { id: string; name: string; positionX: number; positionY: number; width?: number; height?: number; color?: string; sortBy?: string };
     tasks: any[]; userId: string; isDragOver: boolean;
     onTaskDragStart: (e: React.PointerEvent, task: any) => void;
     cardRef: (el: HTMLDivElement | null) => void;
+    overTaskId: string | null;
+    overTaskPosition: "before" | "after" | null;
 }) {
     const [collapsed, setCollapsed] = useState(false);
     const [newTask, setNewTask] = useState("");
@@ -273,6 +277,7 @@ function GroupCard({
     const [newNotes, setNewNotes] = useState("");
     const [showNotesForm, setShowNotesForm] = useState(false);
     const [showColorPicker, setShowColorPicker] = useState(false);
+    const [showSortPicker, setShowSortPicker] = useState(false);
 
     const [isRenaming, setIsRenaming] = useState(false);
     const [renameVal, setRenameVal] = useState(group.name);
@@ -280,6 +285,19 @@ function GroupCard({
     const [isResizing, setIsResizing] = useState(false);
     
     const groupColor = getGroupColor(group.color ?? "zinc");
+    const pickerRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (!showColorPicker && !showSortPicker) return;
+        const handleClickOutside = (event: MouseEvent) => {
+            if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+                setShowColorPicker(false);
+                setShowSortPicker(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [showColorPicker, showSortPicker]);
 
     // Size constraints
     const MIN_WIDTH = 280;
@@ -306,10 +324,39 @@ function GroupCard({
         }
     }, [group.positionX, group.positionY, group.width, group.height, collapsed]);
 
-    const activeTasks = tasks
-        .filter(t => !t.completed)
-        .sort((a, b) => PRIORITY_ORDER[a.priority as TaskPriority ?? "natural"] - PRIORITY_ORDER[b.priority as TaskPriority ?? "natural"]);
-    const doneTasks = tasks.filter(t => t.completed);
+    const sortBy = group.sortBy || "priority";
+
+    const getTaskOrder = (t: any) => {
+        if (typeof t.order === "number") return t.order;
+        if (t.createdAt?.seconds) return t.createdAt.seconds;
+        if (t.createdAt?.toMillis) return t.createdAt.toMillis() / 1000;
+        if (t.createdAt instanceof Date) return t.createdAt.getTime() / 1000;
+        return 0;
+    };
+
+    const sortTasks = (taskList: any[]) => {
+        return [...taskList].sort((a, b) => {
+            if (sortBy === "priority") {
+                return PRIORITY_ORDER[a.priority as TaskPriority ?? "natural"] - PRIORITY_ORDER[b.priority as TaskPriority ?? "natural"];
+            }
+            if (sortBy === "title") {
+                return (a.title || "").localeCompare(b.title || "");
+            }
+            if (sortBy === "date-desc") {
+                return getTaskOrder(b) - getTaskOrder(a);
+            }
+            if (sortBy === "date-asc") {
+                return getTaskOrder(a) - getTaskOrder(b);
+            }
+            if (sortBy === "custom") {
+                return getTaskOrder(a) - getTaskOrder(b);
+            }
+            return 0;
+        });
+    };
+
+    const activeTasks = sortTasks(tasks.filter(t => !t.completed));
+    const doneTasks = sortTasks(tasks.filter(t => t.completed));
 
     // Draggable header logic
     const onHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -362,7 +409,8 @@ function GroupCard({
         if (!newTask.trim()) return;
         const gid = group.id;
         const dur = newDuration ? parseInt(newDuration) : null;
-        const ok = await addTask(userId, newTask.trim(), gid, "natural", 1, dur, newNotes.trim());
+        const maxOrder = activeTasks.length > 0 ? Math.max(...activeTasks.map(getTaskOrder)) : Date.now();
+        const ok = await addTask(userId, newTask.trim(), gid, "natural", 1, dur, newNotes.trim(), maxOrder + 1000);
         if (ok) { setNewTask(""); setNewDuration(""); setNewNotes(""); setShowNotesForm(false); }
         else toast.error("Failed to add task.");
     };
@@ -383,6 +431,11 @@ function GroupCard({
         setShowColorPicker(false);
     };
 
+    const handleSortChange = async (sortOption: string) => {
+        await updateGroupSort(group.id, sortOption);
+        setShowSortPicker(false);
+    };
+
     return (
         <div
             ref={(el) => { cardEl.current = el; cardRef(el); }}
@@ -397,11 +450,12 @@ function GroupCard({
                 willChange: "left,top,width,height"
             }}
             className={cn(
-                "bg-zinc-900/70 backdrop-blur-2xl border rounded-2xl shadow-2xl transition-[box-shadow,border-color] duration-200 flex flex-col",
+                "bg-zinc-900/70 backdrop-blur-2xl border rounded-2xl shadow-2xl transition-[box-shadow,border-color,transform] duration-200 flex flex-col",
                 isDraggingCard || isResizing 
                     ? cn(groupColor.border, groupColor.glow, "scale-[1.01] z-50") 
-                    : "border-white/10 z-10",
-                isDragOver && cn(groupColor.border, groupColor.glow)
+                    : isDragOver 
+                        ? cn(groupColor.border, groupColor.glow, "scale-[1.005] z-30") 
+                        : "border-white/10 z-10"
             )}
         >
             {/* Draggable Header */}
@@ -425,50 +479,120 @@ function GroupCard({
                     <span className="flex-1 text-xs font-black uppercase tracking-widest text-white truncate">{group.name}</span>
                 )}
                 
-                {/* Color picker */}
-                <div className="relative">
-                    {showColorPicker ? (
-                        <div className="flex items-center gap-1 bg-zinc-800/90 rounded-lg p-1 border border-white/10 shadow-lg">
-                            {GROUP_COLORS.map(c => (
+                {/* Action buttons with click-outside wrapper */}
+                <div ref={pickerRef} className="flex items-center gap-0.5">
+                    {/* Color picker */}
+                    <div className="relative">
+                        {showColorPicker ? (
+                            <div className="flex items-center gap-1 bg-zinc-900/95 backdrop-blur-md rounded-lg p-1 border border-white/10 shadow-xl absolute right-0 bottom-full mb-1.5 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                                {GROUP_COLORS.map(c => (
+                                    <button 
+                                        key={c.value}
+                                        onClick={() => handleColorChange(c.value)}
+                                        title={c.label}
+                                        className={cn(
+                                            "w-4 h-4 rounded-full transition-all flex items-center justify-center",
+                                            (group.color ?? "zinc") === c.value 
+                                                ? "ring-2 ring-white/30 scale-110" 
+                                                : "hover:scale-110 opacity-60 hover:opacity-100"
+                                        )}
+                                    >
+                                        <span className={cn("w-2.5 h-2.5 rounded-full", c.bg)} />
+                                    </button>
+                                ))}
                                 <button 
-                                    key={c.value}
-                                    onClick={() => handleColorChange(c.value)}
-                                    title={c.label}
-                                    className={cn(
-                                        "w-4 h-4 rounded-full transition-all flex items-center justify-center",
-                                        (group.color ?? "zinc") === c.value 
-                                            ? "ring-2 ring-white/30 scale-110" 
-                                            : "hover:scale-110 opacity-60 hover:opacity-100"
-                                    )}
+                                    onClick={() => setShowColorPicker(false)}
+                                    className="ml-0.5 text-zinc-500 hover:text-zinc-300 transition-colors"
                                 >
-                                    <span className={cn("w-2.5 h-2.5 rounded-full", c.bg)} />
+                                    <X className="w-3 h-3" />
                                 </button>
-                            ))}
+                            </div>
+                        ) : (
                             <button 
-                                onClick={() => setShowColorPicker(false)}
-                                className="ml-0.5 text-zinc-500 hover:text-zinc-300 transition-colors"
+                                onClick={() => { setShowColorPicker(v => !v); setShowSortPicker(false); }} 
+                                className="text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center flex-shrink-0"
+                                title="Change color"
                             >
-                                <X className="w-3 h-3" />
+                                <span className={cn("w-3.5 h-3.5 rounded-full block border border-white/15", groupColor.bg)} />
                             </button>
-                        </div>
-                    ) : (
-                        <button 
-                            onClick={() => setShowColorPicker(true)} 
-                            className="text-zinc-700 hover:text-zinc-300 transition-colors"
-                        >
-                            <span className={cn("w-2.5 h-2.5 rounded-full block", groupColor.bg)} />
-                        </button>
-                    )}
-                </div>
+                        )}
+                    </div>
 
-                <>
-                    <button onClick={() => { setIsRenaming(true); setRenameVal(group.name); }} className="text-zinc-700 hover:text-zinc-300 transition-colors">
-                        <Pencil className="w-3 h-3" />
+                    {/* Sort picker */}
+                    <div className="relative">
+                        {showSortPicker ? (
+                            <div className="flex items-center gap-1 bg-zinc-900/95 backdrop-blur-md rounded-lg p-1 border border-white/10 shadow-xl absolute right-0 bottom-full mb-1.5 z-50 whitespace-nowrap text-[9px] font-bold uppercase tracking-wider animate-in fade-in slide-in-from-bottom-2 duration-150">
+                                <button 
+                                    onClick={() => handleSortChange("custom")}
+                                    className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", sortBy === "custom" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
+                                    title="Custom manual order"
+                                >
+                                    {sortBy === "custom" && <Check className="w-2.5 h-2.5" />}
+                                    Custom
+                                </button>
+                                <button 
+                                    onClick={() => handleSortChange("priority")}
+                                    className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", sortBy === "priority" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
+                                    title="Sort by Priority"
+                                >
+                                    {sortBy === "priority" && <Check className="w-2.5 h-2.5" />}
+                                    Priority
+                                </button>
+                                <button 
+                                    onClick={() => handleSortChange("title")}
+                                    className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", sortBy === "title" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
+                                    title="Sort A-Z"
+                                >
+                                    {sortBy === "title" && <Check className="w-2.5 h-2.5" />}
+                                    A-Z
+                                </button>
+                                <button 
+                                    onClick={() => handleSortChange("date-desc")}
+                                    className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", sortBy === "date-desc" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
+                                    title="Sort Newest"
+                                >
+                                    {sortBy === "date-desc" && <Check className="w-2.5 h-2.5" />}
+                                    Newest
+                                </button>
+                                <button 
+                                    onClick={() => handleSortChange("date-asc")}
+                                    className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", sortBy === "date-asc" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
+                                    title="Sort Oldest"
+                                >
+                                    {sortBy === "date-asc" && <Check className="w-2.5 h-2.5" />}
+                                    Oldest
+                                </button>
+                                <button 
+                                    onClick={() => setShowSortPicker(false)}
+                                    className="ml-0.5 text-zinc-500 hover:text-zinc-300 transition-colors"
+                                >
+                                    <X className="w-3 h-3" />
+                                </button>
+                            </div>
+                        ) : (
+                            <button 
+                                onClick={() => { setShowSortPicker(v => !v); setShowColorPicker(false); }} 
+                                className={cn(
+                                    "text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center relative flex-shrink-0",
+                                    sortBy !== "priority" && cn(groupColor.text, "bg-white/5")
+                                )}
+                                title={`Sort order: ${sortBy}`}
+                            >
+                                <ArrowUpDown className="w-4 h-4" />
+                                {sortBy !== "priority" && (
+                                    <span className={cn("absolute top-1 right-1 w-1.5 h-1.5 rounded-full animate-pulse", groupColor.bg)} />
+                                )}
+                            </button>
+                        )}
+                    </div>
+
+                    <button onClick={() => { setIsRenaming(true); setRenameVal(group.name); }} className="text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center flex-shrink-0" title="Rename group">
+                        <Pencil className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={handleDelete} className="text-zinc-700 hover:text-red-400 transition-colors">
-                        <Trash2 className="w-3 h-3" />
+                    <button onClick={handleDelete} className="text-zinc-500 hover:text-red-400 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center flex-shrink-0" title="Delete group">
+                        <Trash2 className="w-3.5 h-3.5" />
                     </button>
-                </>
+                </div>
             </div>
 
             {/* Scrollable Body */}
@@ -503,7 +627,25 @@ function GroupCard({
                             <p className="text-[10px] text-zinc-700 uppercase tracking-widest font-bold text-center py-8">No tasks yet</p>
                         ) : (
                             <>
-                                {activeTasks.map(task => <TaskRow key={task.id} task={task} onDragStart={onTaskDragStart} />)}
+                                {activeTasks.map(task => (
+                                    <div key={task.id} data-task-id={task.id} className="relative">
+                                        {/* Drop Indicator - Before */}
+                                        {isDragOver && overTaskId === task.id && overTaskPosition === "before" && (
+                                            <div className="relative py-1 z-10 transition-all duration-150">
+                                                <div className={cn("h-[3px] w-full rounded-full animate-pulse shadow-lg", groupColor.bg)} 
+                                                     style={{ boxShadow: `0 0 10px 2px ${groupColor.shadow || "rgba(255,255,255,0.2)"}` }} />
+                                            </div>
+                                        )}
+                                        <TaskRow task={task} onDragStart={onTaskDragStart} />
+                                        {/* Drop Indicator - After */}
+                                        {isDragOver && overTaskId === task.id && overTaskPosition === "after" && (
+                                            <div className="relative py-1 z-10 transition-all duration-150">
+                                                <div className={cn("h-[3px] w-full rounded-full animate-pulse shadow-lg", groupColor.bg)} 
+                                                     style={{ boxShadow: `0 0 10px 2px ${groupColor.shadow || "rgba(255,255,255,0.2)"}` }} />
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
                                 {doneTasks.length > 0 && (
                                     <>
                                         <div className="flex items-center gap-2 my-2.5">
@@ -511,7 +653,25 @@ function GroupCard({
                                             <span className="text-[9px] text-zinc-700 font-bold uppercase tracking-widest">Done</span>
                                             <div className="flex-1 h-px bg-white/5" />
                                         </div>
-                                        {doneTasks.map(task => <TaskRow key={task.id} task={task} onDragStart={onTaskDragStart} />)}
+                                        {doneTasks.map(task => (
+                                            <div key={task.id} data-task-id={task.id} className="relative">
+                                                {/* Drop Indicator - Before */}
+                                                {isDragOver && overTaskId === task.id && overTaskPosition === "before" && (
+                                                    <div className="relative py-1 z-10 transition-all duration-150">
+                                                        <div className={cn("h-[3px] w-full rounded-full animate-pulse shadow-lg", groupColor.bg)} 
+                                                             style={{ boxShadow: `0 0 10px 2px ${groupColor.shadow || "rgba(255,255,255,0.2)"}` }} />
+                                                    </div>
+                                                )}
+                                                <TaskRow task={task} onDragStart={onTaskDragStart} />
+                                                {/* Drop Indicator - After */}
+                                                {isDragOver && overTaskId === task.id && overTaskPosition === "after" && (
+                                                    <div className="relative py-1 z-10 transition-all duration-150">
+                                                        <div className={cn("h-[3px] w-full rounded-full animate-pulse shadow-lg", groupColor.bg)} 
+                                                             style={{ boxShadow: `0 0 10px 2px ${groupColor.shadow || "rgba(255,255,255,0.2)"}` }} />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
                                     </>
                                 )}
                             </>
@@ -546,6 +706,7 @@ function AssignedTasksCard({
     const [isDraggingCard, setIsDraggingCard] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
     const [showColorPicker, setShowColorPicker] = useState(false);
+    const [showSortPicker, setShowSortPicker] = useState(false);
     
     const loadSavedColor = () => {
         try {
@@ -556,6 +717,19 @@ function AssignedTasksCard({
     
     const [assignedColor, setAssignedColor] = useState(loadSavedColor);
     const assignedGroupColor = getGroupColor(assignedColor);
+    const pickerRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (!showColorPicker && !showSortPicker) return;
+        const handleClickOutside = (event: MouseEvent) => {
+            if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+                setShowColorPicker(false);
+                setShowSortPicker(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [showColorPicker, showSortPicker]);
     
     const loadSavedDimensions = () => {
         try {
@@ -605,6 +779,20 @@ function AssignedTasksCard({
         setShowColorPicker(false);
     };
 
+    const loadSavedSort = () => {
+        try {
+            return localStorage.getItem("assigned-tasks-sort") ?? "priority";
+        } catch {}
+        return "priority";
+    };
+    const [assignedSort, setAssignedSort] = useState(loadSavedSort);
+
+    const handleSortChange = (sortOption: string) => {
+        setAssignedSort(sortOption);
+        localStorage.setItem("assigned-tasks-sort", sortOption);
+        setShowSortPicker(false);
+    };
+
     useEffect(() => {
         const fetchGroupNames = async () => {
             const ids = [...new Set(tasks.map(t => t.sourceGroupId).filter(Boolean))];
@@ -622,10 +810,34 @@ function AssignedTasksCard({
         fetchGroupNames();
     }, [tasks]);
 
-    const activeTasks = tasks
-        .filter(t => t.status !== "done")
-        .sort((a, b) => PRIORITY_ORDER[a.priority as TaskPriority ?? "natural"] - PRIORITY_ORDER[b.priority as TaskPriority ?? "natural"]);
-    const doneTasks = tasks.filter(t => t.status === "done");
+    const getTaskOrder = (t: any) => {
+        if (typeof t.order === "number") return t.order;
+        if (t.createdAt?.seconds) return t.createdAt.seconds;
+        if (t.createdAt?.toMillis) return t.createdAt.toMillis() / 1000;
+        if (t.createdAt instanceof Date) return t.createdAt.getTime() / 1000;
+        return 0;
+    };
+
+    const sortTasks = (taskList: any[]) => {
+        return [...taskList].sort((a, b) => {
+            if (assignedSort === "priority") {
+                return PRIORITY_ORDER[a.priority as TaskPriority ?? "natural"] - PRIORITY_ORDER[b.priority as TaskPriority ?? "natural"];
+            }
+            if (assignedSort === "title") {
+                return (a.title || "").localeCompare(b.title || "");
+            }
+            if (assignedSort === "date-desc") {
+                return getTaskOrder(b) - getTaskOrder(a);
+            }
+            if (assignedSort === "date-asc") {
+                return getTaskOrder(a) - getTaskOrder(b);
+            }
+            return 0;
+        });
+    };
+
+    const activeTasks = sortTasks(tasks.filter(t => t.status !== "done"));
+    const doneTasks = sortTasks(tasks.filter(t => t.status === "done"));
 
     const toggleAssignedTask = async (taskId: string, groupId: string, isDone: boolean) => {
         await updateDoc(doc(db, `focusGroups/${groupId}/tasks`, taskId), { 
@@ -686,7 +898,7 @@ function AssignedTasksCard({
                 zIndex: isDraggingCard || isResizing ? 50 : 10
             }}
             className={cn(
-                "bg-zinc-900/70 backdrop-blur-2xl border rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-[box-shadow,border-color] duration-200",
+                "bg-zinc-900/70 backdrop-blur-2xl border rounded-2xl shadow-2xl flex flex-col transition-[box-shadow,border-color] duration-200",
                 (isDraggingCard || isResizing) 
                     ? cn(assignedGroupColor.border, assignedGroupColor.glow, "scale-[1.01]") 
                     : isDragOver 
@@ -707,47 +919,109 @@ function AssignedTasksCard({
                 <span className="flex-1 text-xs font-black uppercase tracking-widest text-white truncate flex items-center gap-2">
                     <Users className={cn("w-3.5 h-3.5", assignedGroupColor.text)} /> Assigned Tasks
                 </span>
-                
-                {/* Color picker */}
-                <div className="relative">
-                    {showColorPicker ? (
-                        <div className="flex items-center gap-1 bg-zinc-800/90 rounded-lg p-1 border border-white/10 shadow-lg">
-                            {GROUP_COLORS.map(c => (
+                <div ref={pickerRef} className="flex items-center gap-0.5">
+                    {/* Color picker */}
+                    <div className="relative">
+                        {showColorPicker ? (
+                            <div className="flex items-center gap-1 bg-zinc-900/95 backdrop-blur-md rounded-lg p-1 border border-white/10 shadow-xl absolute right-0 bottom-full mb-1.5 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                                {GROUP_COLORS.map(c => (
+                                    <button 
+                                        key={c.value}
+                                        onClick={() => handleColorChange(c.value)}
+                                        title={c.label}
+                                        className={cn(
+                                            "w-4 h-4 rounded-full transition-all flex items-center justify-center",
+                                            assignedColor === c.value 
+                                                ? "ring-2 ring-white/30 scale-110" 
+                                                : "hover:scale-110 opacity-60 hover:opacity-100"
+                                        )}
+                                    >
+                                        <span className={cn("w-2.5 h-2.5 rounded-full", c.bg)} />
+                                    </button>
+                                ))}
                                 <button 
-                                    key={c.value}
-                                    onClick={() => handleColorChange(c.value)}
-                                    title={c.label}
-                                    className={cn(
-                                        "w-4 h-4 rounded-full transition-all flex items-center justify-center",
-                                        assignedColor === c.value 
-                                            ? "ring-2 ring-white/30 scale-110" 
-                                            : "hover:scale-110 opacity-60 hover:opacity-100"
-                                    )}
+                                    onClick={() => setShowColorPicker(false)}
+                                    className="ml-0.5 text-zinc-500 hover:text-zinc-300 transition-colors"
                                 >
-                                    <span className={cn("w-2.5 h-2.5 rounded-full", c.bg)} />
+                                    <X className="w-3 h-3" />
                                 </button>
-                            ))}
+                            </div>
+                        ) : (
                             <button 
-                                onClick={() => setShowColorPicker(false)}
-                                className="ml-0.5 text-zinc-500 hover:text-zinc-300 transition-colors"
+                                onClick={() => { setShowColorPicker(v => !v); setShowSortPicker(false); }} 
+                                className="cursor-pointer text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center flex-shrink-0"
+                                title="Change color"
                             >
-                                <X className="w-3 h-3" />
+                                <span className={cn("w-3.5 h-3.5 rounded-full block border border-white/15", assignedGroupColor.bg)} />
                             </button>
-                        </div>
-                    ) : (
-                        <button 
-                            onClick={() => setShowColorPicker(true)} 
-                            className="cursor-pointer text-zinc-700 hover:text-zinc-300 transition-colors"
-                        >
-                            <span className={cn("w-2.5 h-2.5 rounded-full block", assignedGroupColor.bg)} />
-                        </button>
-                    )}
+                        )}
+                    </div>
+
+                    {/* Sort picker */}
+                    <div className="relative">
+                        {showSortPicker ? (
+                            <div className="flex items-center gap-1 bg-zinc-900/95 backdrop-blur-md rounded-lg p-1 border border-white/10 shadow-xl absolute right-0 bottom-full mb-1.5 z-50 whitespace-nowrap text-[9px] font-bold uppercase tracking-wider animate-in fade-in slide-in-from-bottom-2 duration-150">
+                                <button 
+                                    onClick={() => handleSortChange("priority")}
+                                    className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", assignedSort === "priority" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
+                                    title="Sort by Priority"
+                                >
+                                    {assignedSort === "priority" && <Check className="w-2.5 h-2.5" />}
+                                    Priority
+                                </button>
+                                <button 
+                                    onClick={() => handleSortChange("title")}
+                                    className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", assignedSort === "title" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
+                                    title="Sort A-Z"
+                                >
+                                    {assignedSort === "title" && <Check className="w-2.5 h-2.5" />}
+                                    A-Z
+                                </button>
+                                <button 
+                                    onClick={() => handleSortChange("date-desc")}
+                                    className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", assignedSort === "date-desc" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
+                                    title="Sort Newest"
+                                >
+                                    {assignedSort === "date-desc" && <Check className="w-2.5 h-2.5" />}
+                                    Newest
+                                </button>
+                                <button 
+                                    onClick={() => handleSortChange("date-asc")}
+                                    className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", assignedSort === "date-asc" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
+                                    title="Sort Oldest"
+                                >
+                                    {assignedSort === "date-asc" && <Check className="w-2.5 h-2.5" />}
+                                    Oldest
+                                </button>
+                                <button 
+                                    onClick={() => setShowSortPicker(false)}
+                                    className="ml-0.5 text-zinc-500 hover:text-zinc-300 transition-colors"
+                                >
+                                    <X className="w-3 h-3" />
+                                </button>
+                            </div>
+                        ) : (
+                            <button 
+                                onClick={() => { setShowSortPicker(v => !v); setShowColorPicker(false); }} 
+                                className={cn(
+                                    "cursor-pointer text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center relative flex-shrink-0",
+                                    assignedSort !== "priority" && cn(assignedGroupColor.text, "bg-white/5")
+                                )}
+                                title={`Sort order: ${assignedSort}`}
+                            >
+                                <ArrowUpDown className="w-4 h-4" />
+                                {assignedSort !== "priority" && (
+                                    <span className={cn("absolute top-1 right-1 w-1.5 h-1.5 rounded-full animate-pulse", assignedGroupColor.bg)} />
+                                )}
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 
             {/* Scrollable Body */}
             {!collapsed && (
-                <div className="flex-1 min-h-0 overflow-y-auto p-2.5" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                <div className="flex-1 min-h-0 overflow-y-auto p-2.5 rounded-b-2xl" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                     <div className="space-y-0.5">
                         {tasks.length === 0 ? (
                             <p className="text-[10px] text-zinc-700 uppercase tracking-widest font-bold text-center py-8">No assigned tasks</p>
@@ -933,6 +1207,8 @@ export default function TasksPage() {
     const [dragTaskColor, setDragTaskColor] = useState<string>("zinc");
     const [clonePos, setClonePos] = useState({ x: 0, y: 0 });
     const [overGroupId, setOverGroupId] = useState<string | null>(null);
+    const [overTaskId, setOverTaskId] = useState<string | null>(null);
+    const [overTaskPosition, setOverTaskPosition] = useState<"before" | "after" | null>(null);
     const [overTrash, setOverTrash] = useState(false);
     const [deleteReady, setDeleteReady] = useState(false);
     const [deletingTask, setDeletingTask] = useState<{ id: string; title: string; pos: { x: number; y: number }; color: string } | null>(null);
@@ -982,14 +1258,29 @@ export default function TasksPage() {
         if (!draggingTask) return;
         setClonePos({ x: e.clientX, y: e.clientY });
         const el = document.elementFromPoint(e.clientX, e.clientY);
-        let found: string | null = null;
-        for (const [gid, ref] of Object.entries(groupRefs.current)) {
-            if (ref && ref.contains(el)) { found = gid; break; }
+        
+        // Find which group card we are over
+        const groupCardEl = el?.closest("[data-group-id]");
+        const foundGroupId = groupCardEl?.getAttribute("data-group-id") || null;
+        setOverGroupId(foundGroupId);
+
+        // Find which task row we are over
+        const taskRowEl = el?.closest("[data-task-id]");
+        const foundTaskId = taskRowEl?.getAttribute("data-task-id") || null;
+        setOverTaskId(foundTaskId);
+
+        // Determine if we are hovering on upper or lower half of the task row
+        if (taskRowEl && foundTaskId) {
+            const rect = taskRowEl.getBoundingClientRect();
+            const relativeY = e.clientY - rect.top;
+            const isUpperHalf = relativeY < rect.height / 2;
+            setOverTaskPosition(isUpperHalf ? "before" : "after");
+        } else {
+            setOverTaskPosition(null);
         }
-        setOverGroupId(found);
         
         // When not over any group, we're in "delete zone" (empty space)
-        const isOverEmpty = !found;
+        const isOverEmpty = !foundGroupId;
         setOverTrash(isOverEmpty);
         
         // Start/clear delete timer based on position
@@ -1012,12 +1303,16 @@ export default function TasksPage() {
         const task = draggingTask;
         const wasDeleteReady = deleteReady;
         const wasOverGroupId = overGroupId;
+        const wasOverTaskId = overTaskId;
+        const wasOverTaskPosition = overTaskPosition;
         const currentPos = clonePos;
         const currentColor = dragTaskColor;
         
         // Clear drag state IMMEDIATELY for smooth UX
         setDraggingTask(null);
         setOverGroupId(null);
+        setOverTaskId(null);
+        setOverTaskPosition(null);
         setOverTrash(false);
         setDeleteReady(false);
         if (deleteTimerRef.current) {
@@ -1035,11 +1330,75 @@ export default function TasksPage() {
                 setDeletingTask(null);
                 toast.success("Task deleted.");
             }, 400);
-        } else if (wasOverGroupId && wasOverGroupId !== task.groupId) {
-            // Move task to new group (fire and forget for instant feedback)
-            moveTaskToGroup(task.id, wasOverGroupId);
+        } else if (wasOverGroupId) {
+            // Drop target group
+            const targetGroup = groups.find(g => g.id === wasOverGroupId);
+            const isAssignedTasks = wasOverGroupId === "assigned-tasks";
+            
+            // Reordering tasks within user groups
+            if (!isAssignedTasks) {
+                // If dropping in the same group without hovering over any task, we can do nothing to avoid extra updates
+                if (task.groupId === wasOverGroupId && !wasOverTaskId) {
+                    return;
+                }
+
+                // Get current sorting mode (default to priority)
+                const currentSort = targetGroup?.sortBy || "priority";
+                
+                const getTaskOrder = (t: any) => {
+                    if (typeof t.order === "number") return t.order;
+                    if (t.createdAt?.seconds) return t.createdAt.seconds;
+                    if (t.createdAt?.toMillis) return t.createdAt.toMillis() / 1000;
+                    if (t.createdAt instanceof Date) return t.createdAt.getTime() / 1000;
+                    return 0;
+                };
+
+                // Sort all other active tasks in target group by custom order to locate neighbors
+                const groupActiveTasks = tasks
+                    .filter(t => t.groupId === wasOverGroupId && t.id !== task.id && !t.completed)
+                    .sort((a, b) => getTaskOrder(a) - getTaskOrder(b));
+                
+                let newOrder = Date.now();
+                
+                if (groupActiveTasks.length === 0) {
+                    newOrder = 1000;
+                } else if (wasOverTaskId) {
+                    const hoveredIdx = groupActiveTasks.findIndex(t => t.id === wasOverTaskId);
+                    if (hoveredIdx !== -1) {
+                        if (wasOverTaskPosition === "before") {
+                            if (hoveredIdx === 0) {
+                                newOrder = getTaskOrder(groupActiveTasks[0]) - 1000;
+                            } else {
+                                const prevOrder = getTaskOrder(groupActiveTasks[hoveredIdx - 1]);
+                                const nextOrder = getTaskOrder(groupActiveTasks[hoveredIdx]);
+                                newOrder = (prevOrder + nextOrder) / 2;
+                            }
+                        } else { // "after"
+                            if (hoveredIdx === groupActiveTasks.length - 1) {
+                                newOrder = getTaskOrder(groupActiveTasks[groupActiveTasks.length - 1]) + 1000;
+                            } else {
+                                const prevOrder = getTaskOrder(groupActiveTasks[hoveredIdx]);
+                                const nextOrder = getTaskOrder(groupActiveTasks[hoveredIdx + 1]);
+                                newOrder = (prevOrder + nextOrder) / 2;
+                            }
+                        }
+                    }
+                } else {
+                    // Default to appending to the end
+                    newOrder = getTaskOrder(groupActiveTasks[groupActiveTasks.length - 1]) + 1000;
+                }
+
+                // Update task position and group in DB
+                await updateTaskPositionAndGroup(task.id, wasOverGroupId, newOrder);
+
+                // If sorting was not custom, automatically switch to custom manual sorting!
+                if (currentSort !== "custom") {
+                    await updateGroupSort(wasOverGroupId, "custom");
+                    toast.success(`Switched sorting to custom manual order.`);
+                }
+            }
         }
-    }, [draggingTask, overGroupId, deleteReady, clonePos, dragTaskColor]);
+    }, [draggingTask, overGroupId, overTaskId, overTaskPosition, deleteReady, clonePos, dragTaskColor, tasks, groups]);
 
     const handleApplyAgentGroups = async (agentGroups: { name: string; color: string; tasks: { title: string; priority: "urgent" | "high" | "normal" | "natural"; durationMinutes: number | null; notes: string }[] }[]) => {
         if (!user) return;
@@ -1097,6 +1456,8 @@ export default function TasksPage() {
                 <GroupCard key={g.id} group={g} tasks={tasksByGroup(g.id)}
                     userId={user.uid} isDragOver={overGroupId === g.id}
                     onTaskDragStart={onTaskDragStart} cardRef={el => { groupRefs.current[g.id] = el; }}
+                    overTaskId={overTaskId}
+                    overTaskPosition={overTaskPosition}
                 />
             ))}
 
@@ -1142,29 +1503,50 @@ export default function TasksPage() {
                     <div 
                         style={{ 
                             position: "fixed", 
-                            left: clonePos.x + 10, 
-                            top: clonePos.y + 10, 
+                            left: clonePos.x + 12, 
+                            top: clonePos.y + 12, 
                             pointerEvents: "none", 
                             zIndex: 99,
                             animation: showDeleteWarning ? "shake 0.3s ease-in-out infinite" : undefined,
                             boxShadow: deleteReady 
-                                ? "0 0 20px 4px rgba(239,68,68,0.5), 0 8px 24px rgba(0,0,0,0.4)"
-                                : `0 0 16px 2px ${colorConfig.shadow}, 0 8px 24px rgba(0,0,0,0.4)`
+                                ? "0 0 22px 5px rgba(239,68,68,0.55), 0 12px 28px rgba(0,0,0,0.5)"
+                                : `0 0 18px 3px ${colorConfig.shadow}, 0 12px 28px rgba(0,0,0,0.5)`,
+                            transform: "rotate(3.5deg) scale(1.04)",
+                            transformOrigin: "top left",
+                            transition: "transform 0.15s ease-out"
                         }}
                         className={cn(
-                            "rounded-xl px-3 py-2 backdrop-blur-xl border transition-colors",
+                            "rounded-xl px-3.5 py-2.5 backdrop-blur-xl border transition-colors flex flex-col gap-1 min-w-[200px] max-w-[285px]",
                             deleteReady ? "border-red-500/60 bg-red-950/80" : colorConfig.border,
-                            !deleteReady && "bg-zinc-800/90"
+                            !deleteReady && "bg-zinc-900/95"
                         )}
                     >
                         <div className="flex items-center gap-2">
-                            {deleteReady && <Trash2 className="w-3 h-3 text-red-400" />}
-                            <span className={cn("text-xs font-bold", deleteReady ? "text-red-300" : "text-white")}>
+                            {deleteReady ? (
+                                <Trash2 className="w-3.5 h-3.5 text-red-400 animate-bounce" />
+                            ) : (
+                                <span className={cn("w-2 h-2 rounded-full", getPriority(draggingTask.priority).dot)} />
+                            )}
+                            <span className={cn("text-xs font-bold truncate", deleteReady ? "text-red-300" : "text-white")}>
                                 {deleteReady ? "Release to delete" : draggingTask.title}
                             </span>
                         </div>
+                        {!deleteReady && (draggingTask.durationMinutes || draggingTask.notes) && (
+                            <div className="flex items-center gap-2 mt-0.5 text-[9px] text-zinc-400 font-semibold uppercase tracking-wider">
+                                {draggingTask.durationMinutes && (
+                                    <span className="flex items-center gap-1 bg-white/5 rounded px-1 py-0.5">
+                                        <Clock className="w-2.5 h-2.5" />{draggingTask.durationMinutes}m
+                                    </span>
+                                )}
+                                {draggingTask.notes && (
+                                    <span className="flex items-center gap-1 bg-white/5 rounded px-1 py-0.5 max-w-[120px] truncate">
+                                        {draggingTask.notes}
+                                    </span>
+                                )}
+                            </div>
+                        )}
                         {showDeleteWarning && !deleteReady && (
-                            <div className="text-[9px] text-zinc-500 mt-0.5">Hold to delete...</div>
+                            <div className="text-[9px] text-red-400/80 font-bold mt-1 uppercase tracking-widest animate-pulse">Hold to delete...</div>
                         )}
                     </div>
                 );

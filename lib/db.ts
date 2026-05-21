@@ -511,7 +511,8 @@ export const addTask = async (
     priority: TaskPriority = "natural",
     pomodoros: number = 1,
     durationMinutes: number | null = null,
-    notes: string = ""
+    notes: string = "",
+    order?: number
 ) => {
     try {
         if (auth.currentUser && auth.currentUser.uid === userId) {
@@ -527,6 +528,7 @@ export const addTask = async (
             estimatedPomodoros: pomodoros,
             completedPomodoros: 0,
             completed: false,
+            order: order ?? Date.now(),
             createdAt: serverTimestamp(),
         });
         return true;
@@ -626,6 +628,26 @@ export const moveTaskToGroup = async (taskId: string, newGroupId: string | null)
         return true;
     } catch (error) {
         console.error("Error moving task:", error);
+        return false;
+    }
+};
+
+export const updateGroupSort = async (groupId: string, sortBy: string) => {
+    try {
+        await updateDoc(doc(db, "taskGroups", groupId), { sortBy });
+        return true;
+    } catch (error) {
+        console.error("Error updating group sort order:", error);
+        return false;
+    }
+};
+
+export const updateTaskPositionAndGroup = async (taskId: string, groupId: string | null, order: number) => {
+    try {
+        await updateDoc(doc(db, "tasks", taskId), { groupId, order });
+        return true;
+    } catch (error) {
+        console.error("Error updating task position/group:", error);
         return false;
     }
 };
