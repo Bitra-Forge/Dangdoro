@@ -87,8 +87,8 @@ export default function Home() {
 
         <FloatingFocusAvatars />
 
-        {/* Group Focus Selector - Top Left */}
-        <div className="fixed top-24 left-10 z-40 animate-in slide-in-from-left-12 fade-in duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)]">
+        {/* Group Focus Selector - Top Left (aligns with notifications menu height) */}
+        <div className="fixed top-8 left-8 z-40 animate-in slide-in-from-left-4 fade-in duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)]">
           <GroupFocusSelector />
         </div>
 
