@@ -45,6 +45,7 @@ export interface FocusGroup {
     pendingInvites?: string[];
     totalMinutes?: number;
     createdAt: any;
+    lastResetAt?: any;
     settings?: {
         goalHours: number;
         goalType?: GoalType;
@@ -173,8 +174,8 @@ export function getGoalTypeLabel(goalType?: GoalType): string {
     }
 }
 
-export function getGoalPeriodBounds(goalType?: GoalType, customDays?: number): { start: Date; end: Date } {
-    const now = new Date();
+export function getGoalPeriodBounds(goalType?: GoalType, customDays?: number, referenceDate?: Date): { start: Date; end: Date } {
+    const now = referenceDate || new Date();
     switch (goalType) {
         case "daily": {
             const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -197,7 +198,9 @@ export function getGoalPeriodBounds(goalType?: GoalType, customDays?: number): {
         case "custom": {
             const days = customDays || 7;
             const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + days);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(start);
+            end.setDate(end.getDate() + days);
             return { start, end };
         }
         default: {
@@ -239,13 +242,13 @@ export function computeNextPeriodStart(goalType?: GoalType, customDays?: number)
     }
 }
 
-export function isPeriodExpired(goalType?: GoalType, customDays?: number): boolean {
+export function isPeriodExpired(goalType?: GoalType, customDays?: number, referenceDate?: Date): boolean {
     if (!goalType || goalType === "daily" || goalType === "weekly" || goalType === "monthly") {
-        const { end } = getGoalPeriodBounds(goalType);
+        const { end } = getGoalPeriodBounds(goalType, undefined, referenceDate);
         return new Date() >= end;
     }
     if (goalType === "custom" && customDays) {
-        const { end } = getGoalPeriodBounds(goalType, customDays);
+        const { end } = getGoalPeriodBounds(goalType, customDays, referenceDate);
         return new Date() >= end;
     }
     return false;

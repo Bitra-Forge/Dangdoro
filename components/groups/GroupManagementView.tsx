@@ -4,9 +4,9 @@ import { memo, useState, useEffect } from "react";
 import { useTimerStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { 
-    Target, Users, Copy, Crown, Zap, UserX, RefreshCw, Calendar
+    Target, Users, Copy, Crown, Zap, UserX, Calendar, RotateCcw
 } from "lucide-react";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -16,16 +16,40 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
     const isHost = userRole === "host";
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
     const [goalType, setGoalType] = useState<GoalType>(group.settings?.goalType || "weekly");
-    const [autoRenew, setAutoRenew] = useState(group.settings?.autoRenew ?? true);
     const [customDays, setCustomDays] = useState<string>("");
+    const [showResetConfirm, setShowResetConfirm] = useState(false);
+    const [isResetting, setIsResetting] = useState(false);
+
+    const handleResetStats = async () => {
+        setIsResetting(true);
+        try {
+            const resetStats: any = {};
+            if (group.memberStats) {
+                Object.keys(group.memberStats).forEach(key => {
+                    resetStats[key] = { ...(group.memberStats as any)[key], totalMinutes: 0 };
+                });
+            }
+            await updateDoc(doc(db, "focusGroups", group.id), {
+                totalMinutes: 0,
+                memberStats: resetStats,
+                lastResetAt: serverTimestamp(),
+            });
+            toast.success("Focus progress reset successfully!");
+            setShowResetConfirm(false);
+        } catch (error) {
+            console.error("Failed to reset stats:", error);
+            toast.error("Failed to reset progress.");
+        } finally {
+            setIsResetting(false);
+        }
+    };
 
     useEffect(() => {
         setGoalType(group.settings?.goalType || "weekly");
-        setAutoRenew(group.settings?.autoRenew ?? true);
         if (group.settings?.goalType === "custom" && group.settings?.customDays) {
             setCustomDays(String(group.settings.customDays));
         }
-    }, [group.settings?.goalType, group.settings?.autoRenew, group.settings?.customDays]);
+    }, [group.settings?.goalType, group.settings?.customDays]);
 
     const handleGoalTypeChange = async (newType: GoalType) => {
         setGoalType(newType);
@@ -37,12 +61,6 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
         toast.success(`Goal set to ${getGoalTypeLabel(newType).toLowerCase()}`);
     };
 
-    const handleAutoRenewToggle = async () => {
-        const newVal = !autoRenew;
-        setAutoRenew(newVal);
-        await updateDoc(doc(db, "focusGroups", group.id), { "settings.autoRenew": newVal });
-        toast.success(newVal ? "Auto-renew enabled" : "Auto-renew disabled");
-    };
 
     const handleCustomDaysChange = async (daysStr: string) => {
         setCustomDays(daysStr);
@@ -130,7 +148,7 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                                 <span className="text-[10px] font-black uppercase tracking-widest">Goal Period</span>
                             </div>
                             <div className="grid grid-cols-4 gap-2">
-                                {(["daily", "weekly", "monthly", "custom"] as GoalType[]).map((type) => (
+                                {([ "daily", "weekly", "monthly", "custom" ] as GoalType[]).map((type) => (
                                     <button
                                         key={type}
                                         onClick={() => handleGoalTypeChange(type)}
@@ -175,26 +193,23 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                             )}
                         </div>
 
-                        <div className="p-5 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4">
-                            <div className="flex items-center gap-2 text-zinc-400">
-                                <RefreshCw className="w-4 h-4" />
-                                <span className="text-[10px] font-black uppercase tracking-widest">Auto Renew</span>
+                        <div className="p-5 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4 flex flex-col justify-between">
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-2 text-zinc-400">
+                                    <RotateCcw className="w-4 h-4" />
+                                    <span className="text-[10px] font-black uppercase tracking-widest">Reset Progress</span>
+                                </div>
+                                <p className="text-[10px] text-zinc-500">
+                                    Manually archive member minutes and restart the focus goal period.
+                                </p>
                             </div>
                             <button
-                                onClick={handleAutoRenewToggle}
-                                className={cn(
-                                    "w-full py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2",
-                                    autoRenew
-                                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                                        : "bg-zinc-900 text-zinc-500 border border-white/5"
-                                )}
+                                onClick={() => setShowResetConfirm(true)}
+                                className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                             >
-                                <RefreshCw className={cn("w-4 h-4", autoRenew && "animate-spin")} />
-                                {autoRenew ? "Enabled" : "Disabled"}
+                                <RotateCcw className="w-4 h-4" />
+                                Reset Stats
                             </button>
-                            <p className="text-[10px] text-zinc-600">
-                                When enabled, the goal period automatically resets and progress starts fresh
-                            </p>
                         </div>
                     </div>
                     {(group.privacy === "private-code" || group.privacy === "public") && group.accessCode && (
@@ -223,6 +238,45 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                 <Section label="Officers" color="text-zinc-300" members={adminMembers} user={user} group={group} isHost={isHost} roleActionPendingId={roleActionPendingId} onUpdateRole={onUpdateRole} onRemove={onRemove} />
                 <Section label="Members" color="text-zinc-500" members={regularMembers} user={user} group={group} isHost={isHost} roleActionPendingId={roleActionPendingId} onUpdateRole={onUpdateRole} onRemove={onRemove} />
             </div>
+
+            {showResetConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className={cn(
+                        "w-full max-w-md p-6 rounded-3xl border border-white/10 space-y-6 shadow-2xl animate-in zoom-in-95 duration-200",
+                        settingsGlassmorphism ? "bg-zinc-950/80 backdrop-blur-xl" : "bg-zinc-950"
+                    )}>
+                        <div className="flex flex-col items-center text-center space-y-3">
+                            <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20 text-red-500">
+                                <RotateCcw className="w-6 h-6 animate-pulse" />
+                            </div>
+                            <div>
+                                <h4 className="text-base font-bold text-white">Reset Progress Stats?</h4>
+                                <p className="text-xs text-zinc-500 mt-1">
+                                    This will wipe the current focus minutes for all members in the group and start a new goal period. This action is irreversible.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowResetConfirm(false)}
+                                disabled={isResetting}
+                                className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 font-bold rounded-xl text-xs uppercase tracking-wider transition-all disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleResetStats}
+                                disabled={isResetting}
+                                className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-red-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {isResetting ? (
+                                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                ) : "Yes, Reset Stats"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
         </div>
     );

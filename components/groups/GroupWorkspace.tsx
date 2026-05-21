@@ -130,29 +130,6 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         }
     }, [group, user, loading, router]);
 
-  // 6. Auto-renewal check
-  useEffect(() => {
-    if (!group || !user) return;
-    const goalType = group.settings?.goalType as GoalType | undefined;
-    const autoRenew = group.settings?.autoRenew ?? true;
-    const customDays = group.settings?.customDays;
-    if (!autoRenew) return;
-    if (isPeriodExpired(goalType, customDays)) {
-      // Reset progress for the new period
-      const resetStats: any = {};
-      if (group.memberStats) {
-        Object.keys(group.memberStats).forEach(key => {
-          resetStats[key] = { ...(group.memberStats as any)[key], totalMinutes: 0 };
-        });
-      }
-      updateDoc(doc(db, "focusGroups", group.id), {
-        totalMinutes: 0,
-        memberStats: resetStats,
-        "settings.goalType": goalType || "weekly",
-      }).catch(() => {});
-    }
-  }, [group, user]);
-
     // 7. Fetch friends list
     useEffect(() => {
         if (!user) return;
@@ -164,7 +141,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         if (!group || !user) return null;
         const groupLiveSessions = resolveLiveSessionsForGroup(group.id, liveSessions);
         const memberDetails = group.members.map(memberId => {
-            const stats = group.memberStats?.[memberId] || { role: "member", totalMinutes: 0 };
+            const stats = (group.memberStats?.[memberId] || { role: "member", totalMinutes: 0 }) as any;
             const hydration = hydratedProfiles[memberId];
             const memberLiveSession = groupLiveSessions.find(ls => ls.userId === memberId);
             const isFocusing = !!memberLiveSession;
@@ -185,6 +162,52 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         });
         return { ...group, memberDetails };
     }, [group, user, hydratedProfiles, liveSessions]);
+
+  // 6.5. Notification for admin and host when period expires (manual reset mode)
+  useEffect(() => {
+    async function maybeNotifyAdmins() {
+      if (!enrichedGroup || !enrichedGroup.settings || !enrichedGroup.id || !enrichedGroup.name) return;
+      const { goalType, customDays } = enrichedGroup.settings;
+      if (!goalType) return;
+
+      const referenceDate = enrichedGroup.lastResetAt || enrichedGroup.createdAt;
+      const refDate = referenceDate ? new Date(toMillis(referenceDate) || Date.now()) : undefined;
+
+      if (!isPeriodExpired(goalType, customDays, refDate)) return;
+
+      const bounds = getGoalPeriodBounds(goalType, customDays, refDate);
+      const periodEndIso = bounds.end.toISOString();
+
+      // Find all admin & host users in memberDetails
+      const admins = enrichedGroup.memberDetails ? enrichedGroup.memberDetails.filter(
+        (m: any) => m.role === "host" || m.role === "admin"
+      ) : [];
+
+      for (const admin of admins) {
+        // Check for existing notification for this user, group, and periodEnd
+        const q = query(
+          collection(db, "notifications"),
+          where("type", "==", "goal_period_expired"),
+          where("toUserId", "==", admin.uid),
+          where("groupId", "==", enrichedGroup.id),
+          where("periodEnd", "==", periodEndIso)
+        );
+        const existing = await getDocs(q);
+        if (existing.empty) {
+          await addDoc(collection(db, "notifications"), {
+            type: "goal_period_expired",
+            toUserId: admin.uid,
+            groupId: enrichedGroup.id,
+            groupName: enrichedGroup.name,
+            periodEnd: periodEndIso,
+            read: false,
+            createdAt: serverTimestamp()
+          });
+        }
+      }
+    }
+    maybeNotifyAdmins();
+  }, [enrichedGroup?.lastResetAt, enrichedGroup?.createdAt, enrichedGroup?.settings, enrichedGroup?.id]);
 
     const isMember = enrichedGroup?.members.includes(user?.uid || "");
     const isInGroupSession = activeGroupId === groupId;
@@ -365,9 +388,37 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         }
     };
 
+    const handleJoinGroup = async () => {
+        if (!user || !group) return;
+        if (group.privacy === "private-invite") {
+            toast.error("This workspace is invite-only.");
+            return;
+        }
+        if (group.settings?.maxMembers && (group.members?.length || 0) >= group.settings.maxMembers) {
+            toast.error(`This unit is at maximum capacity (${group.settings.maxMembers} members).`);
+            return;
+        }
+
+        try {
+            const groupRef = doc(db, "focusGroups", groupId);
+            await updateDoc(groupRef, {
+                members: arrayUnion(user.uid),
+                memberCount: increment(1),
+                [`memberStats.${user.uid}`]: {
+                    role: "member",
+                    totalMinutes: 0,
+                    joinedAt: serverTimestamp()
+                }
+            });
+            toast.success(`Joined "${group.name}"!`);
+        } catch (err) {
+            toast.error("Failed to join group.");
+        }
+    };
+
     if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" /></div>;
-    if (!enrichedGroup || !user) return <div className="min-h-screen flex flex-col items-center justify-center text-white gap-4"><p>Group not found</p><Link href="/groups" className="text-sm text-zinc-500 hover:text-white">Back to Groups</Link></div>;
-    if (!group.members.includes(user.uid)) {
+    if (!enrichedGroup || !group || !user) return <div className="min-h-screen flex flex-col items-center justify-center text-white gap-4"><p>Group not found</p><Link href="/groups" className="text-sm text-zinc-500 hover:text-white">Back to Groups</Link></div>;
+    if (!isMember) {
         return null;
     }
 

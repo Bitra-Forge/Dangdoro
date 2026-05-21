@@ -609,7 +609,7 @@ export default function SettingsPage() {
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                                         {(Object.keys(BG_PALETTES) as (keyof typeof BG_PALETTES)[]).map((key) => {
                                             const palette = BG_PALETTES[key];
-                                            const orbs = palette.orbs;
+                                            const orbs = palette.orbs as any;
                                             const color1 = orbs.length > 0 ? `rgb(${orbs[0].color})` : "rgb(100,100,100)";
                                             const color2 = orbs.length > 1 ? `rgb(${orbs[1].color})` : color1;
                                             
