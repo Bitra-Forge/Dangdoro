@@ -375,7 +375,7 @@ export function FloatingFocusAvatars() {
 
     const unsub = onSnapshot(q, (snap) => {
       const fetched = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() } as LiveSession))
+        .map((d) => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) } as LiveSession))
         .sort((a, b) => a.userId.localeCompare(b.userId));
       setRawSessions(fetched);
     });
@@ -390,7 +390,7 @@ export function FloatingFocusAvatars() {
       .filter((s) => {
         if (isPendingServerTimestamp(s.lastHeartbeat)) return true;
         const hbMs = toMillis(s.lastHeartbeat);
-        if (!hbMs) return false;
+        if (!hbMs) return true; // Treat pending/falsy heartbeats as active (prevents temporary filtering during updates)
         return now - hbMs <= STALE_MS;
       })
       .sort((a, b) => a.userId.localeCompare(b.userId));
