@@ -412,7 +412,12 @@ export default function GroupsPage() {
                                             {userGroups.length} {userGroups.length === 1 ? "group" : "groups"}
                                         </span>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <div className={cn(
+                                        "grid gap-6 w-full",
+                                        userGroups.length === 1 ? "grid-cols-1 max-w-md mx-auto" :
+                                        userGroups.length === 2 ? "grid-cols-1 md:grid-cols-2 max-w-3xl mx-auto" :
+                                        "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+                                    )}>
                                         {userGroups.map((group) => (
                                             <EnhancedGroupCard key={group.id} group={group} isMember={true} />
                                         ))}
@@ -429,7 +434,12 @@ export default function GroupsPage() {
                                             {publicGroups.length} open
                                         </span>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <div className={cn(
+                                        "grid gap-6 w-full",
+                                        publicGroups.length === 1 ? "grid-cols-1 max-w-md mx-auto" :
+                                        publicGroups.length === 2 ? "grid-cols-1 md:grid-cols-2 max-w-3xl mx-auto" :
+                                        "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+                                    )}>
                                         {publicGroups.map((group) => (
                                             <EnhancedGroupCard key={group.id} group={group} isMember={false} />
                                         ))}
