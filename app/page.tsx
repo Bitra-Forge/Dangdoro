@@ -8,7 +8,7 @@ import { useTimerStore } from "@/lib/store";
 import { toggleTask } from "@/lib/db";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BackgroundTheme } from "@/components/background-theme";
 import { GroupFocusSelector } from "@/components/group-focus-selector";
 import { FloatingFocusAvatars } from "@/components/floating-focus-avatars";
@@ -31,8 +31,78 @@ export default function Home() {
   const clearTask = useTimerStore((state) => state.clearTask);
   const initialFocusTime = useTimerStore((state) => state.initialFocusTime);
   const mode = useTimerStore((state) => state.mode);
+  const isNavFocusMode = useTimerStore((state) => state.isNavFocusMode);
 
   const [notesExpanded, setNotesExpanded] = useState(false);
+  const [isTopLeftVisible, setIsTopLeftVisible] = useState(false);
+  const [isTopLeftExpanded, setIsTopLeftExpanded] = useState(false);
+  const topLeftRef = useRef<HTMLDivElement | null>(null);
+  const hideTopLeftTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shouldShowTopLeft = !isNavFocusMode || isTopLeftVisible || isTopLeftExpanded;
+
+  const handleTopLeftOpenChange = (open: boolean) => {
+    setIsTopLeftExpanded(open);
+
+    if (open) {
+      if (hideTopLeftTimeoutRef.current) {
+        clearTimeout(hideTopLeftTimeoutRef.current);
+        hideTopLeftTimeoutRef.current = null;
+      }
+      setIsTopLeftVisible(true);
+    }
+  };
+
+  useEffect(() => {
+    if (!isNavFocusMode) {
+      return;
+    }
+
+    const paddingX = isTopLeftExpanded ? 420 : 200;
+    const paddingY = isTopLeftExpanded ? 520 : 200;
+    const hideDelayMs = isTopLeftExpanded ? 500 : 250;
+
+    const clearHideTimeout = () => {
+      if (hideTopLeftTimeoutRef.current) {
+        clearTimeout(hideTopLeftTimeoutRef.current);
+        hideTopLeftTimeoutRef.current = null;
+      }
+    };
+
+    const scheduleHide = () => {
+      if (hideTopLeftTimeoutRef.current) return;
+      hideTopLeftTimeoutRef.current = setTimeout(() => {
+        setIsTopLeftVisible(false);
+        hideTopLeftTimeoutRef.current = null;
+      }, hideDelayMs);
+    };
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const rect = topLeftRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const isNearX = event.clientX >= rect.left - paddingX && event.clientX <= rect.right + paddingX;
+      const isNearY = event.clientY >= rect.top - paddingY && event.clientY <= rect.bottom + paddingY;
+      const isNear = isNearX && isNearY;
+
+      if (isNear) {
+        clearHideTimeout();
+        setIsTopLeftVisible(true);
+      } else {
+        scheduleHide();
+      }
+    };
+
+    const hideOnEnable = requestAnimationFrame(() => {
+      setIsTopLeftVisible(false);
+    });
+    window.addEventListener("mousemove", handleMouseMove, { passive: true });
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      cancelAnimationFrame(hideOnEnable);
+      clearHideTimeout();
+    };
+  }, [isNavFocusMode, isTopLeftExpanded]);
 
   const handleComplete = async () => {
     if (activeTaskId) {
@@ -88,8 +158,16 @@ export default function Home() {
         <FloatingFocusAvatars />
 
         {/* Group Focus Selector - Top Left (aligns with notifications menu height) */}
-        <div className="fixed top-8 left-8 z-40 animate-in slide-in-from-left-4 fade-in duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)]">
-          <GroupFocusSelector />
+        <div
+          ref={topLeftRef}
+          className={cn(
+            "fixed top-8 left-8 z-40 animate-in slide-in-from-left-4 fade-in duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)] transition-all",
+            shouldShowTopLeft
+              ? "opacity-100 translate-y-0 pointer-events-auto"
+              : "opacity-0 -translate-y-1 pointer-events-none"
+          )}
+        >
+          <GroupFocusSelector onOpenChange={handleTopLeftOpenChange} />
         </div>
 
         {/* Premium Active Task Card - Top Right */}

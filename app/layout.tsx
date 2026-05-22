@@ -7,7 +7,7 @@ import { SoundEngine } from "@/components/SoundEngine";
 import { TimerTicker } from "@/components/TimerTicker";
 import { GlobalAuthModal } from "@/components/GlobalAuthModal";
 import { NavigationHub } from "@/components/navigation-hub";
-import { NotificationsMenu } from "@/components/notifications-menu";
+import { NotificationsDock } from "@/components/notifications-dock";
 import { Heartbeat } from "@/components/Heartbeat";
 import { GroupSessionSync } from "@/components/group-session-sync";
 
@@ -57,9 +57,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-zinc-950 text-white">
         <AuthProvider>
-          <div className="fixed top-8 right-8 z-[100] flex flex-col items-center gap-4">
-            <NotificationsMenu />
-          </div>
+          <NotificationsDock />
 
           {children}
           

@@ -48,7 +48,11 @@ function fmtMinutes(mins: number): string {
   return `${h}h ${m}m`;
 }
 
-export function GroupFocusSelector() {
+type GroupFocusSelectorProps = {
+  onOpenChange?: (open: boolean) => void;
+};
+
+export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
   const { user } = useAuth();
   const activeGroupId = useTimerStore((s) => s.activeGroupId);
   const setActiveGroupId = useTimerStore((s) => s.setActiveGroupId);
@@ -58,6 +62,10 @@ export function GroupFocusSelector() {
   const [isOpen, setIsOpen] = useState(false);
   const [activeFocusingCount, setActiveFocusingCount] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    onOpenChange?.(isOpen);
+  }, [isOpen, onOpenChange]);
 
   useEffect(() => {
     if (!user || user.isAnonymous) return;
