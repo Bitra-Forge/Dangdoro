@@ -160,7 +160,7 @@ export default function GroupsPage() {
     }, [focusGroups, user]);
 
     useEffect(() => {
-        if (!user) return;
+        if (!user || user.isAnonymous) return;
 
         const unsubFriends = subscribeToFriendsList(user.uid, (friendsData) => {
             setFriends(friendsData);
@@ -192,7 +192,7 @@ export default function GroupsPage() {
             unsubGroups();
             unsubLive();
         };
-    }, [user?.uid]);
+    }, [user?.uid, user?.isAnonymous]);
 
     useEffect(() => {
         const missingUids = new Set<string>();
@@ -301,7 +301,7 @@ export default function GroupsPage() {
         <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
             <BackgroundTheme showSettings={false} />
             <main className="relative z-10 flex flex-col items-center justify-center pt-24 pb-32 px-4 w-full flex-1">
-                <AuthRequired title="Groups Locked" description="Sign in to create focus groups and join organizations." />
+                <AuthRequired title="Groups restricted" description="Sign in to create focus groups and join organizations." />
             </main>
         </div>
     );

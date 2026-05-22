@@ -745,12 +745,11 @@ function ProfileContent() {
 
     if (!user) {
         return (
-            <div className="flex flex-col flex-1 bg-zinc-950 min-h-screen relative overflow-hidden" style={{ fontFamily: '__nextjs-Geist' }}>
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-500/10 rounded-full blur-[120px] pointer-events-none" />
+            <div className="flex flex-col flex-1 bg-zinc-950 min-h-screen relative overflow-hidden">
                 <main className="relative z-10 flex flex-col items-center justify-center pt-24 pb-32 px-4 w-full flex-1">
                     <AuthRequired
-                        title="Identity Locked"
-                        description="Forge your permanent profile to track streaks and productivity history."
+                        title="Profile restricted"
+                        description="Sign in to create your permanent profile and track your productivity history."
                     />
                 </main>
             </div>

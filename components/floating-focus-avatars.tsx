@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useTimerStore } from "@/lib/store";
+import { useAuth } from "@/components/AuthProvider";
 import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { motion, AnimatePresence, useMotionValue, useTransform, useAnimationFrame } from "framer-motion";
@@ -349,6 +350,7 @@ const OrbitalAvatar = React.memo(OrbitalAvatarComponent, (prev, next) => {
 /* ─── Container ───────────────────────────────────────────── */
 
 export function FloatingFocusAvatars() {
+  const { user } = useAuth();
   const activeGroupId = useTimerStore((s) => s.activeGroupId);
   const activeLiveSessionId = useTimerStore((s) => s.activeLiveSessionId);
   const [rawSessions, setRawSessions] = useState<LiveSession[]>([]);
@@ -363,7 +365,7 @@ export function FloatingFocusAvatars() {
 
   // Firestore listener — re-subscribes when group or session changes
   useEffect(() => {
-    if (!activeGroupId) {
+    if (!activeGroupId || !user || user.isAnonymous) {
       setRawSessions([]);
       return;
     }
@@ -381,7 +383,7 @@ export function FloatingFocusAvatars() {
     });
 
     return unsub;
-  }, [activeGroupId, activeLiveSessionId]);
+  }, [activeGroupId, activeLiveSessionId, user]);
 
   // Derive visible sessions: filter stale + sort by userId for stability
   const sessions = useMemo(() => {

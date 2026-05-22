@@ -161,7 +161,7 @@ export function TimerCard() {
   }, []);
 
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || user.isAnonymous) return;
 
     let unsub: () => void;
     try {

@@ -88,7 +88,7 @@ export default function FriendsPage() {
     const [friendToRemoveId, setFriendToRemoveId] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!user) return;
+        if (!user || user.isAnonymous) return;
 
         const unsubFriends = subscribeToFriendsList(user.uid, (friendsData) => {
             setFriends(friendsData as FriendItem[]);
@@ -134,7 +134,7 @@ export default function FriendsPage() {
 
     useEffect(() => {
         const loadProfileImage = async () => {
-            if (!user?.uid) {
+            if (!user?.uid || user.isAnonymous) {
                 setProfileImageUrl("");
                 return;
             }
@@ -149,7 +149,7 @@ export default function FriendsPage() {
         };
 
         loadProfileImage();
-    }, [user?.uid, user?.photoURL]);
+    }, [user?.uid, user?.photoURL, user?.isAnonymous]);
 
     const handleSendRequest = async (toUserId: string, displayName: string) => {
         if (!user || !user.uid) {
@@ -237,7 +237,7 @@ export default function FriendsPage() {
         <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
             <BackgroundTheme />
             <main className="relative z-10 flex flex-col items-center justify-center pt-24 pb-32 px-4 w-full flex-1">
-                <AuthRequired title="Friends Locked" description="Sign in to connect with friends and see their focus activity." />
+                <AuthRequired title="Friends restricted" description="Sign in to connect with friends and see their focus activity." />
             </main>
         </div>
     );

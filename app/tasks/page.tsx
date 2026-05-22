@@ -1435,7 +1435,7 @@ export default function TasksPage() {
         return (
             <BackgroundTheme showSettings={true}>
                 <main className="relative z-10 flex flex-col items-center justify-center min-h-screen pt-24 pb-32 px-4 overflow-hidden">
-                    <AuthRequired title="Arsenal Locked" description="Sign in to access your Task Forge." />
+                    <AuthRequired title="Tasks restricted" description="Sign in to create and manage your focus tasks." />
                 </main>
             </BackgroundTheme>
         );

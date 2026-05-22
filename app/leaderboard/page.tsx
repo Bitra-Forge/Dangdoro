@@ -53,7 +53,7 @@ function LeaderboardContent() {
         let isMounted = true;
         
         const fetchTops = async () => {
-            if (authLoading) return;
+            if (authLoading || !user || user.isAnonymous) return;
             setLoading(true);
             setPlayers([]);
 
@@ -112,9 +112,8 @@ function LeaderboardContent() {
 
     if (!user || user.isAnonymous) return (
         <div className="flex flex-col flex-1 bg-zinc-950 font-sans min-h-screen relative overflow-hidden">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#C9B037]/10 rounded-full blur-[120px] pointer-events-none" />
             <main className="relative z-10 flex flex-col items-center justify-center pt-24 pb-32 px-4 w-full flex-1">
-                <AuthRequired title="Garden Locked" description="Sign in to view the focus garden and see how your cultivation compares to the focus masters." />
+                <AuthRequired title="Leaderboard restricted" description="Sign in to view global rankings and community focus stats." />
             </main>
         </div>
     );

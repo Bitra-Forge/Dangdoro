@@ -93,7 +93,7 @@ export function GroupFocusSelector() {
   }, [user]);
 
   useEffect(() => {
-    if (!activeGroupId) {
+    if (!activeGroupId || !user || user.isAnonymous) {
       setActiveFocusingCount(0);
       return;
     }
