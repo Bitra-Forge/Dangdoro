@@ -15,23 +15,58 @@ import {
     onSnapshot,
     where,
     writeBatch,
-    arrayRemove
+    arrayRemove,
+    Timestamp
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage, auth } from "./firebase";
 import { User, updateProfile } from "firebase/auth";
 import { trackSessionEvent } from "@/lib/session-telemetry";
+import { FirebaseTimestampLike, FocusGroup, UserProfileData } from "./groups";
 
 const LIVE_SESSION_STALE_MS = 3 * 60 * 1000;
 
-const toMillis = (ts: any): number | null => {
+
+export interface TaskGroup {
+    id: string;
+    userId: string;
+    name: string;
+    positionX: number;
+    positionY: number;
+    width?: number;
+    height?: number;
+    color?: string;
+    sortBy?: string;
+    createdAt?: Timestamp | FirebaseTimestampLike;
+}
+
+export interface TaskItem {
+    id: string;
+    userId: string;
+    groupId: string | null;
+    title: string;
+    completed: boolean;
+    durationMinutes?: number | null;
+    notes?: string;
+    priority?: TaskPriority;
+    order?: number;
+    createdAt?: Timestamp | FirebaseTimestampLike;
+    sourceGroupId?: string;
+    isGroupTask?: boolean;
+}
+
+const toMillis = (ts: FirebaseTimestampLike | Date | number | null | undefined): number | null => {
     if (!ts) return null;
-    if (typeof ts.toMillis === "function") return ts.toMillis();
-    if (typeof ts.seconds === "number") return ts.seconds * 1000;
     if (typeof ts === "number") return ts;
     if (ts instanceof Date) return ts.getTime();
+    if (typeof ts === "object") {
+        if (typeof ts.toMillis === "function") return ts.toMillis();
+        if (typeof ts.seconds === "number") return ts.seconds * 1000;
+        return Date.now();
+    }
     return null;
 };
+
 
 /**
  * Syncs user authentication data with the Firestore 'users' collection.
@@ -71,7 +106,7 @@ export const syncUserProfile = async (user: User) => {
             console.log(`syncUserProfile: Updating existing profile for: ${user.uid}`);
             const existingData = userSnap.data();
 
-            const updateData: any = {
+            const updateData: Record<string, unknown> = {
                 lastActive: serverTimestamp(),
                 isAnonymous: user.isAnonymous,
                 email: user.email || existingData.email,
@@ -173,8 +208,8 @@ export const startLiveSession = async (userId: string, groupId: string, userName
     try {
         interface ExistingLiveSession {
             groupId?: string;
-            startedAt?: any;
-            lastHeartbeat?: any;
+            startedAt?: Timestamp | FirebaseTimestampLike | null;
+            lastHeartbeat?: Timestamp | FirebaseTimestampLike | null;
         }
         const existingActiveQuery = query(
             collection(db, "liveSessions"),
@@ -265,7 +300,7 @@ export const updateLiveSessionHeartbeat = async (liveSessionId: string) => {
         await updateDoc(doc(db, "liveSessions", liveSessionId), {
             lastHeartbeat: serverTimestamp()
         });
-    } catch (e) { /* ignore */ }
+    } catch { /* ignore */ }
 };
 
 export const updateLiveSessionStatus = async (liveSessionId: string, status: "focusing" | "paused") => {
@@ -274,7 +309,7 @@ export const updateLiveSessionStatus = async (liveSessionId: string, status: "fo
             status,
             lastHeartbeat: serverTimestamp()
         });
-    } catch (e) { /* ignore */ }
+    } catch { /* ignore */ }
 };
 
 /**
@@ -336,7 +371,7 @@ export const recalculateGroupMinutesFromSessions = async (groupId: string) => {
     );
     const snapshot = await getDocs(q);
     const totalMinutes = snapshot.docs.reduce((acc, snap) => {
-        const data = snap.data() as any;
+        const data = snap.data() as { duration?: number };
         return acc + (typeof data.duration === "number" ? data.duration : 0);
     }, 0);
 
@@ -461,7 +496,7 @@ export const getGroupLeaderboard = async (options: {
     let groups = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-    } as any));
+    } as unknown as FocusGroup));
 
     // Filter out already-joined groups for the "discover" tab
     if (filter === "discover" && userId) {
@@ -495,7 +530,7 @@ export const fetchUserProfiles = async (uids: string[]) => {
     return querySnapshot.docs.map(doc => ({
         uid: doc.id,
         ...doc.data()
-    } as any));
+    } as unknown as UserProfileData));
 };
 
 /**
@@ -672,7 +707,7 @@ export const updateTaskField = async (taskId: string, fields: { title?: string; 
     }
 };
 
-export const subscribeToGroups = (userId: string, callback: (groups: any[]) => void) => {
+export const subscribeToGroups = (userId: string, callback: (groups: TaskGroup[]) => void) => {
     if (!userId) return () => { };
 
     let activeUnsub: (() => void) | null = null;
@@ -686,7 +721,7 @@ export const subscribeToGroups = (userId: string, callback: (groups: any[]) => v
 
     activeUnsub = onSnapshot(q, (snap) => {
         if (isCancelled) return;
-        callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        callback(snap.docs.map(d => ({ id: d.id, ...d.data() } as TaskGroup)));
     }, (error) => {
         if (!isCancelled) {
             console.error("Error subscribing to groups:", error);
@@ -720,84 +755,85 @@ export const deleteTask = async (taskId: string) => {
     }
 };
 
-export const subscribeToAssignedGroupTasks = (userId: string, callback: (tasks: any[]) => void) => {
+export const subscribeToAssignedGroupTasks = (userId: string, callback: (tasks: TaskItem[]) => void) => {
     if (!userId) return () => { };
 
-    let activeUnsubscribe: (() => void) | null = null;
     let isCancelled = false;
-    let allTasks: any[] = [];
+    let groupsUnsubscribe: (() => void) | null = null;
+    let tasksUnsubscribes: (() => void)[] = [];
+    const groupTaskMaps: Record<string, TaskItem[]> = {};
 
-    const setupListener = async () => {
-        try {
-            const groupsQ = query(
-                collection(db, "focusGroups"),
-                where("members", "array-contains", userId)
-            );
-            
-            const groupsSnap = await getDocs(groupsQ);
-            if (isCancelled) return;
-            
-            const groupIds = groupsSnap.docs.map(d => d.id);
-            if (groupIds.length === 0) {
-                callback([]);
-                return;
-            }
-
-            const unsubscribes: (() => void)[] = [];
-            const groupTaskMaps: Record<string, any[]> = {};
-
-            const updateAllTasks = () => {
-                if (isCancelled) return;
-                allTasks = [];
-                for (const tasks of Object.values(groupTaskMaps)) {
-                    allTasks.push(...tasks);
-                }
-                callback([...allTasks]);
-            };
-
-            for (const groupId of groupIds) {
-                const tasksQ = query(
-                    collection(db, `focusGroups/${groupId}/tasks`),
-                    where("assignedTo", "==", userId)
-                );
-
-                const unsub = onSnapshot(tasksQ, (snapshot) => {
-                    if (isCancelled) return;
-                    groupTaskMaps[groupId] = snapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data(),
-                        sourceGroupId: groupId,
-                        isGroupTask: true
-                    }));
-                    updateAllTasks();
-                }, (error) => {
-                    if (!isCancelled) {
-                        console.error("Error subscribing to group tasks:", error);
-                    }
-                });
-                
-                unsubscribes.push(unsub);
-            }
-
-            activeUnsubscribe = () => {
-                unsubscribes.forEach(u => u());
-            };
-        } catch (error) {
-            if (!isCancelled) {
-                console.error("Error setting up assigned tasks listener:", error);
-            }
+    const updateAllTasks = () => {
+        if (isCancelled) return;
+        const allTasks: TaskItem[] = [];
+        for (const tasks of Object.values(groupTaskMaps)) {
+            allTasks.push(...tasks);
         }
+        callback(allTasks);
     };
 
-    setupListener();
+    const groupsQ = query(
+        collection(db, "focusGroups"),
+        where("members", "array-contains", userId)
+    );
+
+    groupsUnsubscribe = onSnapshot(groupsQ, (groupsSnap) => {
+        if (isCancelled) return;
+
+        tasksUnsubscribes.forEach(unsub => unsub());
+        tasksUnsubscribes = [];
+
+        const currentGroupIds = new Set(groupsSnap.docs.map(d => d.id));
+        for (const gid of Object.keys(groupTaskMaps)) {
+            if (!currentGroupIds.has(gid)) {
+                delete groupTaskMaps[gid];
+            }
+        }
+
+        if (currentGroupIds.size === 0) {
+            callback([]);
+            return;
+        }
+
+        currentGroupIds.forEach((groupId) => {
+            const tasksQ = query(
+                collection(db, `focusGroups/${groupId}/tasks`),
+                where("assignedTo", "==", userId)
+            );
+
+            const unsub = onSnapshot(tasksQ, (tasksSnap) => {
+                if (isCancelled) return;
+                groupTaskMaps[groupId] = tasksSnap.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data(),
+                    sourceGroupId: groupId,
+                    isGroupTask: true
+                } as unknown as TaskItem));
+                updateAllTasks();
+            }, (error) => {
+                if (!isCancelled) {
+                    console.error(`Error subscribing to tasks in group ${groupId}:`, error);
+                }
+            });
+
+            tasksUnsubscribes.push(unsub);
+        });
+
+        updateAllTasks();
+    }, (error) => {
+        if (!isCancelled) {
+            console.error("Error subscribing to focus groups for assigned tasks:", error);
+        }
+    });
 
     return () => {
         isCancelled = true;
-        if (activeUnsubscribe) activeUnsubscribe();
+        if (groupsUnsubscribe) groupsUnsubscribe();
+        tasksUnsubscribes.forEach(unsub => unsub());
     };
 };
 
-export const subscribeToTasks = (userId: string, callback: (tasks: any[]) => void) => {
+export const subscribeToTasks = (userId: string, callback: (tasks: TaskItem[]) => void) => {
     if (!userId) return () => { };
 
     let activeUnsubscribe: (() => void) | null = null;
@@ -812,7 +848,7 @@ export const subscribeToTasks = (userId: string, callback: (tasks: any[]) => voi
 
         activeUnsubscribe = onSnapshot(q, (snapshot) => {
             if (isCancelled) return;
-            const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as TaskItem));
             callback(tasks);
         }, (error) => {
             if (!isCancelled) {
@@ -828,6 +864,7 @@ export const subscribeToTasks = (userId: string, callback: (tasks: any[]) => voi
         if (activeUnsubscribe) activeUnsubscribe();
     };
 };
+
 
 /**
  * Stats and Sessions
@@ -886,19 +923,19 @@ export const updateProfilePictureBase64 = async (userId: string, base64Data: str
     }
 };
 
-export const updateUserSettings = async (userId: string, settings: Record<string, any>) => {
+export const updateUserSettings = async (userId: string, settings: Record<string, unknown>) => {
     try {
         const userRef = doc(db, "users", userId);
         // Use dotted field paths to merge individual fields without overwriting
         // the entire settings object (e.g. settings.focusTime, settings.sessionEndSound)
-        const dottedUpdate: Record<string, any> = {};
+        const dottedUpdate: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(settings)) {
             dottedUpdate[`settings.${key}`] = value;
         }
         await updateDoc(userRef, dottedUpdate);
         return true;
-    } catch (error) {
-        console.error("Error updating settings:", error);
+    } catch {
+        console.error("Error updating settings");
         return false;
     }
 };
@@ -912,8 +949,8 @@ export const updateUserProfile = async (userId: string, data: { displayName?: st
             await updateProfile(auth.currentUser, { displayName: data.displayName });
         }
         return true;
-    } catch (error) {
-        console.error("Error updating user profile:", error);
+    } catch {
+        console.error("Error updating user profile");
         return false;
     }
 };
@@ -929,7 +966,7 @@ export const updateLastActive = async (userId: string) => {
             lastActive: serverTimestamp()
         });
         return true;
-    } catch (error) {
+    } catch {
         // Silently fail to avoid console clutter for a secondary feature
         return false;
     }

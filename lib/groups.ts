@@ -1,7 +1,28 @@
-import { Globe, Key, Mail } from "lucide-react";
+import { Globe, Key, Mail, LucideIcon } from "lucide-react";
+import { Timestamp } from "firebase/firestore";
 
 export type GroupType = "friends" | "organization";
 export type GroupPrivacy = "public" | "private-code" | "private-invite";
+
+export interface FirebaseTimestampLike {
+    toMillis?: () => number;
+    seconds?: number;
+    nanoseconds?: number;
+}
+
+export interface UserProfileData {
+    uid: string;
+    displayName?: string;
+    photoURL?: string;
+    email?: string;
+    totalMinutes?: number;
+    nickname?: string;
+    bio?: string;
+    profileTheme?: string;
+    totalPomodoros?: number;
+    createdAt?: Timestamp | FirebaseTimestampLike;
+    lastActive?: Timestamp | FirebaseTimestampLike | null;
+}
 
 export interface SharedTask {
     id: string;
@@ -11,8 +32,8 @@ export interface SharedTask {
     status: "todo" | "in-progress" | "in-review" | "done";
     priority: "high" | "medium" | "low";
     createdBy: string;
-    createdAt: any;
-    updatedAt?: any;
+    createdAt: Timestamp | FirebaseTimestampLike;
+    updatedAt?: Timestamp | FirebaseTimestampLike;
 }
 
 export interface ObjectiveTemplateDraft {
@@ -22,6 +43,14 @@ export interface ObjectiveTemplateDraft {
 }
 
 export type GoalType = "daily" | "weekly" | "monthly" | "custom";
+
+export interface GroupMemberDetail {
+    uid: string;
+    displayName?: string;
+    photoURL?: string;
+    isFocusing?: boolean;
+    liveSessionStartedAt?: Timestamp | FirebaseTimestampLike | null;
+}
 
 export interface FocusGroup {
     id: string;
@@ -34,18 +63,19 @@ export interface FocusGroup {
     memberStats?: Record<string, {
         role: "host" | "admin" | "member";
         totalMinutes: number;
-        joinedAt: any;
-        lastActive?: any;
+        joinedAt: Timestamp | FirebaseTimestampLike;
+        lastActive?: Timestamp | FirebaseTimestampLike;
     }>;
-    memberDetails?: any[];
+    memberDetails?: GroupMemberDetail[];
     maxMembers?: number;
     privacy: GroupPrivacy;
     accessCode?: string;
     inviteToken?: string;
     pendingInvites?: string[];
     totalMinutes?: number;
-    createdAt: any;
-    lastResetAt?: any;
+    memberCount?: number;
+    createdAt: Timestamp | FirebaseTimestampLike;
+    lastResetAt?: Timestamp | FirebaseTimestampLike;
     settings?: {
         goalHours: number;
         goalType?: GoalType;
@@ -53,6 +83,19 @@ export interface FocusGroup {
         autoRenew?: boolean;
         maxMembers: number;
     };
+}
+
+export interface LiveSession {
+    id: string;
+    userId: string;
+    groupId: string;
+    status: "focusing" | "paused" | "stopped";
+    startedAt: Timestamp | FirebaseTimestampLike;
+    lastHeartbeat: Timestamp | FirebaseTimestampLike;
+    displayName?: string;
+    photoURL?: string;
+    userName?: string;
+    userPhoto?: string;
 }
 
 export function generateInviteToken() {
@@ -73,7 +116,7 @@ export function fmtMinutes(mins: number) {
     return `${h}h ${m}m`;
 }
 
-export const PRIVACY_META: Record<GroupPrivacy, { label: string; icon: any; color: string }> = {
+export const PRIVACY_META: Record<GroupPrivacy, { label: string; icon: LucideIcon; color: string }> = {
     "public":         { label: "Public",          icon: Globe,  color: "text-emerald-400" },
     "private-code":   { label: "Code",            icon: Key,    color: "text-zinc-300" },
     "private-invite": { label: "Invite Only",     icon: Mail,   color: "text-violet-400" },
@@ -81,36 +124,38 @@ export const PRIVACY_META: Record<GroupPrivacy, { label: string; icon: any; colo
 
 export const LIVE_SESSION_STALE_MS = 3 * 60 * 1000;
 
-export function toMillis(ts: any): number | null {
+export function toMillis(ts: FirebaseTimestampLike | Date | number | null | undefined): number | null {
     if (!ts) return null;
-    if (typeof ts.toMillis === "function") return ts.toMillis();
-    if (typeof ts.seconds === "number") return ts.seconds * 1000;
     if (typeof ts === "number") return ts;
     if (ts instanceof Date) return ts.getTime();
-    if (typeof ts === "object") return Date.now();
+    if (typeof ts === "object") {
+        if (typeof ts.toMillis === "function") return ts.toMillis();
+        if (typeof ts.seconds === "number") return ts.seconds * 1000;
+        return Date.now();
+    }
     return null;
 }
 
-export function getEarliestActiveStart(memberDetails: any[] | undefined): any | null {
+export function getEarliestActiveStart(memberDetails: GroupMemberDetail[] | undefined): FirebaseTimestampLike | Timestamp | null {
     if (!memberDetails?.length) return null;
     const activeStarts = memberDetails
-        .filter((m: any) => m.isFocusing && m.liveSessionStartedAt)
-        .map((m: any) => ({ raw: m.liveSessionStartedAt, ms: toMillis(m.liveSessionStartedAt) }))
-        .filter((item: any) => typeof item.ms === "number")
-        .sort((a: any, b: any) => a.ms - b.ms);
+        .filter((m) => m.isFocusing && m.liveSessionStartedAt)
+        .map((m) => ({ raw: m.liveSessionStartedAt!, ms: toMillis(m.liveSessionStartedAt) }))
+        .filter((item): item is { raw: FirebaseTimestampLike | Timestamp; ms: number } => typeof item.ms === "number")
+        .sort((a, b) => a.ms - b.ms);
     return activeStarts.length > 0 ? activeStarts[0].raw : null;
 }
 
-export function resolveLiveSessionsForGroup(groupId: string, sessions: any[]): any[] {
+export function resolveLiveSessionsForGroup(groupId: string, sessions: LiveSession[]): LiveSession[] {
     const now = Date.now();
-    const filtered = sessions.filter((s: any) => {
+    const filtered = sessions.filter((s) => {
         if (s.groupId !== groupId) return false;
         const heartbeatMs = toMillis(s.lastHeartbeat) ?? toMillis(s.startedAt);
         if (!heartbeatMs) return s.status === "focusing";
         return now - heartbeatMs <= LIVE_SESSION_STALE_MS;
     });
 
-    const byUser = new Map<string, any>();
+    const byUser = new Map<string, LiveSession>();
     for (const session of filtered) {
         const key = session.userId;
         if (!key) continue;
@@ -129,9 +174,9 @@ export function resolveLiveSessionsForGroup(groupId: string, sessions: any[]): a
     return Array.from(byUser.values());
 }
 
-export function normalizeLiveSessions(sessions: any[]): any[] {
-    const active = sessions.filter((s: any) => s?.status === "focusing");
-    const byUser = new Map<string, any>();
+export function normalizeLiveSessions(sessions: LiveSession[]): LiveSession[] {
+    const active = sessions.filter((s) => s?.status === "focusing");
+    const byUser = new Map<string, LiveSession>();
     for (const session of active) {
         const userId = session?.userId;
         if (!userId) continue;
@@ -147,12 +192,13 @@ export function normalizeLiveSessions(sessions: any[]): any[] {
     return Array.from(byUser.values());
 }
 
-export function getManagementGroupKey(group: any): string {
+export function getManagementGroupKey(group: FocusGroup | null | undefined): string {
     if (!group) return "";
     return `${group.id}-${group.members?.length}-${group.settings?.goalHours}-${group.settings?.maxMembers}-${group.hostId}`;
 }
 
 export function fmtElapsed(secs: number) {
+
     if (!secs) return "0s";
     const h = Math.floor(secs / 3600);
     const m = Math.floor((secs % 3600) / 60);

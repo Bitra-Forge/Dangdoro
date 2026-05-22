@@ -145,8 +145,6 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
     setIsOpen(false);
   }, [timerIsActive, activeGroupId, setActiveGroupId]);
 
-  if (groups.length === 0) return null;
-
   return (
     <div ref={dropdownRef} className="relative group/focus-selector">
       {/* Ambient Glow for Active Focus Context */}
@@ -162,6 +160,7 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
         className={cn(
           "relative flex items-center gap-3 px-5 py-3 rounded-2xl border transition-all duration-500 backdrop-blur-2xl overflow-hidden",
           "shadow-[0_8px_32px_rgba(0,0,0,0.4)]",
+          isOpen ? "z-50" : "z-10",
           activeGroupId
             ? "bg-zinc-950/60 border-sky-500/35 text-sky-100 shadow-[0_8px_32px_rgba(56,189,248,0.15),inset_0_1px_0_rgba(255,255,255,0.05)]"
             : "bg-zinc-950/30 border-white/[0.06] text-zinc-300 hover:bg-zinc-950/60 hover:border-white/15"
@@ -228,7 +227,7 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                 damping: 28,
                 mass: 0.8
               }}
-              className="absolute top-full left-0 mt-3 w-[360px] z-50 overflow-visible"
+              className="absolute top-full left-0 mt-3 w-[280px] xs:w-[320px] sm:w-[360px] max-w-[calc(100vw-32px)] z-50 overflow-visible"
             >
               {/* Glassmorphic container */}
               <div className="relative bg-zinc-950/80 backdrop-blur-3xl border border-white/[0.08] rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.08)] overflow-hidden">
@@ -239,7 +238,7 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                 )} />
 
                 {/* Header */}
-                <div className="px-6 py-4.5 border-b border-white/[0.05] flex items-center justify-between bg-zinc-950/30">
+                <div className="px-6 py-4 border-b border-white/[0.05] flex items-center justify-between bg-zinc-950/30">
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-3.5 h-3.5 text-sky-400/70 animate-pulse" />
                     <h3 className="text-[10px] font-black uppercase tracking-[0.25em] bg-gradient-to-r from-zinc-100 via-zinc-300 to-zinc-100 bg-clip-text text-transparent">
@@ -304,188 +303,207 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                     </div>
                   )}
 
-                  {/* Group Options */}
-                  {groups.map((group, index) => {
-                    const stats = group.memberStats ?? {};
-                    const focusingMembers = Object.values(stats).filter((m: any) => m.isFocusing);
-                    const isSelected = group.id === activeGroupId;
-                    const goalHours = group.settings?.goalHours ?? 0;
-                    const totalMins = group.totalMinutes ?? 0;
-                    const progress = goalHours > 0 ? Math.min(100, (totalMins / (goalHours * 60)) * 100) : 0;
+                  {/* Group Options / Empty State */}
+                  {groups.length > 0 ? (
+                    groups.map((group, index) => {
+                      const stats = group.memberStats ?? {};
+                      const focusingMembers = Object.values(stats).filter((m: any) => m?.isFocusing);
+                      const isSelected = group.id === activeGroupId;
+                      const goalHours = group.settings?.goalHours ?? 0;
+                      const totalMins = group.totalMinutes ?? 0;
+                      const progress = goalHours > 0 ? Math.min(100, (totalMins / (goalHours * 60)) * 100) : 0;
 
-                    const focusingAvatars = focusingMembers.slice(0, 4).map((m: any) => ({
-                      name: m.displayName ?? "Member",
-                      photo: m.photoURL,
-                    }));
+                      const focusingAvatars = focusingMembers.slice(0, 4).map((m: any) => ({
+                        name: m?.displayName ?? "Member",
+                        photo: m?.photoURL,
+                      }));
 
-                    const pMeta = PRIVACY_ICONS[group.privacy] ?? PRIVACY_ICONS["public"];
-                    const PIcon = pMeta.icon;
+                      const pMeta = PRIVACY_ICONS[group.privacy] ?? PRIVACY_ICONS["public"];
 
-                    return (
-                      <motion.button
-                        key={group.id}
-                        initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 380,
-                          damping: 30,
-                          mass: 0.8,
-                          delay: 0.04 + index * 0.03
-                        }}
-                        whileHover={{ scale: 1.015 }}
-                        whileTap={{ scale: 0.985 }}
-                        onClick={() => handleSelect(group.id)}
-                        className={cn(
-                          "w-full flex flex-col gap-3.5 p-4 rounded-2xl transition-all duration-300 group/item border text-left cursor-pointer relative overflow-hidden",
-                          isSelected
-                            ? "bg-gradient-to-br from-sky-950/40 to-indigo-950/20 border-sky-500/30 text-sky-100 shadow-[0_8px_30px_rgba(56,189,248,0.08),inset_0_1px_1px_rgba(255,255,255,0.05)]"
-                            : "bg-transparent border-transparent text-zinc-300 hover:bg-white/[0.04] hover:border-white/[0.08] hover:text-zinc-100"
-                        )}
-                      >
-                        {/* Selection Accent Bar */}
-                        {isSelected && (
-                          <motion.div
-                            layoutId="active-group-accent"
-                            className="absolute left-0 top-3 bottom-3 w-1 rounded-r-full bg-gradient-to-b from-sky-400 to-indigo-500 shadow-[0_0_10px_rgba(56,189,248,0.8)]"
-                            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                          />
-                        )}
+                      return (
+                        <motion.button
+                          key={group.id}
+                          initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          transition={{
+                            type: "spring",
+                            stiffness: 380,
+                            damping: 30,
+                            mass: 0.8,
+                            delay: 0.04 + index * 0.03
+                          }}
+                          whileHover={{ scale: 1.015 }}
+                          whileTap={{ scale: 0.985 }}
+                          onClick={() => handleSelect(group.id)}
+                          className={cn(
+                            "w-full flex flex-col gap-3.5 p-4 rounded-2xl transition-all duration-300 group/item border text-left cursor-pointer relative overflow-hidden",
+                            isSelected
+                              ? "bg-gradient-to-br from-sky-950/40 to-indigo-950/20 border-sky-500/30 text-sky-100 shadow-[0_8px_30px_rgba(56,189,248,0.08),inset_0_1px_1px_rgba(255,255,255,0.05)]"
+                              : "bg-transparent border-transparent text-zinc-300 hover:bg-white/[0.04] hover:border-white/[0.08] hover:text-zinc-100"
+                          )}
+                        >
+                          {/* Selection Accent Bar */}
+                          {isSelected && (
+                            <motion.div
+                              layoutId="active-group-accent"
+                              className="absolute left-0 top-3 bottom-3 w-1 rounded-r-full bg-gradient-to-b from-sky-400 to-indigo-500 shadow-[0_0_10px_rgba(56,189,248,0.8)]"
+                              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                            />
+                          )}
 
-                        <div className="w-full flex items-center gap-4">
-                          {/* Group Icon */}
-                          <div className="relative shrink-0">
-                            <div className={cn(
-                              "w-10 h-10 rounded-xl flex items-center justify-center border transition-all duration-300",
-                              isSelected
-                                ? "bg-sky-500/20 border-sky-400/30 text-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.25)]"
-                                : "bg-zinc-900/60 border-white/[0.06] text-zinc-500 group-hover/item:bg-zinc-800/80 group-hover/item:border-white/10 group-hover/item:text-zinc-300"
-                            )}>
-                              <Users className="w-4 h-4" />
+                          <div className="w-full flex items-center gap-4">
+                            {/* Group Icon */}
+                            <div className="relative shrink-0">
+                              <div className={cn(
+                                "w-10 h-10 rounded-xl flex items-center justify-center border transition-all duration-300",
+                                isSelected
+                                  ? "bg-sky-500/20 border-sky-400/30 text-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.25)]"
+                                  : "bg-zinc-900/60 border-white/[0.06] text-zinc-500 group-hover/item:bg-zinc-800/80 group-hover/item:border-white/10 group-hover/item:text-zinc-300"
+                              )}>
+                                <Users className="w-4 h-4" />
+                              </div>
+                              {focusingMembers.length > 0 && (
+                                <motion.div
+                                  initial={{ scale: 0 }}
+                                  animate={{ scale: 1 }}
+                                  className="absolute -top-1 -right-1"
+                                >
+                                  <div className="w-3 h-3 rounded-full bg-emerald-400 ring-[2px] ring-zinc-950 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
+                                </motion.div>
+                              )}
                             </div>
-                            {focusingMembers.length > 0 && (
+
+                            {/* Group Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 mb-1.5">
+                                <p className="text-xs font-black uppercase tracking-wider truncate">{group.name}</p>
+                              </div>
+                              
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wide">
+                                  {group.members.length} member{group.members.length !== 1 ? "s" : ""}
+                                </span>
+                                {focusingMembers.length > 0 && (
+                                  <span className="text-[9px] font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_8px_rgba(52,211,153,0.1)]">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_4px_#34d399]" />
+                                    {focusingMembers.length} Focusing
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Selected indicator */}
+                            {isSelected && (
                               <motion.div
                                 initial={{ scale: 0 }}
                                 animate={{ scale: 1 }}
-                                className="absolute -top-1 -right-1"
-                              >
-                                <div className="w-3 h-3 rounded-full bg-emerald-400 ring-[2px] ring-zinc-950 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
-                              </motion.div>
+                                className="w-2 h-2 rounded-full bg-sky-400 shadow-[0_0_10px_rgba(56,189,248,0.8)] shrink-0"
+                              />
                             )}
                           </div>
 
-                          {/* Group Info */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 mb-1.5">
-                              <p className="text-xs font-black uppercase tracking-wider truncate">{group.name}</p>
-                            </div>
-                            
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wide">
-                                {group.members.length} member{group.members.length !== 1 ? "s" : ""}
-                              </span>
-                              {focusingMembers.length > 0 && (
-                                <span className="text-[9px] font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_8px_rgba(52,211,153,0.1)]">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_4px_#34d399]" />
-                                  {focusingMembers.length} Focusing
-                                </span>
+                          {/* Progress bar & avatars bottom section */}
+                          {(goalHours > 0 || focusingAvatars.length > 0) && (
+                            <div className="w-full pl-14 flex flex-col gap-2.5">
+                              {/* Goal Progress bar */}
+                              {goalHours > 0 && (
+                                <div className="flex items-center gap-3">
+                                  <div className="relative flex-1 h-[4px] bg-white/5 rounded-full overflow-hidden">
+                                    {/* Glow Layer */}
+                                    <motion.div
+                                      initial={{ width: 0 }}
+                                      animate={{ width: `${progress}%` }}
+                                      transition={{ duration: 0.8, ease: [0.23, 1, 0.32, 1], delay: 0.1 + index * 0.04 }}
+                                      className={cn(
+                                        "absolute top-0 bottom-0 left-0 rounded-full blur-[2px] opacity-70",
+                                        progress >= 100 ? "bg-emerald-400" : "bg-sky-400"
+                                      )}
+                                    />
+                                    {/* Core Liquid Bar */}
+                                    <motion.div
+                                      initial={{ width: 0 }}
+                                      animate={{ width: `${progress}%` }}
+                                      transition={{ duration: 0.8, ease: [0.23, 1, 0.32, 1], delay: 0.1 + index * 0.04 }}
+                                      className={cn(
+                                        "absolute top-0 bottom-0 left-0 rounded-full bg-gradient-to-r transition-all duration-500",
+                                        progress >= 100
+                                          ? "from-emerald-400 to-teal-500 shadow-[0_0_8px_rgba(52,211,153,0.6)]"
+                                          : "from-sky-400 to-indigo-500 shadow-[0_0_8px_rgba(56,189,248,0.5)]"
+                                      )}
+                                    />
+                                  </div>
+                                  <span className="text-[9px] font-black text-zinc-500 tabular-nums shrink-0 uppercase">
+                                    {fmtMinutes(totalMins)} / {goalHours}H
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Focusing member avatars */}
+                              {focusingAvatars.length > 0 && (
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[8px] font-black uppercase tracking-wider text-zinc-500">Active:</span>
+                                  <div className="flex items-center -space-x-2">
+                                    {focusingAvatars.map((a, i) => {
+                                      const photoUrl = a.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${a.name}`;
+                                      const isRemote = photoUrl.startsWith("http://") || photoUrl.startsWith("https://");
+
+                                      return (
+                                        <div
+                                          key={i}
+                                          className="relative w-6 h-6 rounded-full overflow-hidden ring-2 ring-emerald-500/40 border border-zinc-950 transition-all duration-300 hover:scale-125 hover:z-10 hover:ring-emerald-400"
+                                          title={a.name}
+                                        >
+                                          {isRemote ? (
+                                            <Image
+                                              src={photoUrl}
+                                              alt={a.name}
+                                              width={24}
+                                              height={24}
+                                              className="w-full h-full object-cover"
+                                              unoptimized={photoUrl.includes("dicebear")}
+                                            />
+                                          ) : (
+                                            <img
+                                              src={photoUrl}
+                                              alt={a.name}
+                                              className="w-full h-full object-cover"
+                                            />
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                    {focusingMembers.length > 4 && (
+                                      <div className="w-6 h-6 rounded-full bg-zinc-900 border border-white/[0.08] flex items-center justify-center ring-2 ring-emerald-500/30">
+                                        <span className="text-[8px] font-black text-emerald-400">+{focusingMembers.length - 4}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                               )}
                             </div>
-                          </div>
-
-                          {/* Selected indicator */}
-                          {isSelected && (
-                            <motion.div
-                              initial={{ scale: 0 }}
-                              animate={{ scale: 1 }}
-                              className="w-2 h-2 rounded-full bg-sky-400 shadow-[0_0_10px_rgba(56,189,248,0.8)] shrink-0"
-                            />
                           )}
-                        </div>
-
-                        {/* Progress bar & avatars bottom section */}
-                        {(goalHours > 0 || focusingAvatars.length > 0) && (
-                          <div className="w-full pl-14 flex flex-col gap-2.5">
-                            {/* Goal Progress bar */}
-                            {goalHours > 0 && (
-                              <div className="flex items-center gap-3">
-                                <div className="relative flex-1 h-[4px] bg-white/5 rounded-full overflow-hidden">
-                                  {/* Glow Layer */}
-                                  <motion.div
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${progress}%` }}
-                                    transition={{ duration: 0.8, ease: [0.23, 1, 0.32, 1], delay: 0.1 + index * 0.04 }}
-                                    className={cn(
-                                      "absolute top-0 bottom-0 left-0 rounded-full blur-[2px] opacity-70",
-                                      progress >= 100 ? "bg-emerald-400" : "bg-sky-400"
-                                    )}
-                                  />
-                                  {/* Core Liquid Bar */}
-                                  <motion.div
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${progress}%` }}
-                                    transition={{ duration: 0.8, ease: [0.23, 1, 0.32, 1], delay: 0.1 + index * 0.04 }}
-                                    className={cn(
-                                      "absolute top-0 bottom-0 left-0 rounded-full bg-gradient-to-r transition-all duration-500",
-                                      progress >= 100
-                                        ? "from-emerald-400 to-teal-500 shadow-[0_0_8px_rgba(52,211,153,0.6)]"
-                                        : "from-sky-400 to-indigo-500 shadow-[0_0_8px_rgba(56,189,248,0.5)]"
-                                    )}
-                                  />
-                                </div>
-                                <span className="text-[9px] font-black text-zinc-500 tabular-nums shrink-0 uppercase">
-                                  {fmtMinutes(totalMins)} / {goalHours}H
-                                </span>
-                              </div>
-                            )}
-
-                            {/* Focusing member avatars */}
-                            {focusingAvatars.length > 0 && (
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-[8px] font-black uppercase tracking-wider text-zinc-500">Active:</span>
-                                <div className="flex items-center -space-x-2">
-                                  {focusingAvatars.map((a, i) => {
-                                    const photoUrl = a.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${a.name}`;
-                                    const isRemote = photoUrl.startsWith("http://") || photoUrl.startsWith("https://");
-
-                                    return (
-                                      <div
-                                        key={i}
-                                        className="relative w-6 h-6 rounded-full overflow-hidden ring-2 ring-emerald-500/40 border border-zinc-950 transition-all duration-300 hover:scale-125 hover:z-10 hover:ring-emerald-400"
-                                        title={a.name}
-                                      >
-                                        {isRemote ? (
-                                          <Image
-                                            src={photoUrl}
-                                            alt={a.name}
-                                            width={24}
-                                            height={24}
-                                            className="w-full h-full object-cover"
-                                            unoptimized={photoUrl.includes("dicebear")}
-                                          />
-                                        ) : (
-                                          <img
-                                            src={photoUrl}
-                                            alt={a.name}
-                                            className="w-full h-full object-cover"
-                                          />
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                  {focusingMembers.length > 4 && (
-                                    <div className="w-6 h-6 rounded-full bg-zinc-900 border border-white/[0.08] flex items-center justify-center ring-2 ring-emerald-500/30">
-                                      <span className="text-[8px] font-black text-emerald-400">+{focusingMembers.length - 4}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
+                        </motion.button>
+                      );
+                    })
+                  ) : (
+                    <div className="px-6 py-8 text-center flex flex-col items-center justify-center gap-3 bg-zinc-950/20 rounded-2xl border border-white/[0.03] mt-2">
+                      <Users className="w-6 h-6 text-zinc-600 animate-pulse" />
+                      <p className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
+                        {!user || user.isAnonymous ? "Solo Mode Active" : "No Groups Joined"}
+                      </p>
+                      <p className="text-[10px] text-zinc-500 max-w-[200px] leading-relaxed mx-auto">
+                        {!user || user.isAnonymous ? (
+                          <>
+                            <a href="/login" className="text-sky-400 hover:underline">Sign in</a> to join community focus groups and track progress together.
+                          </>
+                        ) : (
+                          <>
+                            Visit the <a href="/groups" className="text-sky-400 hover:underline">Groups tab</a> to find or create a focus circle.
+                          </>
                         )}
-                      </motion.button>
-                    );
-                  })}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Footer accent line */}

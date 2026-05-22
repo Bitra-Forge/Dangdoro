@@ -1223,22 +1223,34 @@ export default function TasksPage() {
             return;
         }
         
-        let cleanup: (() => void) | undefined;
+        let active = true;
+        let u1: (() => void) | null = null;
+        let u2: (() => void) | null = null;
+        let u3: (() => void) | null = null;
+
         const run = async () => {
             if (user.isAnonymous) {
                 const { syncUserProfile } = await import("@/lib/db");
                 await syncUserProfile(user);
             }
-            const u1 = subscribeToTasks(user.uid, (t) => {
+
+            if (!active) return;
+
+            u1 = subscribeToTasks(user.uid, (t) => {
                 setTasks(t);
                 setLoading(false);
             });
-            const u2 = subscribeToGroups(user.uid, setGroups);
-            const u3 = subscribeToAssignedGroupTasks(user.uid, setAssignedTasks);
-            cleanup = () => { u1(); u2(); u3(); };
+            u2 = subscribeToGroups(user.uid, setGroups);
+            u3 = subscribeToAssignedGroupTasks(user.uid, setAssignedTasks);
         };
         run();
-        return () => { if (cleanup) cleanup(); };
+
+        return () => {
+            active = false;
+            if (u1) u1();
+            if (u2) u2();
+            if (u3) u3();
+        };
     }, [user, authLoading]);
 
     // Helper to get task's group color

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { updateProfilePictureBase64, getSessionHistory, updateUserProfile } from "@/lib/db";
-import { getFriendsList } from "@/lib/friendship";
+import { getFriendsList, type Friend } from "@/lib/friendship";
 import {
     Camera, Zap, Clock, Calendar,
     Share2, Pencil, Activity, Flame,
@@ -116,16 +116,7 @@ interface FriendStatus {
     isFriend?: boolean;
 }
 
-interface FriendListItem {
-    friendId: string;
-    since?: unknown;
-    userData?: {
-        id?: string;
-        displayName?: string;
-        photoURL?: string;
-        [key: string]: unknown;
-    } | null;
-}
+type FriendListItem = Friend;
 
 interface ChartPoint {
     date: string;
@@ -407,10 +398,11 @@ function ProfileContent() {
         if (authLoading) return;
         if (!user) { setLoading(false); return; }
 
+        let active = true;
+        const unsubs: (() => void)[] = [];
+
         const fetchData = async () => {
             setLoading(true);
-
-            const unsubs: (() => void)[] = [];
 
             const effectiveUserId = targetUserId || user.uid;
             const ownProfile = effectiveUserId === user.uid;
@@ -421,11 +413,14 @@ function ProfileContent() {
                 await syncUserProfile(user);
             }
 
+            if (!active) return;
+
             // Fetch friendship status if not own profile
             if (!ownProfile) {
                 const { getFriendRequestStatus, areFriends } = await import("@/lib/friendship");
                 const status = await getFriendRequestStatus(user.uid, effectiveUserId);
                 const isFriend = await areFriends(user.uid, effectiveUserId);
+                if (!active) return;
                 setFriendStatus({ status: status?.status, direction: status?.direction, isFriend });
 
                 // Listen to friends collection for accepted / unfriended status
@@ -437,7 +432,8 @@ function ProfileContent() {
                         return { ...prev, isFriend: isNowFriend, ...(isNowFriend ? { status: undefined, direction: undefined } : {}) };
                     });
                 });
-                unsubs.push(unsubFriend);
+                if (!active) unsubFriend();
+                else unsubs.push(unsubFriend);
 
                 // Listen to friendRequests for pending requests updates
                 const { query, collection, or, and, where, onSnapshot: onSnap } = await import("firebase/firestore");
@@ -461,11 +457,13 @@ function ProfileContent() {
                 }, (error) => {
                     console.error("Friend request listener error:", error);
                 });
-                unsubs.push(unsubReq);
+                if (!active) unsubReq();
+                else unsubs.push(unsubReq);
             }
 
             // Sync user data
             const unsubData = onSnapshot(doc(db, "users", effectiveUserId), (docSnap) => {
+                if (!active) return;
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     setUserData(data);
@@ -480,13 +478,17 @@ function ProfileContent() {
                 }
                 setLoading(false);
             });
+            if (!active) unsubData();
+            else unsubs.push(unsubData);
 
             // Sync sessions info for grid & streak
             const history = (await getSessionHistory(effectiveUserId, 365)) as SessionData[];
+            if (!active) return;
             setSessions(history);
 
             // Fetch friends list
             const friendsData = await getFriendsList(effectiveUserId);
+            if (!active) return;
             setFriends(friendsData);
 
             // Fetch stats data
@@ -553,17 +555,17 @@ function ProfileContent() {
                 }
             });
 
+            if (!active) return;
             setWeekData(last7Days);
             setMonthData(last8Weeks);
             setYearData(last12Months);
-
-            unsubs.push(unsubData);
-            return () => unsubs.forEach(fn => fn());
         };
 
-        let unsubscribe: (() => void) | undefined;
-        fetchData().then(unsub => { unsubscribe = unsub; });
-        return () => { if (unsubscribe) unsubscribe(); };
+        fetchData();
+        return () => {
+            active = false;
+            unsubs.forEach(fn => fn());
+        };
     }, [user, authLoading, targetUserId]);
 
     // --- Calculations ---

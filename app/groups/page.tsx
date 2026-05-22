@@ -22,10 +22,9 @@ import {
 import { db } from "@/lib/firebase";
 import { motion, AnimatePresence } from "framer-motion";
 
-// Shared Library
 import { 
     FocusGroup, GroupPrivacy, normalizeLiveSessions, 
-    resolveLiveSessionsForGroup, generateInviteToken, GoalType
+    resolveLiveSessionsForGroup, generateInviteToken, GoalType, LiveSession
 } from "@/lib/groups";
 
 // Extracted Components
@@ -182,7 +181,7 @@ export default function GroupsPage() {
         const unsubLive = onSnapshot(
             collection(db, "liveSessions"),
             (snapshot) => {
-                const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as LiveSession));
                 setLiveSessions(normalizeLiveSessions(raw));
             }
         );

@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { SYSTEM_PROMPT } from "@/lib/prompts";
+import { adminAuth } from "@/lib/firebase-admin";
 
 const PREFERRED_FREE_MODELS = [
   "google/gemini-2.0-flash-exp:free",
@@ -97,8 +98,26 @@ async function tryGeminiFallback(messages: any[]) {
 }
 
 export async function POST(req: Request) {
+  // 1. Verify Authorization Token
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return Response.json({ error: "Unauthorized: Missing Authorization header" }, { status: 401 });
+  }
+
+  const token = authHeader.split("Bearer ")[1];
+  try {
+    const decodedToken = await adminAuth.verifyIdToken(token);
+    if (!decodedToken || !decodedToken.uid) {
+      return Response.json({ error: "Unauthorized: Invalid session" }, { status: 401 });
+    }
+  } catch (error) {
+    console.error("Firebase Admin verification failed:", error);
+    return Response.json({ error: "Unauthorized: Token verification failed" }, { status: 401 });
+  }
+
   const openRouterKey = process.env.OPENROUTER_API_KEY;
   const geminiKey = process.env.GEMINI_API_KEY;
+
 
   if (!openRouterKey && !geminiKey) {
     return Response.json({ error: "No API keys configured" }, { status: 500 });

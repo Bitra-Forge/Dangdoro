@@ -18,10 +18,16 @@ export function GroupSessionSync() {
   const activeLiveSessionId = useTimerStore((s) => s.activeLiveSessionId);
 
   useEffect(() => {
-    if (!user || user.isAnonymous) return;
-
     const syncLiveSession = async () => {
       try {
+        if (!user || user.isAnonymous) {
+          if (activeLiveSessionId) {
+            await endLiveSession(activeLiveSessionId);
+            setLiveSessionId(null);
+          }
+          return;
+        }
+
         if (timerIsActive && activeGroupId && !activeLiveSessionId) {
           const sid = await startLiveSession(
             user.uid,
@@ -36,8 +42,12 @@ export function GroupSessionSync() {
             setActiveGroupId(null);
             pauseTimer();
           }
+        } else if (activeLiveSessionId && !timerIsActive && !isPaused) {
+          // Stopped or completed - end live session
+          await endLiveSession(activeLiveSessionId);
+          setLiveSessionId(null);
         } else if (activeLiveSessionId && activeGroupId) {
-          // Update status based on pause state
+          // Update status based on pause/focus state
           const newStatus = isPaused ? "paused" : "focusing";
           await updateLiveSessionStatus(activeLiveSessionId, newStatus);
         } else if (!activeGroupId && activeLiveSessionId) {
@@ -49,7 +59,7 @@ export function GroupSessionSync() {
       } catch {
         trackSessionEvent("group_session_sync_failed", {
           stage: "global_sync",
-          userId: user.uid,
+          userId: user?.uid,
           activeGroupId,
           activeLiveSessionId,
         });
@@ -65,7 +75,7 @@ export function GroupSessionSync() {
     setActiveGroupId,
     setLiveSessionId,
     timerIsActive,
-    user?.uid,
+    user,
   ]);
 
   useEffect(() => {
@@ -79,7 +89,19 @@ export function GroupSessionSync() {
       updateLiveSessionHeartbeat(activeLiveSessionId);
     }, 30000);
 
-    return () => clearInterval(heartbeat);
+    // Clean up presence immediately on tab close or page hide
+    const handleCleanup = () => {
+      endLiveSession(activeLiveSessionId);
+    };
+
+    window.addEventListener("beforeunload", handleCleanup);
+    window.addEventListener("pagehide", handleCleanup);
+
+    return () => {
+      clearInterval(heartbeat);
+      window.removeEventListener("beforeunload", handleCleanup);
+      window.removeEventListener("pagehide", handleCleanup);
+    };
   }, [activeLiveSessionId]);
 
   return null;

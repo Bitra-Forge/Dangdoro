@@ -1,15 +1,17 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BackgroundPanel } from "@/components/background-panel";
-import { SoundPanel } from "@/components/sound-panel";
 import { QuickActionsNav } from "@/components/quick-actions-nav";
 import { Navigation } from "@/components/navigation";
 import { useTimerStore } from "@/lib/store";
-import { NotesPanel } from "@/components/notes-panel";
-import { QuickTasksPanel } from "@/components/quick-tasks-panel";
+
+const BackgroundPanel = dynamic(() => import("@/components/background-panel").then((m) => m.BackgroundPanel), { ssr: false });
+const SoundPanel = dynamic(() => import("@/components/sound-panel").then((m) => m.SoundPanel), { ssr: false });
+const NotesPanel = dynamic(() => import("@/components/notes-panel").then((m) => m.NotesPanel), { ssr: false });
+const QuickTasksPanel = dynamic(() => import("@/components/quick-tasks-panel").then((m) => m.QuickTasksPanel), { ssr: false });
 
 export function NavigationHub() {
   const pathname = usePathname();

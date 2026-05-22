@@ -4,19 +4,20 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation";
 import { useTimerStore } from "@/lib/store";
 import { useAuth } from "@/components/AuthProvider";
-import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, getDocs, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { motion, AnimatePresence, useMotionValue, useTransform, useAnimationFrame } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useAnimationFrame } from "framer-motion";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
+import { FirebaseTimestampLike } from "@/lib/groups";
 
 interface LiveSession {
   id: string;
   userId: string;
   userName: string;
   userPhoto: string | null;
-  startedAt: any;
-  lastHeartbeat: any;
+  startedAt: Timestamp | FirebaseTimestampLike | null;
+  lastHeartbeat: Timestamp | FirebaseTimestampLike | null;
   status: string;
 }
 
@@ -46,18 +47,24 @@ function sessionsEqual(a: LiveSession[], b: LiveSession[]): boolean {
   return true;
 }
 
-function isPendingServerTimestamp(ts: any): boolean {
+function isPendingServerTimestamp(ts: unknown): boolean {
   if (!ts) return false;
-  if (typeof ts === "object" && "_methodName" in ts && ts._methodName === "serverTimestamp") return true;
+  if (typeof ts === "object" && ts !== null && "_methodName" in ts) {
+    const obj = ts as Record<string, unknown>;
+    return obj._methodName === "serverTimestamp";
+  }
   return false;
 }
 
-function toMillis(ts: any): number {
+function toMillis(ts: FirebaseTimestampLike | Date | number | null | undefined): number {
   if (!ts) return 0;
-  if (typeof ts.toMillis === "function") return ts.toMillis();
-  if (typeof ts.seconds === "number") return ts.seconds * 1000;
+  if (typeof ts === "number") return ts;
   if (ts instanceof Date) return ts.getTime();
-  return Number(ts) || 0;
+  if (typeof ts === "object") {
+    if (typeof ts.toMillis === "function") return ts.toMillis();
+    if (typeof ts.seconds === "number") return ts.seconds * 1000;
+  }
+  return 0;
 }
 
 function fmtElapsed(secs: number): string {
@@ -99,21 +106,6 @@ function stableColorIndex(userId: string): number {
   return Math.floor(hashUserId(userId, 13) * ACCENT_COLORS.length);
 }
 
-function generateOrbitKeyframes(
-  startAngle: number,
-  steps: number = 80
-): { x: number[]; y: number[] } {
-  const x: number[] = [];
-  const y: number[] = [];
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const angle = startAngle + t * Math.PI * 2;
-    x.push(Math.cos(angle) * ORBIT_RX);
-    y.push(Math.sin(angle) * ORBIT_RY);
-  }
-  return { x, y };
-}
-
 const ACCENT_COLORS = [
   { ring: "ring-sky-400/40", glow: "bg-sky-400", hoverGlow: "rgba(56,189,248,0.5)", dot: "bg-sky-400", text: "text-sky-400", gradient: "from-sky-500/30 to-cyan-500/20" },
   { ring: "ring-violet-400/40", glow: "bg-violet-400", hoverGlow: "rgba(167,139,250,0.5)", dot: "bg-violet-400", text: "text-violet-400", gradient: "from-violet-500/30 to-purple-500/20" },
@@ -143,7 +135,7 @@ function OrbitalAvatarComponent({
   const isPaused = useTimerStore((s) => s.isPaused);
 
   // Local "now" for tooltip countdown — only ticks when hovered to save resources
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (!hovered || isPaused) return;
@@ -354,8 +346,12 @@ export function FloatingFocusAvatars() {
   const activeGroupId = useTimerStore((s) => s.activeGroupId);
   const activeLiveSessionId = useTimerStore((s) => s.activeLiveSessionId);
   const [rawSessions, setRawSessions] = useState<LiveSession[]>([]);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   const [userPhotos, setUserPhotos] = useState<Record<string, string>>({});
+
+  // Local maps to record when each session was last received and its heartbeat to prevent clock drift issues
+  const lastReceivedRef = useRef<Record<string, number>>({});
+  const lastHeartbeatsRef = useRef<Record<string, number>>({});
 
   // 1-second ticker for staleness filtering
   useEffect(() => {
@@ -366,8 +362,12 @@ export function FloatingFocusAvatars() {
   // Firestore listener — re-subscribes when group or session changes
   useEffect(() => {
     if (!activeGroupId || !user || user.isAnonymous) {
-      setRawSessions([]);
-      return;
+      const timer = setTimeout(() => {
+        setRawSessions((prev) => (prev.length > 0 ? [] : prev));
+        lastReceivedRef.current = {};
+        lastHeartbeatsRef.current = {};
+      }, 0);
+      return () => clearTimeout(timer);
     }
 
     const q = query(
@@ -376,10 +376,47 @@ export function FloatingFocusAvatars() {
     );
 
     const unsub = onSnapshot(q, (snap) => {
+      const nowClient = Date.now();
+
+      // Find maxServerTime in this snapshot to estimate clock offset
+      let maxServerTime = 0;
+      snap.docs.forEach((d) => {
+        const data = d.data();
+        const hb = toMillis(data.lastHeartbeat) || toMillis(data.startedAt);
+        if (hb && hb > maxServerTime) {
+          maxServerTime = hb;
+        }
+      });
+
+      const clockOffset = maxServerTime > 0 ? nowClient - maxServerTime : 0;
+
       const fetched = snap.docs
-        .map((d) => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) } as LiveSession))
+        .map((d) => {
+          const data = d.data({ serverTimestamps: "estimate" });
+          const sessionId = d.id;
+          const hb = toMillis(data.lastHeartbeat) || toMillis(data.startedAt) || (nowClient - clockOffset);
+
+          // Calculate age using estimated server clock offset
+          const age = Math.max(0, (nowClient - clockOffset) - hb);
+
+          // Update receivedAt: if we don't have it or the server timestamp changed
+          const prevHb = lastHeartbeatsRef.current[sessionId] || null;
+
+          if (!lastReceivedRef.current[sessionId] || (prevHb && hb !== prevHb)) {
+            lastReceivedRef.current[sessionId] = nowClient - age;
+          }
+          lastHeartbeatsRef.current[sessionId] = hb;
+
+          return { id: sessionId, ...data } as LiveSession;
+        })
         .sort((a, b) => a.userId.localeCompare(b.userId));
-      setRawSessions(fetched);
+      
+      setRawSessions((prev) => {
+        if (!sessionsEqual(prev, fetched)) {
+          return fetched;
+        }
+        return prev;
+      });
     });
 
     return unsub;
@@ -390,13 +427,14 @@ export function FloatingFocusAvatars() {
     const STALE_MS = 3 * 60 * 1000;
     return rawSessions
       .filter((s) => {
+        if (activeLiveSessionId && s.id === activeLiveSessionId) return true; // Always show user's own avatar
         if (isPendingServerTimestamp(s.lastHeartbeat)) return true;
-        const hbMs = toMillis(s.lastHeartbeat);
-        if (!hbMs) return true; // Treat pending/falsy heartbeats as active (prevents temporary filtering during updates)
-        return now - hbMs <= STALE_MS;
+        
+        const receivedAt = lastReceivedRef.current[s.id] || toMillis(s.lastHeartbeat) || now;
+        return now - receivedAt <= STALE_MS;
       })
       .sort((a, b) => a.userId.localeCompare(b.userId));
-  }, [rawSessions, now]);
+  }, [rawSessions, now, activeLiveSessionId]);
 
   // Track which user IDs are currently visible to fetch their photos
   const sessionUserIdsKey = useMemo(() => sessions.map((s) => s.userId).join(","), [sessions]);
@@ -409,21 +447,29 @@ export function FloatingFocusAvatars() {
     let cancelled = false;
 
     async function fetchPhotos() {
+      // Filter out user IDs we already have in cache
+      const missingIds = ids.filter(uid => !userPhotos[uid]);
+      if (missingIds.length === 0) return;
+
       const photos: Record<string, string> = {};
-      await Promise.all(
-        ids.map(async (uid) => {
-          try {
-            const snap = await getDoc(doc(db, "users", uid));
-            if (snap.exists()) {
-              const data = snap.data();
-              if (data.photoURL) photos[uid] = data.photoURL;
+      try {
+        // Fetch missing user profiles in batches of 30
+        for (let i = 0; i < missingIds.length; i += 30) {
+          const batchIds = missingIds.slice(i, i + 30);
+          const qProfiles = query(collection(db, "users"), where("__name__", "in", batchIds));
+          const querySnap = await getDocs(qProfiles);
+          querySnap.docs.forEach(docSnap => {
+            const data = docSnap.data();
+            if (data.photoURL) {
+              photos[docSnap.id] = data.photoURL;
             }
-          } catch {
-            // Fallback handled by session photo
-          }
-        })
-      );
-      if (!cancelled) {
+          });
+        }
+      } catch (err) {
+        console.error("Failed to batch fetch user photos:", err);
+      }
+
+      if (!cancelled && Object.keys(photos).length > 0) {
         setUserPhotos((prev) => ({ ...prev, ...photos }));
       }
     }
@@ -432,7 +478,7 @@ export function FloatingFocusAvatars() {
     return () => {
       cancelled = true;
     };
-  }, [sessionUserIdsKey]);
+  }, [sessionUserIdsKey, userPhotos]);
 
   if (sessions.length === 0) return null;
 

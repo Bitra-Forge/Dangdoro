@@ -1,6 +1,5 @@
 import {
     doc,
-    setDoc,
     getDoc,
     collection,
     addDoc,
@@ -13,13 +12,11 @@ import {
     onSnapshot,
     orderBy,
     writeBatch,
-    QuerySnapshot,
-    DocumentData,
     limit,
-    startAt,
-    endAt
+    Timestamp
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { FirebaseTimestampLike, toMillis } from "./groups";
 
 /**
  * Friendship Data Model:
@@ -43,23 +40,45 @@ import { db } from "./firebase";
 // Types
 export type FriendRequestStatus = "pending" | "accepted" | "declined";
 
+export interface UserProfileData {
+    id: string;
+    uid?: string;
+    displayName?: string;
+    photoURL?: string;
+    email?: string;
+    totalMinutes?: number;
+}
+
 export interface FriendRequest {
     id: string;
     fromUserId: string;
     toUserId: string;
     status: FriendRequestStatus;
-    createdAt: any; // Firestore Timestamp
-    updatedAt: any; // Firestore Timestamp
+    createdAt: Timestamp | FirebaseTimestampLike;
+    updatedAt: Timestamp | FirebaseTimestampLike;
+    fromUserData?: UserProfileData | null;
+    toUserData?: UserProfileData | null;
 }
 
 export interface Friend {
+    id: string;
     friendId: string;
-    since: any; // Firestore Timestamp
-    userData?: any; // User profile data (joined manually)
+    since: Timestamp | FirebaseTimestampLike;
+    userData?: UserProfileData | null;
 }
 
-const getRequestTimeValue = (request: any): number => {
-    return request.updatedAt?.toMillis?.() || request.createdAt?.toMillis?.() || 0;
+export interface CompletedSession {
+    id: string;
+    userId: string;
+    completedAt: Timestamp | FirebaseTimestampLike;
+    durationMinutes: number;
+    taskTitle?: string;
+    displayName?: string;
+    photoURL?: string;
+}
+
+const getRequestTimeValue = (request: FriendRequest): number => {
+    return toMillis(request.updatedAt) || toMillis(request.createdAt) || 0;
 };
 
 const getRequestsBetweenUsers = async (userId1: string, userId2: string): Promise<FriendRequest[]> => {
@@ -82,7 +101,7 @@ const getRequestsBetweenUsers = async (userId1: string, userId2: string): Promis
 /**
  * Send a friend request from one user to another.
  */
-export const sendFriendRequest = async (fromUserId: string, toUserId: string) => {
+export const sendFriendRequest = async (fromUserId: string, toUserId: string): Promise<boolean> => {
     try {
         // Validate parameters
         if (!fromUserId || typeof fromUserId !== 'string' || !fromUserId.trim()) {
@@ -152,7 +171,7 @@ export const sendFriendRequest = async (fromUserId: string, toUserId: string) =>
 /**
  * Accept a friend request.
  */
-export const acceptFriendRequest = async (requestId: string, fromUserId: string, toUserId: string) => {
+export const acceptFriendRequest = async (requestId: string, fromUserId: string, toUserId: string): Promise<boolean> => {
     try {
         // Validate parameters
         if (!requestId || typeof requestId !== 'string' || !requestId.trim()) {
@@ -204,7 +223,7 @@ export const acceptFriendRequest = async (requestId: string, fromUserId: string,
 /**
  * Decline a friend request.
  */
-export const declineFriendRequest = async (requestId: string) => {
+export const declineFriendRequest = async (requestId: string): Promise<boolean> => {
     try {
         await updateDoc(doc(db, "friendRequests", requestId), {
             status: "declined",
@@ -220,7 +239,7 @@ export const declineFriendRequest = async (requestId: string) => {
 /**
  * Remove a friend from both users' friend lists.
  */
-export const removeFriend = async (userId1: string, userId2: string) => {
+export const removeFriend = async (userId1: string, userId2: string): Promise<boolean> => {
     try {
         // Validate parameters
         if (!userId1 || typeof userId1 !== 'string' || !userId1.trim()) {
@@ -252,7 +271,7 @@ export const removeFriend = async (userId1: string, userId2: string) => {
 /**
  * Cancel a pending friend request.
  */
-export const cancelFriendRequest = async (requestId: string) => {
+export const cancelFriendRequest = async (requestId: string): Promise<boolean> => {
     try {
         // Validate parameter
         if (!requestId || typeof requestId !== 'string' || !requestId.trim()) {
@@ -284,7 +303,7 @@ export const getFriendRequest = async (userId1: string, userId2: string): Promis
 /**
  * Get all pending friend requests for a user (received).
  */
-export const getReceivedFriendRequests = async (userId: string) => {
+export const getReceivedFriendRequests = async (userId: string): Promise<FriendRequest[]> => {
     try {
         const q = query(
             collection(db, "friendRequests"),
@@ -293,25 +312,31 @@ export const getReceivedFriendRequests = async (userId: string) => {
 
         const snapshot = await getDocs(q);
         const requests = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
-            .filter((r: any) => r.status === "pending")
-            .sort((a: any, b: any) => {
-                const aTime = a.createdAt?.toMillis?.() || 0;
-                const bTime = b.createdAt?.toMillis?.() || 0;
+            .map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as FriendRequest))
+            .filter((r) => r.status === "pending")
+            .sort((a, b) => {
+                const aTime = toMillis(a.createdAt) || 0;
+                const bTime = toMillis(b.createdAt) || 0;
                 return bTime - aTime;
             });
 
-        return Promise.all(
-            requests.map(async (request: any) => {
-                const fromUserDoc = await getDoc(doc(db, "users", request.fromUserId));
-                return {
-                    ...request,
-                    fromUserData: fromUserDoc.exists()
-                        ? { id: fromUserDoc.id, ...fromUserDoc.data() }
-                        : null,
-                };
-            })
-        );
+        const fromUserIds = requests.map(r => r.fromUserId);
+        if (fromUserIds.length === 0) return [];
+
+        const userProfilesMap = new Map<string, UserProfileData>();
+        for (let i = 0; i < fromUserIds.length; i += 30) {
+            const batchIds = fromUserIds.slice(i, i + 30);
+            const qProfiles = query(collection(db, "users"), where("__name__", "in", batchIds));
+            const querySnap = await getDocs(qProfiles);
+            querySnap.docs.forEach(docSnap => {
+                userProfilesMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as UserProfileData);
+            });
+        }
+
+        return requests.map(request => ({
+            ...request,
+            fromUserData: userProfilesMap.get(request.fromUserId) || null
+        }));
     } catch (error) {
         console.error("Error getting received friend requests:", error);
         return [];
@@ -321,7 +346,7 @@ export const getReceivedFriendRequests = async (userId: string) => {
 /**
  * Get all pending friend requests sent by a user.
  */
-export const getSentFriendRequests = async (userId: string) => {
+export const getSentFriendRequests = async (userId: string): Promise<FriendRequest[]> => {
     try {
         const q = query(
             collection(db, "friendRequests"),
@@ -330,25 +355,31 @@ export const getSentFriendRequests = async (userId: string) => {
 
         const snapshot = await getDocs(q);
         const requests = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
-            .filter((r: any) => r.status === "pending")
-            .sort((a: any, b: any) => {
-                const aTime = a.createdAt?.toMillis?.() || 0;
-                const bTime = b.createdAt?.toMillis?.() || 0;
+            .map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as FriendRequest))
+            .filter((r) => r.status === "pending")
+            .sort((a, b) => {
+                const aTime = toMillis(a.createdAt) || 0;
+                const bTime = toMillis(b.createdAt) || 0;
                 return bTime - aTime;
             });
 
-        return Promise.all(
-            requests.map(async (request: any) => {
-                const toUserDoc = await getDoc(doc(db, "users", request.toUserId));
-                return {
-                    ...request,
-                    toUserData: toUserDoc.exists()
-                        ? { id: toUserDoc.id, ...toUserDoc.data() }
-                        : null,
-                };
-            })
-        );
+        const toUserIds = requests.map(r => r.toUserId);
+        if (toUserIds.length === 0) return [];
+
+        const userProfilesMap = new Map<string, UserProfileData>();
+        for (let i = 0; i < toUserIds.length; i += 30) {
+            const batchIds = toUserIds.slice(i, i + 30);
+            const qProfiles = query(collection(db, "users"), where("__name__", "in", batchIds));
+            const querySnap = await getDocs(qProfiles);
+            querySnap.docs.forEach(docSnap => {
+                userProfilesMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as UserProfileData);
+            });
+        }
+
+        return requests.map(request => ({
+            ...request,
+            toUserData: userProfilesMap.get(request.toUserId) || null
+        }));
     } catch (error) {
         console.error("Error getting sent friend requests:", error);
         return [];
@@ -358,32 +389,37 @@ export const getSentFriendRequests = async (userId: string) => {
 /**
  * Get user's friends list with their profile data.
  */
-export const getFriendsList = async (userId: string) => {
+export const getFriendsList = async (userId: string): Promise<Friend[]> => {
     try {
         const friendsRef = collection(db, "users", userId, "friends");
         const snapshot = await getDocs(friendsRef);
 
-        const friends = snapshot.docs.map(doc => {
-            const data = doc.data();
+        const friends = snapshot.docs.map(docSnap => {
+            const data = docSnap.data();
             return {
-                id: doc.id,
-                friendId: data.friendId || doc.id,
+                id: docSnap.id,
+                friendId: data.friendId || docSnap.id,
                 since: data.since
             };
         }) as Friend[];
 
-        // Fetch user data for each friend
-        const friendsWithData = await Promise.all(
-            friends.map(async (friend) => {
-                const userDoc = await getDoc(doc(db, "users", friend.friendId));
-                return {
-                    ...friend,
-                    userData: userDoc.exists() ? { id: userDoc.id, ...userDoc.data() } : null
-                };
-            })
-        );
+        const friendIds = friends.map(f => f.friendId);
+        if (friendIds.length === 0) return [];
 
-        return friendsWithData;
+        const userProfilesMap = new Map<string, UserProfileData>();
+        for (let i = 0; i < friendIds.length; i += 30) {
+            const batchIds = friendIds.slice(i, i + 30);
+            const qProfiles = query(collection(db, "users"), where("__name__", "in", batchIds));
+            const querySnap = await getDocs(qProfiles);
+            querySnap.docs.forEach(docSnap => {
+                userProfilesMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as UserProfileData);
+            });
+        }
+
+        return friends.map(friend => ({
+            ...friend,
+            userData: userProfilesMap.get(friend.friendId) || null
+        }));
     } catch (error) {
         console.error("Error getting friends list:", error);
         return [];
@@ -395,7 +431,7 @@ export const getFriendsList = async (userId: string) => {
  */
 export const subscribeToReceivedFriendRequests = (
     userId: string,
-    callback: (requests: any[]) => void
+    callback: (requests: FriendRequest[]) => void
 ) => {
     if (!userId) return () => {};
 
@@ -406,25 +442,34 @@ export const subscribeToReceivedFriendRequests = (
 
     return onSnapshot(q, async (snapshot) => {
         const requests = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
-            .filter((r: any) => r.status === "pending")
-            .sort((a: any, b: any) => {
-                const aTime = a.createdAt?.toMillis?.() || 0;
-                const bTime = b.createdAt?.toMillis?.() || 0;
+            .map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as FriendRequest))
+            .filter((r) => r.status === "pending")
+            .sort((a, b) => {
+                const aTime = toMillis(a.createdAt) || 0;
+                const bTime = toMillis(b.createdAt) || 0;
                 return bTime - aTime;
             });
 
-        const requestsWithData = await Promise.all(
-            requests.map(async (request: any) => {
-                const fromUserDoc = await getDoc(doc(db, "users", request.fromUserId));
-                return {
-                    ...request,
-                    fromUserData: fromUserDoc.exists()
-                        ? { id: fromUserDoc.id, ...fromUserDoc.data() }
-                        : null,
-                };
-            })
-        );
+        const fromUserIds = requests.map(r => r.fromUserId);
+        if (fromUserIds.length === 0) {
+            callback([]);
+            return;
+        }
+
+        const userProfilesMap = new Map<string, UserProfileData>();
+        for (let i = 0; i < fromUserIds.length; i += 30) {
+            const batchIds = fromUserIds.slice(i, i + 30);
+            const qProfiles = query(collection(db, "users"), where("__name__", "in", batchIds));
+            const querySnap = await getDocs(qProfiles);
+            querySnap.docs.forEach(docSnap => {
+                userProfilesMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as UserProfileData);
+            });
+        }
+
+        const requestsWithData = requests.map(request => ({
+            ...request,
+            fromUserData: userProfilesMap.get(request.fromUserId) || null
+        }));
 
         callback(requestsWithData);
     }, (error) => {
@@ -437,32 +482,42 @@ export const subscribeToReceivedFriendRequests = (
  */
 export const subscribeToFriendsList = (
     userId: string,
-    callback: (friends: any[]) => void
+    callback: (friends: Friend[]) => void
 ) => {
     if (!userId) return () => {};
 
     const friendsRef = collection(db, "users", userId, "friends");
 
     return onSnapshot(friendsRef, async (snapshot) => {
-        const friends = snapshot.docs.map(doc => {
-            const data = doc.data();
+        const friends = snapshot.docs.map(docSnap => {
+            const data = docSnap.data();
             return {
-                id: doc.id,
-                friendId: data.friendId || doc.id,
+                id: docSnap.id,
+                friendId: data.friendId || docSnap.id,
                 since: data.since
             };
         }) as Friend[];
 
-        // Fetch user data for each friend
-        const friendsWithData = await Promise.all(
-            friends.map(async (friend) => {
-                const userDoc = await getDoc(doc(db, "users", friend.friendId));
-                return {
-                    ...friend,
-                    userData: userDoc.exists() ? { id: userDoc.id, ...userDoc.data() } : null
-                };
-            })
-        );
+        const friendIds = friends.map(f => f.friendId);
+        if (friendIds.length === 0) {
+            callback([]);
+            return;
+        }
+
+        const userProfilesMap = new Map<string, UserProfileData>();
+        for (let i = 0; i < friendIds.length; i += 30) {
+            const batchIds = friendIds.slice(i, i + 30);
+            const qProfiles = query(collection(db, "users"), where("__name__", "in", batchIds));
+            const querySnap = await getDocs(qProfiles);
+            querySnap.docs.forEach(docSnap => {
+                userProfilesMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as UserProfileData);
+            });
+        }
+
+        const friendsWithData = friends.map(friend => ({
+            ...friend,
+            userData: userProfilesMap.get(friend.friendId) || null
+        }));
 
         callback(friendsWithData);
     }, (error) => {
@@ -474,7 +529,7 @@ export const subscribeToFriendsList = (
  * Search for users by nickname, display name, email, or user ID.
  * Returns only public-safe fields (no emails, no sensitive data).
  */
-export const searchUsers = async (searchTerm: string, excludeUserId: string, limitCount: number = 20) => {
+export const searchUsers = async (searchTerm: string, excludeUserId: string, limitCount: number = 20): Promise<UserProfileData[]> => {
     try {
         const term = searchTerm.trim();
         const termLower = term.toLowerCase();
@@ -486,9 +541,10 @@ export const searchUsers = async (searchTerm: string, excludeUserId: string, lim
             if (snap.exists() && snap.id !== excludeUserId) {
                 const data = snap.data();
                 return [{
+                    id: snap.id,
                     uid: snap.id,
-                    displayName: data.displayName,
-                    photoURL: data.photoURL,
+                    displayName: data?.displayName,
+                    photoURL: data?.photoURL,
                     // NO email returned - privacy safe
                 }];
             }
@@ -508,17 +564,18 @@ export const searchUsers = async (searchTerm: string, excludeUserId: string, lim
             .map(docSnap => {
                 const data = docSnap.data();
                 return {
+                    id: docSnap.id,
                     uid: docSnap.id,
-                    displayName: data.displayName,
-                    photoURL: data.photoURL,
+                    displayName: data?.displayName,
+                    photoURL: data?.photoURL,
                     // Deliberately excludes: email, settings, isAnonymous, createdAt
                     // Only returns public-safe fields
-                };
+                } as UserProfileData;
             })
-            .filter((user: any) => {
+            .filter((user) => {
                 if (user.uid === excludeUserId) return false;
                 const displayName = (user.displayName || "").toLowerCase();
-                const uid = user.uid.toLowerCase();
+                const uid = (user.uid || "").toLowerCase();
 
                 return displayName.includes(termLower) || uid.includes(termLower);
             })
@@ -532,7 +589,7 @@ export const searchUsers = async (searchTerm: string, excludeUserId: string, lim
 /**
  * Get friend request status between two users.
  */
-export const getFriendRequestStatus = async (userId1: string, userId2: string) => {
+export const getFriendRequestStatus = async (userId1: string, userId2: string): Promise<{ status: FriendRequestStatus; direction: "sent" | "received" } | null> => {
     try {
         const request = await getFriendRequest(userId1, userId2);
         if (!request) return null;
@@ -552,7 +609,7 @@ export const getFriendRequestStatus = async (userId1: string, userId2: string) =
 /**
  * Check if two users are friends.
  */
-export const areFriends = async (userId1: string, userId2: string) => {
+export const areFriends = async (userId1: string, userId2: string): Promise<boolean> => {
     try {
         const friendRef = doc(db, "users", userId1, "friends", userId2);
         const snap = await getDoc(friendRef);
@@ -566,7 +623,7 @@ export const areFriends = async (userId1: string, userId2: string) => {
 /**
  * Get friends leaderboard - rankings among friends only.
  */
-export const getFriendsLeaderboard = async (userId: string, limitCount: number = 20) => {
+export const getFriendsLeaderboard = async (userId: string, limitCount: number = 20): Promise<UserProfileData[]> => {
     try {
         // First get friends list
         const friendsList = await getFriendsList(userId);
@@ -581,19 +638,19 @@ export const getFriendsLeaderboard = async (userId: string, limitCount: number =
 
         // Fetch user data for all friends
         const usersRef = collection(db, "users");
-        const results: any[] = [];
+        const results: UserProfileData[] = [];
 
         // Firestore doesn't support "IN" queries with more than 30 items, so batch if needed
         for (let i = 0; i < friendIds.length; i += 30) {
-            const batch = friendIds.slice(i, i + 30);
+            const batchIds = friendIds.slice(i, i + 30);
             const q = query(
                 usersRef,
-                where("__name__", "in", batch)
+                where("__name__", "in", batchIds)
             );
             
             const snapshot = await getDocs(q);
-            snapshot.docs.forEach(doc => {
-                results.push({ id: doc.id, ...doc.data() });
+            snapshot.docs.forEach(docSnap => {
+                results.push({ id: docSnap.id, ...docSnap.data() } as UserProfileData);
             });
         }
 
@@ -610,7 +667,7 @@ export const getFriendsLeaderboard = async (userId: string, limitCount: number =
 /**
  * Get recent activity from friends (completed sessions).
  */
-export const getFriendsActivity = async (userId: string, limitCount: number = 20) => {
+export const getFriendsActivity = async (userId: string, limitCount: number = 20): Promise<CompletedSession[]> => {
     try {
         // Get friends list
         const friendsList = await getFriendsList(userId);
@@ -622,29 +679,29 @@ export const getFriendsActivity = async (userId: string, limitCount: number = 20
 
         // Get recent sessions from friends
         const sessionsRef = collection(db, "sessions");
-        const results: any[] = [];
+        const results: CompletedSession[] = [];
 
         // Batch query (Firestore "IN" limit is 30)
         for (let i = 0; i < friendIds.length; i += 30) {
-            const batch = friendIds.slice(i, i + 30);
+            const batchIds = friendIds.slice(i, i + 30);
             const q = query(
                 sessionsRef,
-                where("userId", "in", batch),
+                where("userId", "in", batchIds),
                 orderBy("completedAt", "desc"),
                 limit(Math.ceil(limitCount / friendIds.length) + 1)
             );
 
             const snapshot = await getDocs(q);
-            snapshot.docs.forEach(doc => {
-                results.push({ id: doc.id, ...doc.data() });
+            snapshot.docs.forEach(docSnap => {
+                results.push({ id: docSnap.id, ...docSnap.data() } as CompletedSession);
             });
         }
 
         // Sort by completedAt descending and limit
         return results
             .sort((a, b) => {
-                const timeA = a.completedAt?.toMillis?.() || 0;
-                const timeB = b.completedAt?.toMillis?.() || 0;
+                const timeA = toMillis(a.completedAt) || 0;
+                const timeB = toMillis(b.completedAt) || 0;
                 return timeB - timeA;
             })
             .slice(0, limitCount);

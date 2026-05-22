@@ -5,6 +5,8 @@ import { X, Send, Loader2, Check, Sparkles, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+import { auth } from "@/lib/firebase";
+
 
 interface Message {
     role: "user" | "assistant";
@@ -77,9 +79,15 @@ export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
         setPendingGroups(null);
 
         try {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+            const headers: Record<string, string> = { "Content-Type": "application/json" };
+            if (token) {
+                headers["Authorization"] = `Bearer ${token}`;
+            }
+
             const res = await fetch("/api/generate-tasks", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers,
                 body: JSON.stringify({ messages: newMessages }),
             });
 

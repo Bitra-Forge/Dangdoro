@@ -26,7 +26,7 @@ import {
     fmtMinutes, resolveLiveSessionsForGroup, toMillis, 
     getEarliestActiveStart, normalizeLiveSessions,
     getGoalTypeLabel, getGoalPeriodBounds, isPeriodExpired,
-    computeNextPeriodStart, GoalType
+    computeNextPeriodStart, GoalType, LiveSession
 } from "@/lib/groups";
 import { fetchUserProfiles, savePartialPomodoroSession } from "@/lib/db";
 import { applyGroupSessionAction } from "@/lib/group-session";
@@ -112,7 +112,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         const unsub = onSnapshot(
             q,
             (snapshot) => {
-                const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as LiveSession));
                 setLiveSessions(normalizeLiveSessions(raw));
             },
             (error) => {
