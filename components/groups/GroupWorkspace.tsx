@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, memo } from "react";
+import { useEffect, useState, useMemo, memo, useRef, useCallback } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import {
     doc, onSnapshot, collection, query, orderBy,
@@ -47,6 +47,7 @@ interface GroupWorkspaceProps {
 export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const { user } = useAuth();
     const router = useRouter();
+    const permissionDeniedRef = useRef(false);
     const [group, setGroup] = useState<FocusGroup | null>(null);
     const [liveSessions, setLiveSessions] = useState<any[]>([]);
     const [tasks, setTasks] = useState<SharedTask[]>([]);
@@ -75,38 +76,67 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const activeGroupId = useTimerStore(s => s.activeGroupId);
     const isPaused = useTimerStore(s => s.isPaused ?? false);
 
+    const handlePermissionDenied = useCallback((error: any) => {
+        if (error?.code !== "permission-denied") return;
+        if (permissionDeniedRef.current) return;
+        permissionDeniedRef.current = true;
+        toast.error("You don't have access to this group.");
+        router.push("/groups");
+    }, [router]);
+
     // 1. Subscribe to group data
     useEffect(() => {
-        if (!groupId) return;
-        const unsub = onSnapshot(doc(db, "focusGroups", groupId), (snap) => {
-            if (snap.exists()) {
-                setGroup({ id: snap.id, ...snap.data() } as FocusGroup);
-            } else {
-                setGroup(null);
+        if (!groupId || !user || user.isAnonymous) return;
+        const unsub = onSnapshot(
+            doc(db, "focusGroups", groupId),
+            (snap) => {
+                if (snap.exists()) {
+                    setGroup({ id: snap.id, ...snap.data() } as FocusGroup);
+                } else {
+                    setGroup(null);
+                }
+                setLoading(false);
+            },
+            (error) => {
+                handlePermissionDenied(error);
+                setLoading(false);
             }
-            setLoading(false);
-        });
+        );
         return unsub;
-    }, [groupId]);
+    }, [groupId, user?.uid, user?.isAnonymous, handlePermissionDenied]);
 
     // 2. Subscribe to live sessions
     useEffect(() => {
-        const unsub = onSnapshot(collection(db, "liveSessions"), (snapshot) => {
-            const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setLiveSessions(normalizeLiveSessions(raw));
-        });
+        if (!groupId || !user || user.isAnonymous) return;
+        const q = query(collection(db, "liveSessions"), where("groupId", "==", groupId));
+        const unsub = onSnapshot(
+            q,
+            (snapshot) => {
+                const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setLiveSessions(normalizeLiveSessions(raw));
+            },
+            (error) => {
+                handlePermissionDenied(error);
+            }
+        );
         return unsub;
-    }, []);
+    }, [groupId, user?.uid, user?.isAnonymous, handlePermissionDenied]);
 
     // 3. Subscribe to tasks
     useEffect(() => {
-        if (!groupId || !user) return;
+        if (!groupId || !user || user.isAnonymous) return;
         const q = query(collection(db, `focusGroups/${groupId}/tasks`), orderBy("createdAt", "desc"));
-        const unsub = onSnapshot(q, (snap) => {
-            setTasks(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SharedTask)));
-        });
+        const unsub = onSnapshot(
+            q,
+            (snap) => {
+                setTasks(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SharedTask)));
+            },
+            (error) => {
+                handlePermissionDenied(error);
+            }
+        );
         return unsub;
-    }, [groupId, user]);
+    }, [groupId, user?.uid, user?.isAnonymous, handlePermissionDenied]);
 
     // 4. Hydrate member profiles
     useEffect(() => {
@@ -166,7 +196,8 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
   // 6.5. Notification for admin and host when period expires (manual reset mode)
   useEffect(() => {
     async function maybeNotifyAdmins() {
-      if (!enrichedGroup || !enrichedGroup.settings || !enrichedGroup.id || !enrichedGroup.name) return;
+            if (!enrichedGroup || !enrichedGroup.settings || !enrichedGroup.id || !enrichedGroup.name) return;
+            if (!user || enrichedGroup.hostId !== user.uid) return;
       const { goalType, customDays } = enrichedGroup.settings;
       if (!goalType) return;
 
@@ -183,31 +214,37 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         (m: any) => m.role === "host" || m.role === "admin"
       ) : [];
 
-      for (const admin of admins) {
-        // Check for existing notification for this user, group, and periodEnd
-        const q = query(
-          collection(db, "notifications"),
-          where("type", "==", "goal_period_expired"),
-          where("toUserId", "==", admin.uid),
-          where("groupId", "==", enrichedGroup.id),
-          where("periodEnd", "==", periodEndIso)
-        );
-        const existing = await getDocs(q);
-        if (existing.empty) {
-          await addDoc(collection(db, "notifications"), {
-            type: "goal_period_expired",
-            toUserId: admin.uid,
-            groupId: enrichedGroup.id,
-            groupName: enrichedGroup.name,
-            periodEnd: periodEndIso,
-            read: false,
-            createdAt: serverTimestamp()
-          });
-        }
-      }
+            try {
+                for (const admin of admins) {
+                    // Check for existing notification for this user, group, and periodEnd
+                    const q = query(
+                        collection(db, "notifications"),
+                        where("type", "==", "goal_period_expired"),
+                        where("toUserId", "==", admin.uid),
+                        where("groupId", "==", enrichedGroup.id),
+                        where("periodEnd", "==", periodEndIso)
+                    );
+                    const existing = await getDocs(q);
+                    if (existing.empty) {
+                        await addDoc(collection(db, "notifications"), {
+                            type: "goal_period_expired",
+                            toUserId: admin.uid,
+                            groupId: enrichedGroup.id,
+                            groupName: enrichedGroup.name,
+                            periodEnd: periodEndIso,
+                            read: false,
+                            createdAt: serverTimestamp()
+                        });
+                    }
+                }
+            } catch (error: any) {
+                if (error?.code !== "permission-denied") {
+                    console.error("Failed to send goal period notifications:", error);
+                }
+            }
     }
     maybeNotifyAdmins();
-  }, [enrichedGroup?.lastResetAt, enrichedGroup?.createdAt, enrichedGroup?.settings, enrichedGroup?.id]);
+    }, [enrichedGroup?.lastResetAt, enrichedGroup?.createdAt, enrichedGroup?.settings, enrichedGroup?.id, enrichedGroup?.hostId, user?.uid]);
 
     const isMember = enrichedGroup?.members.includes(user?.uid || "");
     const isInGroupSession = activeGroupId === groupId;

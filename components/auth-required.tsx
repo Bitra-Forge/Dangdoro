@@ -30,7 +30,7 @@ export function AuthRequired({ title, description }: AuthRequiredProps) {
 
             <Button
                 onClick={openAuthVault}
-                className="h-10 px-8 rounded-xl bg-white text-black hover:bg-zinc-200 transition-all font-bold uppercase tracking-tighter"
+                className="h-10 px-8 rounded-full bg-white text-black hover:bg-zinc-200 transition-all font-bold uppercase tracking-tighter"
                 style={{ fontSize: "13px" }}
             >
                 <LogIn className="mr-2 w-4 h-4" /> Sign In

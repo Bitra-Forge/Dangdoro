@@ -261,7 +261,7 @@ export function AuthCard({ redirect, isModal, onSuccess, initialEmailMode = "log
                                                     placeholder="Your name"
                                                     value={displayName}
                                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDisplayName(e.target.value)}
-                                                    className="bg-zinc-900 border-white/15 h-11 pl-10 rounded-md text-white placeholder:text-zinc-600 focus:border-sky-400/60 focus-visible:ring-0 focus-visible:ring-offset-0 transition-colors"
+                                                    className="bg-zinc-900 border-white/15 h-11 pl-10 rounded-md text-white placeholder:text-zinc-600 focus:border-white/60 focus-visible:ring-0 focus-visible:ring-offset-0 transition-colors"
                                                 />
                                             </div>
                                         </div>
@@ -282,7 +282,7 @@ export function AuthCard({ redirect, isModal, onSuccess, initialEmailMode = "log
                                                     "bg-zinc-900 h-11 pl-10 rounded-md text-white placeholder:text-zinc-600 focus-visible:ring-0 focus-visible:ring-offset-0 transition-colors",
                                                     emailError
                                                         ? "border-red-500/60 focus:border-red-500"
-                                                        : "border-white/15 focus:border-sky-400/60"
+                                                        : "border-white/15 focus:border-white/60"
                                                 )}
                                             />
                                         </div>
@@ -296,7 +296,7 @@ export function AuthCard({ redirect, isModal, onSuccess, initialEmailMode = "log
                                                 placeholder="••••••••"
                                                 value={password}
                                                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-                                                className="bg-zinc-900 border-white/15 h-11 pl-10 pr-10 rounded-md text-white placeholder:text-zinc-600 focus:border-sky-400/60 focus-visible:ring-0 focus-visible:ring-offset-0 transition-colors"
+                                                className="bg-zinc-900 border-white/15 h-11 pl-10 pr-10 rounded-md text-white placeholder:text-zinc-600 focus:border-white/60 focus-visible:ring-0 focus-visible:ring-offset-0 transition-colors"
                                             />
                                             <button
                                                 type="button"
