@@ -1,14 +1,12 @@
 "use client";
 
-import { CheckSquare, Image as ImageIcon, Pencil, Volume2 } from "lucide-react";
+import { CheckSquare, Pencil, Volume2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTimerStore } from "@/lib/store";
 import { useNotesStore } from "@/lib/notes-store";
 import { useQuickTasksStore } from "@/lib/quick-tasks-store";
 
 export function QuickActionsNav() {
-  const isBgOpen = useTimerStore((state) => state.isBgPanelOpen);
-  const setIsBgOpen = useTimerStore((state) => state.setIsBgPanelOpen);
   const isSoundOpen = useTimerStore((state) => state.isSoundPanelOpen);
   const setIsSoundOpen = useTimerStore((state) => state.setIsSoundPanelOpen);
   const isNotesOpen = useNotesStore((state) => state.isNotesOpen);
@@ -19,7 +17,6 @@ export function QuickActionsNav() {
   const closeAllPanels = () => {
     setIsTasksOpen(false);
     setIsNotesOpen(false);
-    setIsBgOpen(false);
     setIsSoundOpen(false);
   };
 
@@ -67,28 +64,6 @@ export function QuickActionsNav() {
             isNotesOpen ? "scale-110" : "group-hover:scale-110"
           )} />
           {isNotesOpen && (
-            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full shadow-[0_0_10px_white]" />
-          )}
-        </button>
-
-        <button
-          data-quick-action-trigger="true"
-          onClick={() => {
-            const willOpen = !isBgOpen;
-            closeAllPanels();
-            setIsBgOpen(willOpen);
-          }}
-          className={cn(
-            "p-2 rounded-xl transition-all duration-300 group relative",
-            isBgOpen ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
-          )}
-          title="Change Background"
-        >
-          <ImageIcon className={cn(
-            "w-5 h-5 transition-transform duration-300",
-            isBgOpen ? "scale-110" : "group-hover:scale-110"
-          )} />
-          {isBgOpen && (
             <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full shadow-[0_0_10px_white]" />
           )}
         </button>

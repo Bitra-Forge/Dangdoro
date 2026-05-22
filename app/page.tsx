@@ -6,7 +6,6 @@ import { Clock, CheckCircle2 as CheckIcon, X as CloseIcon, ChevronDown } from "l
 import { toast } from "sonner";
 import { useTimerStore } from "@/lib/store";
 import { toggleTask } from "@/lib/db";
-import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 import { BackgroundTheme } from "@/components/background-theme";
@@ -20,7 +19,6 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export default function Home() {
-  const backgroundImage = useTimerStore((state) => state.backgroundImage);
   const backgroundSolidColor = useTimerStore((state) => state.backgroundSolidColor);
   const noneBackgroundMode = useTimerStore((state) => state.noneBackgroundMode);
   const noneBackgroundGradient = useTimerStore((state) => state.noneBackgroundGradient);
@@ -127,30 +125,14 @@ export default function Home() {
       style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
       {/* Immersive Background */}
       <div className="absolute inset-0 z-0 select-none pointer-events-none transition-all duration-1000">
-        {backgroundImage === "none" && (
-          <div
-            className="absolute inset-0"
-            style={
-              noneBackgroundMode === "gradient"
-                ? { backgroundImage: noneBackgroundGradient }
-                : { backgroundColor: backgroundSolidColor }
-            }
-          />
-        )}
-        {backgroundImage !== "none" && (
-          <>
-            <Image
-              key={backgroundImage}
-              src={`/Backgrounds/${backgroundImage}`}
-              alt="Background"
-              fill
-              sizes="100vw"
-              priority
-              className="object-cover opacity-100 transition-all duration-1000 animate-in fade-in fill-mode-forwards"
-            />
-            <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/40 via-transparent to-zinc-950/40" />
-          </>
-        )}
+        <div
+          className="absolute inset-0"
+          style={
+            noneBackgroundMode === "gradient"
+              ? { backgroundImage: noneBackgroundGradient }
+              : { backgroundColor: backgroundSolidColor }
+          }
+        />
       </div>
 
       <main className="relative z-10 flex flex-col items-center justify-center pt-24 pb-32 px-4 w-full flex-1">
