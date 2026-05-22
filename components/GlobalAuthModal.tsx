@@ -14,9 +14,9 @@ export function GlobalAuthModal() {
 
     return (
         <Dialog open={isAuthModalOpen} onOpenChange={closeAuthVault}>
-            <DialogContent showCloseButton={false} className="bg-zinc-950 border-white/10 text-white max-w-md rounded-[2.5rem] p-8 shadow-2xl shadow-sky-500/5 overflow-hidden">
-                <DialogTitle className="sr-only">Auth Vault Identity Access</DialogTitle>
-                <DialogDescription className="sr-only">Connect to establish your permanent legacy slot.</DialogDescription>
+            <DialogContent showCloseButton={false} className="bg-transparent border-none text-white max-w-md p-0 shadow-none">
+                <DialogTitle className="sr-only">Sign in</DialogTitle>
+                <DialogDescription className="sr-only">Access your account.</DialogDescription>
                 <AuthCard isModal onSuccess={closeAuthVault} />
             </DialogContent>
         </Dialog>

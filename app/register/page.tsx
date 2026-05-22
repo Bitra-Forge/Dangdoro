@@ -6,18 +6,18 @@ import { useSearchParams } from "next/navigation";
 import { BackgroundTheme } from "@/components/background-theme";
 import { AuthCard } from "@/components/AuthCard";
 
-function LoginContent() {
+function RegisterContent() {
     const searchParams = useSearchParams();
     const redirect = searchParams.get("redirect") || "/";
 
     return (
         <div className="min-h-screen flex items-center justify-center px-4 py-16">
             <div className="w-full max-w-md">
-                <AuthCard redirect={redirect} initialEmailMode="login" />
+                <AuthCard redirect={redirect} initialEmailMode="signup" />
                 <p className="text-sm text-zinc-400 text-center mt-4">
-                    Don't have an account?{" "}
-                    <Link href="/register" className="text-white hover:text-zinc-200 transition-colors">
-                        Create one
+                    Already have an account?{" "}
+                    <Link href="/login" className="text-white hover:text-zinc-200 transition-colors">
+                        Sign in
                     </Link>
                 </p>
             </div>
@@ -25,7 +25,7 @@ function LoginContent() {
     );
 }
 
-export default function LoginPage() {
+export default function RegisterPage() {
     return (
         <BackgroundTheme>
             <Suspense fallback={
@@ -33,7 +33,7 @@ export default function LoginPage() {
                     <div className="w-10 h-10 border-2 border-white/10 border-t-white/60 rounded-full animate-spin" />
                 </div>
             }>
-                <LoginContent />
+                <RegisterContent />
             </Suspense>
         </BackgroundTheme>
     );
