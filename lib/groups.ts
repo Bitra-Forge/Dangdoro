@@ -99,6 +99,11 @@ export interface LiveSession {
 }
 
 export function generateInviteToken() {
+    // Use crypto for a cryptographically secure token (8 uppercase alphanumeric chars)
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
+        return crypto.randomUUID().replace(/-/g, "").substring(0, 8).toUpperCase();
+    }
+    // Fallback for environments without crypto (shouldn't happen in modern runtimes)
     return Math.random().toString(36).substring(2, 10).toUpperCase();
 }
 

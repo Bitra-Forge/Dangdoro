@@ -165,16 +165,54 @@ export default function GroupsPage() {
             setFriends(friendsData);
         });
 
-        const unsubGroups = onSnapshot(
+        // Query 1: Groups the user is a member of
+        const memberQuery = query(
             collection(db, "focusGroups"),
+            where("members", "array-contains", user.uid)
+        );
+
+        // Query 2: Public groups (for discovery)
+        const publicQuery = query(
+            collection(db, "focusGroups"),
+            where("privacy", "==", "public")
+        );
+
+        let memberGroups: FocusGroup[] = [];
+        let publicGroupsList: FocusGroup[] = [];
+
+        const mergeGroups = () => {
+            const seen = new Set<string>();
+            const merged: FocusGroup[] = [];
+            for (const g of [...memberGroups, ...publicGroupsList]) {
+                if (!seen.has(g.id)) {
+                    seen.add(g.id);
+                    merged.push(g);
+                }
+            }
+            setFocusGroups(merged);
+            setLoading(false);
+        };
+
+        const unsubMember = onSnapshot(
+            memberQuery,
             (snapshot) => {
-                const groups: FocusGroup[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FocusGroup));
-                setFocusGroups(groups);
-                setLoading(false);
+                memberGroups = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FocusGroup));
+                mergeGroups();
             },
             (error) => {
-                console.error("focusGroups listener error:", error);
+                console.error("focusGroups member listener error:", error);
                 setLoading(false);
+            }
+        );
+
+        const unsubPublic = onSnapshot(
+            publicQuery,
+            (snapshot) => {
+                publicGroupsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FocusGroup));
+                mergeGroups();
+            },
+            (error) => {
+                console.error("focusGroups public listener error:", error);
             }
         );
 
@@ -188,7 +226,8 @@ export default function GroupsPage() {
 
         return () => {
             unsubFriends();
-            unsubGroups();
+            unsubMember();
+            unsubPublic();
             unsubLive();
         };
     }, [user?.uid, user?.isAnonymous]);

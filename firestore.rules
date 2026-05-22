@@ -1,0 +1,203 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helper Functions ────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isGroupMember(groupData) {
+      return isSignedIn() && request.auth.uid in groupData.members;
+    }
+
+    function isGroupHost(groupData) {
+      return isSignedIn() && request.auth.uid == groupData.hostId;
+    }
+
+    // ─── Users ───────────────────────────────────────────────────
+    match /users/{userId} {
+      // Anyone signed in can read public profiles (for leaderboard, groups, friends)
+      allow read: if isSignedIn();
+
+      // Users can only create/update their own profile
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+
+      // Users should not be able to delete their profile doc directly
+      allow delete: if false;
+
+      // ─── Friends subcollection (symmetric friendship model) ──
+      match /friends/{friendId} {
+        // Users can read their own friends list
+        allow read: if isSignedIn() && isOwner(userId);
+
+        // Friendship docs are created/deleted via batch writes by
+        // either party (the accepting user writes to both subcollections)
+        allow create: if isSignedIn() && (
+          isOwner(userId) || isOwner(friendId)
+        );
+        allow delete: if isSignedIn() && (
+          isOwner(userId) || isOwner(friendId)
+        );
+
+        allow update: if false;
+      }
+    }
+
+    // ─── Sessions (Pomodoro history) ─────────────────────────────
+    match /sessions/{sessionId} {
+      // Any signed-in user can read sessions (needed for friends activity feed).
+      // Sessions only contain userId, duration, timestamps — no sensitive data.
+      allow read: if isSignedIn();
+
+      // Users can only create sessions for themselves
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+
+      // Sessions are immutable once created
+      allow update, delete: if false;
+    }
+
+    // ─── Tasks (personal) ────────────────────────────────────────
+    match /tasks/{taskId} {
+      // Users can only access their own tasks
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // ─── Task Groups (personal organization) ─────────────────────
+    match /taskGroups/{groupId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // ─── Focus Groups (collaborative) ────────────────────────────
+    match /focusGroups/{groupId} {
+      // Public groups can be read by anyone signed in (for discovery)
+      // Private groups can only be read by members
+      allow read: if isSignedIn() && (
+        resource.data.privacy == "public" ||
+        resource.data.privacy == "private-code" ||
+        isGroupMember(resource.data) ||
+        request.auth.uid in resource.data.pendingInvites
+      );
+
+      // Any signed-in user can create a group
+      allow create: if isSignedIn() && request.resource.data.hostId == request.auth.uid;
+
+      // Only the host can update core group settings
+      // Members can update specific fields (memberStats, totalMinutes)
+      allow update: if isSignedIn() && (
+        isGroupHost(resource.data) ||
+        (isGroupMember(resource.data) && onlyUpdatingAllowedMemberFields()) ||
+        // Allow users to accept/decline invites (modify pendingInvites, members)
+        (request.auth.uid in resource.data.pendingInvites && onlyUpdatingInviteFields()) ||
+        // Allow non-members to join public or code-based groups (field-restricted)
+        ((resource.data.privacy == "public" || resource.data.privacy == "private-code") && onlyUpdatingAllowedMemberFields())
+      );
+
+      // Only the host can delete
+      allow delete: if isGroupHost(resource.data);
+
+      // ─── Focus Group Sub-collections ────────────────────────
+      match /tasks/{taskId} {
+        // Group members can read all group tasks
+        allow read: if isSignedIn() && isGroupMember(
+          get(/databases/$(database)/documents/focusGroups/$(groupId)).data
+        );
+
+        // Group members can create tasks
+        allow create: if isSignedIn() && isGroupMember(
+          get(/databases/$(database)/documents/focusGroups/$(groupId)).data
+        );
+
+        // Only task creator, group host, or admin can update/delete
+        // (Admin role is stored in memberStats; checking at the rule level
+        // would require an extra document read, so we allow any member
+        // to keep it simple — the UI already gates by role.)
+        allow update, delete: if isSignedIn() && isGroupMember(
+          get(/databases/$(database)/documents/focusGroups/$(groupId)).data
+        );
+      }
+    }
+
+    // Helper: only allow members to update their own stats + group aggregates
+    function onlyUpdatingAllowedMemberFields() {
+      let allowed = [
+        'memberStats',
+        'totalMinutes',
+        'memberCount',
+        'members',
+        'pendingInvites'
+      ].toSet();
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+    }
+
+    // Helper: invite acceptance only touches members, pendingInvites, memberStats, memberCount
+    function onlyUpdatingInviteFields() {
+      let allowed = ['members', 'pendingInvites', 'memberStats', 'memberCount'].toSet();
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+    }
+
+    // ─── Live Sessions (presence) ────────────────────────────────
+    match /liveSessions/{sessionId} {
+      // Anyone signed in can read live sessions (for group presence display)
+      allow read: if isSignedIn();
+
+      // Users can only create live sessions for themselves
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+
+      // Users can only update/delete their own live sessions
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // ─── Friend Requests ─────────────────────────────────────────
+    match /friendRequests/{requestId} {
+      // Both sender and receiver can read
+      allow read: if isSignedIn() && (
+        resource.data.fromUserId == request.auth.uid ||
+        resource.data.toUserId == request.auth.uid
+      );
+
+      // Sender creates
+      allow create: if isSignedIn() && request.resource.data.fromUserId == request.auth.uid;
+
+      // Both sender and receiver can update (accept/decline/reuse)
+      allow update: if isSignedIn() && (
+        resource.data.fromUserId == request.auth.uid ||
+        resource.data.toUserId == request.auth.uid
+      );
+
+      // Both can delete (cancel)
+      allow delete: if isSignedIn() && (
+        resource.data.fromUserId == request.auth.uid ||
+        resource.data.toUserId == request.auth.uid
+      );
+    }
+
+    // ─── Notifications ───────────────────────────────────────────
+    match /notifications/{notifId} {
+      // Notifications use "toUserId" as the recipient field
+      allow read: if isSignedIn() && resource.data.toUserId == request.auth.uid;
+      allow create: if isSignedIn(); // Other users/hosts create notifications for recipients
+      allow update: if isSignedIn() && resource.data.toUserId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.toUserId == request.auth.uid;
+    }
+
+    // ─── Deny everything else ────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

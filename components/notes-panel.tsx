@@ -10,9 +10,19 @@ import {
   Italic,
   Underline,
 } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
+import DOMPurify from "dompurify";
+
+/** Sanitize HTML to prevent XSS via stored notes */
+const sanitizeHtml = (html: string): string => {
+  if (typeof window === "undefined") return html;
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ["b", "i", "u", "br", "div", "span", "p", "font", "strong", "em"],
+    ALLOWED_ATTR: ["style", "size", "color"],
+  });
+};
 
 export function NotesPanel() {
   const isOpen = useNotesStore((state) => state.isNotesOpen);
@@ -35,7 +45,7 @@ export function NotesPanel() {
 
   const getPlainText = () => {
     const tmp = document.createElement("div");
-    tmp.innerHTML = notes;
+    tmp.innerHTML = sanitizeHtml(notes);
     return (tmp.textContent || "").trim();
   };
 
@@ -69,8 +79,9 @@ export function NotesPanel() {
 
     if (!editorRef.current) return;
 
-    if (editorRef.current.innerHTML !== notes) {
-      editorRef.current.innerHTML = hasHtmlTags ? notes : htmlFromPlainText;
+    const sanitizedContent = sanitizeHtml(hasHtmlTags ? notes : htmlFromPlainText);
+    if (editorRef.current.innerHTML !== sanitizedContent) {
+      editorRef.current.innerHTML = sanitizedContent;
     }
 
     // Only force focus/caret placement once when opening.

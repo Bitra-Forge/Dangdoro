@@ -22,7 +22,11 @@ export function GroupSessionSync() {
       try {
         if (!user || user.isAnonymous) {
           if (activeLiveSessionId) {
-            await endLiveSession(activeLiveSessionId);
+            try {
+              await endLiveSession(activeLiveSessionId);
+            } catch {
+              // Stale session from a previous auth context — ignore
+            }
             setLiveSessionId(null);
           }
           return;

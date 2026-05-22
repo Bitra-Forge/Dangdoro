@@ -285,8 +285,11 @@ export const endLiveSession = async (liveSessionId: string) => {
         await deleteDoc(docRef);
         trackSessionEvent("live_session_end", { liveSessionId });
         return true;
-    } catch (error) {
-        console.error("Error ending live session:", error);
+    } catch (error: any) {
+        // Silently handle permission-denied (stale session from previous auth)
+        if (error?.code !== "permission-denied") {
+            console.error("Error ending live session:", error);
+        }
         trackSessionEvent("group_session_sync_failed", {
             stage: "end_live_session",
             liveSessionId,
@@ -521,16 +524,26 @@ export const getGroupLeaderboard = async (options: {
 export const fetchUserProfiles = async (uids: string[]) => {
     if (!uids.length) return [];
     
-    // Firestore 'in' queries are limited to 10-30 items depending on version. 
-    // We'll chunk if necessary, but groups are usually < 30.
+    // Firestore 'in' queries are limited to 30 items.
+    // Chunk the UIDs and merge results.
+    const CHUNK_SIZE = 30;
     const usersRef = collection(db, "users");
-    const q = query(usersRef, where("uid", "in", uids.slice(0, 30)));
-    const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
-        uid: doc.id,
-        ...doc.data()
-    } as unknown as UserProfileData));
+    const allProfiles: UserProfileData[] = [];
+
+    for (let i = 0; i < uids.length; i += CHUNK_SIZE) {
+        const chunk = uids.slice(i, i + CHUNK_SIZE);
+        const q = query(usersRef, where("uid", "in", chunk));
+        const querySnapshot = await getDocs(q);
+        
+        allProfiles.push(
+            ...querySnapshot.docs.map(doc => ({
+                uid: doc.id,
+                ...doc.data()
+            } as unknown as UserProfileData))
+        );
+    }
+
+    return allProfiles;
 };
 
 /**

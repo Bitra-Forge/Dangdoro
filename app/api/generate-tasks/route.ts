@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { SYSTEM_PROMPT } from "@/lib/prompts";
 import { adminAuth } from "@/lib/firebase-admin";
+import { aiRateLimiter } from "@/lib/rate-limit";
 
 const PREFERRED_FREE_MODELS = [
   "google/gemini-2.0-flash-exp:free",
@@ -105,14 +106,28 @@ export async function POST(req: Request) {
   }
 
   const token = authHeader.split("Bearer ")[1];
+  let uid: string;
   try {
     const decodedToken = await adminAuth.verifyIdToken(token);
     if (!decodedToken || !decodedToken.uid) {
       return Response.json({ error: "Unauthorized: Invalid session" }, { status: 401 });
     }
+    uid = decodedToken.uid;
   } catch (error) {
     console.error("Firebase Admin verification failed:", error);
     return Response.json({ error: "Unauthorized: Token verification failed" }, { status: 401 });
+  }
+
+  // 2. Rate Limiting — 10 requests per 60 seconds per user
+  const rateCheck = aiRateLimiter.check(uid);
+  if (!rateCheck.allowed) {
+    return Response.json(
+      { error: "Too many requests. Please wait before generating more tasks." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(Math.ceil(rateCheck.resetMs / 1000)) },
+      }
+    );
   }
 
   const openRouterKey = process.env.OPENROUTER_API_KEY;
