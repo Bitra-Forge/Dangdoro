@@ -505,7 +505,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                             disabled={!!sessionActionPending}
                                             onClick={() => handleSessionAction("start")}
                                             className={cn(
-                                                "px-7 py-2.5 rounded-[10px] font-black text-xs transition-all duration-300 ease-out flex items-center gap-2 relative overflow-hidden group/btn",
+                                                "p-2.5 sm:px-7 sm:py-2.5 rounded-[10px] font-black text-xs transition-all duration-300 ease-out flex items-center gap-2 relative overflow-hidden group/btn",
                                                 sessionActionPending
                                                     ? "bg-white/60 text-black/50 cursor-not-allowed"
                                                     : "bg-white text-black hover:shadow-[0_8px_30px_rgba(255,255,255,0.4)] cursor-pointer"
@@ -513,15 +513,15 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                         >
                                             <div className="absolute inset-0 bg-gradient-to-tr from-black/5 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300 pointer-events-none" />
                                             <Play className="w-4 h-4 relative z-10 fill-current" />
-                                            <span className="relative z-10">{sessionActionPending === "start" ? "Starting..." : "Start Focus"}</span>
+                                            <span className="relative z-10 hidden sm:inline">{sessionActionPending === "start" ? "Starting..." : "Start Focus"}</span>
                                         </button>
                                     ) : (
-                                        <>
+                                        <div className="flex items-center gap-2">
                                              <button
                                                  disabled={!!sessionActionPending}
                                                  onClick={() => handleSessionAction("pause")}
                                                  className={cn(
-                                                     "px-6 py-2.5 rounded-[10px] font-black text-xs transition-all duration-300 flex items-center gap-2 group/btn relative overflow-hidden border-none",
+                                                     "p-2.5 sm:px-6 sm:py-2.5 rounded-[10px] font-black text-xs transition-all duration-300 flex items-center gap-2 group/btn relative overflow-hidden border-none",
                                                      isPaused
                                                          ? "bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 cursor-pointer"
                                                          : sessionActionPending 
@@ -538,13 +538,13 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                                  
                                                  <div className={cn("absolute inset-0 bg-gradient-to-tr to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300 pointer-events-none", isPaused ? "from-cyan-500/5" : "from-amber-500/5")} />
                                                  {isPaused ? <Play className="w-4 h-4 relative z-10 fill-current" /> : <Pause className="w-4 h-4 relative z-10" />}
-                                                 <span className="relative z-10">{isPaused ? "Resume" : sessionActionPending === "pause" ? "Pausing..." : "Pause"}</span>
+                                                 <span className="relative z-10 hidden sm:inline">{isPaused ? "Resume" : sessionActionPending === "pause" ? "Pausing..." : "Pause"}</span>
                                              </button>
                                             <button
                                                 disabled={!!sessionActionPending}
                                                 onClick={() => handleSessionAction("stop")}
                                                 className={cn(
-                                                    "px-6 py-2.5 rounded-[10px] font-black text-xs transition-all duration-300 flex items-center gap-2 group/btn relative overflow-hidden border-none",
+                                                    "p-2.5 sm:px-6 sm:py-2.5 rounded-[10px] font-black text-xs transition-all duration-300 flex items-center gap-2 group/btn relative overflow-hidden border-none",
                                                     sessionActionPending 
                                                         ? "bg-red-500/20 text-red-200/50 cursor-not-allowed" 
                                                         : "bg-red-500/5 text-red-400 hover:bg-red-500/10 hover:text-red-300 hover:shadow-[0_8px_25px_rgba(239,68,68,0.15)] cursor-pointer"
@@ -559,9 +559,9 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                                 
                                                 <div className="absolute inset-0 bg-gradient-to-tr from-red-500/5 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300 pointer-events-none" />
                                                 <StopCircle className="w-4 h-4 relative z-10" />
-                                                <span className="relative z-10">{sessionActionPending === "stop" ? "Stopping..." : "Stop"}</span>
+                                                <span className="relative z-10 hidden sm:inline">{sessionActionPending === "stop" ? "Stopping..." : "Stop"}</span>
                                             </button>
-                                        </>
+                                        </div>
                                     )}
                                 </div>
 

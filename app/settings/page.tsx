@@ -732,7 +732,7 @@ export default function SettingsPage() {
                                         onClick={openAuthVault}
                                     >
                                         <div className="flex items-center gap-4">
-                                            <div className="w-12 h-12 rounded-lg bg-blue-500/20 flex items-center justify-center border border-blue-500/30">
+                                            <div className="w-12 h-12 rounded-lg bg-blue-500/20 flex items-center justify-center border border-blue-500/30 shrink-0">
                                                 <LogIn className="w-6 h-6 text-blue-500" />
                                             </div>
                                             <div>
@@ -747,7 +747,7 @@ export default function SettingsPage() {
                                 )}
                             </div>
                         </section>
-
+ 
                         {/* Support Section */}
                         <section>
                             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-1">Support</h2>
@@ -755,7 +755,7 @@ export default function SettingsPage() {
                                 <div className="absolute -inset-px bg-gradient-to-r from-rose-500/10 to-transparent rounded-lg opacity-0 group-hover/support:opacity-100 transition-opacity duration-700 pointer-events-none" />
                                 <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-lg bg-rose-500/20 flex items-center justify-center border border-rose-500/20">
+                                        <div className="w-10 h-10 rounded-lg bg-rose-500/20 flex items-center justify-center border border-rose-500/20 shrink-0">
                                             <Heart className="w-5 h-5 text-rose-400" />
                                         </div>
                                         <div className="flex flex-col max-w-md">

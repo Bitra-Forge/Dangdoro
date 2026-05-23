@@ -172,10 +172,11 @@ export function NotesPanel() {
         <motion.div
           key="quick-notes-panel"
           ref={panelRef}
-          initial={{ scale: 0.96, x: -14, y: 10 }}
-          animate={{ scale: 1, x: 0, y: 0 }}
+          initial={{ scale: 0.96, y: 10 }}
+          animate={{ scale: 1, y: 0 }}
+          exit={{ scale: 0.96, y: 10 }}
           transition={{ type: "spring", stiffness: 360, damping: 34, mass: 0.7 }}
-          className="fixed left-[4.75rem] bottom-28 w-full max-w-[420px] transform origin-left-bottom z-[60]"
+          className="fixed left-1/2 -translate-x-1/2 bottom-40 sm:bottom-28 w-[92vw] sm:w-full max-w-[420px] transform origin-bottom z-[60]"
         >
           <div className="bg-slate-950/80 backdrop-blur-3xl border border-white/10 rounded-[10px] shadow-[0_25px_50px_rgba(0,0,0,0.7)] flex flex-col overflow-hidden">
         {/* Header */}

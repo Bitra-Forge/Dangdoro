@@ -222,6 +222,28 @@ export function TimerCard() {
   }, []);
 
   useEffect(() => {
+    const handleGlobalInteraction = () => {
+      setShowHoverControls(true);
+      clearHideControlsTimeout();
+      if (isActive) {
+        hideControlsTimeoutRef.current = setTimeout(() => {
+          setShowHoverControls(false);
+          hideControlsTimeoutRef.current = null;
+        }, 3000);
+      }
+    };
+
+    window.addEventListener("click", handleGlobalInteraction, { passive: true });
+    window.addEventListener("touchstart", handleGlobalInteraction, { passive: true });
+
+    return () => {
+      window.removeEventListener("click", handleGlobalInteraction);
+      window.removeEventListener("touchstart", handleGlobalInteraction);
+      clearHideControlsTimeout();
+    };
+  }, [isActive]);
+
+  useEffect(() => {
     const handleFullscreenChange = () => {
       if (typeof document === "undefined") {
         return;
@@ -510,7 +532,7 @@ export function TimerCard() {
               </div>
 
               <div className={cn(
-                "flex items-center justify-center gap-6 mt-10 transition-all duration-500 relative z-10",
+                "flex items-center justify-center gap-3 md:gap-6 mt-10 transition-all duration-500 relative z-10",
                 isActive && !shouldRevealHoverControls && "opacity-0"
               )}>
                 {/* Center: Start / Stop */}
@@ -559,7 +581,7 @@ export function TimerCard() {
                 </div>
 
                 {/* Right: Reset and Settings icons */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -576,7 +598,7 @@ export function TimerCard() {
                       size="icon"
                       onClick={() => setIsSettingsOpen(!isSettingsOpen)}
                       title="Toggle settings"
-                      className="h-14 w-14 rounded-2xl transition-all duration-300 cursor-pointer text-white border border-white/25 bg-white/10 hover:bg-white/20"
+                      className="h-14 w-14 rounded-2xl transition-all duration-300 cursor-pointer text-white border border-white/25 bg-white/10 hover:bg-white/20 shrink-0"
                     >
                       <Settings className={cn(
                         "w-6 h-6 transition-transform duration-300",
@@ -586,7 +608,7 @@ export function TimerCard() {
 
                     {/* Settings popup - appears upper-right with connector */}
                     {isSettingsOpen && (
-                      <div className="absolute left-full ml-32 bottom-0 z-20 animate-in fade-in slide-in-from-left-4 duration-300">
+                      <div className="absolute right-0 bottom-full mb-4 lg:left-full lg:right-auto lg:ml-32 lg:mb-0 lg:bottom-0 z-20 animate-in fade-in slide-in-from-left-4 duration-300">
                         <div className="w-[280px] bg-zinc-900/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden">
 
                           {/* Step Size */}

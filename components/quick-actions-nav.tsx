@@ -23,7 +23,7 @@ export function QuickActionsNav() {
   return (
     <div className="relative">
       {/* Main Nav Bar */}
-      <nav className="flex items-center gap-2 p-2 bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+      <nav className="flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
         <button
           data-quick-action-trigger="true"
           onClick={() => {
@@ -32,7 +32,7 @@ export function QuickActionsNav() {
             setIsTasksOpen(willOpen);
           }}
           className={cn(
-            "p-2 rounded-xl transition-all duration-300 group relative",
+            "p-1.5 sm:p-2 rounded-xl transition-all duration-300 group relative",
             isTasksOpen ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
           )}
           title="Quick Tasks"
@@ -54,7 +54,7 @@ export function QuickActionsNav() {
             setIsNotesOpen(willOpen);
           }}
           className={cn(
-            "p-2 rounded-xl transition-all duration-300 group relative",
+            "p-1.5 sm:p-2 rounded-xl transition-all duration-300 group relative",
             isNotesOpen ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
           )}
           title="Quick Notes"
@@ -76,7 +76,7 @@ export function QuickActionsNav() {
             setIsSoundOpen(willOpen);
           }}
           className={cn(
-            "p-2 rounded-xl transition-all duration-300 group relative",
+            "p-1.5 sm:p-2 rounded-xl transition-all duration-300 group relative",
             isSoundOpen ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
           )}
           title="Ambient Sound"

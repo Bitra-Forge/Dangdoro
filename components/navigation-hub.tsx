@@ -111,7 +111,7 @@ export function NavigationHub() {
           onMouseEnter={handleNavMouseEnter}
           onMouseLeave={handleNavMouseLeave}
           className={cn(
-            "flex items-center gap-4 relative px-1 transition-all duration-500",
+            "flex flex-col sm:flex-row items-center gap-2.5 sm:gap-4 relative px-1 transition-all duration-500",
             isNavVisible
               ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
               : "opacity-0 translate-y-5 scale-95 pointer-events-none"

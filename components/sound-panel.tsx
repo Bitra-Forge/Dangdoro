@@ -62,7 +62,7 @@ export function SoundPanel() {
     <div
       ref={panelRef}
       className={cn(
-        "absolute bottom-full mb-3 left-1/2 -translate-x-1/2 w-full max-w-[450px] transition-all duration-500 transform origin-bottom z-50",
+        "absolute bottom-full mb-3 left-1/2 -translate-x-1/2 w-[92vw] sm:w-full max-w-[450px] transition-all duration-500 transform origin-bottom z-50",
         isOpen
           ? "opacity-100 scale-100 pointer-events-auto"
           : "opacity-0 scale-95 pointer-events-none translate-y-4"

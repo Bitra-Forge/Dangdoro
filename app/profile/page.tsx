@@ -1210,7 +1210,7 @@ function ProfileContent() {
                                 e.currentTarget.style.setProperty("--x", `${x}px`);
                                 e.currentTarget.style.setProperty("--y", `${y}px`);
                             }}
-                            className="lg:col-span-8 border rounded-2xl p-8 flex flex-col relative overflow-hidden group/card"
+                            className="lg:col-span-8 border rounded-2xl p-8 pb-12 flex flex-col relative overflow-hidden group/card"
                             style={{
                                 boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5)",
                                 background: `radial-gradient(circle at 90% 10%, ${currentTheme.accent}0f, transparent 70%), #040405`,
@@ -1273,27 +1273,27 @@ function ProfileContent() {
                                     ))}
                                 </div>
 
-                                {/* Grid */}
-                                <div className="grid grid-rows-7 grid-flow-col gap-1.5 w-full h-[140px]">
-                                    {productivityData.map((day, i) => (
-                                        <div key={i} title={day.tooltip} className="w-full h-full relative group/day">
-                                            <div
-                                                className="w-full h-full rounded-[3px] transition-all duration-300 pointer-events-none relative z-10"
-                                                style={{
-                                                    backgroundColor: day.level > 0 ? currentTheme.accent : "rgba(255,255,255,0.06)",
-                                                    opacity: day.level === 0 ? 1 : day.level === 1 ? 0.35 : day.level === 2 ? 0.65 : 1,
-                                                    boxShadow: day.level > 1 ? `0 0-8px ${currentTheme.accent}33` : 'none',
-                                                }}
-                                            />
-                                            {day.level > 0 && (
-                                                <div
-                                                    className="absolute inset-0 blur-[6px] opacity-[0.15] pointer-events-none"
-                                                    style={{ backgroundColor: currentTheme.accent }}
-                                                />
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
+                                 {/* Grid */}
+                                 <div className="grid grid-rows-7 grid-flow-col gap-1.5 w-full h-[90px] sm:h-[140px]">
+                                     {productivityData.map((day, i) => (
+                                         <div key={i} title={day.tooltip} className="w-full h-full flex items-center justify-center relative group/day">
+                                             <div
+                                                 className="w-[8px] h-[8px] sm:w-full sm:h-full md:w-auto md:aspect-square lg:w-full lg:aspect-auto rounded-[1.5px] sm:rounded-[3px] transition-all duration-300 pointer-events-none relative z-10"
+                                                 style={{
+                                                     backgroundColor: day.level > 0 ? currentTheme.accent : "rgba(255,255,255,0.06)",
+                                                     opacity: day.level === 0 ? 1 : day.level === 1 ? 0.35 : day.level === 2 ? 0.65 : 1,
+                                                     boxShadow: day.level > 1 ? `0 0-8px ${currentTheme.accent}33` : 'none',
+                                                 }}
+                                             />
+                                             {day.level > 0 && (
+                                                 <div
+                                                     className="absolute w-[8px] h-[8px] sm:w-full sm:h-full md:w-auto md:h-full md:aspect-square lg:w-full lg:aspect-auto blur-[6px] opacity-[0.15] pointer-events-none"
+                                                     style={{ backgroundColor: currentTheme.accent }}
+                                                 />
+                                             )}
+                                         </div>
+                                     ))}
+                                 </div>
                             </div>
                         </motion.div>
 
@@ -1342,7 +1342,7 @@ function ProfileContent() {
                             {/* Inner Border Glow */}
                             <div className="absolute inset-0 rounded-2xl border pointer-events-none z-10" style={{ borderColor: `${currentTheme.accent}11` }} />
 
-                            <div className="flex items-center justify-between mb-16 relative z-10 w-full">
+                            <div className="flex items-center justify-between mb-8 sm:mb-16 relative z-10 w-full">
                                 <div className="flex items-center gap-3">
                                     <div className="w-[3px] h-5 rounded-full" style={{ backgroundColor: currentTheme.accent, boxShadow: `0 0 12px ${currentTheme.accent}66` }} />
                                     <Calendar className="w-5 h-5 stroke-[2.5] opacity-60" style={{ color: currentTheme.accent }} />
@@ -1353,9 +1353,9 @@ function ProfileContent() {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-7 gap-2">
+                            <div className="grid grid-cols-7 gap-2 max-w-[280px] xs:max-w-[320px] sm:max-w-sm mx-auto w-full">
                                 {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                                    <div key={i} className="text-[9px] font-black text-zinc-700 text-center uppercase pb-3">
+                                    <div key={i} className="text-[9px] sm:text-[10px] font-black text-zinc-700 text-center uppercase pb-3">
                                         {day}
                                     </div>
                                 ))}
@@ -1365,7 +1365,7 @@ function ProfileContent() {
                                             <>
                                                 {/* Base day indicator */}
                                                 <div
-                                                    className="w-full h-full rounded-xl flex items-center justify-center text-[11px] font-bold transition-all duration-300"
+                                                    className="w-full h-full rounded-lg sm:rounded-xl flex items-center justify-center text-xs sm:text-sm font-bold transition-all duration-300"
                                                     style={day.hasActivity ? {
                                                         backgroundColor: `${currentTheme.accent}15`,
                                                         borderColor: `${currentTheme.accent}25`,
@@ -1501,7 +1501,7 @@ function ProfileContent() {
                                 </div>
                             </div>
 
-                            <div className="h-[400px] w-full mt-4 relative group/chart">
+                            <div className="h-[250px] sm:h-[400px] w-full mt-4 relative group/chart">
                                 {mounted && (
                                     <div className="relative w-full h-full">
                                         {/* Traveling Laser HUD Line */}
@@ -1522,13 +1522,15 @@ function ProfileContent() {
                                             initial={{ clipPath: 'inset(0 100% 0 0)' }}
                                             animate={{ clipPath: 'inset(0 0% 0 0)' }}
                                             transition={{ duration: 2.5, ease: "easeInOut" }}
-                                            className="w-full h-full min-w-0"
+                                            className="w-full h-full min-w-0 outline-none focus:outline-none"
                                         >
-                                            <ResponsiveContainer width="100%" height={400} debounce={50}>
+                                            <ResponsiveContainer width="100%" height="100%" debounce={50} className="outline-none focus:outline-none" style={{ outline: 'none' }}>
                                                 <ComposedChart
                                                     data={timeRange === "days" ? weekData : timeRange === "weeks" ? monthData : yearData}
                                                     key={`${timeRange}_composed`}
                                                     margin={{ top: 20, right: 10, left: -20, bottom: 25 }}
+                                                    className="outline-none focus:outline-none"
+                                                    style={{ outline: 'none' }}
                                                 >
                                                     <defs>
                                                         <linearGradient id="colorFlow_analytics" x1="0" y1="0" x2="0" y2="1">
