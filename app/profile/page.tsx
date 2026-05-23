@@ -278,13 +278,13 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal 
 
             <div className={cn("flex flex-col min-w-0 pr-1 relative z-10", horizontal ? "items-start text-left" : "items-center")}>
                 <span className={cn(
-                    "font-black text-white tracking-tighter tabular-nums mb-0.5 drop-shadow-sm leading-none whitespace-nowrap transition-all duration-500",
+                    "ubuntu-bold font-black text-white tracking-tighter tabular-nums mb-0.5 drop-shadow-sm leading-none whitespace-nowrap transition-all duration-500",
                     horizontal ? "text-lg" : "text-2xl",
                     "group-hover:drop-shadow-[0_0_10px_white]"
                 )}>
                     {value}
                 </span>
-                <span className="text-[8.5px] font-black text-zinc-500 uppercase tracking-[0.15em] group-hover:text-zinc-300 transition-all duration-500 leading-none truncate w-full">
+                <span className="text-[8.5px] ubuntu-bold font-black text-zinc-500 uppercase tracking-[0.15em] group-hover:text-zinc-300 transition-all duration-500 leading-none truncate w-full">
                     {label}
                 </span>
             </div>
@@ -762,7 +762,7 @@ function ProfileContent() {
 
     return (
         <BackgroundTheme>
-            <div className="flex flex-col flex-1 bg-zinc-950 min-h-screen relative overflow-x-hidden" style={{ fontFamily: '__nextjs-Geist' }}>
+            <div className="flex flex-col flex-1 bg-zinc-950 min-h-screen relative overflow-x-hidden">
 
                 {/* Immersive Background Elements */}
                 <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full h-screen pointer-events-none z-0">
@@ -848,7 +848,7 @@ function ProfileContent() {
                                             {isEditing && (
                                                 <label className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center opacity-0 hover:opacity-100 transition-all cursor-pointer z-30">
                                                     <Camera className="w-10 h-10 text-white mb-3" />
-                                                    <span className="text-[10px] font-black tracking-widest uppercase">Update Scan</span>
+                                                    <span className="text-[10px] ubuntu-bold font-black tracking-widest uppercase">Update Scan</span>
                                                     <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
                                                 </label>
                                             )}
@@ -870,7 +870,7 @@ function ProfileContent() {
                                         {friendStatus?.isFriend ? (
                                             <Button 
                                                 onClick={() => setUnfriendConfirmOpen(true)}
-                                                className="w-full h-9 rounded-full bg-green-500/20 text-green-400 font-black text-[9px] tracking-widest border border-green-500/20 uppercase hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/20 group cursor-pointer transition-colors"
+                                                className="w-full h-9 rounded-full bg-green-500/20 text-green-400 ubuntu-bold font-black text-[9px] tracking-widest border border-green-500/20 uppercase hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/20 group cursor-pointer transition-colors"
                                             >
                                                 <UserCheck className="w-2.5 h-2.5 mr-2 group-hover:hidden" />
                                                 <UserMinus className="w-2.5 h-2.5 mr-2 hidden group-hover:block" />
@@ -888,7 +888,7 @@ function ProfileContent() {
                                                             setFriendStatus({ ...friendStatus, status: undefined, direction: undefined });
                                                         }
                                                     }}
-                                                    className="w-full h-9 rounded-full font-black text-[9px] tracking-widest uppercase border transition-colors bg-yellow-500/20 text-yellow-400 border-yellow-500/20 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/20 group cursor-pointer"
+                                                    className="w-full h-9 rounded-full ubuntu-bold font-black text-[9px] tracking-widest uppercase border transition-colors bg-yellow-500/20 text-yellow-400 border-yellow-500/20 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/20 group cursor-pointer"
                                                 >
                                                     <Timer className="w-2.5 h-2.5 mr-2 group-hover:hidden" />
                                                     <UserMinus className="w-2.5 h-2.5 mr-2 hidden group-hover:block" />
@@ -906,7 +906,7 @@ function ProfileContent() {
                                                                 // the snapshot listener will handle state update automatically
                                                             }
                                                         }}
-                                                        className="flex-1 h-9 rounded-full bg-green-500/20 text-green-400 hover:bg-green-500/30 border border-green-500/20 font-black text-[9px] tracking-widest uppercase cursor-pointer transition-colors"
+                                                        className="flex-1 h-9 rounded-full bg-green-500/20 text-green-400 hover:bg-green-500/30 border border-green-500/20 ubuntu-bold font-black text-[9px] tracking-widest uppercase cursor-pointer transition-colors"
                                                     >
                                                         Accept
                                                     </Button>
@@ -919,7 +919,7 @@ function ProfileContent() {
                                                                 // the snapshot listener will handle state update automatically
                                                             }
                                                         }}
-                                                        className="flex-1 h-9 rounded-full bg-red-500/20 text-red-500 hover:bg-red-500/30 border border-red-500/20 font-black text-[9px] tracking-widest uppercase cursor-pointer transition-colors"
+                                                        className="flex-1 h-9 rounded-full bg-red-500/20 text-red-500 hover:bg-red-500/30 border border-red-500/20 ubuntu-bold font-black text-[9px] tracking-widest uppercase cursor-pointer transition-colors"
                                                     >
                                                         Decline
                                                     </Button>
@@ -935,7 +935,7 @@ function ProfileContent() {
                                                         setFriendStatus({ ...friendStatus, status: "pending", direction: "sent" });
                                                     }
                                                 }}
-                                                className="w-full h-9 rounded-full bg-white text-black hover:bg-zinc-200 font-black text-[9px] tracking-widest border border-white/20 uppercase shadow-xl"
+                                                className="w-full h-9 rounded-full bg-white text-black hover:bg-zinc-200 ubuntu-bold font-black text-[9px] tracking-widest border border-white/20 uppercase shadow-xl"
                                             >
                                                 <Users className="w-2.5 h-2.5 mr-2" />
                                                 Add Friend
@@ -951,7 +951,7 @@ function ProfileContent() {
                                         >
                                             <Button
                                                 onClick={() => setIsEditing(true)}
-                                                className="w-full h-9 rounded-full bg-zinc-100 text-zinc-950 hover:bg-white font-black text-[9px] tracking-widest transition-all border border-white/20 relative shadow-xl overflow-hidden group/btn cursor-pointer"
+                                                className="w-full h-9 rounded-full bg-zinc-100 text-zinc-950 hover:bg-white ubuntu-bold font-black text-[9px] tracking-widest transition-all border border-white/20 relative shadow-xl overflow-hidden group/btn cursor-pointer"
                                             >
                                                 <div className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-[-25deg] -translate-x-full group-hover/btn:animate-shine transition-transform" />
                                                 <div className="flex items-center justify-center gap-2 relative z-10 uppercase">
@@ -972,7 +972,7 @@ function ProfileContent() {
                                                     navigator.clipboard.writeText(`${window.location.origin}/profile?user=${user.uid}`);
                                                     toast.success("Profile link copied!");
                                                 }}
-                                                className="w-full h-9 rounded-full border border-white/5 bg-zinc-900/40 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60 transition-all backdrop-blur-xl group/btn relative overflow-hidden text-[9px] font-black tracking-widest cursor-pointer"
+                                                className="w-full h-9 rounded-full border border-white/5 bg-zinc-900/40 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60 transition-all backdrop-blur-xl group/btn relative overflow-hidden text-[9px] ubuntu-bold font-black tracking-widest cursor-pointer"
                                             >
                                                 <div className="flex items-center justify-center gap-2 uppercase relative z-10">
                                                     <Share2 className="w-2.5 h-2.5 transition-transform group-hover/btn:rotate-12" />
@@ -1011,14 +1011,14 @@ function ProfileContent() {
                                             <Button
                                                 onClick={handleSaveProfile}
                                                 disabled={isSaving}
-                                                className="h-12 px-10 rounded-2xl bg-white text-black hover:bg-zinc-200 font-black uppercase tracking-widest text-[10px] shadow-[0_0_40px_rgba(255,255,255,0.1)] transition-all flex items-center gap-2"
+                                                className="h-12 px-10 rounded-2xl bg-white text-black hover:bg-zinc-200 ubuntu-bold font-black uppercase tracking-widest text-[10px] shadow-[0_0_40px_rgba(255,255,255,0.1)] transition-all flex items-center gap-2"
                                             >
                                                 {isSaving ? "Syncing..." : "Commit Changes"}
                                             </Button>
                                             <Button
                                                 variant="ghost"
                                                 onClick={() => setIsEditing(false)}
-                                                className="h-12 px-8 rounded-2xl border border-white/10 text-zinc-400 font-black uppercase tracking-widest text-[10px] hover:bg-white/5 transition-all"
+                                                className="h-12 px-8 rounded-2xl border border-white/10 text-zinc-400 ubuntu-bold font-black uppercase tracking-widest text-[10px] hover:bg-white/5 transition-all"
                                             >
                                                 Abort
                                             </Button>
@@ -1164,11 +1164,11 @@ function ProfileContent() {
                                         </div>
                                         <div className="flex flex-col">
                                             <div className="flex items-center">
-                                                <span className="text-xl font-black text-white tracking-tighter tabular-nums leading-none">
+                                                <span className="text-xl ubuntu-bold font-black text-white tracking-tighter tabular-nums leading-none">
                                                     {friends.length}
                                                 </span>
                                             </div>
-                                            <span className="text-[7.5px] font-black text-zinc-600 uppercase tracking-[0.2em] mt-1 group-hover:text-zinc-400 transition-colors">
+                                            <span className="text-[7.5px] ubuntu-bold font-black text-zinc-600 uppercase tracking-[0.2em] mt-1 group-hover:text-zinc-400 transition-colors">
                                                 Focus Friends
                                             </span>
                                         </div>
