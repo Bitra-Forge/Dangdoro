@@ -336,7 +336,7 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                           whileTap={{ scale: 0.985 }}
                           onClick={() => handleSelect(group.id)}
                           className={cn(
-                            "w-full flex flex-col gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group/item border text-left cursor-pointer relative overflow-hidden select-none",
+                            "w-full flex flex-col gap-1 px-4 py-3 rounded-2xl transition-all duration-300 group/item border text-left cursor-pointer relative overflow-hidden select-none",
                             isSelected
                               ? "bg-gradient-to-br from-sky-950/40 to-indigo-950/20 border-sky-500/30 text-sky-100 shadow-[0_8px_30px_rgba(56,189,248,0.08),inset_0_1px_1px_rgba(255,255,255,0.05)]"
                               : "bg-transparent border-transparent text-zinc-300 hover:bg-white/[0.04] hover:border-white/[0.08] hover:text-zinc-100"
