@@ -253,7 +253,7 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                 {/* Options List */}
                 <div className="p-3 max-h-[360px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/5 scrollbar-track-transparent flex flex-col gap-2">
                   {/* Solo Option */}
-                  <motion.button
+                  <motion.div
                     initial={{ opacity: 0, y: 8, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{
@@ -267,7 +267,7 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                     whileTap={{ scale: 0.985 }}
                     onClick={() => handleSelect("")}
                     className={cn(
-                      "w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all duration-300 group/item border text-left cursor-pointer",
+                      "w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all duration-300 group/item border text-left cursor-pointer select-none",
                       !activeGroupId
                         ? "bg-white/[0.06] border-white/10 text-white shadow-[0_4px_20px_rgba(255,255,255,0.04),inset_0_1px_0_rgba(255,255,255,0.08)]"
                         : "bg-transparent border-transparent text-zinc-400 hover:bg-white/[0.03] hover:border-white/[0.06] hover:text-zinc-200"
@@ -292,7 +292,7 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                         className="w-2 h-2 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]"
                       />
                     )}
-                  </motion.button>
+                  </motion.div>
 
                   {/* Section Label */}
                   {groups.length > 0 && (
@@ -321,7 +321,7 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                       const pMeta = PRIVACY_ICONS[group.privacy] ?? PRIVACY_ICONS["public"];
 
                       return (
-                        <motion.button
+                        <motion.div
                           key={group.id}
                           initial={{ opacity: 0, y: 8, scale: 0.98 }}
                           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -336,7 +336,7 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                           whileTap={{ scale: 0.985 }}
                           onClick={() => handleSelect(group.id)}
                           className={cn(
-                            "w-full flex flex-col gap-3.5 p-4 rounded-2xl transition-all duration-300 group/item border text-left cursor-pointer relative overflow-hidden",
+                            "w-full flex flex-col gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group/item border text-left cursor-pointer relative overflow-hidden select-none",
                             isSelected
                               ? "bg-gradient-to-br from-sky-950/40 to-indigo-950/20 border-sky-500/30 text-sky-100 shadow-[0_8px_30px_rgba(56,189,248,0.08),inset_0_1px_1px_rgba(255,255,255,0.05)]"
                               : "bg-transparent border-transparent text-zinc-300 hover:bg-white/[0.04] hover:border-white/[0.08] hover:text-zinc-100"
@@ -351,6 +351,7 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                             />
                           )}
 
+                          {/* Main row: icon + text + indicator */}
                           <div className="w-full flex items-center gap-4">
                             {/* Group Icon */}
                             <div className="relative shrink-0">
@@ -375,40 +376,37 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
 
                             {/* Group Info */}
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5 mb-1.5">
-                                <p className="text-xs font-black uppercase tracking-wider truncate">{group.name}</p>
-                              </div>
-                              
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wide">
-                                  {group.members.length} member{group.members.length !== 1 ? "s" : ""}
-                                </span>
-                                {focusingMembers.length > 0 && (
-                                  <span className="text-[9px] font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_8px_rgba(52,211,153,0.1)]">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_4px_#34d399]" />
-                                    {focusingMembers.length} Focusing
-                                  </span>
-                                )}
-                              </div>
+                              <p className="text-xs font-black uppercase tracking-wider truncate">{group.name}</p>
+                              <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wide mt-0.5">
+                                {group.members.length} member{group.members.length !== 1 ? "s" : ""}
+                              </p>
                             </div>
 
-                            {/* Selected indicator */}
-                            {isSelected && (
-                              <motion.div
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
-                                className="w-2 h-2 rounded-full bg-sky-400 shadow-[0_0_10px_rgba(56,189,248,0.8)] shrink-0"
-                              />
-                            )}
+                            {/* Focusing badge + selected indicator */}
+                            <div className="flex items-center gap-2 shrink-0">
+                              {focusingMembers.length > 0 && (
+                                <span className="text-[9px] font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_8px_rgba(52,211,153,0.1)]">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_4px_#34d399]" />
+                                  {focusingMembers.length}
+                                </span>
+                              )}
+                              {isSelected && (
+                                <motion.div
+                                  initial={{ scale: 0 }}
+                                  animate={{ scale: 1 }}
+                                  className="w-2 h-2 rounded-full bg-sky-400 shadow-[0_0_10px_rgba(56,189,248,0.8)]"
+                                />
+                              )}
+                            </div>
                           </div>
 
                           {/* Progress bar & avatars bottom section */}
                           {(goalHours > 0 || focusingAvatars.length > 0) && (
-                            <div className="w-full pl-14 flex flex-col gap-2.5">
+                            <div className="flex flex-col w-full pl-14 gap-2.5">
                               {/* Goal Progress bar */}
                               {goalHours > 0 && (
-                                <div className="flex items-center gap-3">
-                                  <div className="relative flex-1 h-[4px] bg-white/5 rounded-full overflow-hidden">
+                                <div className="flex items-center w-full gap-3">
+                                  <div className="relative flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
                                     {/* Glow Layer */}
                                     <motion.div
                                       initial={{ width: 0 }}
@@ -482,7 +480,7 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                               )}
                             </div>
                           )}
-                        </motion.button>
+                        </motion.div>
                       );
                     })
                   ) : (

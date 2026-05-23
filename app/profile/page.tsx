@@ -224,7 +224,7 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal 
                                 loop
                                 style={{
                                     height: '100%',
-                                    width: 'auto',
+                                    width: '100%',
                                     mixBlendMode: colorClass.includes('red') ? 'screen' : 'normal',
                                 }}
                             />

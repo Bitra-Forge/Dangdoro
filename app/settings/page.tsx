@@ -4,7 +4,8 @@ import React, { useEffect, useState } from "react";
 import {
     Bell, Clock, LogOut, Mail, LogIn,
     Zap, Minus, Plus, RotateCcw,
-    ChevronRight, PlayCircle, PauseCircle, Sparkles, Palette, Check, WandSparkles, Grid3X3
+    ChevronRight, PlayCircle, PauseCircle, Sparkles, Palette, Check, WandSparkles, Grid3X3,
+    Heart
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { logOut } from "@/lib/auth";
@@ -744,6 +745,36 @@ export default function SettingsPage() {
                                         </div>
                                     </div>
                                 )}
+                            </div>
+                        </section>
+
+                        {/* Support Section */}
+                        <section>
+                            <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-1">Support</h2>
+                            <div className="bg-zinc-900/50 rounded-lg p-6 border border-white/5 relative overflow-hidden group/support">
+                                <div className="absolute -inset-px bg-gradient-to-r from-rose-500/10 to-transparent rounded-lg opacity-0 group-hover/support:opacity-100 transition-opacity duration-700 pointer-events-none" />
+                                <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-lg bg-rose-500/20 flex items-center justify-center border border-rose-500/20">
+                                            <Heart className="w-5 h-5 text-rose-400" />
+                                        </div>
+                                        <div className="flex flex-col max-w-md">
+                                            <span className="text-zinc-200 font-bold">Support Dangdoro</span>
+                                            <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
+                                                If you find Dangdoro helpful, consider supporting the creator! Your contributions directly fund Firestore databases, AI API usage, and ongoing development.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <a
+                                        href="https://ko-fi.com/morales002"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="px-5 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 transform active:scale-95 shadow-lg shadow-rose-500/10 hover:shadow-rose-500/30 flex items-center gap-2"
+                                    >
+                                        <Heart className="w-3.5 h-3.5 fill-current" />
+                                        Buy me a coffee
+                                    </a>
+                                </div>
                             </div>
                         </section>
                     </div>

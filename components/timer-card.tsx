@@ -486,7 +486,7 @@ export function TimerCard() {
 
 
               {/* Progress Bar Section */}
-              <div className="flex items-center gap-4 w-[320px] mt-2 mb-2 group/progress">
+              <div className="flex items-center gap-4 w-[320px] -mt-10 mb-2 group/progress">
                 <div className="flex-1 h-[3px] bg-white/5 rounded-full relative transition-all duration-1000">
                   <div
                     className={cn(

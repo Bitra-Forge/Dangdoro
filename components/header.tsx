@@ -1,6 +1,6 @@
 "use client";
 
-import { User } from "lucide-react";
+import { User, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -54,6 +54,16 @@ export function Header() {
                         {user?.isAnonymous ? "Guest Session" : (user ? "Verified Hero" : "Offline")}
                     </span>
                 </div>
+
+                <a
+                    href="https://ko-fi.com/morales002"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Support Dangdoro"
+                    className="p-2 bg-rose-500/10 hover:bg-rose-500 border border-rose-500/20 hover:border-rose-500 rounded-xl transition-all duration-300 transform active:scale-90 flex items-center justify-center group shadow-lg shadow-rose-500/0 hover:shadow-rose-500/20"
+                >
+                    <Heart className="w-4 h-4 text-rose-400 group-hover:text-black transition-colors duration-300 group-hover:scale-110 transition-transform" />
+                </a>
 
                 <NotificationsMenu />
 
