@@ -9,8 +9,8 @@ import { updateProfilePictureBase64, getSessionHistory, updateUserProfile } from
 import { getFriendsList, type Friend } from "@/lib/friendship";
 import {
     Camera, Zap, Clock, Calendar,
-    Share2, Pencil, Activity, Flame,
-    TrendingUp, BarChart3, LineChart, AreaChart,
+    Share2, Pencil, Flame,
+    TrendingUp, AreaChart,
     Users, Copy, UserCheck, ChevronRight, Timer, LayoutGrid, UserMinus
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -116,6 +116,12 @@ interface FriendStatus {
     isFriend?: boolean;
 }
 
+interface FriendRequestDoc {
+    status?: string;
+    fromUserId?: string;
+    toUserId?: string;
+}
+
 type FriendListItem = Friend;
 
 interface ChartPoint {
@@ -124,14 +130,6 @@ interface ChartPoint {
     fullDate: Date;
     minutes: number;
 }
-
-type ThemeConfig = {
-    name: string;
-    colors: string[];
-    accent: string;
-    glow: string;
-    text?: string;
-};
 
 interface StatCardProps {
     icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
@@ -314,32 +312,6 @@ const formatFocusedTime = (totalMinutes: number) => {
     return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
 };
 
-const ProductivitySquare = ({ level, theme }: { level: number, theme: ThemeConfig }) => {
-    // level: 0, 1, 2, 3
-    const colorIndex = level - 1;
-    const bgColor = level === 0 ? "bg-white/[0.03]" : "";
-
-    return (
-        <div
-            className={cn(
-                "w-2.5 h-2.5 rounded-full transition-all duration-700 relative group/sq",
-                bgColor
-            )}
-            style={{
-                backgroundColor: colorIndex !== -1 ? theme.colors[colorIndex] : undefined,
-                boxShadow: colorIndex !== -1 ? `0 0 10px ${theme.colors[colorIndex]}44` : undefined
-            }}
-        >
-            {level > 0 && (
-                <div
-                    className="absolute inset-0 blur-[2px] opacity-0 group-hover/sq:opacity-50 transition-opacity"
-                    style={{ backgroundColor: theme.colors[colorIndex] }}
-                />
-            )}
-        </div>
-    );
-};
-
 // --- Page ---
 
 function ProfileContent() {
@@ -355,7 +327,7 @@ function ProfileContent() {
         return () => clearInterval(interval);
     }, []);
 
-    const isOnline = (timestamp: any) => {
+    const isOnline = (timestamp?: UserProfileData["lastActive"] | null) => {
         if (!timestamp) return false;
         const lastActive = timestamp instanceof Date ? timestamp : timestamp.toDate?.();
         if (!lastActive) return false;
@@ -446,8 +418,8 @@ function ProfileContent() {
                 );
                 
                 const unsubReq = onSnap(requestsQuery, (snap) => {
-                    const docs = snap.docs.map(d => d.data());
-                    const req = docs.find((r: any) => r.status === "pending");
+                    const docs = snap.docs.map((d) => d.data() as FriendRequestDoc);
+                    const req = docs.find((r) => r.status === "pending");
                     if (req) {
                         const direction = req.fromUserId === user.uid ? "sent" : "received";
                         setFriendStatus(prev => ({ ...prev, status: "pending", direction }));
@@ -616,7 +588,7 @@ function ProfileContent() {
                 else level = 3;
             }
 
-            let tooltipText = `${format(date, 'MMM d')}: ${formatFocusedTime(totalMins)} focused`;
+            const tooltipText = `${format(date, 'MMM d')}: ${formatFocusedTime(totalMins)} focused`;
 
             grid.push({
                 date,
@@ -786,7 +758,7 @@ function ProfileContent() {
                                     initial={{ opacity: 0, scale: 0.8 }}
                                     animate={{ opacity: 1, scale: 1 }}
                                     transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-                                    className="relative group flex items-center"
+                                    className="relative group flex items-center gap-6"
                                 >
                                     {/* Theme Picker - Left Side of Avatar when Editing */}
                                     <AnimatePresence>
@@ -795,7 +767,7 @@ function ProfileContent() {
                                                 initial={{ opacity: 0, x: 20 }}
                                                 animate={{ opacity: 1, x: 0 }}
                                                 exit={{ opacity: 0, x: 20 }}
-                                                className="absolute right-full mr-8 flex flex-col gap-4 items-center"
+                                                className="flex flex-col gap-4 items-center lg:absolute lg:right-full lg:mr-8"
                                             >
                                                 <div className="flex flex-col gap-3">
                                                     {Object.entries(THEMES).map(([id, t]) => (
