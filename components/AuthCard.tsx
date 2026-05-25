@@ -66,10 +66,10 @@ export function AuthCard({ redirect, isModal, onSuccess, initialEmailMode = "log
             setIsSubmitting(true);
             if (user && user.isAnonymous) {
                 await linkAnonymousToGoogle(user);
-                toast.success("Identity Secured via Cloud Vault!");
+                toast.success("Account linked! Your data is now saved.");
             } else {
                 await signInWithGoogle();
-                toast.success("Welcome back to the Core.");
+                toast.success("Welcome back!");
             }
             if (onSuccess) onSuccess();
             if (redirect) router.push(redirect);
@@ -90,7 +90,7 @@ export function AuthCard({ redirect, isModal, onSuccess, initialEmailMode = "log
             return;
         }
         if (!email || !password) {
-            toast.error("Vault access requires full credentials.");
+            toast.error("Please enter your email and password.");
             return;
         }
 
@@ -99,14 +99,14 @@ export function AuthCard({ redirect, isModal, onSuccess, initialEmailMode = "log
             if (user && user.isAnonymous) {
                 // Link guest session to email with chosen name
                 await linkAnonymousToEmail(user, email, password, displayName);
-                toast.success("Guest legacy successfully archived in the Vault!");
+                toast.success("Account created! Your data is now saved.");
             } else {
                 if (emailMode === "signup") {
                     await signUpWithEmail(email, password, displayName);
-                    toast.success("Vault slot established. Welcome Hero.");
+                    toast.success("Account created. Welcome!");
                 } else {
                     await signInWithEmail(email, password);
-                    toast.success("Identity verified. Accessing Core.");
+                    toast.success("Signed in successfully.");
                 }
             }
             if (onSuccess) onSuccess();
@@ -124,9 +124,9 @@ export function AuthCard({ redirect, isModal, onSuccess, initialEmailMode = "log
     const handleSignOut = async () => {
         try {
             await logOut();
-            toast.success("Session terminated safely.");
+            toast.success("Signed out.");
         } catch (error: any) {
-            toast.error("Error terminating vault session.");
+            toast.error("Error signing out.");
         }
     };
 

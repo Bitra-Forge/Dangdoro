@@ -985,14 +985,14 @@ function ProfileContent() {
                                                 disabled={isSaving}
                                                 className="h-12 px-10 rounded-2xl bg-white text-black hover:bg-zinc-200 ubuntu-bold font-black uppercase tracking-widest text-[10px] shadow-[0_0_40px_rgba(255,255,255,0.1)] transition-all flex items-center gap-2"
                                             >
-                                                {isSaving ? "Syncing..." : "Commit Changes"}
+                                                {isSaving ? "Syncing..." : "Save"}
                                             </Button>
                                             <Button
                                                 variant="ghost"
                                                 onClick={() => setIsEditing(false)}
                                                 className="h-12 px-8 rounded-2xl border border-white/10 text-zinc-400 ubuntu-bold font-black uppercase tracking-widest text-[10px] hover:bg-white/5 transition-all"
                                             >
-                                                Abort
+                                                Cancel
                                             </Button>
                                         </div>
                                     </motion.div>
@@ -1637,7 +1637,7 @@ function ProfileContent() {
                                     <Cropper image={image || undefined} crop={crop} zoom={zoom} aspect={1} onCropChange={setCrop} onCropComplete={onCropComplete} onZoomChange={setZoom} cropShape="rect" showGrid={false} />
                                 </div>
                                 <div className="absolute bottom-0 left-0 right-0 p-8 bg-zinc-950/80 backdrop-blur-xl flex items-center justify-between border-t border-white/5">
-                                    <Button variant="ghost" onClick={() => setShowCropper(false)} className="text-zinc-500 hover:text-white uppercase font-black text-xs tracking-[0.2em]">Abort</Button>
+                                    <Button variant="ghost" onClick={() => setShowCropper(false)} className="text-zinc-500 hover:text-white uppercase font-black text-xs tracking-[0.2em]">Cancel</Button>
                                     <Button
                                         onClick={handleUploadCropped}
                                         className="text-white font-black uppercase text-xs tracking-[0.3em] px-10 h-12 rounded-2xl shadow-xl transition-all"

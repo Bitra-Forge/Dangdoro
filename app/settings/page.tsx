@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import {
     Bell, Clock, LogOut, Mail, LogIn,
     Zap, Minus, Plus, RotateCcw,
-    ChevronRight, PlayCircle, PauseCircle, Sparkles, Palette, Check, WandSparkles, Grid3X3,
+    ChevronRight, PlayCircle, PauseCircle, Repeat, Sparkles, Palette, Check, WandSparkles, Grid3X3,
     Heart
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
@@ -150,7 +150,7 @@ export default function SettingsPage() {
         { label: "Pomodoro", key: "focusTime", icon: Zap, color: "bg-blue-500" },
         { label: "Break", key: "breakTime", icon: Clock, color: "bg-green-500" },
         { label: "Long Break", key: "longBreakTime", icon: Clock, color: "bg-purple-500" },
-        { label: "Long Break Interval", key: "longBreakEvery", icon: PauseCircle, color: "bg-fuchsia-500" },
+        { label: "Long Break Interval", key: "longBreakEvery", icon: Repeat, color: "bg-fuchsia-500" },
         { label: "Steps", key: "adjustmentAmount", icon: ChevronRight, color: "bg-zinc-700" },
     ];
 
@@ -717,9 +717,8 @@ export default function SettingsPage() {
                                                     <LogOut className="w-5 h-5 text-red-500 group-hover:text-white" />
                                                 </div>
                                                 <div className="flex flex-col">
-                                                    <span className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-0.5">You're browsing as a guest</span>
                                                     <span className="text-red-400 font-bold group-hover:text-red-300">
-                                                        {user.isAnonymous ? "SignIn | Register" : "Sign Out"}
+                                                        {user.isAnonymous ? "Sign In | Register" : "Sign Out"}
                                                     </span>
                                                 </div>
                                             </div>
@@ -761,7 +760,7 @@ export default function SettingsPage() {
                                         <div className="flex flex-col max-w-md">
                                             <span className="text-zinc-200 font-bold">Support Dangdoro</span>
                                             <p className="text-[11px] text-zinc-400 mt-1 leading-relaxed">
-                                                If you find Dangdoro helpful, consider supporting the creator! Your contributions directly fund Firestore databases, AI API usage, and ongoing development.
+                                                If you find Dangdoro helpful, consider supporting the creator! Your contribution helps keep the app running and improving.
                                             </p>
                                         </div>
                                     </div>
