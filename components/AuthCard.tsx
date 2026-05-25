@@ -16,7 +16,7 @@ import { LogOut, Mail, Lock, UserPlus, Eye, EyeOff, X as XIcon } from "lucide-re
 import { useRouter } from "next/navigation";
 
 import { doc, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 
 type EmailMode = "login" | "signup";
 
@@ -40,7 +40,7 @@ export function AuthCard({ redirect, isModal, onSuccess, initialEmailMode = "log
     const [showPassword, setShowPassword] = useState(false);
 
     useEffect(() => {
-        if (!user || user.isAnonymous) return;
+        if (!user) return;
 
         // When in linking mode, pre-fill the name field with the guest's unique ID
         if (user.isAnonymous && !displayName) {
@@ -64,8 +64,9 @@ export function AuthCard({ redirect, isModal, onSuccess, initialEmailMode = "log
     const handleGoogleAuth = async () => {
         try {
             setIsSubmitting(true);
-            if (user && user.isAnonymous) {
-                await linkAnonymousToGoogle(user);
+            const currentUser = auth.currentUser;
+            if (currentUser && currentUser.isAnonymous) {
+                await linkAnonymousToGoogle(currentUser);
                 toast.success("Account linked! Your data is now saved.");
             } else {
                 await signInWithGoogle();
@@ -83,7 +84,8 @@ export function AuthCard({ redirect, isModal, onSuccess, initialEmailMode = "log
     const handleEmailAuth = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        const isSignup = emailMode === "signup" || user?.isAnonymous;
+        const currentUser = auth.currentUser;
+        const isSignup = emailMode === "signup";
 
         if (isSignup && !displayName) {
             toast.error("Please identify yourself with a username.");
@@ -96,12 +98,12 @@ export function AuthCard({ redirect, isModal, onSuccess, initialEmailMode = "log
 
         try {
             setIsSubmitting(true);
-            if (user && user.isAnonymous) {
+            if (isSignup && currentUser && currentUser.isAnonymous) {
                 // Link guest session to email with chosen name
-                await linkAnonymousToEmail(user, email, password, displayName);
+                await linkAnonymousToEmail(currentUser, email, password, displayName);
                 toast.success("Account created! Your data is now saved.");
             } else {
-                if (emailMode === "signup") {
+                if (isSignup) {
                     await signUpWithEmail(email, password, displayName);
                     toast.success("Account created. Welcome!");
                 } else {
