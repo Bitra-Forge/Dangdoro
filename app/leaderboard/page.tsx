@@ -344,7 +344,7 @@ function LeaderboardContent() {
                                                 <div className={cn("absolute inset-0 transition-all duration-700 pointer-events-none skew-x-[-20deg] scale-150", isGold ? "opacity-15 group-hover:opacity-30 bg-gradient-to-tr from-transparent via-yellow-400/40 to-transparent" : isSilver ? "opacity-20 group-hover:opacity-40 bg-gradient-to-tr from-transparent via-slate-300/30 to-transparent" : "opacity-20 group-hover:opacity-30 bg-gradient-to-tr from-transparent via-orange-400/20 to-transparent")} />
 
                                                 <div className="relative mb-6">
-                                                    <div className={cn("rounded-full border transition-all duration-300 group-hover:border-opacity-100 overflow-hidden", isGold ? "border-[#C9B037]/40 w-24 h-24" : isSilver ? "border-zinc-400/30 w-20 h-20" : "border-orange-700/20 w-20 h-20")}>
+                                                    <div onClick={() => router.push(`/profile?user=${player.uid}`)} className={cn("rounded-full border transition-all duration-300 group-hover:border-opacity-100 overflow-hidden cursor-pointer", isGold ? "border-[#C9B037]/40 w-24 h-24" : isSilver ? "border-zinc-400/30 w-20 h-20" : "border-orange-700/20 w-20 h-20")}>
                                                         <Avatar className="w-full h-full border-0 rounded-full">
                                                             <AvatarImage src={player.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${player.uid}`} className="object-cover" />
                                                             <AvatarFallback className="rounded-full">{player.displayName?.slice(0, 1)}</AvatarFallback>
@@ -391,7 +391,7 @@ function LeaderboardContent() {
                                         return (
                                             <div id={`player-${player.uid}`} key={player.uid || player.id || `other-${index}`} className="group relative flex items-center gap-6 p-4 rounded-[1rem] bg-zinc-800/40 border border-white/15 hover:bg-zinc-800/60 hover:border-white/25 transition-all duration-300 shadow-sm">
                                                 <div className="w-8 text-center font-sans font-bold text-zinc-500 group-hover:text-zinc-300 transition-colors">{rank}</div>
-                                                <div className="relative w-10 h-10 rounded-full border border-white/10 group-hover:border-white/20 transition-all duration-300 overflow-hidden">
+                                                <div onClick={() => router.push(`/profile?user=${player.uid}`)} className="relative w-10 h-10 rounded-full border border-white/10 group-hover:border-white/20 transition-all duration-300 overflow-hidden cursor-pointer">
                                                     <Avatar className="w-full h-full border-0 rounded-full">
                                                         <AvatarImage src={player.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${player.uid}`} className="object-cover w-full h-full" />
                                                         <AvatarFallback className="text-[9px] rounded-full">{player.displayName?.slice(0, 1)}</AvatarFallback>

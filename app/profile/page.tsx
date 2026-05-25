@@ -1646,7 +1646,7 @@ function ProfileContent() {
                                             boxShadow: `0 0 30px ${currentTheme.accent}44`
                                         }}
                                     >
-                                        Confirm Sync
+                                        Confirm
                                     </Button>
                                 </div>
                             </motion.div>
