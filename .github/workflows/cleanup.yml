@@ -22,10 +22,7 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Create Service Account File
-        run: echo "$FIREBASE_SERVICE_ACCOUNT" > service-account.json
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-
       - name: Run Cleanup Script
         run: npx tsx scripts/cleanup-guests.ts
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

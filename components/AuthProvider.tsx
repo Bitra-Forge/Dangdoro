@@ -3,7 +3,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { signInGuest } from "@/lib/auth";
 import { syncUserProfile } from "@/lib/db";
 import { useTimerStore } from "@/lib/store";
 
@@ -51,34 +50,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             } else {
                 // RESET TIMER & SETTINGS: Ensure no session leaks after sign-out
                 useTimerStore.getState().resetToDefaults();
-
-                // ZERO FRICTION: Automatically sign in as a guest, 
-                // UNLESS the user just manually signed out.
-                const isManualSignOut = typeof window !== "undefined" && localStorage.getItem("manual-sign-out") === "true";
-
-                if (isManualSignOut) {
-                    console.log("AuthProvider: Manual sign-out detected. Skipping auto-guest sign-in.");
-                    setUser(null);
-                    setLoading(false);
-                    return;
-                }
-
-                try {
-                    console.log("AuthProvider: No user detected, initiating auto-guest sign-in...");
-                    const guestUser = await signInGuest();
-                    // ... (rest of logic)
-
-                    // If for some reason the listener doesn't fire promptly, we update manually
-                    if (auth.currentUser?.uid === guestUser.uid) {
-                        console.log("AuthProvider: Manually updating state for guest:", guestUser.uid);
-                        setUser(guestUser);
-                        setLoading(false);
-                    }
-                } catch (error) {
-                    console.error("AuthProvider: Auto guest sign-in failed:", error);
-                    setUser(null);
-                    setLoading(false);
-                }
+                setUser(null);
+                setLoading(false);
             }
         });
 
