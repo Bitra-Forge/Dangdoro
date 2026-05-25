@@ -717,9 +717,9 @@ export default function SettingsPage() {
                                                     <LogOut className="w-5 h-5 text-red-500 group-hover:text-white" />
                                                 </div>
                                                 <div className="flex flex-col">
-                                                    <span className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-0.5">Account Status</span>
+                                                    <span className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-0.5">You're browsing as a guest</span>
                                                     <span className="text-red-400 font-bold group-hover:text-red-300">
-                                                        {user.isAnonymous ? "Sign In / Register" : "Sign Out"}
+                                                        {user.isAnonymous ? "SignIn | Register" : "Sign Out"}
                                                     </span>
                                                 </div>
                                             </div>
@@ -736,8 +736,8 @@ export default function SettingsPage() {
                                                 <LogIn className="w-6 h-6 text-blue-500" />
                                             </div>
                                             <div>
-                                                <h3 className="text-zinc-200 font-bold">Sign In to Sync</h3>
-                                                <p className="text-sm text-zinc-500">Preserve your settings and task history across all devices.</p>
+                                                <h3 className="text-zinc-200 font-bold">Sign In | Register</h3>
+                                                <p className="text-sm text-zinc-500">Keep your settings and tasks with you, wherever you go.</p>
                                             </div>
                                         </div>
                                         <div className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm shadow-lg shadow-blue-500/20">

@@ -10,7 +10,7 @@ import { getFriendsList, type Friend } from "@/lib/friendship";
 import {
     Camera, Zap, Clock, Calendar,
     Share2, Pencil, Flame,
-    TrendingUp, AreaChart,
+    AreaChart,
     Users, Copy, UserCheck, ChevronRight, Timer, LayoutGrid, UserMinus
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -1617,27 +1617,7 @@ function ProfileContent() {
                             </div>
                         </motion.div>
 
-                        {/* Guest Persistence Notice */}
-                        {user && user.isAnonymous && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.5, duration: 0.5 }}
-                                className="w-full mt-8 p-6 bg-purple-500/5 border border-purple-500/10 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6"
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center">
-                                        <TrendingUp className="w-6 h-6 text-purple-400" />
-                                    </div>
-                                    <div className="text-left">
-                                        <h3 className="text-sm font-black text-white uppercase italic tracking-tight">Persistence Protocol</h3>
-                                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-relaxed">
-                                            Guest stats are temporary. Connect with Google to secure your focus history permanently.
-                                        </p>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        )}
+
 
                     </motion.div>
                 </main>

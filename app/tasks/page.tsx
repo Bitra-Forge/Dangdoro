@@ -1653,10 +1653,10 @@ export default function TasksPage() {
                 {user.isAnonymous && (
                     <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2.5 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-700 whitespace-nowrap">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Guest tasks are local. Sign in to sync.</p>
+                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Your tasks are saved on this device. Sign in or register to keep them everywhere.</p>
                         <Button variant="ghost" onClick={() => window.location.href = "/profile"}
                             className="text-emerald-500 hover:text-emerald-400 font-black uppercase tracking-widest text-[10px] h-auto p-0 flex-shrink-0">
-                            Sync Now
+                            Sign In | Register
                         </Button>
                     </div>
                 )}
