@@ -334,7 +334,14 @@ function LeaderboardContent() {
 
                                     return (
                                         <div id={`player-${player.uid}`} key={player.uid || player.id || `podium-${idx}`} className={cn("relative group transition-all duration-700 animate-in fade-in slide-in-from-bottom-12", isGold ? "order-1 md:order-2 z-20" : isSilver ? "order-2 md:order-1" : "order-3 md:order-3")} style={{ animationDelay: `${rank * 150}ms` }}>
-                                            <div className={cn("relative group flex flex-col items-center rounded-[1rem] border transition-all duration-500 overflow-hidden", isGold ? "bg-gradient-to-br from-zinc-800 via-zinc-800/80 to-yellow-900/40 border-yellow-500/60 shadow-[0_0_70px_rgba(255,215,0,0.25)] z-10 py-12 scale-105" : isSilver ? "bg-gradient-to-b from-slate-700/30 to-zinc-800/60 border-slate-400/40 hover:border-slate-400/60 shadow-[0_0_60px_rgba(148,163,184,0.15)] py-10 scale-98" : "bg-gradient-to-b from-orange-900/20 via-zinc-800/40 to-zinc-900/60 border-orange-800/30 hover:border-orange-800/50 shadow-[0_0_40px_rgba(154,52,18,0.1)] py-10 scale-95")}>
+                                            <div className={cn(
+                                                "relative group flex flex-col items-center rounded-[1rem] border transition-all duration-500 overflow-hidden w-full max-w-[320px] sm:max-w-[360px] md:max-w-none mx-auto",
+                                                isGold
+                                                    ? "bg-gradient-to-br from-zinc-800 via-zinc-800/80 to-yellow-900/40 border-yellow-500/60 shadow-[0_0_70px_rgba(255,215,0,0.25)] z-10 py-8 sm:py-12 scale-95 sm:scale-105"
+                                                    : isSilver
+                                                        ? "bg-gradient-to-b from-slate-700/30 to-zinc-800/60 border-slate-400/40 hover:border-slate-400/60 shadow-[0_0_60px_rgba(148,163,184,0.15)] py-7 sm:py-10 scale-[0.92] sm:scale-98"
+                                                        : "bg-gradient-to-b from-orange-900/20 via-zinc-800/40 to-zinc-900/60 border-orange-800/30 hover:border-orange-800/50 shadow-[0_0_40px_rgba(154,52,18,0.1)] py-7 sm:py-10 scale-[0.9] sm:scale-95"
+                                            )}>
                                                 
                                                 {/* Visual Polish Restoration */}
                                                 {isGold && <div className="absolute -top-32 -left-32 w-80 h-80 bg-yellow-500/20 blur-[120px] pointer-events-none group-hover:bg-yellow-500/30 transition-all duration-700" />}
@@ -344,7 +351,7 @@ function LeaderboardContent() {
                                                 <div className={cn("absolute inset-0 transition-all duration-700 pointer-events-none skew-x-[-20deg] scale-150", isGold ? "opacity-15 group-hover:opacity-30 bg-gradient-to-tr from-transparent via-yellow-400/40 to-transparent" : isSilver ? "opacity-20 group-hover:opacity-40 bg-gradient-to-tr from-transparent via-slate-300/30 to-transparent" : "opacity-20 group-hover:opacity-30 bg-gradient-to-tr from-transparent via-orange-400/20 to-transparent")} />
 
                                                 <div className="relative mb-6">
-                                                    <div onClick={() => router.push(`/profile?user=${player.uid}`)} className={cn("rounded-full border transition-all duration-300 group-hover:border-opacity-100 overflow-hidden cursor-pointer", isGold ? "border-[#C9B037]/40 w-24 h-24" : isSilver ? "border-zinc-400/30 w-20 h-20" : "border-orange-700/20 w-20 h-20")}>
+                                                    <div onClick={() => router.push(`/profile?user=${player.uid}`)} className={cn("rounded-full border transition-all duration-300 group-hover:border-opacity-100 overflow-hidden cursor-pointer", isGold ? "border-[#C9B037]/40 w-20 h-20 sm:w-24 sm:h-24" : isSilver ? "border-zinc-400/30 w-16 h-16 sm:w-20 sm:h-20" : "border-orange-700/20 w-16 h-16 sm:w-20 sm:h-20")}>
                                                         <Avatar className="w-full h-full border-0 rounded-full">
                                                             <AvatarImage src={player.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${player.uid}`} className="object-cover" />
                                                             <AvatarFallback className="rounded-full">{player.displayName?.slice(0, 1)}</AvatarFallback>
@@ -383,7 +390,7 @@ function LeaderboardContent() {
                                 <div className="w-full max-w-4xl space-y-4 mt-10">
                                     <div className="flex items-center gap-6 justify-center mb-8 w-full">
                                         <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-zinc-800 to-transparent shadow-[0_0_10px_rgba(255,255,255,0.05)]" />
-                                        <h3 className="text-zinc-500 font-sans text-[12px] font-black tracking-[0.5em] uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.15)]">Slow and steady wins the race</h3>
+                                        <h3 className="hidden sm:block text-zinc-500 font-sans text-[12px] font-black tracking-[0.5em] uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.15)]">Slow and steady wins the race</h3>
                                         <div className="h-[1px] w-24 bg-gradient-to-l from-transparent via-zinc-800 to-transparent shadow-[0_0_10px_rgba(255,255,255,0.05)]" />
                                     </div>
                                     {others.map((player, index) => {

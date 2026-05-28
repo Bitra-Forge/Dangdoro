@@ -342,15 +342,15 @@ export function TimerCard() {
   }
 
   const focusToggle = (
-    <div className="fixed bottom-6 right-6 z-40">
+    <div className="fixed bottom-8 right-4 sm:right-6 z-40">
       <Button
         variant="ghost"
         size="icon"
         onClick={handleFocusToggle}
         title={isNavFocusMode ? "Disable Focus Mode (show nav)" : "Enable Focus Mode (hide nav)"}
-        className="h-14 w-14 rounded-2xl transition-all duration-300 shrink-0 cursor-pointer text-white border border-white/25 bg-white/10 hover:bg-white/20 backdrop-blur-md"
+        className="h-11 w-11 sm:h-14 sm:w-14 rounded-xl sm:rounded-2xl transition-all duration-300 shrink-0 cursor-pointer text-white border border-white/25 bg-white/10 hover:bg-white/20 backdrop-blur-md"
       >
-        {isNavFocusMode ? <Eye className="w-6 h-6" /> : <EyeOff className="w-6 h-6" />}
+        {isNavFocusMode ? <Eye className="w-5 h-5 sm:w-6 sm:h-6" /> : <EyeOff className="w-5 h-5 sm:w-6 sm:h-6" />}
       </Button>
     </div>
   );
@@ -379,7 +379,7 @@ export function TimerCard() {
 
       {/* Mode Switcher */}
       <div className={cn(
-        "-mt-20 flex items-center gap-2 relative z-10 w-fit p-1.5 rounded-2xl border border-white/20 bg-black/25 backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all duration-700",
+        "-mt-20 flex items-center gap-1.5 sm:gap-2 relative z-10 w-fit p-1 sm:p-1.5 rounded-2xl border border-white/20 bg-black/25 backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all duration-700",
         isActive && !isEditing ? "opacity-0 pointer-events-none" : "opacity-100"
       )}>
         {([
@@ -391,7 +391,7 @@ export function TimerCard() {
             key={m.id}
             onClick={() => setMode(m.id as "focus" | "break" | "long-break")}
             className={cn(
-              "min-w-[120px] md:min-w-[145px] px-5 py-3 text-[13px] font-black tracking-[0.02em] text-center transition-all duration-300 rounded-xl cursor-pointer border",
+              "min-w-[88px] sm:min-w-[120px] md:min-w-[145px] px-3 sm:px-5 py-2 sm:py-3 text-[11px] sm:text-[13px] font-black tracking-[0.02em] text-center transition-all duration-300 rounded-full cursor-pointer border",
               mode === m.id
                 ? m.id === "focus"
                   ? "bg-sky-300/20 text-sky-50 border-sky-200/30 backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_24px_rgba(125,211,252,0.14)]"

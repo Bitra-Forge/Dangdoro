@@ -1473,7 +1473,7 @@ function ProfileContent() {
                                 </div>
                             </div>
 
-                            <div className="h-[250px] sm:h-[400px] w-full mt-4 relative group/chart">
+                            <div className="h-[220px] sm:h-[400px] w-full mt-4 relative group/chart">
                                 {mounted && (
                                     <div className="relative w-full h-full">
                                         {/* Traveling Laser HUD Line */}
