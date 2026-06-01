@@ -116,6 +116,16 @@ npm run lint
 
 ---
 
+## 👥 Meet the Team
+
+| Developer | GitHub | LinkedIn |
+| :--- | :--- | :--- |
+| <img src="https://avatars.githubusercontent.com/u/114666874?v=4" width="30" height="30" style="border-radius: 50%; vertical-align: middle; margin-right: 8px;" /> **Mohamed Elzalook** | [@Morales020](http://github.com/Morales020) | [Mohamed Elzalook](http://www.linkedin.com/in/mohamed-elzalook/) |
+| <img src="https://avatars.githubusercontent.com/u/143705285?v=4" width="30" height="30" style="border-radius: 50%; vertical-align: middle; margin-right: 8px;" /> **Tamim Abdrabou** | [@TamemAbdRab0u](https://github.com/TamemAbdRab0u) | [Tamim Abdrabou](https://www.linkedin.com/in/tamem-abdrabou-34ab14357/) |
+| <img src="https://avatars.githubusercontent.com/u/121311553?v=4" width="30" height="30" style="border-radius: 50%; vertical-align: middle; margin-right: 8px;" /> **Hossam Fathy** | [@finitemist](https://github.com/finitemist) | [Hossam Fathy](https://www.linkedin.com/in/hossam-fathy-bb1039259/) |
+
+---
+
 ## 💖 Support the Project
 
 If you find Dangdoro helpful and want to support its ongoing development, consider supporting the creator!

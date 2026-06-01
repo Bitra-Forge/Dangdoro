@@ -12,6 +12,8 @@ import { onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useBackgroundTheme } from "@/lib/use-background-theme";
 
+let isGlobalHydrated = false;
+
 export function TimerCard() {
   const BACKGROUND_COLORS = [
     { name: "Sage", value: "#757c4f" },
@@ -56,7 +58,7 @@ export function TimerCard() {
   const [editMins, setEditMins] = useState("");
   const [editSecs, setEditSecs] = useState("");
   const [adjustmentAmount, setAdjustmentAmount] = useState(1); // in minutes
-  const [hasHydrated, setHasHydrated] = useState(false);
+  const [hasHydrated, setHasHydrated] = useState(isGlobalHydrated);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [playingSoundId, setPlayingSoundId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -157,6 +159,7 @@ export function TimerCard() {
 
   // Hydration guard: only render on client after storage is loaded
   useEffect(() => {
+    isGlobalHydrated = true;
     setHasHydrated(true);
   }, []);
 

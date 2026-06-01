@@ -24,12 +24,14 @@ export function BackgroundTheme({
     const shouldShowFloatingSettings = showSettings && !isHomePage;
     const effectiveShowDots = disableDots ? false : showDots;
 
-    if (!isHydrated) return null;
-
     return (
         <>
             {/* Background */}
-            <AnimatedDotGrid showDots={effectiveShowDots} palette={bgPalette} />
+            {isHydrated ? (
+                <AnimatedDotGrid showDots={effectiveShowDots} palette={bgPalette} />
+            ) : (
+                <div className="fixed inset-0 z-0 pointer-events-none bg-zinc-950" />
+            )}
             {subtleOverlay && <div className="fixed inset-0 z-[1] bg-zinc-950/55 pointer-events-none" />}
             
             {/* Children content */}

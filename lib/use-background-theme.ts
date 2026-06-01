@@ -12,20 +12,40 @@ type ThemeSyncDetail = {
     bgPalette: keyof typeof BG_PALETTES;
 };
 
+let isGlobalThemeHydrated = false;
+
 export function useBackgroundTheme(isHomePage: boolean = false) {
+    const dotsKey = isHomePage ? BG_CONFIG.STORAGE_KEYS.SHOW_DOTS : BG_CONFIG.STORAGE_KEYS.SHOW_DOTS_GLOBAL;
+    const paletteKey = isHomePage ? BG_CONFIG.STORAGE_KEYS.BG_PALETTE : BG_CONFIG.STORAGE_KEYS.BG_PALETTE_GLOBAL;
+
     const [state, setState] = useState<{
         showDots: boolean;
         bgPalette: keyof typeof BG_PALETTES;
         isHydrated: boolean;
-    }>({
-        showDots: BG_CONFIG.DEFAULTS.showDots,
-        bgPalette: BG_CONFIG.DEFAULTS.palette,
-        isHydrated: false,
+    }>(() => {
+        if (isGlobalThemeHydrated && typeof window !== "undefined") {
+            const savedDots = localStorage.getItem(dotsKey);
+            const savedPalette = localStorage.getItem(paletteKey);
+            
+            const finalDots = savedDots !== null ? savedDots === "true" : BG_CONFIG.DEFAULTS.showDots;
+            const finalPalette = (savedPalette && savedPalette in BG_PALETTES)
+                ? (savedPalette as keyof typeof BG_PALETTES)
+                : BG_CONFIG.DEFAULTS.palette;
+
+            return {
+                showDots: finalDots,
+                bgPalette: finalPalette,
+                isHydrated: true,
+            };
+        }
+        return {
+            showDots: BG_CONFIG.DEFAULTS.showDots,
+            bgPalette: BG_CONFIG.DEFAULTS.palette,
+            isHydrated: false,
+        };
     });
 
     const { showDots, bgPalette, isHydrated } = state;
-    const dotsKey = isHomePage ? BG_CONFIG.STORAGE_KEYS.SHOW_DOTS : BG_CONFIG.STORAGE_KEYS.SHOW_DOTS_GLOBAL;
-    const paletteKey = isHomePage ? BG_CONFIG.STORAGE_KEYS.BG_PALETTE : BG_CONFIG.STORAGE_KEYS.BG_PALETTE_GLOBAL;
 
     // Load from localStorage on mount (client-side only)
     useEffect(() => {
@@ -41,10 +61,16 @@ export function useBackgroundTheme(isHomePage: boolean = false) {
             // Use setTimeout to execute the state update in a macro-task
             // to prevent synchronous cascading renders in the effect loop.
             const timer = setTimeout(() => {
-                setState({
-                    showDots: finalDots,
-                    bgPalette: finalPalette,
-                    isHydrated: true,
+                isGlobalThemeHydrated = true;
+                setState((prev) => {
+                    if (prev.showDots === finalDots && prev.bgPalette === finalPalette && prev.isHydrated) {
+                        return prev;
+                    }
+                    return {
+                        showDots: finalDots,
+                        bgPalette: finalPalette,
+                        isHydrated: true,
+                    };
                 });
             }, 0);
 
@@ -91,7 +117,7 @@ export function useBackgroundTheme(isHomePage: boolean = false) {
 
     return {
         showDots,
-        bgPalette,
+        bgPalette: isHomePage ? "none" : bgPalette,
         updateShowDots,
         updateBgPalette,
         isHydrated,
