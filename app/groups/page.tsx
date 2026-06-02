@@ -5,7 +5,6 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { BackgroundTheme } from "@/components/background-theme";
 import { AuthRequired } from "@/components/auth-required";
-import { Space_Grotesk } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { 
     Users, Plus, Key, Globe, Search, Flame
@@ -32,11 +31,7 @@ import { EnhancedGroupCard } from "@/components/groups/EnhancedGroupCard";
 import { ActiveFocusersBanner } from "@/components/groups/ActiveFocusersBanner";
 import { JoinCodeModal } from "@/components/groups/JoinCodeModal";
 
-const spaceGrotesk = Space_Grotesk({
-    subsets: ["latin"],
-    variable: "--font-space-grotesk",
-    weight: ["300", "400", "500", "600", "700"],
-});
+
 
 export default function GroupsPage() {
     const { user, loading: authLoading } = useAuth();
@@ -346,7 +341,7 @@ export default function GroupsPage() {
 
     if (loading) return (
         <BackgroundTheme>
-            <div className={cn("relative min-h-screen flex flex-col pt-16 overflow-x-hidden", spaceGrotesk.variable, "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
+            <div className={cn("relative min-h-screen flex flex-col pt-16 overflow-x-hidden", "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
                 <main className="relative z-10 flex flex-col items-center pb-48 px-4 w-full flex-1 max-w-6xl mx-auto">
                     <header className="flex flex-col items-center text-center mb-12 w-full">
                         <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">Groups</h1>
@@ -365,7 +360,7 @@ export default function GroupsPage() {
 
     return (
         <BackgroundTheme>
-            <div className={cn("relative min-h-screen flex flex-col pt-16 overflow-x-hidden", spaceGrotesk.variable, "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
+            <div className={cn("relative min-h-screen flex flex-col pt-16 overflow-x-hidden", "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
                 <main className="relative z-10 flex flex-col items-center pb-48 px-4 w-full flex-1 max-w-6xl mx-auto">
 
                     <header className="flex flex-col items-center text-center mb-12 w-full pt-10 relative">

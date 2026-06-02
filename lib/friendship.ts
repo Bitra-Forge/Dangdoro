@@ -388,7 +388,7 @@ export const getSentFriendRequests = async (userId: string): Promise<FriendReque
 
 /**
  * Get user's friends list with their profile data.
- */
+  */
 export const getFriendsList = async (userId: string): Promise<Friend[]> => {
     try {
         const friendsRef = collection(db, "users", userId, "friends");
@@ -422,6 +422,30 @@ export const getFriendsList = async (userId: string): Promise<Friend[]> => {
         }));
     } catch (error) {
         console.error("Error getting friends list:", error);
+        return [];
+    }
+};
+
+/**
+ * Get simple friends list containing only friend IDs (without fetching full user profiles).
+ * Useful for counts and quick lookups to avoid heavy Firestore reads.
+ */
+export const getFriendsListSimple = async (userId: string): Promise<Friend[]> => {
+    try {
+        const friendsRef = collection(db, "users", userId, "friends");
+        const snapshot = await getDocs(friendsRef);
+
+        return snapshot.docs.map(docSnap => {
+            const data = docSnap.data();
+            return {
+                id: docSnap.id,
+                friendId: data.friendId || docSnap.id,
+                since: data.since,
+                userData: null
+            };
+        }) as Friend[];
+    } catch (error) {
+        console.error("Error getting simple friends list:", error);
         return [];
     }
 };
@@ -626,7 +650,7 @@ export const areFriends = async (userId1: string, userId2: string): Promise<bool
 export const getFriendsLeaderboard = async (userId: string, limitCount: number = 20): Promise<UserProfileData[]> => {
     try {
         // First get friends list
-        const friendsList = await getFriendsList(userId);
+        const friendsList = await getFriendsListSimple(userId);
         const friendIds = friendsList.map(f => f.friendId);
         
         // Include current user in the leaderboard
@@ -670,7 +694,7 @@ export const getFriendsLeaderboard = async (userId: string, limitCount: number =
 export const getFriendsActivity = async (userId: string, limitCount: number = 20): Promise<CompletedSession[]> => {
     try {
         // Get friends list
-        const friendsList = await getFriendsList(userId);
+        const friendsList = await getFriendsListSimple(userId);
         const friendIds = friendsList.map(f => f.friendId);
 
         if (friendIds.length === 0) {

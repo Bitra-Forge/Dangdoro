@@ -1,22 +1,16 @@
 "use client";
 
+import React, { memo } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { Clock, TrendingUp, Zap } from "lucide-react";
-import { Space_Grotesk } from "next/font/google";
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-space-grotesk",
-  weight: ["300", "400", "500", "600", "700"],
-});
 
 interface ProfileStatsCardProps {
   user: any;
   rank: number;
 }
 
-export function ProfileStatsCard({ user, rank }: ProfileStatsCardProps) {
+function ProfileStatsCardComponent({ user, rank }: ProfileStatsCardProps) {
   if (!user) return null;
 
   const totalMinutes = user.totalMinutes || 0;
@@ -25,8 +19,7 @@ export function ProfileStatsCard({ user, rank }: ProfileStatsCardProps) {
 
   return (
     <div className={cn(
-      "relative flex flex-col bg-white/[0.02] backdrop-blur-2xl border border-white/10 rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.5)] transition-all duration-500 hover:border-[#C9B037]/40 hover:bg-white/[0.04] group animate-in fade-in slide-in-from-left-10",
-      spaceGrotesk.variable,
+      "relative flex flex-col bg-zinc-950/90 sm:bg-white/[0.02] backdrop-blur-none sm:backdrop-blur-2xl border border-white/10 rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.5)] transition-all duration-500 hover:border-[#C9B037]/40 hover:bg-white/[0.04] group animate-in fade-in slide-in-from-left-10",
       "font-sans"
     )}
       style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
@@ -43,10 +36,12 @@ export function ProfileStatsCard({ user, rank }: ProfileStatsCardProps) {
         <div className="relative">
           <div className="w-20 h-20 rounded-full border-2 border-[#C9B037]/40 overflow-hidden transition-all duration-500 group-hover:border-[#C9B037]/80 group-hover:shadow-[0_0_30px_rgba(201,176,55,0.3)]">
             <Avatar className="w-full h-full rounded-none bg-transparent">
-              <AvatarImage
-                src={user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`}
-                className="object-cover w-full h-full"
-              />
+              {user.photoURL && (
+                <AvatarImage
+                  src={user.photoURL}
+                  className="object-cover w-full h-full"
+                />
+              )}
               <AvatarFallback className="bg-zinc-800 font-bold text-xl text-[#C9B037] rounded-none">{user.displayName?.slice(0, 1)}</AvatarFallback>
             </Avatar>
           </div>
@@ -71,3 +66,5 @@ export function ProfileStatsCard({ user, rank }: ProfileStatsCardProps) {
     </div>
   );
 }
+
+export const ProfileStatsCard = memo(ProfileStatsCardComponent);

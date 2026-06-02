@@ -35,7 +35,7 @@ export function Navigation() {
 
     return (
         <div>
-            <nav className="flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl">
+            <nav className="flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 bg-zinc-950 lg:bg-zinc-900/40 backdrop-blur-none lg:backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl">
 
                 {activeLinks.map((link) => {
                     const Icon = link.icon;

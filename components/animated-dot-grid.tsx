@@ -19,7 +19,8 @@ export function AnimatedDotGrid({
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
-        const DOT_SPACING = 18;
+        const isTouch = typeof window !== "undefined" && ("ontouchstart" in window || navigator.maxTouchPoints > 0);
+        const DOT_SPACING = isTouch ? 36 : 18;
         const DOT_RADIUS = 1;
         const HOVER_RADIUS = 100;
 
@@ -33,7 +34,9 @@ export function AnimatedDotGrid({
         const handleMouseMove = (e: MouseEvent) => {
             mouseRef.current = { x: e.clientX, y: e.clientY };
         };
-        window.addEventListener("mousemove", handleMouseMove);
+        if (!isTouch) {
+            window.addEventListener("mousemove", handleMouseMove);
+        }
 
         const paletteConfig = BG_PALETTES[palette] || BG_PALETTES.mixed;
         const orbs = paletteConfig.orbs.map((o, i) => ({
@@ -46,48 +49,62 @@ export function AnimatedDotGrid({
         const draw = (t: number) => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Draw background orbs
-            for (const o of orbs) {
-                const cx = o.x * canvas.width + Math.sin(t * o.speed + o.phase) * 70;
-                const cy = o.y * canvas.height + Math.cos(t * o.speed + o.phase) * 50;
-                const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, o.r);
-                g.addColorStop(0, `rgba(${o.color},0.13)`);
-                g.addColorStop(1, `rgba(${o.color},0)`);
-                ctx.fillStyle = g;
-                ctx.beginPath();
-                ctx.arc(cx, cy, o.r, 0, Math.PI * 2);
-                ctx.fill();
+            // Draw background orbs (skipped on touch/mobile to maximize composition performance)
+            if (!isTouch) {
+                for (const o of orbs) {
+                    const cx = o.x * canvas.width + Math.sin(t * o.speed + o.phase) * 70;
+                    const cy = o.y * canvas.height + Math.cos(t * o.speed + o.phase) * 50;
+                    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, o.r);
+                    g.addColorStop(0, `rgba(${o.color},0.13)`);
+                    g.addColorStop(1, `rgba(${o.color},0)`);
+                    ctx.fillStyle = g;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, o.r, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
             
             // Draw dots with hover effect (only if enabled)
             if (showDots) {
-                const mx = mouseRef.current.x;
-                const my = mouseRef.current.y;
                 const cols = Math.ceil(canvas.width / DOT_SPACING) + 1;
                 const rows = Math.ceil(canvas.height / DOT_SPACING) + 1;
-                const HOVER_RADIUS_SQ = HOVER_RADIUS * HOVER_RADIUS;
-                
-                for (let row = 0; row < rows; row++) {
-                    for (let col = 0; col < cols; col++) {
-                        const x = col * DOT_SPACING;
-                        const y = row * DOT_SPACING;
-                        
-                        // Calculate square distance from mouse (faster than sqrt)
-                        const dx = x - mx;
-                        const dy = y - my;
-                        const distSq = dx * dx + dy * dy;
-                        
-                        // Calculate opacity based on distance (closer = brighter)
-                        let opacity = 0.09;
-                        if (distSq < HOVER_RADIUS_SQ) {
-                            const dist = Math.sqrt(distSq);
-                            const intensity = 1 - (dist / HOVER_RADIUS);
-                            opacity = 0.09 + (intensity * intensity * 0.6);
+
+                if (isTouch) {
+                    // On touch devices, set fillStyle once and skip mouse distance calculations
+                    ctx.fillStyle = "rgba(255, 255, 255, 0.09)";
+                    for (let row = 0; row < rows; row++) {
+                        for (let col = 0; col < cols; col++) {
+                            const x = col * DOT_SPACING;
+                            const y = row * DOT_SPACING;
+                            ctx.fillRect(x - DOT_RADIUS, y - DOT_RADIUS, DOT_RADIUS * 2, DOT_RADIUS * 2);
                         }
-                        
-                        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-                        // fillRect is much faster than arc() for small dots
-                        ctx.fillRect(x - DOT_RADIUS, y - DOT_RADIUS, DOT_RADIUS * 2, DOT_RADIUS * 2);
+                    }
+                } else {
+                    const mx = mouseRef.current.x;
+                    const my = mouseRef.current.y;
+                    const HOVER_RADIUS_SQ = HOVER_RADIUS * HOVER_RADIUS;
+                    
+                    for (let row = 0; row < rows; row++) {
+                        for (let col = 0; col < cols; col++) {
+                            const x = col * DOT_SPACING;
+                            const y = row * DOT_SPACING;
+                            
+                            // Calculate square distance from mouse (faster than sqrt)
+                            const dx = x - mx;
+                            const dy = y - my;
+                            const distSq = dx * dx + dy * dy;
+                            
+                            // Calculate opacity based on distance (closer = brighter)
+                            let opacity = 0.09;
+                            if (distSq < HOVER_RADIUS_SQ) {
+                                const dist = Math.sqrt(distSq);
+                                const intensity = 1 - (dist / HOVER_RADIUS);
+                                opacity = 0.09 + (intensity * intensity * 0.6);
+                            }
+                            
+                            ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+                            ctx.fillRect(x - DOT_RADIUS, y - DOT_RADIUS, DOT_RADIUS * 2, DOT_RADIUS * 2);
+                        }
                     }
                 }
             }
@@ -98,7 +115,9 @@ export function AnimatedDotGrid({
         return () => { 
             cancelAnimationFrame(raf); 
             window.removeEventListener("resize", resize); 
-            window.removeEventListener("mousemove", handleMouseMove);
+            if (!isTouch) {
+                window.removeEventListener("mousemove", handleMouseMove);
+            }
         };
     }, [showDots, palette]);
 

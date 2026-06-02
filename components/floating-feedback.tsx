@@ -96,10 +96,10 @@ export function FloatingFeedback() {
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "fixed top-8 right-4 sm:right-8 z-50 flex items-center justify-center w-11 h-11 rounded-2xl border transition-all duration-500 backdrop-blur-2xl cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.4)]",
+          "fixed top-8 right-4 sm:right-8 z-50 flex items-center justify-center w-11 h-11 rounded-2xl border transition-all duration-500 backdrop-blur-none sm:backdrop-blur-2xl cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.4)]",
           isOpen
             ? "bg-orange-500 border-orange-500 text-white shadow-[0_8px_32px_rgba(232,130,26,0.25)]"
-            : "bg-zinc-950/30 border-white/[0.06] text-zinc-300 hover:bg-zinc-950/60 hover:border-white/15 hover:text-white"
+            : "bg-zinc-950 sm:bg-zinc-950/30 border-white/[0.06] text-zinc-300 hover:bg-zinc-950/60 hover:border-white/15 hover:text-white"
         )}
         aria-label="Toggle feedback form"
       >
@@ -144,9 +144,9 @@ export function FloatingFeedback() {
 
             {/* Form Card */}
             <motion.div
-              initial={{ opacity: 0, y: -12, scale: 0.95, filter: "blur(4px)" }}
-              animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-              exit={{ opacity: 0, y: -8, scale: 0.96, filter: "blur(2px)" }}
+              initial={{ opacity: 0, y: -12, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.96 }}
               transition={{
                 type: "spring",
                 stiffness: 400,
@@ -156,7 +156,7 @@ export function FloatingFeedback() {
               className="fixed top-22 left-1/2 -translate-x-1/2 w-[calc(100vw-2rem)] max-w-[340px] sm:left-8 sm:translate-x-0 sm:w-[350px] sm:max-w-[calc(100vw-32px)] z-50 overflow-visible"
             >
               {/* Glassmorphic container */}
-              <div className="relative bg-zinc-950/90 backdrop-blur-3xl border border-white/[0.08] rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.08)] overflow-hidden p-6">
+              <div className="relative bg-zinc-950 sm:bg-zinc-950/90 backdrop-blur-none sm:backdrop-blur-3xl border border-white/[0.08] rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.08)] overflow-hidden p-6">
                 
                 {/* Accent border glow */}
                 <div className="absolute -inset-px bg-gradient-to-r from-orange-500/10 to-transparent rounded-[2rem] pointer-events-none" />

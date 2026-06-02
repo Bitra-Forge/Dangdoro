@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, Suspense, useMemo } from "react";
 import { 
     Trophy, Zap, Clock, Medal, Sprout, Leaf, Flower2, ChevronRight, 
     TrendingUp, Search, Info, Users, Briefcase, ChevronLeft 
@@ -10,19 +10,13 @@ import { getFriendsLeaderboard } from "@/lib/friendship";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { syncUserProfile } from "@/lib/db";
-import { Space_Grotesk } from "next/font/google";
 import { useAuth } from "@/components/AuthProvider";
 import { ProfileStatsCard } from "@/components/profile-stats-card";
 import { AuthRequired } from "@/components/auth-required";
 import { BackgroundTheme } from "@/components/background-theme";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams, useRouter } from "next/navigation";
-
-const spaceGrotesk = Space_Grotesk({
-    subsets: ["latin"],
-    variable: "--font-space-grotesk",
-    weight: ["300", "400", "500", "600", "700"],
-});
+import Image from "next/image";
 
 type LeaderboardTab = "global" | "friends" | "groups";
 
@@ -123,17 +117,18 @@ function LeaderboardContent() {
         </div>
     );
 
-    const topThree = players.slice(0, 3);
-    const others = players.slice(3);
-    const userRank = players.findIndex(p => p.uid === user?.uid);
-    const currentUserData = players[userRank];
-
-    // Rearrange top 3 for the visual podium: [Rank 2, Rank 1, Rank 3]
-    const podiumOrder = [topThree[1], topThree[0], topThree[2]].filter(Boolean);
+    const { topThree, others, userRank, currentUserData, podiumOrder } = useMemo(() => {
+        const top3 = players.slice(0, 3);
+        const rest = players.slice(3);
+        const rank = players.findIndex(p => p.uid === user?.uid);
+        const current = players[rank];
+        const podium = [top3[1], top3[0], top3[2]].filter(Boolean);
+        return { topThree: top3, others: rest, userRank: rank, currentUserData: current, podiumOrder: podium };
+    }, [players, user?.uid]);
 
     return (
         <BackgroundTheme>
-            <div className={cn("relative min-h-screen bg-zinc-950 flex flex-col pt-16 overflow-x-hidden", spaceGrotesk.variable, "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
+            <div className={cn("relative min-h-screen bg-zinc-950 flex flex-col pt-16 overflow-x-hidden", "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
                 {/* Background Atmosphere - Balanced Neutral Glow */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[600px] bg-gradient-to-b from-zinc-900/40 to-transparent pointer-events-none" />
 
@@ -180,7 +175,7 @@ function LeaderboardContent() {
                     {/* Tab Toggle */}
                     {!selectedGroup && (
                         <div className="flex flex-col items-center gap-6 mb-12 w-full max-w-2xl">
-                            <div className="flex items-center gap-2 p-1.5 bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-full w-full">
+                            <div className="flex items-center gap-2 p-1.5 bg-zinc-950/90 sm:bg-zinc-900/40 backdrop-blur-none sm:backdrop-blur-2xl border border-white/10 rounded-full w-full">
                                 {[
                                     { id: "global", icon: Trophy, label: "Global" },
                                     { id: "friends", icon: Users, label: "Friends" },
@@ -211,8 +206,17 @@ function LeaderboardContent() {
                         </div>
                     )}
 
-                    {loading ? (
-                        <div className="flex flex-col items-center justify-center h-96 gap-4">
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={loading ? "loading" : `${activeTab}_${selectedGroup ? selectedGroup.id : "none"}_${players.length}`}
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -12 }}
+                            transition={{ duration: 0.3, ease: "easeOut" }}
+                            className="w-full flex-1 flex flex-col items-center"
+                        >
+                            {loading ? (
+                                <div className="flex flex-col items-center justify-center h-96 gap-4">
                             <div className="w-16 h-16 border-4 border-[#C9B037]/10 border-t-[#C9B037] rounded-full animate-spin" />
                             <p className="text-xs font-black uppercase text-zinc-600 tracking-widest animate-pulse">Syncing Growth...</p>
                         </div>
@@ -247,7 +251,7 @@ function LeaderboardContent() {
                                                 <div className="relative overflow-hidden rounded-[5px] bg-gradient-to-br from-zinc-900/80 to-zinc-950/80 border border-[#C9B037]/30 hover:border-[#C9B037]/60 transition-all duration-500 hover:shadow-[0_0_40px_rgba(201,176,55,0.15)] hover:-translate-y-1">
                                                     
                                                     {/* Glow Effect */}
-                                                    <div className="absolute top-0 right-0 w-32 h-32 bg-[#C9B037]/10 blur-[60px] -mr-8 -mt-8 group-hover:bg-[#C9B037]/20 transition-all duration-500" />
+                                                    <div className="absolute top-0 right-0 w-32 h-32 bg-[#C9B037]/10 blur-[60px] -mr-8 -mt-8 group-hover:bg-[#C9B037]/20 transition-all duration-500 hidden sm:block" />
                                                     
                                                     {/* Content */}
                                                     <div className="relative p-6">
@@ -349,21 +353,21 @@ function LeaderboardContent() {
                                             )}>
                                                 
                                                 {/* Visual Polish Restoration */}
-                                                {isGold && <div className="absolute -top-32 -left-32 w-80 h-80 bg-yellow-500/20 blur-[120px] pointer-events-none group-hover:bg-yellow-500/30 transition-all duration-700" />}
-                                                {isSilver && <div className="absolute -top-24 -left-24 w-60 h-60 bg-slate-400/20 blur-[110px] pointer-events-none group-hover:bg-slate-400/30 transition-all duration-700" />}
-                                                {isBronze && <div className="absolute -top-16 -left-16 w-48 h-48 bg-orange-600/10 blur-[90px] pointer-events-none group-hover:bg-orange-600/20 transition-all duration-700" />}
+                                                {isGold && <div className="absolute -top-32 -left-32 w-80 h-80 bg-yellow-500/20 blur-[120px] pointer-events-none group-hover:bg-yellow-500/30 transition-all duration-700 hidden sm:block" />}
+                                                {isSilver && <div className="absolute -top-24 -left-24 w-60 h-60 bg-slate-400/20 blur-[110px] pointer-events-none group-hover:bg-slate-400/30 transition-all duration-700 hidden sm:block" />}
+                                                {isBronze && <div className="absolute -top-16 -left-16 w-48 h-48 bg-orange-600/10 blur-[90px] pointer-events-none group-hover:bg-orange-600/20 transition-all duration-700 hidden sm:block" />}
                                                 
                                                 <div className={cn("absolute inset-0 transition-all duration-700 pointer-events-none skew-x-[-20deg] scale-150", isGold ? "opacity-15 group-hover:opacity-30 bg-gradient-to-tr from-transparent via-yellow-400/40 to-transparent" : isSilver ? "opacity-20 group-hover:opacity-40 bg-gradient-to-tr from-transparent via-slate-300/30 to-transparent" : "opacity-20 group-hover:opacity-30 bg-gradient-to-tr from-transparent via-orange-400/20 to-transparent")} />
 
                                                 <div className="relative mb-6">
                                                     <div onClick={() => router.push(`/profile?user=${player.uid}`)} className={cn("rounded-full border transition-all duration-300 group-hover:border-opacity-100 overflow-hidden cursor-pointer", isGold ? "border-[#C9B037]/40 w-20 h-20 sm:w-24 sm:h-24" : isSilver ? "border-zinc-400/30 w-16 h-16 sm:w-20 sm:h-20" : "border-orange-700/20 w-16 h-16 sm:w-20 sm:h-20")}>
                                                         <Avatar className="w-full h-full border-0 rounded-full">
-                                                            <AvatarImage src={player.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${player.uid}`} className="object-cover" />
+                                                            {player.photoURL && <AvatarImage src={player.photoURL} className="object-cover" />}
                                                             <AvatarFallback className="rounded-full">{player.displayName?.slice(0, 1)}</AvatarFallback>
                                                         </Avatar>
                                                     </div>
                                                     <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full border border-zinc-800 flex items-center justify-center bg-zinc-950 shadow-xl overflow-hidden pt-0.5">
-                                                        <img src={`/Icons/medal (${rank === 1 ? 3 : rank === 3 ? 1 : 2}).png`} alt={`Rank ${rank}`} className="w-5 h-5 object-contain" />
+                                                        <Image src={`/Icons/medal (${rank === 1 ? 3 : rank === 3 ? 1 : 2}).png`} alt={`Rank ${rank}`} width={20} height={20} className="w-5 h-5 object-contain" />
                                                     </div>
                                                 </div>
 
@@ -405,7 +409,7 @@ function LeaderboardContent() {
                                                 <div className="w-8 text-center font-sans font-bold text-zinc-500 group-hover:text-zinc-300 transition-colors">{rank}</div>
                                                 <div onClick={() => router.push(`/profile?user=${player.uid}`)} className="relative w-10 h-10 rounded-full border border-white/10 group-hover:border-white/20 transition-all duration-300 overflow-hidden cursor-pointer">
                                                     <Avatar className="w-full h-full border-0 rounded-full">
-                                                        <AvatarImage src={player.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${player.uid}`} className="object-cover w-full h-full" />
+                                                        {player.photoURL && <AvatarImage src={player.photoURL} className="object-cover w-full h-full" />}
                                                         <AvatarFallback className="text-[9px] rounded-full">{player.displayName?.slice(0, 1)}</AvatarFallback>
                                                     </Avatar>
                                                 </div>
@@ -428,6 +432,8 @@ function LeaderboardContent() {
                             )}
                         </div>
                     )}
+                        </motion.div>
+                    </AnimatePresence>
                 </main>
             </div>
         </BackgroundTheme>

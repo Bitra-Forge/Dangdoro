@@ -3,7 +3,6 @@
 import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Bell, Check, X, User, Users } from "lucide-react";
-import { Space_Grotesk } from "next/font/google";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, updateDoc } from "firebase/firestore";
@@ -16,11 +15,6 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-
-const spaceGrotesk = Space_Grotesk({
-    subsets: ["latin"],
-    weight: ["300", "400", "500", "600", "700"],
-});
 
 interface UserProfile {
     uid: string;
@@ -281,7 +275,7 @@ export function NotificationsMenu() {
                                                     <AvatarFallback className="rounded-full"><Check className="w-4 h-4" /></AvatarFallback>
                                                 </Avatar>
                                                 <div className="flex flex-col min-w-0">
-                                                    <span className={cn("text-[11px] font-bold text-white truncate", spaceGrotesk.className)}>
+                                                    <span className="text-[11px] font-space-grotesk font-bold text-white truncate">
                                                         Assigned objective
                                                     </span>
                                                     <span className="text-[9px] font-bold text-muted-foreground uppercase">
@@ -328,7 +322,7 @@ export function NotificationsMenu() {
                                                     <AvatarFallback className="rounded-full"><Users className="w-4 h-4" /></AvatarFallback>
                                                 </Avatar>
                                                 <div className="flex flex-col min-w-0">
-                                                    <span className={cn("text-[11px] font-bold text-white truncate", spaceGrotesk.className)}>
+                                                    <span className="text-[11px] font-space-grotesk font-bold text-white truncate">
                                                         {invite.name || "Group invite"}
                                                     </span>
                                                     <span className="text-[9px] font-bold text-muted-foreground uppercase">
@@ -371,7 +365,7 @@ export function NotificationsMenu() {
                                                     <AvatarFallback className="rounded-full"><User className="w-4 h-4" /></AvatarFallback>
                                                 </Avatar>
                                                 <div className="flex flex-col">
-                                                    <span className={cn("text-[11px] font-bold text-white", spaceGrotesk.className)}>{profile?.displayName || "Someone"}</span>
+                                                    <span className="text-[11px] font-space-grotesk font-bold text-white">{profile?.displayName || "Someone"}</span>
                                                     <span className="text-[9px] font-bold text-muted-foreground uppercase">Friend Request</span>
                                                 </div>
                                             </Link>

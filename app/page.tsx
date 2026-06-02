@@ -1,6 +1,5 @@
 "use client";
 
-import { Space_Grotesk } from "next/font/google";
 import { TimerCard } from "@/components/timer-card";
 import { Clock, CheckCircle2 as CheckIcon, X as CloseIcon, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
@@ -11,12 +10,6 @@ import { useEffect, useRef, useState } from "react";
 import { BackgroundTheme } from "@/components/background-theme";
 import { GroupFocusSelector } from "@/components/group-focus-selector";
 import { FloatingFocusAvatars, InlinePausedDock } from "@/components/floating-focus-avatars";
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-space-grotesk",
-  weight: ["300", "400", "500", "600", "700"],
-});
 
 export default function Home() {
   const backgroundSolidColor = useTimerStore((state) => state.backgroundSolidColor);
@@ -121,7 +114,7 @@ export default function Home() {
 
   return (
     <BackgroundTheme showSettings={false} isHomePage={true}>
-      <div className={`flex flex-col flex-1 bg-zinc-950 min-h-screen relative overflow-hidden ${spaceGrotesk.variable} font-sans`}
+      <div className="flex flex-col flex-1 bg-zinc-950 min-h-screen relative overflow-hidden font-sans"
       style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
       {/* Immersive Background */}
       <div className="absolute inset-0 z-0 select-none pointer-events-none transition-all duration-1000">

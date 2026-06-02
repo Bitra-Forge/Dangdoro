@@ -1,12 +1,12 @@
 "use client";
-import React, { useEffect, useState, useMemo, Suspense } from "react";
+import React, { useEffect, useState, useMemo, Suspense, memo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { cn } from "@/lib/utils";
 import { onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { updateProfilePictureBase64, getSessionHistory, updateUserProfile } from "@/lib/db";
-import { getFriendsList, type Friend } from "@/lib/friendship";
+import { getFriendsListSimple, type Friend } from "@/lib/friendship";
 import {
     Camera, Zap, Clock, Calendar,
     Share2, Pencil, Flame,
@@ -28,18 +28,35 @@ import { format, differenceInDays, startOfDay, subDays, isSameDay, startOfMonth,
 import { toast } from "sonner";
 import { AuthRequired } from "@/components/auth-required";
 import { motion, AnimatePresence } from "framer-motion";
-import Cropper, { type Area as CropArea } from "react-easy-crop";
-import { DotLottieReact } from '@lottiefiles/dotlottie-react';
+import dynamic from "next/dynamic";
+
+const DotLottieReact = dynamic(
+    () => import("@lottiefiles/dotlottie-react").then(mod => mod.DotLottieReact),
+    { ssr: false }
+);
+
+function useTouchDevice() {
+    const [isTouch, setIsTouch] = useState(false);
+    useEffect(() => {
+        setIsTouch('ontouchstart' in window || navigator.maxTouchPoints > 0);
+    }, []);
+    return isTouch;
+}
+
+const ProfileChart = dynamic(
+    () => import("@/components/profile-chart").then(mod => mod.ProfileChart),
+    { 
+        ssr: false, 
+        loading: () => <div className="w-full h-full bg-zinc-950/20 animate-pulse rounded-xl" />
+    }
+);
+
+const ProfilePicCropperModal = dynamic(
+    () => import("@/components/profile-pic-cropper-modal"),
+    { ssr: false }
+);
+
 import { BackgroundTheme } from "@/components/background-theme";
-import {
-    ComposedChart,
-    Area,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ResponsiveContainer,
-} from "recharts";
 
 // --- Themes ---
 const THEMES: Record<string, { name: string; colors: string[]; accent: string; glow: string; text?: string }> = {
@@ -149,8 +166,9 @@ interface StatCardProps {
 }
 
 // --- Components ---
-
-const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal = false, lottie = null }: StatCardProps) => {
+const StatCard = memo(({ icon: Icon, label, value, colorClass, delay = 0, horizontal = false, lottie = null }: StatCardProps) => {
+    const isTouchDevice = useTouchDevice();
+    const [isHovered, setIsHovered] = useState(false);
     const emberParticles = useMemo(
         () =>
             [...Array(15)].map((_, i) => ({
@@ -165,7 +183,7 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal 
         []
     );
 
-    const getThemeAnimations = () => {
+    const theme = useMemo(() => {
         if (colorClass.includes('red')) return {
             glow: "rgba(239,68,68,0.15)",
             accent: "#ef4444",
@@ -186,18 +204,17 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal 
             accent: "#a855f7",
             particles: "bg-purple-500",
         };
-    };
-
-    const theme = getThemeAnimations();
-
+    }, [colorClass]);
     return (
         <motion.div
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             whileHover="hover"
-            transition={{ delay: 0.2 + delay, duration: 0.8 }}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            transition={{ duration: 0.35 }}
             className={cn(
-                "relative group bg-zinc-900/10 backdrop-blur-2xl border border-white/5 rounded-[5px] flex shadow-2xl transition-all duration-500 overflow-hidden cursor-pointer",
+                "relative group bg-zinc-900/90 sm:bg-zinc-900/10 backdrop-blur-none sm:backdrop-blur-2xl border border-white/5 rounded-[5px] flex shadow-2xl transition-all duration-500 overflow-hidden cursor-pointer",
                 horizontal ? "flex-row items-center p-4 gap-4" : "flex-col items-center text-center p-4"
             )}
         >
@@ -212,12 +229,13 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal 
                 style={{ backgroundColor: theme.glow }}
             />
 
-            {/* 3. Dynamic Particle Themes */}
             <div className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-1000 overflow-hidden">
-                {lottie && (
+                {lottie && !isTouchDevice && (
                     <div className={cn(
-                        "absolute inset-0 pointer-events-none transition-opacity duration-700 overflow-hidden",
-                        colorClass.includes('red') ? "opacity-80 group-hover:opacity-100" : "opacity-30 group-hover:opacity-50"
+                        "absolute inset-0 pointer-events-none transition-all duration-700 overflow-hidden",
+                        isHovered 
+                            ? (colorClass.includes('red') ? "opacity-80 group-hover:opacity-100 visible" : "opacity-30 group-hover:opacity-50 visible")
+                            : "opacity-0 invisible"
                     )}>
                         <div className={cn(
                             "absolute right-0 top-1/2 -translate-y-1/2 h-full transition-all duration-700",
@@ -309,7 +327,7 @@ const StatCard = ({ icon: Icon, label, value, colorClass, delay = 0, horizontal 
             />
         </motion.div>
     );
-};
+});
 
 const formatFocusedTime = (totalMinutes: number) => {
     if (totalMinutes < 60) return `${totalMinutes}m`;
@@ -319,150 +337,10 @@ const formatFocusedTime = (totalMinutes: number) => {
     return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
 };
 
-// --- Sub-components ---
-
-interface ProfilePicCropperModalProps {
-    image: string;
-    currentTheme: typeof THEMES[string];
-    onClose: () => void;
-    onConfirm: (base64Image: string) => Promise<void>;
-}
-
-function ProfilePicCropperModal({ image, currentTheme, onClose, onConfirm }: ProfilePicCropperModalProps) {
-    const [crop, setCrop] = useState({ x: 0, y: 0 });
-    const [zoom, setZoom] = useState(1);
-    const [croppedAreaPixels, setCroppedAreaPixels] = useState<CropArea | null>(null);
-    const [isSaving, setIsSaving] = useState(false);
-
-    const onCropComplete = (_: CropArea, pixels: CropArea) => setCroppedAreaPixels(pixels);
-
-    const handleConfirm = async () => {
-        if (!croppedAreaPixels) return;
-        setIsSaving(true);
-        try {
-            const base64Image = await getCroppedImgBase64(image, croppedAreaPixels);
-            if (!base64Image) throw new Error();
-            await onConfirm(base64Image);
-        } catch {
-            toast.error("Failed to crop image.");
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    const getCroppedImgBase64 = async (imageSrc: string, pixelCrop: CropArea): Promise<string | null> => {
-        const img = new Image();
-        img.src = imageSrc;
-        await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return null;
-
-        // High quality scale
-        canvas.width = 512;
-        canvas.height = 512;
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-
-        ctx.drawImage(
-            img,
-            pixelCrop.x,
-            pixelCrop.y,
-            pixelCrop.width,
-            pixelCrop.height,
-            0,
-            0,
-            512,
-            512
-        );
-        return canvas.toDataURL("image/jpeg", 0.92);
-    };
-
-    return (
-        <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-zinc-950/90 backdrop-blur-xl flex items-center justify-center p-4"
-        >
-            <motion.div
-                initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }}
-                className="w-full max-w-xl bg-zinc-900 border border-white/10 rounded-[3rem] overflow-hidden relative shadow-[0_0_100px_rgba(0,0,0,0.8)] flex flex-col"
-            >
-                <div className="relative w-full aspect-square bg-zinc-950">
-                    <Cropper
-                        image={image}
-                        crop={crop}
-                        zoom={zoom}
-                        minZoom={1}
-                        maxZoom={3}
-                        aspect={1}
-                        onCropChange={setCrop}
-                        onCropComplete={onCropComplete}
-                        onZoomChange={setZoom}
-                        cropShape="rect"
-                        showGrid={false}
-                    />
-                </div>
-                <div className="flex items-center gap-4 px-8 py-4 bg-zinc-900/90 border-t border-white/5">
-                    <button
-                        type="button"
-                        onClick={() => setZoom(Math.max(1, zoom - 0.2))}
-                        className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                        title="Zoom Out"
-                    >
-                        <ZoomOut className="w-4 h-4" />
-                    </button>
-                    <input
-                        type="range"
-                        value={zoom}
-                        min={1}
-                        max={3}
-                        step={0.05}
-                        aria-label="Zoom"
-                        onChange={(e) => setZoom(Number(e.target.value))}
-                        className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-white transition-all"
-                        style={{ accentColor: currentTheme.accent }}
-                    />
-                    <button
-                        type="button"
-                        onClick={() => setZoom(Math.min(3, zoom + 0.2))}
-                        className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                        title="Zoom In"
-                    >
-                        <ZoomIn className="w-4 h-4" />
-                    </button>
-                </div>
-                <div className="p-8 bg-zinc-950/80 backdrop-blur-xl flex items-center justify-between border-t border-white/5">
-                    <Button variant="ghost" disabled={isSaving} onClick={onClose} className="text-zinc-500 hover:text-white uppercase ubuntu-bold font-black text-xs tracking-[0.2em] active:translate-y-0">Cancel</Button>
-                    <motion.div
-                        whileHover={isSaving ? undefined : {
-                            boxShadow: `0 0 35px ${currentTheme.accent}66`
-                        }}
-                        whileTap={isSaving ? undefined : { scale: 0.98 }}
-                        transition={{ duration: 0.2, ease: "easeInOut" }}
-                        className="rounded-2xl"
-                    >
-                        <Button
-                            onClick={handleConfirm}
-                            disabled={isSaving}
-                            className="ubuntu-bold font-black uppercase text-xs tracking-[0.3em] px-10 h-12 rounded-2xl shadow-xl transition-all cursor-pointer active:translate-y-0"
-                            style={{
-                                backgroundColor: currentTheme.accent,
-                                color: currentTheme.text || "#FFFFFF",
-                                boxShadow: `0 0 30px ${currentTheme.accent}44`
-                            }}
-                        >
-                            {isSaving ? "Saving..." : "Confirm"}
-                        </Button>
-                    </motion.div>
-                </div>
-            </motion.div>
-        </motion.div>
-    );
-}
-
 // --- Page ---
 
 function ProfileContent() {
+    const isTouchDevice = useTouchDevice();
     const searchParams = useSearchParams();
     const targetUserId = searchParams.get("user");
     const { user, loading: authLoading } = useAuth();
@@ -505,6 +383,7 @@ function ProfileContent() {
     const [timeRange, setTimeRange] = useState<TimeRange>("days");
     const [mounted, setMounted] = useState(false);
     const [friends, setFriends] = useState<FriendListItem[]>([]);
+    const [isFriendsHovered, setIsFriendsHovered] = useState(false);
 
     useEffect(() => {
         setMounted(true);
@@ -534,8 +413,10 @@ function ProfileContent() {
             // Fetch friendship status if not own profile
             if (!ownProfile) {
                 const { getFriendRequestStatus, areFriends } = await import("@/lib/friendship");
-                const status = await getFriendRequestStatus(user.uid, effectiveUserId);
-                const isFriend = await areFriends(user.uid, effectiveUserId);
+                const [status, isFriend] = await Promise.all([
+                    getFriendRequestStatus(user.uid, effectiveUserId),
+                    areFriends(user.uid, effectiveUserId)
+                ]);
                 if (!active) return;
                 setFriendStatus({ status: status?.status, direction: status?.direction, isFriend });
 
@@ -597,18 +478,15 @@ function ProfileContent() {
             if (!active) unsubData();
             else unsubs.push(unsubData);
 
-            // Sync sessions info for grid & streak
-            const history = (await getSessionHistory(effectiveUserId, 365)) as SessionData[];
+            // Sync sessions, friends, and stats data in parallel
+            const [history, friendsData, userDoc] = await Promise.all([
+                getSessionHistory(effectiveUserId, 365) as Promise<SessionData[]>,
+                getFriendsListSimple(effectiveUserId),
+                getDoc(doc(db, "users", user.uid))
+            ]);
             if (!active) return;
             setSessions(history);
-
-            // Fetch friends list
-            const friendsData = await getFriendsList(effectiveUserId);
-            if (!active) return;
             setFriends(friendsData);
-
-            // Fetch stats data
-            const userDoc = await getDoc(doc(db, "users", user.uid));
             if (userDoc.exists()) {
                 // Stats cards removed, skipping setUserStats
             }
@@ -808,10 +686,10 @@ function ProfileContent() {
 
     // --- Render ---
 
-    if (authLoading || (user && loading)) {
+    if (authLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-zinc-950">
-                <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+                <div className="w-12 h-12 border-4 border-white/10 border-t-white rounded-full animate-spin" />
             </div>
         );
     }
@@ -836,7 +714,7 @@ function ProfileContent() {
             <div className="flex flex-col flex-1 bg-zinc-950 min-h-screen relative overflow-x-hidden">
 
                 {/* Immersive Background Elements */}
-                <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full h-screen pointer-events-none z-0">
+                <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full h-screen pointer-events-none z-0 hidden sm:block">
                     <div
                         className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full blur-[120px] animate-pulse-slow transition-colors duration-1000"
                         style={{ backgroundColor: `${currentTheme.accent}11` }}
@@ -845,7 +723,26 @@ function ProfileContent() {
                     <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/5 to-transparent" />
                 </div>
 
-                <main className="relative z-10 flex flex-col items-center pb-32 px-6 w-full flex-1 max-w-6xl mx-auto pt-20">
+                <AnimatePresence mode="wait">
+                    {loading ? (
+                        <motion.div
+                            key="profile-loader"
+                            initial={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.35, ease: "easeInOut" }}
+                            className="absolute inset-0 flex items-center justify-center bg-zinc-950 z-[999] min-h-screen"
+                        >
+                            <div className="w-12 h-12 border-4 border-white/10 border-t-white rounded-full animate-spin" />
+                        </motion.div>
+                    ) : (
+                        <motion.main
+                            key="profile-content"
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -12 }}
+                            transition={{ duration: 0.4, ease: "easeOut" }}
+                            className="relative z-10 flex flex-col items-center pb-32 px-6 w-full flex-1 max-w-6xl mx-auto pt-20"
+                        >
 
                     {/* --- IDENTITY HUB --- */}
                     <section className="w-full flex flex-col lg:flex-row items-center lg:items-start gap-12 mb-20 px-2 relative">
@@ -908,10 +805,12 @@ function ProfileContent() {
                                         <Avatar
                                             className="w-40 h-40 md:w-48 md:h-48 rounded-[2.2rem] border border-white/10 relative z-10 overflow-hidden transition-all duration-500 group-hover:border-white/30"
                                         >
-                                            <AvatarImage
-                                                src={userData?.photoURL || user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`}
-                                                className="object-cover w-full h-full scale-100 group-hover:scale-105 transition-transform duration-[2s] ease-out rounded-[2.2rem]"
-                                            />
+                                            {(userData?.photoURL || user.photoURL) && (
+                                                <AvatarImage
+                                                    src={(userData?.photoURL || user.photoURL) ?? undefined}
+                                                    className="object-cover w-full h-full scale-100 group-hover:scale-105 transition-transform duration-[2s] ease-out rounded-[2.2rem]"
+                                                />
+                                            )}
                                             <AvatarFallback className="bg-zinc-900 font-black text-6xl text-white rounded-[2.2rem] transition-all group-hover:bg-zinc-800">
                                                 {user.displayName?.charAt(0) || "D"}
                                             </AvatarFallback>
@@ -1135,11 +1034,10 @@ function ProfileContent() {
                             </div>
                         </div>
 
-                        {/* Quick Stats Column - Custom Stacked Layout */}
                         <motion.div
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: 0.3 }}
+                            transition={{ duration: 0.35 }}
                             className="grid grid-cols-2 gap-3 w-full lg:w-[360px] shrink-0"
                         >
                             {/* Streak: Spans 2x width (top) - Horizontal */}
@@ -1191,9 +1089,11 @@ function ProfileContent() {
                                 <motion.div
                                     initial={{ opacity: 0, scale: 0.98 }}
                                     animate={{ opacity: 1, scale: 1 }}
-                                    transition={{ delay: 0.5, duration: 0.8 }}
+                                    transition={{ duration: 0.35 }}
+                                    onMouseEnter={() => setIsFriendsHovered(true)}
+                                    onMouseLeave={() => setIsFriendsHovered(false)}
                                     className={cn(
-                                        "relative group bg-zinc-900/10 backdrop-blur-2xl border border-white/5 rounded-[5px] flex items-center justify-between p-3 px-5 shadow-2xl transition-all duration-500 h-full min-h-[80px] overflow-hidden",
+                                        "relative group bg-zinc-900/90 sm:bg-zinc-900/10 backdrop-blur-none sm:backdrop-blur-2xl border border-white/5 rounded-[5px] flex items-center justify-between p-3 px-5 shadow-2xl transition-all duration-500 h-full min-h-[80px] overflow-hidden",
                                         isOwnProfile ? "cursor-pointer hover:bg-zinc-900/20" : "cursor-default"
                                     )}
                                     onClick={() => isOwnProfile && (window.location.href = "/friends")}
@@ -1212,12 +1112,16 @@ function ProfileContent() {
                                     {/* Friends Card Animated Background */}
                                     <div className="absolute inset-0 pointer-events-none z-0 opacity-0 group-hover:opacity-35 transition-opacity duration-700">
                                         <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[320px] h-[320px]">
-                                            <DotLottieReact
-                                                src="https://lottie.host/57f88543-91fb-4d6d-a8a3-5c0be150cdcf/R5RnYeBnGD.lottie"
-                                                autoplay
-                                                loop
-                                                style={{ width: "100%", height: "100%" }}
-                                            />
+                                            {!isTouchDevice && (
+                                                <div className={cn("w-full h-full transition-all duration-700", isFriendsHovered ? "opacity-100 visible" : "opacity-0 invisible")}>
+                                                <DotLottieReact
+                                                    src="https://lottie.host/57f88543-91fb-4d6d-a8a3-5c0be150cdcf/R5RnYeBnGD.lottie"
+                                                    autoplay
+                                                    loop
+                                                    style={{ width: "100%", height: "100%" }}
+                                                />
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="absolute inset-0 bg-gradient-to-r from-zinc-950/80 via-zinc-950/40 to-transparent" />
                                     </div>
@@ -1278,10 +1182,11 @@ function ProfileContent() {
 
                         {/* Neural Activity (Heatmap) */}
                         <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
+                            initial={{ opacity: 0, scale: 0.98 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.6, duration: 0.8 }}
+                            transition={{ duration: 0.35 }}
                             onMouseMove={(e) => {
+                                if (isTouchDevice) return;
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 const x = e.clientX - rect.left;
                                 const y = e.clientY - rect.top;
@@ -1297,7 +1202,7 @@ function ProfileContent() {
                         >
                             {/* Top-Right Ambient Glow Source */}
                             <div
-                                className="absolute -top-[15%] -right-[10%] w-[50%] h-[50%] rounded-full opacity-[0.18] pointer-events-none transition-colors duration-1000 z-0"
+                                className="absolute -top-[15%] -right-[10%] w-[50%] h-[50%] rounded-full opacity-[0.18] pointer-events-none transition-colors duration-1000 z-0 hidden sm:block"
                                 style={{
                                     background: `radial-gradient(circle at center, ${currentTheme.accent}, transparent 75%)`,
                                     filter: 'blur(90px)'
@@ -1365,7 +1270,7 @@ function ProfileContent() {
                                              />
                                              {day.level > 0 && (
                                                  <div
-                                                     className="absolute w-[8px] h-[8px] sm:w-full sm:h-full md:w-auto md:h-full md:aspect-square lg:w-full lg:aspect-auto blur-[6px] opacity-[0.15] pointer-events-none"
+                                                     className="absolute w-[8px] h-[8px] sm:w-full sm:h-full md:w-auto md:h-full md:aspect-square lg:w-full lg:aspect-auto blur-[6px] opacity-[0.15] pointer-events-none hidden sm:block"
                                                      style={{ backgroundColor: currentTheme.accent }}
                                                  />
                                              )}
@@ -1377,10 +1282,11 @@ function ProfileContent() {
 
                         {/* Streak Calendar Terminal */}
                         <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
+                            initial={{ opacity: 0, scale: 0.98 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.7, duration: 0.8 }}
+                            transition={{ duration: 0.35 }}
                             onMouseMove={(e) => {
+                                if (isTouchDevice) return;
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 const x = e.clientX - rect.left;
                                 const y = e.clientY - rect.top;
@@ -1396,7 +1302,7 @@ function ProfileContent() {
                         >
                             {/* Top-Left Ambient Glow Source (STRONGER) */}
                             <div
-                                className="absolute -top-[15%] -left-[15%] w-[60%] h-[60%] rounded-full opacity-[0.22] pointer-events-none transition-colors duration-1000 z-0"
+                                className="absolute -top-[15%] -left-[15%] w-[60%] h-[60%] rounded-full opacity-[0.22] pointer-events-none transition-colors duration-1000 z-0 hidden sm:block"
                                 style={{
                                     background: `radial-gradient(circle at center, ${currentTheme.accent}, transparent 75%)`,
                                     filter: 'blur(80px)'
@@ -1480,10 +1386,11 @@ function ProfileContent() {
                     >
                         {/* Chart Section */}
                         <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
+                            initial={{ opacity: 0, scale: 0.98 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.8, duration: 0.8 }}
+                            transition={{ duration: 0.35 }}
                             onMouseMove={(e) => {
+                                if (isTouchDevice) return;
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 const x = e.clientX - rect.left;
                                 const y = e.clientY - rect.top;
@@ -1499,7 +1406,7 @@ function ProfileContent() {
                         >
                             {/* Ambient Glow Source */}
                             <div
-                                className="absolute -top-[20%] -right-[10%] w-[60%] h-[60%] rounded-full opacity-[0.22] pointer-events-none transition-colors duration-1000 z-0"
+                                className="absolute -top-[20%] -right-[10%] w-[60%] h-[60%] rounded-full opacity-[0.22] pointer-events-none transition-colors duration-1000 z-0 hidden sm:block"
                                 style={{
                                     background: `radial-gradient(circle at center, ${currentTheme.accent}, transparent 75%)`,
                                     filter: 'blur(90px)'
@@ -1596,129 +1503,14 @@ function ProfileContent() {
                                             }}
                                         />
 
-                                        <motion.div
-                                            key={`mask_${timeRange}`}
-                                            initial={{ clipPath: 'inset(0 100% 0 0)' }}
-                                            animate={{ clipPath: 'inset(0 0% 0 0)' }}
-                                            transition={{ duration: 2.5, ease: "easeInOut" }}
-                                            className="w-full h-full min-w-0 outline-none focus:outline-none"
-                                        >
-                                            <ResponsiveContainer width="100%" height="100%" debounce={50} className="outline-none focus:outline-none" style={{ outline: 'none' }}>
-                                                <ComposedChart
-                                                    data={timeRange === "days" ? weekData : timeRange === "weeks" ? monthData : yearData}
-                                                    key={`${timeRange}_composed`}
-                                                    margin={{ top: 20, right: 10, left: -20, bottom: 25 }}
-                                                    className="outline-none focus:outline-none"
-                                                    style={{ outline: 'none' }}
-                                                >
-                                                    <defs>
-                                                        <linearGradient id="colorFlow_analytics" x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="0%" stopColor={currentTheme.accent} stopOpacity={0.5} />
-                                                            <stop offset="40%" stopColor={currentTheme.accent} stopOpacity={0.15} />
-                                                            <stop offset="90%" stopColor={currentTheme.accent} stopOpacity={0.02} />
-                                                            <stop offset="100%" stopColor={currentTheme.accent} stopOpacity={0} />
-                                                        </linearGradient>
-                                                        <linearGradient id="strokeFlow_analytics" x1="0" y1="0" x2="1" y2="0">
-                                                            <stop offset="0%" stopColor={currentTheme.accent} stopOpacity={0.4} style={{ transition: 'stop-color 1000ms ease-in-out' }} />
-                                                            <stop offset="50%" stopColor={currentTheme.accent} stopOpacity={1} style={{ transition: 'stop-color 1000ms ease-in-out' }} />
-                                                            <stop offset="100%" stopColor={currentTheme.accent} stopOpacity={0.4} style={{ transition: 'stop-color 1000ms ease-in-out' }} />
-                                                        </linearGradient>
-                                                        <filter id="glow_analytics" x="-20%" y="-20%" width="140%" height="140%">
-                                                            <feGaussianBlur stdDeviation="3" result="blur" />
-                                                            <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                                                        </filter>
-                                                    </defs>
-
-                                                    <CartesianGrid
-                                                        strokeDasharray="4 4"
-                                                        stroke="rgba(255,255,255,0.03)"
-                                                        vertical={false}
-                                                    />
-
-                                                    <XAxis
-                                                        dataKey="date"
-                                                        axisLine={false}
-                                                        tickLine={false}
-                                                        tick={{ fill: 'rgba(255,255,255,0.25)', fontSize: 9, fontWeight: 700, letterSpacing: '0.05em' }}
-                                                        dy={15}
-                                                        padding={{ left: 30, right: 30 }}
-                                                    />
-
-                                                    <YAxis hide domain={[0, 'auto']} />
-
-                                                    <Tooltip
-                                                        cursor={{ fill: 'rgba(255,255,255,0.03)', radius: 12 }}
-                                                        content={({ active, payload }) => {
-                                                            if (active && payload && payload.length) {
-                                                                const label = payload[0].payload.tooltipLabel || payload[0].payload.date;
-                                                                return (
-                                                                    <motion.div
-                                                                        initial={{ opacity: 0, x: -10, filter: 'blur(10px)' }}
-                                                                        animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
-                                                                        className="relative min-w-[120px] p-[1px] rounded-xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
-                                                                    >
-                                                                        {/* Animated Border Gradient */}
-                                                                        <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-white/5" />
-
-                                                                        <div className="relative bg-zinc-900/90 backdrop-blur-3xl rounded-[11px] p-3.5">
-                                                                            {/* Left Accent Bar */}
-                                                                            <div
-                                                                                className="absolute left-0 top-3 bottom-3 w-[2px] rounded-r-full"
-                                                                                style={{ background: currentTheme.accent, boxShadow: `0 0 8px ${currentTheme.accent}` }}
-                                                                            />
-
-                                                                            <div className="flex items-center gap-3">
-                                                                                <p className="text-[10px] font-bold text-white/90 whitespace-nowrap">
-                                                                                    {label}
-                                                                                </p>
-
-                                                                                <div className="w-[1px] h-3 bg-white/10" />
-
-                                                                                <div className="flex items-baseline gap-1">
-                                                                                    <span className="text-xl font-black text-white tabular-nums leading-none">
-                                                                                        {payload[0].value}
-                                                                                    </span>
-                                                                                    <span className="text-[9px] font-black text-zinc-400 uppercase">min</span>
-                                                                                </div>
-                                                                            </div>
-
-                                                                            {/* Background Glow */}
-                                                                            <div
-                                                                                className="absolute -right-3 -bottom-3 w-12 h-12 blur-2xl opacity-10 pointer-events-none rounded-full"
-                                                                                style={{ background: currentTheme.accent }}
-                                                                            />
-                                                                        </div>
-                                                                    </motion.div>
-                                                                );
-                                                            }
-                                                            return null;
-                                                        }}
-                                                    />
-
-                                                    {/* Operational Trend Area */}
-                                                    <Area
-                                                        type="monotone"
-                                                        dataKey="minutes"
-                                                        stroke={currentTheme.accent}
-                                                        strokeWidth={2}
-                                                        fill="url(#colorFlow_analytics)"
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        animationDuration={1500}
-                                                        animationEasing="ease-in-out"
-                                                        activeDot={{
-                                                            r: 8,
-                                                            fill: "#fff",
-                                                            stroke: currentTheme.accent,
-                                                            strokeWidth: 4,
-                                                            style: {
-                                                                filter: `drop-shadow(0 0 12px ${currentTheme.accent})`
-                                                            }
-                                                        }}
-                                                    />
-                                                </ComposedChart>
-                                            </ResponsiveContainer>
-                                        </motion.div>
+                                        <ProfileChart
+                                            timeRange={timeRange}
+                                            weekData={weekData}
+                                            monthData={monthData}
+                                            yearData={yearData}
+                                            currentTheme={currentTheme}
+                                            isTouchDevice={isTouchDevice}
+                                        />
                                     </div>
                                 )}
                             </div>
@@ -1727,7 +1519,9 @@ function ProfileContent() {
 
 
                     </motion.div>
-                </main>
+                    </motion.main>
+                )}
+            </AnimatePresence>
 
                 {/* Cropping Modal */}
                 <AnimatePresence>

@@ -19,7 +19,7 @@ export function Header() {
     const { user, loading } = useAuth();
 
     return (
-        <header className="fixed top-0 left-0 right-0 z-50 h-20 bg-background/80 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-12 transition-all duration-500">
+        <header className="fixed top-0 left-0 right-0 z-50 h-20 bg-background md:bg-background/80 backdrop-blur-none md:backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-12 transition-all duration-500">
             <div className="flex items-center gap-12">
                 <h1 className="text-3xl font-black tracking-tighter text-primary select-none cursor-default hover:scale-105 transition-transform duration-500">
                     Dangdoro
@@ -69,7 +69,7 @@ export function Header() {
 
                 <Link href="/profile">
                     <Avatar className="w-10 h-10 border-2 border-primary/20 p-0.5 hover:border-primary transition-colors duration-500 hover:scale-105 transform cursor-pointer">
-                        <AvatarImage src={user?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.uid || 'default'}`} />
+                        {user?.photoURL && <AvatarImage src={user.photoURL ?? undefined} />}
                         <AvatarFallback className="bg-zinc-900 text-[10px] font-black">{user?.displayName?.slice(0, 2) || "!!"}</AvatarFallback>
                     </Avatar>
                 </Link>

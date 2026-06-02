@@ -1,4 +1,3 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { SYSTEM_PROMPT } from "@/lib/prompts";
 import { adminAuth } from "@/lib/firebase-admin";
 import { aiRateLimiter } from "@/lib/rate-limit";
@@ -66,6 +65,7 @@ async function tryGeminiFallback(messages: any[]) {
   for (const modelName of geminiModels) {
     try {
       console.log(`Attempting Gemini fallback with model: ${modelName}`);
+      const { GoogleGenerativeAI } = await import("@google/generative-ai");
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: modelName });
 

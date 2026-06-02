@@ -5,14 +5,7 @@ import { GroupWorkspace } from "@/components/groups/GroupWorkspace";
 import { BackgroundTheme } from "@/components/background-theme";
 import { AuthRequired } from "@/components/auth-required";
 import { useAuth } from "@/components/AuthProvider";
-import { Space_Grotesk } from "next/font/google";
 import { cn } from "@/lib/utils";
-
-const spaceGrotesk = Space_Grotesk({
-    subsets: ["latin"],
-    variable: "--font-space-grotesk",
-    weight: ["300", "400", "500", "600", "700"],
-});
 
 export default function GroupDetailPage({ params }: { params: Promise<{ groupId: string }> }) {
     const { groupId } = use(params);
@@ -31,7 +24,7 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
 
     return (
         <BackgroundTheme showSettings={false}>
-            <div className={cn("relative min-h-screen flex flex-col overflow-x-hidden group-page-radius", spaceGrotesk.variable, "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
+            <div className={cn("relative min-h-screen flex flex-col overflow-x-hidden group-page-radius", "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
                 <main className="relative z-10 flex flex-col w-full flex-1">
                     <GroupWorkspace groupId={groupId} />
                 </main>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, memo } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { BackgroundTheme } from "@/components/background-theme";
 import { AuthRequired } from "@/components/auth-required";
@@ -479,6 +479,100 @@ function formatTimeAgo(timestamp: MaybeTimestamp) {
     return `${years}y ago`;
 }
 
+interface FriendCardProps {
+    friend: FriendItem;
+    online: boolean;
+    onRemoveFriend: (friendId: string) => void;
+}
+
+const FriendCard = memo(({ friend, online, onRemoveFriend }: FriendCardProps) => {
+    const userData = friend.userData;
+    const totalMinutes = userData?.totalMinutes || 0;
+    const profileUserId = userData?.uid || userData?.id || friend.friendId;
+
+    const formatFocusTime = (minutesCount: number) => {
+        const hours = Math.floor(minutesCount / 60);
+        const mins = minutesCount % 60;
+        if (hours === 0) return `${mins}m`;
+        if (mins === 0) return `${hours}h`;
+        return `${hours}h ${mins}m`;
+    };
+
+    const formatFriendSince = (timestamp: MaybeTimestamp) => {
+        if (!timestamp) return "---";
+        const date = timestamp instanceof Date ? timestamp : timestamp.toDate?.();
+        if (!date) return "---";
+        return date.getFullYear();
+    };
+
+    return (
+        <motion.div
+            whileHover={{}}
+            className="ubuntu-regular group relative rounded-[5px] bg-zinc-900/40 backdrop-blur-xl border border-white/5 hover:border-white/10 shadow-2xl transition-all duration-300 overflow-hidden"
+        >
+            <Link href={`/profile?user=${profileUserId}`} className="block p-5" aria-label={`Open ${userData?.displayName || "friend"} profile`}>
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                    <div className={cn(
+                        "absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent to-transparent shadow-[0_0_8px_rgba(110,231,183,0.3)]",
+                        online 
+                            ? "via-emerald-300/60 shadow-[0_0_8px_rgba(110,231,183,0.3)]" 
+                            : "via-sky-300/60 shadow-[0_0_8px_rgba(125,211,252,0.3)]"
+                    )} />
+                </div>
+
+                <div className="relative z-10 flex items-start gap-3">
+                    <Avatar className="w-12 h-12 rounded-full overflow-hidden border border-white/10">
+                        <AvatarImage src={userData?.photoURL} className="rounded-full object-cover" />
+                        <AvatarFallback className="rounded-full">{userData?.displayName?.[0]}</AvatarFallback>
+                    </Avatar>
+
+                    <div className="min-w-0 flex-1">
+                        <p className="ubuntu-bold text-xl leading-none font-extrabold text-zinc-100 tracking-tight truncate">
+                            {userData?.displayName || "Unknown"}
+                        </p>
+                        <div className="ubuntu-medium mt-2 flex items-center gap-1.5 text-[12px] font-semibold">
+                            <span className={cn("inline-block w-1.5 h-1.5 rounded-full", online ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-zinc-500")} />
+                            <span className={online ? "text-emerald-400" : "text-zinc-400"}>
+                                {online ? "Online" : `Offline • Last seen ${formatTimeAgo(userData?.lastActive)}`}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="relative z-10 mt-5 border-t border-white/10 pt-4 grid grid-cols-3 gap-2">
+                    <div className="text-center">
+                        <p className="ubuntu-medium text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Focus Time</p>
+                        <p className="ubuntu-bold text-base leading-tight font-black text-zinc-100 tabular-nums">{formatFocusTime(totalMinutes)}</p>
+                    </div>
+                    <div className="text-center">
+                        <p className="ubuntu-medium text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Sessions</p>
+                        <p className="ubuntu-bold text-base leading-tight font-black text-zinc-100 tabular-nums">{userData?.totalPomodoros || 0}</p>
+                    </div>
+                    <div className="text-center">
+                        <p className="ubuntu-medium text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Friend Since</p>
+                        <p className="ubuntu-bold text-base leading-tight font-black text-zinc-100 tabular-nums">{formatFriendSince(friend.since)}</p>
+                    </div>
+                </div>
+            </Link>
+
+            <button
+                onClick={() => onRemoveFriend(friend.friendId)}
+                className="absolute top-3 right-3 p-2 opacity-0 translate-y-1 scale-95 group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 text-red-500 hover:text-red-400 cursor-pointer transition-all duration-200 ease-out z-20"
+                aria-label="Remove friend"
+            >
+                <motion.span
+                    whileHover={{ scale: 1.12 }}
+                    transition={{ duration: 0.18, ease: "easeOut" }}
+                    className="inline-flex"
+                >
+                    <UserMinus className="w-4 h-4" />
+                </motion.span>
+            </button>
+        </motion.div>
+    );
+});
+FriendCard.displayName = "FriendCard";
+
 type FriendsTabProps = {
     friends: FriendItem[];
     loading: boolean;
@@ -541,75 +635,14 @@ function FriendsTab({ friends, loading, onRemoveFriend, onGoToSearch }: FriendsT
                         <span className="ubuntu-bold text-[12px] font-black tracking-[0.2em] text-emerald-400">Online</span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {onlineFriends.map((friend) => {
-                            const userData = friend.userData;
-                            const totalMinutes = userData?.totalMinutes || 0;
-                            const profileUserId = userData?.uid || userData?.id || friend.friendId;
-                            const online = true;
-
-                            return (
-                                <motion.div
-                                    key={friend.friendId}
-                                    whileHover={{}}
-                                    className="ubuntu-regular group relative rounded-[5px] bg-zinc-900/40 backdrop-blur-xl border border-white/5 hover:border-white/10 shadow-2xl transition-all duration-300 overflow-hidden"
-                                >
-                                    <Link href={`/profile?user=${profileUserId}`} className="block p-5" aria-label={`Open ${userData?.displayName || "friend"} profile`}>
-                                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-                                            <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-300/60 to-transparent shadow-[0_0_8px_rgba(110,231,183,0.3)]" />
-                                        </div>
-
-                                        <div className="relative z-10 flex items-start gap-3">
-                                            <Avatar className="w-12 h-12 rounded-full overflow-hidden border border-white/10">
-                                                <AvatarImage src={userData?.photoURL} className="rounded-full object-cover" />
-                                                <AvatarFallback className="rounded-full">{userData?.displayName?.[0]}</AvatarFallback>
-                                            </Avatar>
-
-                                            <div className="min-w-0 flex-1">
-                                                <p className="ubuntu-bold text-xl leading-none font-extrabold text-zinc-100 tracking-tight truncate">
-                                                    {userData?.displayName || "Unknown"}
-                                                </p>
-                                                <div className="ubuntu-medium mt-2 flex items-center gap-1.5 text-[12px] font-semibold">
-                                                    <span className={cn("inline-block w-1.5 h-1.5 rounded-full", online ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-zinc-500")} />
-                                                    <span className={online ? "text-emerald-400" : "text-zinc-400"}>
-                                                        {online ? "Online" : `Offline • Last seen ${formatTimeAgo(userData?.lastActive)}`}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                        </div>
-
-                                        <div className="relative z-10 mt-5 border-t border-white/10 pt-4 grid grid-cols-3 gap-2">
-                                            <div className="text-center">
-                                                <p className="ubuntu-medium text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Focus Time</p>
-                                                <p className="ubuntu-bold text-base leading-tight font-black text-zinc-100 tabular-nums">{formatFocusTime(totalMinutes)}</p>
-                                            </div>
-                                            <div className="text-center">
-                                                <p className="ubuntu-medium text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Sessions</p>
-                                                <p className="ubuntu-bold text-base leading-tight font-black text-zinc-100 tabular-nums">{userData?.totalPomodoros || 0}</p>
-                                            </div>
-                                            <div className="text-center">
-                                                <p className="ubuntu-medium text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Friend Since</p>
-                                                <p className="ubuntu-bold text-base leading-tight font-black text-zinc-100 tabular-nums">{formatFriendSince(friend.since)}</p>
-                                            </div>
-                                        </div>
-                                    </Link>
-
-                                    <button
-                                        onClick={() => onRemoveFriend(friend.friendId)}
-                                        className="absolute top-3 right-3 p-2 opacity-0 translate-y-1 scale-95 group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 text-red-500 hover:text-red-400 cursor-pointer transition-all duration-200 ease-out z-20"
-                                        aria-label="Remove friend"
-                                    >
-                                        <motion.span
-                                            whileHover={{ scale: 1.12 }}
-                                            transition={{ duration: 0.18, ease: "easeOut" }}
-                                            className="inline-flex"
-                                        >
-                                            <UserMinus className="w-4 h-4" />
-                                        </motion.span>
-                                    </button>
-                                </motion.div>
-                            );
-                        })}
+                        {onlineFriends.map((friend) => (
+                            <FriendCard
+                                key={friend.friendId}
+                                friend={friend}
+                                online={true}
+                                onRemoveFriend={onRemoveFriend}
+                            />
+                        ))}
                     </div>
                 </section>
             )}
@@ -621,74 +654,14 @@ function FriendsTab({ friends, loading, onRemoveFriend, onGoToSearch }: FriendsT
                         <span className="ubuntu-bold text-[12px] font-black tracking-[0.2em] text-zinc-500">Offline</span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {offlineFriends.map((friend) => {
-                            const userData = friend.userData;
-                            const totalMinutes = userData?.totalMinutes || 0;
-                            const profileUserId = userData?.uid || userData?.id || friend.friendId;
-                            const online = false;
-
-                            return (
-                                <motion.div
-                                    key={friend.friendId}
-                                    whileHover={{}}
-                                    className="ubuntu-regular group relative rounded-[5px] bg-zinc-900/40 backdrop-blur-xl border border-white/5 hover:border-white/10 shadow-2xl transition-all duration-300 overflow-hidden"
-                                >
-                                    <Link href={`/profile?user=${profileUserId}`} className="block p-5" aria-label={`Open ${userData?.displayName || "friend"} profile`}>
-                                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-                                            <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-sky-300/60 to-transparent shadow-[0_0_8px_rgba(125,211,252,0.3)]" />
-                                        </div>
-
-                                        <div className="relative z-10 flex items-start gap-3">
-                                            <Avatar className="w-12 h-12 rounded-full overflow-hidden border border-white/10">
-                                                <AvatarImage src={userData?.photoURL} className="rounded-full object-cover" />
-                                                <AvatarFallback className="rounded-full">{userData?.displayName?.[0]}</AvatarFallback>
-                                            </Avatar>
-
-                                            <div className="min-w-0 flex-1">
-                                                <p className="ubuntu-bold text-xl leading-none font-extrabold text-zinc-100 tracking-tight truncate">
-                                                    {userData?.displayName || "Unknown"}
-                                                </p>
-                                                <div className="ubuntu-medium mt-2 flex items-center gap-1.5 text-[12px] font-semibold">
-                                                    <span className={cn("inline-block w-1.5 h-1.5 rounded-full", online ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-zinc-500")} />
-                                                    <span className={online ? "text-emerald-400" : "text-zinc-400"}>
-                                                        {online ? "Online" : `Offline • Last seen ${formatTimeAgo(userData?.lastActive)}`}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="relative z-10 mt-5 border-t border-white/10 pt-4 grid grid-cols-3 gap-2">
-                                            <div className="text-center">
-                                                <p className="ubuntu-medium text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Focus Time</p>
-                                                <p className="ubuntu-bold text-base leading-tight font-black text-zinc-100 tabular-nums">{formatFocusTime(totalMinutes)}</p>
-                                            </div>
-                                            <div className="text-center">
-                                                <p className="ubuntu-medium text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Sessions</p>
-                                                <p className="ubuntu-bold text-base leading-tight font-black text-zinc-100 tabular-nums">{userData?.totalPomodoros || 0}</p>
-                                            </div>
-                                            <div className="text-center">
-                                                <p className="ubuntu-medium text-[9px] uppercase tracking-wider text-zinc-500 font-bold">Friend Since</p>
-                                                <p className="ubuntu-bold text-base leading-tight font-black text-zinc-100 tabular-nums">{formatFriendSince(friend.since)}</p>
-                                            </div>
-                                        </div>
-                                    </Link>
-
-                                    <button
-                                        onClick={() => onRemoveFriend(friend.friendId)}
-                                        className="absolute top-3 right-3 p-2 opacity-0 translate-y-1 scale-95 group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 text-red-500 hover:text-red-400 cursor-pointer transition-all duration-200 ease-out z-20"
-                                        aria-label="Remove friend"
-                                    >
-                                        <motion.span
-                                            whileHover={{ scale: 1.12 }}
-                                            transition={{ duration: 0.18, ease: "easeOut" }}
-                                            className="inline-flex"
-                                        >
-                                            <UserMinus className="w-4 h-4" />
-                                        </motion.span>
-                                    </button>
-                                </motion.div>
-                            );
-                        })}
+                        {offlineFriends.map((friend) => (
+                            <FriendCard
+                                key={friend.friendId}
+                                friend={friend}
+                                online={false}
+                                onRemoveFriend={onRemoveFriend}
+                            />
+                        ))}
                     </div>
                 </section>
             )}
