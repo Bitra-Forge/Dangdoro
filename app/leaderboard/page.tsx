@@ -25,6 +25,7 @@ function LeaderboardContent() {
     const router = useRouter();
     const [players, setPlayers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [visibleCount, setVisibleCount] = useState(20);
     const searchParams = useSearchParams();
     
     // Initial tab based on URL or default
@@ -50,6 +51,7 @@ function LeaderboardContent() {
             if (authLoading || !user || user.isAnonymous) return;
             setLoading(true);
             setPlayers([]);
+            setVisibleCount(20);
 
             if (user && user.isAnonymous) {
                 await syncUserProfile(user);
@@ -84,17 +86,17 @@ function LeaderboardContent() {
                     const nonGuests = tops.filter(
                         (player: any) => !player.isAnonymous
                     );
-                    setPlayers(nonGuests.slice(0, 20));
+                    setPlayers(nonGuests);
                 }
             } else if (activeTab === "friends") {
-                const friendsTops = await getFriendsLeaderboard(user!.uid, 20);
+                const friendsTops = await getFriendsLeaderboard(user!.uid, 100);
                 if (isMounted) setPlayers(friendsTops);
             } else if (activeTab === "groups") {
                 const groups = await getGroupLeaderboard({
                     userId: user!.uid,
                     filter: "joined",
                     sortBy: "minutes",
-                    limitCount: 20
+                    limitCount: 100
                 });
                 if (isMounted) setPlayers(groups);
             }
@@ -107,6 +109,15 @@ function LeaderboardContent() {
         };
     }, [user, authLoading, activeTab, selectedGroup, searchParams]);
 
+    const { topThree, others, userRank, currentUserData, podiumOrder } = useMemo(() => {
+        const top3 = players.slice(0, 3);
+        const rest = players.slice(3);
+        const rank = players.findIndex(p => p.uid === user?.uid);
+        const current = players[rank];
+        const podium = [top3[1], top3[0], top3[2]].filter(Boolean);
+        return { topThree: top3, others: rest, userRank: rank, currentUserData: current, podiumOrder: podium };
+    }, [players, user?.uid]);
+
     if (authLoading) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center"><div className="w-12 h-12 border-4 border-[#C9B037]/20 border-t-[#C9B037] rounded-full animate-spin" /></div>;
 
     if (!user || user.isAnonymous) return (
@@ -116,15 +127,6 @@ function LeaderboardContent() {
             </main>
         </div>
     );
-
-    const { topThree, others, userRank, currentUserData, podiumOrder } = useMemo(() => {
-        const top3 = players.slice(0, 3);
-        const rest = players.slice(3);
-        const rank = players.findIndex(p => p.uid === user?.uid);
-        const current = players[rank];
-        const podium = [top3[1], top3[0], top3[2]].filter(Boolean);
-        return { topThree: top3, others: rest, userRank: rank, currentUserData: current, podiumOrder: podium };
-    }, [players, user?.uid]);
 
     return (
         <BackgroundTheme>
@@ -137,8 +139,16 @@ function LeaderboardContent() {
                     {currentUserData && activeTab !== "groups" && !selectedGroup && (
                         <button 
                             onClick={() => {
-                                const el = document.getElementById(`player-${user!.uid}`);
-                                el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                if (userRank + 1 > visibleCount) {
+                                    setVisibleCount(userRank + 1);
+                                    setTimeout(() => {
+                                        const el = document.getElementById(`player-${user!.uid}`);
+                                        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    }, 100);
+                                } else {
+                                    const el = document.getElementById(`player-${user!.uid}`);
+                                    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }
                             }}
                             className="fixed left-8 top-8 hidden xl:flex z-50 cursor-pointer transition-transform duration-300 hover:scale-105 active:scale-95"
                         >
@@ -231,90 +241,102 @@ function LeaderboardContent() {
                                     <p className="text-sm text-zinc-600 max-w-xs">You haven't joined any focus groups yet.</p>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
-                                    {players.map((group, idx) => {
-                                        const memberCount = group.members?.length ?? group.memberCount ?? 0;
-                                        const totalMinutes = group.totalMinutes || 0;
-                                        const hours = Math.floor(totalMinutes / 60);
-                                        const minutes = totalMinutes % 60;
-                                        
-                                        return (
-                                            <motion.div 
-                                                key={group.id || `group-${idx}`} 
-                                                onClick={() => setSelectedGroup(group)} 
-                                                initial={{ opacity: 0, y: 20 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                transition={{ delay: idx * 0.1, duration: 0.4 }}
-                                                className="relative group cursor-pointer"
-                                            >
-                                                {/* Card Container */}
-                                                <div className="relative overflow-hidden rounded-[5px] bg-gradient-to-br from-zinc-900/80 to-zinc-950/80 border border-[#C9B037]/30 hover:border-[#C9B037]/60 transition-all duration-500 hover:shadow-[0_0_40px_rgba(201,176,55,0.15)] hover:-translate-y-1">
-                                                    
-                                                    {/* Glow Effect */}
-                                                    <div className="absolute top-0 right-0 w-32 h-32 bg-[#C9B037]/10 blur-[60px] -mr-8 -mt-8 group-hover:bg-[#C9B037]/20 transition-all duration-500 hidden sm:block" />
-                                                    
-                                                    {/* Content */}
-                                                    <div className="relative p-6">
-                                                        {/* Group Name */}
-                                                        <h3 className="text-xl font-bold text-white mb-1 group-hover:text-[#C9B037] transition-colors duration-300">
-                                                            {group.name}
-                                                        </h3>
+                                <>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
+                                        {players.slice(0, visibleCount).map((group, idx) => {
+                                            const memberCount = group.members?.length ?? group.memberCount ?? 0;
+                                            const totalMinutes = group.totalMinutes || 0;
+                                            const hours = Math.floor(totalMinutes / 60);
+                                            const minutes = totalMinutes % 60;
+                                            
+                                            return (
+                                                <motion.div 
+                                                    key={group.id || `group-${idx}`} 
+                                                    onClick={() => setSelectedGroup(group)} 
+                                                    initial={{ opacity: 0, y: 20 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    transition={{ delay: idx * 0.1, duration: 0.4 }}
+                                                    className="relative group cursor-pointer"
+                                                >
+                                                    {/* Card Container */}
+                                                    <div className="relative overflow-hidden rounded-[5px] bg-gradient-to-br from-zinc-900/80 to-zinc-950/80 border border-[#C9B037]/30 hover:border-[#C9B037]/60 transition-all duration-500 hover:shadow-[0_0_40px_rgba(201,176,55,0.15)] hover:-translate-y-1">
                                                         
-                                                        {/* Description */}
-                                                        {group.description && (
-                                                            <p className="text-xs text-zinc-500 mb-6 line-clamp-2">{group.description}</p>
-                                                        )}
+                                                        {/* Glow Effect */}
+                                                        <div className="absolute top-0 right-0 w-32 h-32 bg-[#C9B037]/10 blur-[60px] -mr-8 -mt-8 group-hover:bg-[#C9B037]/20 transition-all duration-500 hidden sm:block" />
                                                         
-                                                        {/* Stats Grid */}
-                                                        <div className="grid grid-cols-2 gap-4 mb-6">
-                                                            {/* Members */}
-                                                            <div className="flex flex-col gap-1">
-                                                                <div className="flex items-center gap-2 text-zinc-500">
-                                                                    <Users className="w-3.5 h-3.5" />
-                                                                    <span className="text-[10px] font-black uppercase tracking-wider">Members</span>
+                                                        {/* Content */}
+                                                        <div className="relative p-6">
+                                                            {/* Group Name */}
+                                                            <h3 className="text-xl font-bold text-white mb-1 group-hover:text-[#C9B037] transition-colors duration-300">
+                                                                {group.name}
+                                                            </h3>
+                                                            
+                                                            {/* Description */}
+                                                            {group.description && (
+                                                                <p className="text-xs text-zinc-500 mb-6 line-clamp-2">{group.description}</p>
+                                                            )}
+                                                            
+                                                            {/* Stats Grid */}
+                                                            <div className="grid grid-cols-2 gap-4 mb-6">
+                                                                {/* Members */}
+                                                                <div className="flex flex-col gap-1">
+                                                                    <div className="flex items-center gap-2 text-zinc-500">
+                                                                        <Users className="w-3.5 h-3.5" />
+                                                                        <span className="text-[10px] font-black uppercase tracking-wider">Members</span>
+                                                                    </div>
+                                                                    <span className="text-lg font-bold text-white">{memberCount}</span>
                                                                 </div>
-                                                                <span className="text-lg font-bold text-white">{memberCount}</span>
+                                                                
+                                                                {/* Focus Time */}
+                                                                <div className="flex flex-col gap-1">
+                                                                    <div className="flex items-center gap-2 text-zinc-500">
+                                                                        <Clock className="w-3.5 h-3.5 text-[#C9B037]/60" />
+                                                                        <span className="text-[10px] font-black uppercase tracking-wider">Focus</span>
+                                                                    </div>
+                                                                    <div className="flex items-baseline gap-1">
+                                                                        {hours > 0 && <span className="text-lg font-bold text-white">{hours}h</span>}
+                                                                        <span className="text-lg font-bold text-[#C9B037]">{minutes}m</span>
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                             
-                                                            {/* Focus Time */}
-                                                            <div className="flex flex-col gap-1">
-                                                                <div className="flex items-center gap-2 text-zinc-500">
-                                                                    <Clock className="w-3.5 h-3.5 text-[#C9B037]/60" />
-                                                                    <span className="text-[10px] font-black uppercase tracking-wider">Focus</span>
-                                                                </div>
-                                                                <div className="flex items-baseline gap-1">
-                                                                    {hours > 0 && <span className="text-lg font-bold text-white">{hours}h</span>}
-                                                                    <span className="text-lg font-bold text-[#C9B037]">{minutes}m</span>
-                                                                </div>
+                                                            {/* Progress Bar */}
+                                                            <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden mb-4">
+                                                                <motion.div 
+                                                                    initial={{ width: 0 }}
+                                                                    animate={{ width: `${Math.min(100, (totalMinutes / 1000) * 100)}%` }}
+                                                                    transition={{ delay: idx * 0.1 + 0.3, duration: 0.8 }}
+                                                                    className="h-full bg-gradient-to-r from-[#C9B037]/60 to-[#C9B037] rounded-full"
+                                                                />
                                                             </div>
-                                                        </div>
-                                                        
-                                                        {/* Progress Bar */}
-                                                        <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden mb-4">
-                                                            <motion.div 
-                                                                initial={{ width: 0 }}
-                                                                animate={{ width: `${Math.min(100, (totalMinutes / 1000) * 100)}%` }}
-                                                                transition={{ delay: idx * 0.1 + 0.3, duration: 0.8 }}
-                                                                className="h-full bg-gradient-to-r from-[#C9B037]/60 to-[#C9B037] rounded-full"
-                                                            />
-                                                        </div>
-                                                        
-                                                        {/* Bottom Action */}
-                                                        <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                                                            <span className="text-[10px] font-black uppercase tracking-wider text-zinc-600">
-                                                                {group.type && group.type !== "friends" ? group.type : "Focus Group"}
-                                                            </span>
-                                                            <div className="flex items-center gap-2 text-zinc-600 group-hover:text-[#C9B037] transition-all duration-300">
-                                                                <span className="text-xs font-bold">View</span>
-                                                                <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                                            
+                                                            {/* Bottom Action */}
+                                                            <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                                                                <span className="text-[10px] font-black uppercase tracking-wider text-zinc-600">
+                                                                    {group.type && group.type !== "friends" ? group.type : "Focus Group"}
+                                                                </span>
+                                                                <div className="flex items-center gap-2 text-zinc-600 group-hover:text-[#C9B037] transition-all duration-300">
+                                                                    <span className="text-xs font-bold">View</span>
+                                                                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            </motion.div>
-                                        );
-                                    })}
-                                </div>
+                                                </motion.div>
+                                            );
+                                        })}
+                                    </div>
+                                    {players.length > visibleCount && (
+                                        <div className="flex justify-center w-full pt-6">
+                                            <button
+                                                onClick={() => setVisibleCount(prev => prev + 20)}
+                                                className="px-8 py-3 rounded-full border border-white/10 hover:border-[#C9B037]/40 bg-zinc-900/50 hover:bg-zinc-900/80 text-xs font-black uppercase tracking-widest text-zinc-400 hover:text-[#C9B037] transition-all duration-300 shadow-sm hover:shadow-[0_0_25px_rgba(201,176,55,0.1)] active:scale-95 cursor-pointer"
+                                            >
+                                                See More
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
                     ) : activeTab === "friends" && players.length === 0 ? (
@@ -402,7 +424,7 @@ function LeaderboardContent() {
                                         <h3 className="hidden sm:block text-zinc-500 font-sans text-[12px] font-black tracking-[0.5em] uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.15)]">Slow and steady wins the race</h3>
                                         <div className="h-[1px] w-24 bg-gradient-to-l from-transparent via-zinc-800 to-transparent shadow-[0_0_10px_rgba(255,255,255,0.05)]" />
                                     </div>
-                                    {others.map((player, index) => {
+                                    {others.slice(0, Math.max(0, visibleCount - 3)).map((player, index) => {
                                         const rank = index + 4;
                                         return (
                                             <div id={`player-${player.uid}`} key={player.uid || player.id || `other-${index}`} className="group relative flex items-center gap-6 p-4 rounded-[1rem] bg-zinc-800/40 border border-white/15 hover:bg-zinc-800/60 hover:border-white/25 transition-all duration-300 shadow-sm">
@@ -428,6 +450,17 @@ function LeaderboardContent() {
                                             </div>
                                         );
                                     })}
+                                </div>
+                            )}
+
+                            {players.length > visibleCount && (
+                                <div className="flex justify-center w-full -mt-8">
+                                    <button
+                                        onClick={() => setVisibleCount(prev => prev + 20)}
+                                        className="px-8 py-3 rounded-full border border-white/10 hover:border-[#C9B037]/40 bg-zinc-900/50 hover:bg-zinc-900/80 text-xs font-black uppercase tracking-widest text-zinc-400 hover:text-[#C9B037] transition-all duration-300 shadow-sm hover:shadow-[0_0_25px_rgba(201,176,55,0.1)] active:scale-95 cursor-pointer"
+                                    >
+                                        See More
+                                    </button>
                                 </div>
                             )}
                         </div>
