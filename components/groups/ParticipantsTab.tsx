@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { Users, Target, Mail } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { fmtMinutes, fmtElapsed, getGoalTypeLabel } from "@/lib/groups";
+import { fmtMinutes, fmtElapsed, getGoalTypeLabel, toMillis } from "@/lib/groups";
 
 export const ParticipantsTab = memo(function ParticipantsTab({ group, sortedMembers, user, isAdmin, onManageRoles, onInvite, goalHours = 0, goalType = "weekly" }: any) {
     const [memberNowMs, setMemberNowMs] = useState(Date.now());
@@ -74,24 +74,17 @@ export const ParticipantsTab = memo(function ParticipantsTab({ group, sortedMemb
 const UserCard = memo(function UserCard({ m, isMe, memberNowMs }: any) {
     const elapsedText = useMemo(() => {
         if (!m.isFocusing || !m.liveSessionStartedAt) return null;
-        let startedMs = 0;
-        const ts = m.liveSessionStartedAt;
-        if (typeof ts === "number") startedMs = ts;
-        else if (ts instanceof Date) startedMs = ts.getTime();
-        else if (ts.seconds) startedMs = ts.seconds * 1000;
-        else return null;
+        const startedMs = toMillis(m.liveSessionStartedAt);
+        if (!startedMs) return null;
 
         const isPaused = m.sessionStatus === "paused";
         let endMs = memberNowMs;
-        if (isPaused && m.liveSessionLastHeartbeat) {
-            const hb = m.liveSessionLastHeartbeat;
-            if (typeof hb === "number") endMs = hb;
-            else if (hb instanceof Date) endMs = hb.getTime();
-            else if (hb.seconds) endMs = hb.seconds * 1000;
+        if (isPaused) {
+            endMs = toMillis(m.liveSessionPausedAt) || toMillis(m.liveSessionLastHeartbeat) || Date.now();
         }
 
         return fmtElapsed(Math.max(0, Math.floor((endMs - startedMs) / 1000)));
-    }, [m.isFocusing, m.liveSessionStartedAt, m.sessionStatus, m.liveSessionLastHeartbeat, memberNowMs]);
+    }, [m.isFocusing, m.liveSessionStartedAt, m.sessionStatus, m.liveSessionPausedAt, m.liveSessionLastHeartbeat, memberNowMs]);
 
     const isLive = m.isFocusing && m.sessionStatus !== "paused";
     const isPaused = m.isFocusing && m.sessionStatus === "paused";

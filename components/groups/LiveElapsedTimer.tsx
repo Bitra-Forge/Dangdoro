@@ -1,8 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toMillis } from "@/lib/groups";
 
-export function LiveElapsedTimer({ startTime, isActive }: { startTime: any, isActive: boolean }) {
+export function LiveElapsedTimer({
+    startTime,
+    isActive,
+    isPaused,
+    pausedAt,
+    lastHeartbeat
+}: {
+    startTime: any;
+    isActive: boolean;
+    isPaused?: boolean;
+    pausedAt?: any;
+    lastHeartbeat?: any;
+}) {
     const [elapsed, setElapsed] = useState("");
 
     useEffect(() => {
@@ -12,14 +25,15 @@ export function LiveElapsedTimer({ startTime, isActive }: { startTime: any, isAc
         }
 
         const update = () => {
-            let startMs = 0;
-            if (typeof startTime.toMillis === "function") startMs = startTime.toMillis();
-            else if (typeof startTime.seconds === "number") startMs = startTime.seconds * 1000;
-            else if (typeof startTime === "number") startMs = startTime;
-            else if (startTime instanceof Date) startMs = startTime.getTime();
-            else startMs = Date.now(); // Fallback for optimistic updates
+            const startMs = toMillis(startTime);
+            if (!startMs) return;
 
-            const diff = Math.max(0, Date.now() - startMs);
+            let endMs = Date.now();
+            if (isPaused) {
+                endMs = toMillis(pausedAt) || toMillis(lastHeartbeat) || Date.now();
+            }
+
+            const diff = Math.max(0, endMs - startMs);
             const h = Math.floor(diff / 3600000);
             const m = Math.floor((diff % 3600000) / 60000);
             const s = Math.floor((diff % 60000) / 1000);
@@ -27,9 +41,11 @@ export function LiveElapsedTimer({ startTime, isActive }: { startTime: any, isAc
         };
 
         update();
+        if (isPaused) return;
+
         const t = setInterval(update, 1000);
         return () => clearInterval(t);
-    }, [startTime, isActive]);
+    }, [startTime, isActive, isPaused, pausedAt, lastHeartbeat]);
 
     return <>{elapsed}</>;
 }

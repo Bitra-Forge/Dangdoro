@@ -187,6 +187,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                 sessionStatus,
                 liveSessionStartedAt: memberLiveSession?.startedAt || null,
                 liveSessionLastHeartbeat: memberLiveSession?.lastHeartbeat || null,
+                liveSessionPausedAt: memberLiveSession?.pausedAt || null,
                 role,
                 isHost: group.hostId === memberId
             };
@@ -878,7 +879,13 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                                                     <p className={cn(
                                                                         "text-[10px] font-bold",
                                                                         isPausedMember ? "text-amber-300/80" : "text-indigo-300/80"
-                                                                    )}>Session: <LiveElapsedTimer startTime={m.liveSessionStartedAt} isActive={m.isFocusing} /></p>
+                                                                    )}>Session: <LiveElapsedTimer 
+                                                                        startTime={m.liveSessionStartedAt} 
+                                                                        isActive={m.isFocusing} 
+                                                                        isPaused={isPausedMember}
+                                                                        pausedAt={m.liveSessionPausedAt}
+                                                                        lastHeartbeat={m.liveSessionLastHeartbeat}
+                                                                    /></p>
                                                                 )}
                                                             </div>
                                                             {m.isFocusing && <span className={cn("text-[9px] font-black uppercase", isPausedMember ? "text-amber-400" : "text-indigo-400")}>{isPausedMember ? "Paused" : "Live"}</span>}
