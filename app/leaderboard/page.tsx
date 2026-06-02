@@ -85,8 +85,13 @@ function LeaderboardContent() {
                     setPlayers(rankedMembers);
                 }
             } else if (activeTab === "global") {
-                const tops = await getLeaderboard(20);
-                if (isMounted) setPlayers(tops);
+                const tops = await getLeaderboard(100);
+                if (isMounted) {
+                    const nonGuests = tops.filter(
+                        (player: any) => !player.isAnonymous
+                    );
+                    setPlayers(nonGuests.slice(0, 20));
+                }
             } else if (activeTab === "friends") {
                 const friendsTops = await getFriendsLeaderboard(user!.uid, 20);
                 if (isMounted) setPlayers(friendsTops);
