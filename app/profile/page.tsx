@@ -11,7 +11,8 @@ import {
     Camera, Zap, Clock, Calendar,
     Share2, Pencil, Flame,
     AreaChart,
-    Users, Copy, UserCheck, ChevronRight, Timer, LayoutGrid, UserMinus
+    Users, Copy, UserCheck, ChevronRight, Timer, LayoutGrid, UserMinus,
+    ZoomIn, ZoomOut
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -46,37 +47,43 @@ const THEMES: Record<string, { name: string; colors: string[]; accent: string; g
         name: "Obsidian Core",
         colors: ["#0A0A0A", "#404040", "#FFFFFF"],
         accent: "#FFFFFF",
-        glow: "rgba(255, 255, 255, 0.15)"
+        glow: "rgba(255, 255, 255, 0.15)",
+        text: "#000000"
     },
     midnight: {
         name: "Midnight",
         colors: ["#020617", "#0F172A", "#3B82F6"],
         accent: "#3B82F6",
-        glow: "rgba(59, 130, 246, 0.2)"
+        glow: "rgba(59, 130, 246, 0.2)",
+        text: "#FFFFFF"
     },
     cinematic: {
         name: "Cinematic",
         colors: ["#522546", "#88304E", "#E23E57"],
         accent: "#E23E57",
-        glow: "rgba(226, 62, 87, 0.2)"
+        glow: "rgba(226, 62, 87, 0.2)",
+        text: "#FFFFFF"
     },
     teal: {
         name: "Deep Teal Sea",
         colors: ["#024959", "#026773", "#3CA6A6"],
         accent: "#3CA6A6",
-        glow: "rgba(60, 166, 166, 0.2)"
+        glow: "rgba(60, 166, 166, 0.2)",
+        text: "#FFFFFF"
     },
     meadow: {
         name: "Emerald Meadow",
         colors: ["#A2CB8B", "#C7EABB", "#E8F5BD"],
         accent: "#E8F5BD",
-        glow: "rgba(232, 245, 189, 0.2)"
+        glow: "rgba(232, 245, 189, 0.2)",
+        text: "#152E15"
     },
     crimson: {
         name: "Crimson Void",
         colors: ["#170505", "#7F1D1D", "#FCA5A5"],
         accent: "#FCA5A5",
-        glow: "rgba(252, 165, 165, 0.2)"
+        glow: "rgba(252, 165, 165, 0.2)",
+        text: "#3E0A0A"
     }
 };
 
@@ -312,6 +319,147 @@ const formatFocusedTime = (totalMinutes: number) => {
     return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
 };
 
+// --- Sub-components ---
+
+interface ProfilePicCropperModalProps {
+    image: string;
+    currentTheme: typeof THEMES[string];
+    onClose: () => void;
+    onConfirm: (base64Image: string) => Promise<void>;
+}
+
+function ProfilePicCropperModal({ image, currentTheme, onClose, onConfirm }: ProfilePicCropperModalProps) {
+    const [crop, setCrop] = useState({ x: 0, y: 0 });
+    const [zoom, setZoom] = useState(1);
+    const [croppedAreaPixels, setCroppedAreaPixels] = useState<CropArea | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+
+    const onCropComplete = (_: CropArea, pixels: CropArea) => setCroppedAreaPixels(pixels);
+
+    const handleConfirm = async () => {
+        if (!croppedAreaPixels) return;
+        setIsSaving(true);
+        try {
+            const base64Image = await getCroppedImgBase64(image, croppedAreaPixels);
+            if (!base64Image) throw new Error();
+            await onConfirm(base64Image);
+        } catch {
+            toast.error("Failed to crop image.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const getCroppedImgBase64 = async (imageSrc: string, pixelCrop: CropArea): Promise<string | null> => {
+        const img = new Image();
+        img.src = imageSrc;
+        await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return null;
+
+        // High quality scale
+        canvas.width = 512;
+        canvas.height = 512;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
+        ctx.drawImage(
+            img,
+            pixelCrop.x,
+            pixelCrop.y,
+            pixelCrop.width,
+            pixelCrop.height,
+            0,
+            0,
+            512,
+            512
+        );
+        return canvas.toDataURL("image/jpeg", 0.92);
+    };
+
+    return (
+        <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-zinc-950/90 backdrop-blur-xl flex items-center justify-center p-4"
+        >
+            <motion.div
+                initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }}
+                className="w-full max-w-xl bg-zinc-900 border border-white/10 rounded-[3rem] overflow-hidden relative shadow-[0_0_100px_rgba(0,0,0,0.8)] flex flex-col"
+            >
+                <div className="relative w-full aspect-square bg-zinc-950">
+                    <Cropper
+                        image={image}
+                        crop={crop}
+                        zoom={zoom}
+                        minZoom={1}
+                        maxZoom={3}
+                        aspect={1}
+                        onCropChange={setCrop}
+                        onCropComplete={onCropComplete}
+                        onZoomChange={setZoom}
+                        cropShape="rect"
+                        showGrid={false}
+                    />
+                </div>
+                <div className="flex items-center gap-4 px-8 py-4 bg-zinc-900/90 border-t border-white/5">
+                    <button
+                        type="button"
+                        onClick={() => setZoom(Math.max(1, zoom - 0.2))}
+                        className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                        title="Zoom Out"
+                    >
+                        <ZoomOut className="w-4 h-4" />
+                    </button>
+                    <input
+                        type="range"
+                        value={zoom}
+                        min={1}
+                        max={3}
+                        step={0.05}
+                        aria-label="Zoom"
+                        onChange={(e) => setZoom(Number(e.target.value))}
+                        className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-white transition-all"
+                        style={{ accentColor: currentTheme.accent }}
+                    />
+                    <button
+                        type="button"
+                        onClick={() => setZoom(Math.min(3, zoom + 0.2))}
+                        className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                        title="Zoom In"
+                    >
+                        <ZoomIn className="w-4 h-4" />
+                    </button>
+                </div>
+                <div className="p-8 bg-zinc-950/80 backdrop-blur-xl flex items-center justify-between border-t border-white/5">
+                    <Button variant="ghost" disabled={isSaving} onClick={onClose} className="text-zinc-500 hover:text-white uppercase ubuntu-bold font-black text-xs tracking-[0.2em] active:translate-y-0">Cancel</Button>
+                    <motion.div
+                        whileHover={isSaving ? undefined : {
+                            boxShadow: `0 0 35px ${currentTheme.accent}66`
+                        }}
+                        whileTap={isSaving ? undefined : { scale: 0.98 }}
+                        transition={{ duration: 0.2, ease: "easeInOut" }}
+                        className="rounded-2xl"
+                    >
+                        <Button
+                            onClick={handleConfirm}
+                            disabled={isSaving}
+                            className="ubuntu-bold font-black uppercase text-xs tracking-[0.3em] px-10 h-12 rounded-2xl shadow-xl transition-all cursor-pointer active:translate-y-0"
+                            style={{
+                                backgroundColor: currentTheme.accent,
+                                color: currentTheme.text || "#FFFFFF",
+                                boxShadow: `0 0 30px ${currentTheme.accent}44`
+                            }}
+                        >
+                            {isSaving ? "Saving..." : "Confirm"}
+                        </Button>
+                    </motion.div>
+                </div>
+            </motion.div>
+        </motion.div>
+    );
+}
+
 // --- Page ---
 
 function ProfileContent() {
@@ -340,10 +488,6 @@ function ProfileContent() {
 
     // Cropping State
     const [image, setImage] = useState<string | null>(null);
-    const [crop, setCrop] = useState({ x: 0, y: 0 });
-    const [zoom, setZoom] = useState(1);
-    const [croppedAreaPixels, setCroppedAreaPixels] = useState<CropArea | null>(null);
-    const [showCropper, setShowCropper] = useState(false);
     const [unfriendConfirmOpen, setUnfriendConfirmOpen] = useState(false);
 
     // Edit State
@@ -641,23 +785,6 @@ function ProfileContent() {
         if (!file || !user) return;
         const objectUrl = URL.createObjectURL(file);
         setImage(objectUrl);
-        setShowCropper(true);
-    };
-
-    const onCropComplete = (_: CropArea, pixels: CropArea) => setCroppedAreaPixels(pixels);
-
-    const handleUploadCropped = async () => {
-        if (!image || !croppedAreaPixels || !user) return;
-        try {
-            toast.loading("Forging identity...", { id: "upload" });
-            const base64Image = await getCroppedImgBase64(image, croppedAreaPixels);
-            if (!base64Image) throw new Error();
-            await updateProfilePictureBase64(user.uid, base64Image);
-            toast.success("Updated!", { id: "upload" });
-            setShowCropper(false);
-            if (image.startsWith('blob:')) URL.revokeObjectURL(image);
-            setImage(null);
-        } catch { toast.error("Failed.", { id: "upload" }); }
     };
 
     const handleSaveProfile = async () => {
@@ -677,34 +804,6 @@ function ProfileContent() {
         } finally {
             setIsSaving(false);
         }
-    };
-
-    const getCroppedImgBase64 = async (imageSrc: string, pixelCrop: CropArea): Promise<string | null> => {
-        const img = new Image();
-        img.src = imageSrc;
-        await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return null;
-
-        // High quality scale
-        canvas.width = 512;
-        canvas.height = 512;
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-
-        ctx.drawImage(
-            img,
-            pixelCrop.x,
-            pixelCrop.y,
-            pixelCrop.width,
-            pixelCrop.height,
-            0,
-            0,
-            512,
-            512
-        );
-        return canvas.toDataURL("image/jpeg", 0.92);
     };
 
     // --- Render ---
@@ -923,7 +1022,7 @@ function ProfileContent() {
                                         >
                                             <Button
                                                 onClick={() => setIsEditing(true)}
-                                                className="w-full h-9 rounded-full bg-zinc-100 text-zinc-950 hover:bg-white ubuntu-bold font-black text-[9px] tracking-widest transition-all border border-white/20 relative shadow-xl overflow-hidden group/btn cursor-pointer"
+                                                className="w-full h-9 rounded-full bg-zinc-100 text-zinc-950 hover:bg-white ubuntu-bold font-black text-[11px] tracking-widest transition-all border border-white/20 relative shadow-xl overflow-hidden group/btn cursor-pointer"
                                             >
                                                 <div className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-[-25deg] -translate-x-full group-hover/btn:animate-shine transition-transform" />
                                                 <div className="flex items-center justify-center gap-2 relative z-10 uppercase">
@@ -932,7 +1031,7 @@ function ProfileContent() {
                                                 </div>
                                             </Button>
                                         </motion.div>
-
+ 
                                         <motion.div
                                             whileHover={{ y: -1 }}
                                             whileTap={{ y: 0 }}
@@ -944,8 +1043,12 @@ function ProfileContent() {
                                                     navigator.clipboard.writeText(`${window.location.origin}/profile?user=${user.uid}`);
                                                     toast.success("Profile link copied!");
                                                 }}
-                                                className="w-full h-9 rounded-full border border-white/5 bg-zinc-900/40 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60 transition-all backdrop-blur-xl group/btn relative overflow-hidden text-[9px] ubuntu-bold font-black tracking-widest cursor-pointer"
+                                                className="w-full h-9 rounded-full bg-zinc-900/80 text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-all backdrop-blur-sm group/btn relative overflow-hidden text-[11px] ubuntu-bold font-black tracking-widest cursor-pointer active:translate-y-0"
                                             >
+                                                {/* Glass highlights matching notification button */}
+                                                <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/20 group-hover/btn:border-white/40 pointer-events-none transition-colors duration-300" />
+                                                <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/10 pointer-events-none" />
+
                                                 <div className="flex items-center justify-center gap-2 uppercase relative z-10">
                                                     <Share2 className="w-2.5 h-2.5 transition-transform group-hover/btn:rotate-12" />
                                                     Share Vault
@@ -974,7 +1077,7 @@ function ProfileContent() {
                                         <textarea
                                             value={editBio}
                                             onChange={e => setEditBio(e.target.value)}
-                                            placeholder="System Architect | Digital Curator"
+                                            placeholder="Write your bio..."
                                             rows={2}
                                             className="bg-transparent border-b border-white/5 text-sm font-medium text-zinc-400 leading-relaxed focus:outline-none focus:border-white/20 transition-all w-full py-2 resize-none scrollbar-none [ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                                         />
@@ -1022,7 +1125,7 @@ function ProfileContent() {
                                         </button>
 
                                         <p className="text-zinc-400 text-sm md:text-base font-medium leading-[1.8] mb-14 max-w-2xl break-all">
-                                            {userData?.bio || "System Architect and Digital Curator focusing on high-fidelity procedural environments and neural interface aesthetics. Architecting the void since 2024."}
+                                            {userData?.bio || "No bio yet."}
                                         </p>
                                     </motion.div>
                                 )}
@@ -1447,9 +1550,10 @@ function ProfileContent() {
                                             className={cn(
                                                 "flex items-center justify-center px-6 py-2.5 text-[10px] font-bold uppercase tracking-widest rounded-full transition-all duration-300 relative group/tab",
                                                 timeRange === tab.id
-                                                    ? "text-white"
+                                                    ? ""
                                                     : "text-zinc-500 hover:text-white/70"
                                             )}
+                                            style={timeRange === tab.id ? { color: currentTheme.text || "#FFFFFF" } : undefined}
                                         >
                                             {timeRange === tab.id && (
                                                 <motion.div
@@ -1624,33 +1728,27 @@ function ProfileContent() {
 
                 {/* Cropping Modal */}
                 <AnimatePresence>
-                    {showCropper && image && (
-                        <motion.div
-                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                            className="fixed inset-0 z-[100] bg-zinc-950/90 backdrop-blur-xl flex items-center justify-center p-4"
-                        >
-                            <motion.div
-                                initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }}
-                                className="w-full max-w-xl aspect-square bg-zinc-900 border border-white/10 rounded-[3rem] overflow-hidden relative shadow-[0_0_100px_rgba(0,0,0,0.8)]"
-                            >
-                                <div className="absolute inset-0 pb-24">
-                                    <Cropper image={image || undefined} crop={crop} zoom={zoom} aspect={1} onCropChange={setCrop} onCropComplete={onCropComplete} onZoomChange={setZoom} cropShape="rect" showGrid={false} />
-                                </div>
-                                <div className="absolute bottom-0 left-0 right-0 p-8 bg-zinc-950/80 backdrop-blur-xl flex items-center justify-between border-t border-white/5">
-                                    <Button variant="ghost" onClick={() => setShowCropper(false)} className="text-zinc-500 hover:text-white uppercase font-black text-xs tracking-[0.2em]">Cancel</Button>
-                                    <Button
-                                        onClick={handleUploadCropped}
-                                        className="text-white font-black uppercase text-xs tracking-[0.3em] px-10 h-12 rounded-2xl shadow-xl transition-all"
-                                        style={{
-                                            backgroundColor: currentTheme.accent,
-                                            boxShadow: `0 0 30px ${currentTheme.accent}44`
-                                        }}
-                                    >
-                                        Confirm
-                                    </Button>
-                                </div>
-                            </motion.div>
-                        </motion.div>
+                    {image && (
+                        <ProfilePicCropperModal
+                            image={image}
+                            currentTheme={currentTheme}
+                            onClose={() => {
+                                if (image.startsWith('blob:')) URL.revokeObjectURL(image);
+                                setImage(null);
+                            }}
+                            onConfirm={async (base64Image) => {
+                                if (!user) return;
+                                try {
+                                    toast.loading("Forging identity...", { id: "upload" });
+                                    await updateProfilePictureBase64(user.uid, base64Image);
+                                    toast.success("Updated!", { id: "upload" });
+                                    if (image.startsWith('blob:')) URL.revokeObjectURL(image);
+                                    setImage(null);
+                                } catch {
+                                    toast.error("Failed.", { id: "upload" });
+                                }
+                            }}
+                        />
                     )}
                 </AnimatePresence>
             </div>
