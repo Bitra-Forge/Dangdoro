@@ -29,12 +29,13 @@ interface UserProfile {
 
 export function NotificationsMenu() {
 
-    const { user } = useAuth();
+    const { user, openAuthVault } = useAuth();
     const pathname = usePathname();
     const router = useRouter();
     const isOpen = useDockPopoverStore((s) => s.active === "notifications");
     const toggleMenu = useDockPopoverStore((s) => s.toggle);
     const closeMenu = useDockPopoverStore((s) => s.close);
+    const isUnauthenticated = !user || user.isAnonymous;
     const [requests, setRequests] = useState<FriendRequestItem[]>([]);
     const [groupInvites, setGroupInvites] = useState<GroupInviteItem[]>([]);
     const [profiles, setProfiles] = useState<Record<string, UserProfile>>({});
@@ -179,9 +180,9 @@ export function NotificationsMenu() {
 
     if (pathname.startsWith("/friends")) return null;
     if (pathname.match(/^\/groups\/[^/]+/)) return null;
-    if (!user || user.isAnonymous) return null;
 
     const handleAccept = async (reqId: string, fromUserId: string) => {
+        if (!user) return;
         if (await acceptFriendRequest(reqId, fromUserId, user.uid)) {
             toast.success("Friend request accepted");
         } else {
@@ -222,7 +223,13 @@ export function NotificationsMenu() {
     return (
         <div className="relative" ref={menuRef}>
             <button
-                onClick={() => toggleMenu("notifications")}
+                onClick={() => {
+                    if (isUnauthenticated) {
+                        openAuthVault();
+                        return;
+                    }
+                    toggleMenu("notifications");
+                }}
                 className={cn(
                     "p-2.5 rounded-full backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-visible",
                     isOpen
