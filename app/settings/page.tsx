@@ -102,10 +102,10 @@ const DevAvatar = ({ name, avatar }: { name: string; avatar?: string }) => {
         <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center border border-white/10 font-bold text-[11px] text-zinc-300 overflow-hidden shrink-0 shadow-inner group/avatar">
             {avatar && !error ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img 
-                    src={avatar} 
-                    alt={name} 
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover/avatar:scale-110" 
+                <img
+                    src={avatar}
+                    alt={name}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover/avatar:scale-110"
                     referrerPolicy="no-referrer"
                     onError={() => setError(true)}
                 />
@@ -118,7 +118,7 @@ const DevAvatar = ({ name, avatar }: { name: string; avatar?: string }) => {
 
 export default function SettingsPage() {
     const { showDots, bgPalette, updateShowDots, updateBgPalette } = useBackgroundTheme(false);
-    
+
     const NONE_SOLID_COLORS = [
         { name: "Sage", value: "#757c4f" },
         { name: "Teal Mist", value: "#2f7f7a" },
@@ -127,7 +127,7 @@ export default function SettingsPage() {
         { name: "Rose", value: "#9e5252" },
         { name: "Amber", value: "#8b4b23" },
         { name: "Sandstone", value: "#b07a45" },
-        { name: "Violet", value: "#572373" },        
+        { name: "Violet", value: "#572373" },
         { name: "Mulberry", value: "#7a3f74" },
     ] as const;
 
@@ -358,7 +358,7 @@ export default function SettingsPage() {
                     <header className="flex items-center justify-between mb-10">
                         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
                         <div className="flex items-center gap-2">
-                             {hasChanges && (
+                            {hasChanges && (
                                 <button
                                     onClick={handleRestoreDefaults}
                                     className="p-2 text-zinc-500 hover:text-white transition-colors"
@@ -366,15 +366,14 @@ export default function SettingsPage() {
                                 >
                                     <RotateCcw className="w-4 h-4" />
                                 </button>
-                             )}
+                            )}
                             <button
                                 onClick={handleSaveSettings}
                                 disabled={!hasChanges || saving}
-                                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
-                                    hasChanges 
-                                        ? "bg-white text-black hover:bg-zinc-200" 
+                                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${hasChanges
+                                        ? "bg-white text-black hover:bg-zinc-200"
                                         : "bg-zinc-900 text-zinc-600 cursor-not-allowed"
-                                }`}
+                                    }`}
                             >
                                 {saving ? "Saving..." : hasChanges ? "Save" : "Saved"}
                             </button>
@@ -387,7 +386,7 @@ export default function SettingsPage() {
                             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-1">Timer</h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 bg-zinc-900/50 rounded-lg overflow-hidden border border-white/5">
                                 {timerFields.map((item, i) => (
-                                    <div 
+                                    <div
                                         key={item.key}
                                         className={`flex items-center justify-between p-6 transition-colors hover:bg-white/[0.01] 
                                             ${i < 3 ? 'border-b md:border-b-0' : ''} 
@@ -401,13 +400,13 @@ export default function SettingsPage() {
                                             </div>
                                             <div className="flex flex-col">
                                                 <span className="text-zinc-200 font-medium">{item.label}</span>
-                        {item.key === "longBreakEvery" && (
-                            <span className="text-[9px] text-zinc-500 uppercase tracking-wider">Number of pomodoros before a long break</span>
-                        )}
-                    </div>
-                </div>
+                                                {item.key === "longBreakEvery" && (
+                                                    <span className="text-[9px] text-zinc-500 uppercase tracking-wider">Number of pomodoros before a long break</span>
+                                                )}
+                                            </div>
+                                        </div>
                                         <div className="flex items-center gap-3 bg-black/20 p-1 rounded-lg">
-                                            <button 
+                                            <button
                                                 onClick={() => handleUpdateSetting(item.key, Math.max(1, settings[item.key] - 1))}
                                                 className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-white transition-colors hover:bg-white/5 rounded-lg"
                                             >
@@ -433,7 +432,7 @@ export default function SettingsPage() {
                                                 }}
                                                 className="w-12 bg-transparent text-center font-bold text-lg outline-none focus:text-white focus:bg-white/5 rounded transition-all tabular-nums cursor-text"
                                             />
-                                            <button 
+                                            <button
                                                 onClick={() => handleUpdateSetting(item.key, Math.min(120, settings[item.key] + 1))}
                                                 className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-white transition-colors hover:bg-white/5 rounded-lg"
                                             >
@@ -713,7 +712,7 @@ export default function SettingsPage() {
                                             const orbs = palette.orbs as any;
                                             const color1 = orbs.length > 0 ? `rgb(${orbs[0].color})` : "rgb(100,100,100)";
                                             const color2 = orbs.length > 1 ? `rgb(${orbs[1].color})` : color1;
-                                            
+
                                             return (
                                                 <button
                                                     key={key}
@@ -747,7 +746,7 @@ export default function SettingsPage() {
                                     { id: "universfield-soft-piano-logo-141290.mp3", label: "Zen Piano" },
                                     { id: "koiroylers-cutie-cat-355747.mp3", label: "Cyber Cat" }
                                 ].map((sound, i) => (
-                                    <div 
+                                    <div
                                         key={sound.id}
                                         className={`flex items-center justify-between p-6 cursor-pointer transition-all
                                             ${i < 2 ? 'border-b md:border-b-0 md:border-r border-white/5' : ''} 
@@ -766,7 +765,7 @@ export default function SettingsPage() {
                                                 {sound.label}
                                             </span>
                                         </div>
-                                        <button 
+                                        <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 if (playingSoundId === sound.id) {
@@ -808,7 +807,7 @@ export default function SettingsPage() {
                                                 </div>
                                             </div>
                                         </div>
-                                        <div 
+                                        <div
                                             className="flex items-center justify-between p-6 cursor-pointer hover:bg-rose-500/10 transition-all group"
                                             onClick={user.isAnonymous ? openAuthVault : handleSignOut}
                                         >
@@ -826,7 +825,7 @@ export default function SettingsPage() {
                                         </div>
                                     </>
                                 ) : (
-                                    <div 
+                                    <div
                                         className="col-span-1 md:col-span-2 flex items-center justify-between p-8 cursor-pointer hover:bg-white/[0.02] transition-colors"
                                         onClick={openAuthVault}
                                     >

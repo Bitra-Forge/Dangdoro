@@ -8,6 +8,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc, updateDoc } from "firebase/firestore";
 import { acceptFriendRequest, declineFriendRequest } from "@/lib/friendship";
 import { acceptGroupInvite, declineGroupInvite, fetchUserProfiles } from "@/lib/db";
+import { useDockPopoverStore } from "@/lib/dock-popover-store";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,9 @@ export function NotificationsMenu() {
     const { user } = useAuth();
     const pathname = usePathname();
     const router = useRouter();
-    const [isOpen, setIsOpen] = useState(false);
+    const isOpen = useDockPopoverStore((s) => s.active === "notifications");
+    const toggleMenu = useDockPopoverStore((s) => s.toggle);
+    const closeMenu = useDockPopoverStore((s) => s.close);
     const [requests, setRequests] = useState<FriendRequestItem[]>([]);
     const [groupInvites, setGroupInvites] = useState<GroupInviteItem[]>([]);
     const [profiles, setProfiles] = useState<Record<string, UserProfile>>({});
@@ -71,12 +74,14 @@ export function NotificationsMenu() {
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-                setIsOpen(false);
+                closeMenu("notifications");
             }
         };
-        document.addEventListener("mousedown", handleClickOutside);
+        if (isOpen) {
+            document.addEventListener("mousedown", handleClickOutside);
+        }
         return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
+    }, [isOpen, closeMenu]);
 
     useEffect(() => {
         if (!user || user.isAnonymous) return;
@@ -216,8 +221,8 @@ export function NotificationsMenu() {
 
     return (
         <div className="relative" ref={menuRef}>
-            <button 
-                onClick={() => setIsOpen(!isOpen)}
+            <button
+                onClick={() => toggleMenu("notifications")}
                 className={cn(
                     "p-2.5 rounded-full backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-visible",
                     isOpen
@@ -273,7 +278,7 @@ export function NotificationsMenu() {
                                                     size="sm"
                                                     className="flex-1 h-8 rounded-lg bg-white hover:bg-zinc-200 text-black text-[10px] font-black uppercase tracking-wider cursor-pointer"
                                                     onClick={() => {
-                                                        setIsOpen(false);
+                                                        closeMenu("notifications");
                                                         handleMarkAssignmentRead(notif.id);
                                                         if (notif.groupId) {
                                                             router.push(`/groups/${notif.groupId}?tab=mine`);
@@ -342,7 +347,7 @@ export function NotificationsMenu() {
                                         <div key={req.id} className="p-4 border-b border-white/5">
                                             <Link 
                                                 href={`/profile?user=${req.fromUserId}`}
-                                                onClick={() => setIsOpen(false)}
+                                                onClick={() => closeMenu("notifications")}
                                                 className="flex items-center gap-3 mb-3 group/user cursor-pointer"
                                             >
                                                 <Avatar className="w-8 h-8 rounded-full border border-white/10 overflow-hidden shrink-0">

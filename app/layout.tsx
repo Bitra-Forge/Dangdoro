@@ -12,6 +12,8 @@ import { Heartbeat } from "@/components/Heartbeat";
 import { GroupSessionSync } from "@/components/group-session-sync";
 
 
+
+
 const figtree = Figtree({
   variable: "--font-sans",
   subsets: ["latin"],
