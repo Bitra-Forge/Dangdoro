@@ -20,6 +20,7 @@ export function NotificationsDock() {
   const isGroupPage = pathname?.startsWith("/groups");
   const [isVisible, setIsVisible] = useState(false);
   const dockRef = useRef<HTMLDivElement | null>(null);
+  const feedbackRef = useRef<HTMLDivElement | null>(null);
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shouldShow = !isNavFocusMode || isVisible;
 
@@ -34,7 +35,9 @@ export function NotificationsDock() {
   // Close the popup if clicking outside of the dock/form area
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (dockRef.current && !dockRef.current.contains(e.target as Node)) {
+      const isClickInsideDock = dockRef.current?.contains(e.target as Node);
+      const isClickInsideFeedback = feedbackRef.current?.contains(e.target as Node);
+      if (!isClickInsideDock && !isClickInsideFeedback) {
         closeFeedback("feedback");
       }
     };
@@ -151,64 +154,66 @@ export function NotificationsDock() {
   }, [isNavFocusMode]);
 
   return (
-    <div
-      ref={dockRef}
-      className={cn(
-        "fixed top-8 right-8 z-[100] flex items-center gap-3 transition-all",
-        shouldShow || isFeedbackOpen
-          ? "opacity-100 translate-y-0 pointer-events-auto"
-          : "opacity-0 -translate-y-1 pointer-events-none"
-      )}
-    >
-      {!isGroupPage && (
-        <a
-          href="https://ko-fi.com/morales002"
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Support Dangdoro"
-          className="p-2.5 rounded-full bg-zinc-900/80 text-zinc-400 hover:text-rose-400 backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-visible hover:bg-rose-500/10 group"
-        >
-          {/* Glass highlights */}
-          <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/20 pointer-events-none group-hover:border-rose-500/30 transition-colors duration-300" />
-          <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/10 pointer-events-none" />
+    <>
+      <div
+        ref={dockRef}
+        className={cn(
+          "fixed top-8 right-2 sm:right-8 z-[100] flex items-center gap-3 transition-all",
+          shouldShow || isFeedbackOpen
+            ? "opacity-100 translate-y-0 pointer-events-auto"
+            : "opacity-0 -translate-y-1 pointer-events-none"
+        )}
+      >
+        {!isGroupPage && (
+          <a
+            href="https://ko-fi.com/morales002"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Support Dangdoro"
+            className="p-2.5 rounded-full bg-zinc-900/80 text-zinc-400 hover:text-rose-400 backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-visible hover:bg-rose-500/10 group"
+          >
+            {/* Glass highlights */}
+            <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/20 pointer-events-none group-hover:border-rose-500/30 transition-colors duration-300" />
+            <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/10 pointer-events-none" />
 
-          <Heart className="w-4 h-4 transition-transform group-hover:scale-110 duration-300" />
-        </a>
-      )}
+            <Heart className="w-4 h-4 transition-transform group-hover:scale-110 duration-300" />
+          </a>
+        )}
 
-      {!isGroupPage && (
-        /* Floating Feedback Trigger Button */
-        <button
-          onClick={() => toggleFeedback("feedback")}
-          className={cn(
-            "p-2.5 rounded-full bg-zinc-900/80 backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-visible group",
-            isFeedbackOpen
-              ? "bg-white/15 text-white shadow-[inset_0_0_10px_rgba(255,255,255,0.1)]"
-              : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
-          )}
-          title="Send Feedback"
-        >
-          {/* Glass highlights */}
-          <div className={cn(
-            "absolute inset-0 rounded-full border-t-[0.5px] pointer-events-none transition-colors duration-300",
-            isFeedbackOpen ? "border-white/40" : "border-white/20 group-hover:border-white/30"
-          )} />
-          <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/10 pointer-events-none" />
-
-          <Image
-            src={feedbackImg}
-            alt="Feedback"
-            width={16}
-            height={16}
+        {!isGroupPage && (
+          /* Floating Feedback Trigger Button */
+          <button
+            onClick={() => toggleFeedback("feedback")}
             className={cn(
-              "w-4 h-4 object-contain transition-all duration-300 filter group-hover:scale-110 relative z-10",
-              isFeedbackOpen ? "invert" : "invert opacity-60 group-hover:opacity-100"
+              "p-2.5 rounded-full bg-zinc-900/80 backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-visible group",
+              isFeedbackOpen
+                ? "bg-white/15 text-white shadow-[inset_0_0_10px_rgba(255,255,255,0.1)]"
+                : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
             )}
-          />
-        </button>
-      )}
+            title="Send Feedback"
+          >
+            {/* Glass highlights */}
+            <div className={cn(
+              "absolute inset-0 rounded-full border-t-[0.5px] pointer-events-none transition-colors duration-300",
+              isFeedbackOpen ? "border-white/40" : "border-white/20 group-hover:border-white/30"
+            )} />
+            <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/10 pointer-events-none" />
 
-      <NotificationsMenu />
+            <Image
+              src={feedbackImg}
+              alt="Feedback"
+              width={16}
+              height={16}
+              className={cn(
+                "w-4 h-4 object-contain transition-all duration-300 filter group-hover:scale-110 relative z-10",
+                isFeedbackOpen ? "invert" : "invert opacity-60 group-hover:opacity-100"
+              )}
+            />
+          </button>
+        )}
+
+        <NotificationsMenu />
+      </div>
 
       {/* Floating Feedback Popover Form */}
       <AnimatePresence>
@@ -216,6 +221,7 @@ export function NotificationsDock() {
           <>
             {/* Form Card */}
             <motion.div
+              ref={feedbackRef}
               initial={{ opacity: 0, y: -12, scale: 0.95, filter: "blur(4px)" }}
               animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
               exit={{ opacity: 0, y: -8, scale: 0.96, filter: "blur(2px)" }}
@@ -225,11 +231,11 @@ export function NotificationsDock() {
                 damping: 28,
                 max: 0.8
               }}
-              className="fixed top-22 right-8 w-[480px] max-w-[calc(100vw-32px)] z-[100] overflow-visible"
+              className="fixed top-22 right-2 sm:right-8 w-[480px] max-w-[calc(100vw-16px)] sm:max-w-[calc(100vw-64px)] z-[100] overflow-visible"
             >
               {/* Glassmorphic container */}
               <div className="relative bg-zinc-950/90 backdrop-blur-3xl border border-white/[0.08] rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.08)] overflow-hidden p-6">
-                
+
                 {/* Accent border glow */}
                 <div className="absolute -inset-px bg-gradient-to-r from-white/10 to-transparent rounded-[2rem] pointer-events-none" />
 
@@ -237,12 +243,12 @@ export function NotificationsDock() {
                   {/* Form Header */}
                   <div className="flex items-center gap-3.5 mb-5">
                     <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center border border-white/15 shadow-inner shrink-0">
-                      <Image 
-                        src={feedbackImg} 
-                        alt="Feedback" 
-                        width={16} 
-                        height={16} 
-                        className="w-4 h-4 object-contain filter invert" 
+                      <Image
+                        src={feedbackImg}
+                        alt="Feedback"
+                        width={16}
+                        height={16}
+                        className="w-4 h-4 object-contain filter invert"
                       />
                     </div>
                     <div className="flex flex-col text-left">
@@ -309,6 +315,6 @@ export function NotificationsDock() {
           </>
         )}
       </AnimatePresence>
-    </div>
+    </>
   );
 }
