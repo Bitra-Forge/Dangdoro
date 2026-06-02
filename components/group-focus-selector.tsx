@@ -149,16 +149,16 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
     <div ref={dropdownRef} className="relative group/focus-selector">
       {/* Ambient Glow for Active Focus Context */}
       {activeGroupId && (
-        <div className="absolute -inset-1.5 bg-gradient-to-r from-sky-500/20 to-blue-500/20 rounded-[22px] blur-xl opacity-60 group-hover/focus-selector:opacity-85 transition-all duration-700 pointer-events-none animate-pulse-slow" />
+        <div className="absolute -inset-1.5 bg-gradient-to-r from-sky-500/20 to-blue-500/20 rounded-[22px] blur-xl opacity-60 group-hover/focus-selector:opacity-85 transition-[opacity] duration-500 pointer-events-none animate-pulse-slow" />
       )}
 
       {/* Trigger Button */}
       <motion.button
-        whileHover={{ scale: 1.02, y: -1 }}
-        whileTap={{ scale: 0.98 }}
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.99 }}
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "relative flex items-center gap-3 px-5 py-3 rounded-2xl border transition-all duration-500 backdrop-blur-2xl overflow-hidden",
+          "relative flex items-center gap-3 px-5 py-3 rounded-2xl border transition-[background-color,border-color,color,box-shadow] duration-200 backdrop-blur-2xl overflow-hidden",
           "shadow-[0_8px_32px_rgba(0,0,0,0.4)]",
           isOpen ? "z-50" : "z-10",
           activeGroupId
@@ -188,18 +188,19 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
 
         {activeFocusingCount > 0 && (
           <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-400/20 shadow-[0_0_8px_rgba(52,211,153,0.15)] flex items-center justify-center gap-1">
-            <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-[9px] font-black text-emerald-400 tabular-nums">{activeFocusingCount}</span>
           </span>
         )}
 
-        <motion.div
-          animate={{ rotate: isOpen ? 180 : 0 }}
-          transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
-          className="opacity-55 group-hover/focus-selector:opacity-100 transition-opacity duration-300"
+        <div
+          className={cn(
+            "opacity-55 group-hover/focus-selector:opacity-100 transition-all duration-300",
+            isOpen ? "rotate-180" : "rotate-0"
+          )}
         >
           <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
-        </motion.div>
+        </div>
       </motion.button>
 
       {/* Dropdown Menu */}
@@ -211,21 +212,19 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
+              transition={{ duration: 0.12 }}
               className="fixed inset-0 z-40"
               onClick={() => setIsOpen(false)}
             />
 
             {/* Dropdown Panel */}
             <motion.div
-              initial={{ opacity: 0, y: -8, scale: 0.96, filter: "blur(4px)" }}
-              animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-              exit={{ opacity: 0, y: -6, scale: 0.98, filter: "blur(2px)" }}
+              initial={{ opacity: 0, y: -6, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -4, scale: 0.98 }}
               transition={{
-                type: "spring",
-                stiffness: 400,
-                damping: 28,
-                mass: 0.8
+                duration: 0.15,
+                ease: "easeOut"
               }}
               className="absolute top-full left-0 mt-3 w-[280px] xs:w-[320px] sm:w-[360px] max-w-[calc(100vw-32px)] z-50 overflow-visible"
             >
@@ -253,21 +252,10 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                 {/* Options List */}
                 <div className="p-3 max-h-[360px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/5 scrollbar-track-transparent flex flex-col gap-2">
                   {/* Solo Option */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{
-                      type: "spring",
-                      stiffness: 380,
-                      damping: 30,
-                      mass: 0.8,
-                      delay: 0.02
-                    }}
-                    whileHover={{ scale: 1.015 }}
-                    whileTap={{ scale: 0.985 }}
+                  <div
                     onClick={() => handleSelect("")}
                     className={cn(
-                      "w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-all duration-300 group/item border text-left cursor-pointer select-none",
+                      "w-full flex items-center gap-4 px-4 py-3 rounded-2xl transition-[background-color,border-color,color,transform] duration-150 hover:scale-[1.005] active:scale-[0.995] group/item border text-left cursor-pointer select-none",
                       !activeGroupId
                         ? "bg-white/[0.06] border-white/10 text-white shadow-[0_4px_20px_rgba(255,255,255,0.04),inset_0_1px_0_rgba(255,255,255,0.08)]"
                         : "bg-transparent border-transparent text-zinc-400 hover:bg-white/[0.03] hover:border-white/[0.06] hover:text-zinc-200"
@@ -286,13 +274,11 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                       <p className="text-[10px] text-zinc-500 font-medium mt-0.5">Independent session</p>
                     </div>
                     {!activeGroupId && (
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        className="w-2 h-2 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]"
+                      <div
+                        className="w-2 h-2 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)] animate-in zoom-in-50 duration-200"
                       />
                     )}
-                  </motion.div>
+                  </div>
 
                   {/* Section Label */}
                   {groups.length > 0 && (
@@ -321,22 +307,12 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                       const pMeta = PRIVACY_ICONS[group.privacy] ?? PRIVACY_ICONS["public"];
 
                       return (
-                        <motion.div
+                        <div
                           key={group.id}
-                          initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          transition={{
-                            type: "spring",
-                            stiffness: 380,
-                            damping: 30,
-                            mass: 0.8,
-                            delay: 0.04 + index * 0.03
-                          }}
-                          whileHover={{ scale: 1.015 }}
-                          whileTap={{ scale: 0.985 }}
                           onClick={() => handleSelect(group.id)}
                           className={cn(
-                            "w-full flex flex-col gap-1 px-4 py-3 rounded-2xl transition-all duration-300 group/item border text-left cursor-pointer relative overflow-hidden select-none",
+                            "w-full flex flex-col gap-1 px-4 py-3 rounded-2xl border text-left cursor-pointer relative overflow-hidden select-none",
+                            "transition-[background-color,border-color,color,transform] duration-150 hover:scale-[1.005] active:scale-[0.995] group/item",
                             isSelected
                               ? "bg-gradient-to-br from-sky-950/40 to-indigo-950/20 border-sky-500/30 text-sky-100 shadow-[0_8px_30px_rgba(56,189,248,0.08),inset_0_1px_1px_rgba(255,255,255,0.05)]"
                               : "bg-transparent border-transparent text-zinc-300 hover:bg-white/[0.04] hover:border-white/[0.08] hover:text-zinc-100"
@@ -344,10 +320,8 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                         >
                           {/* Selection Accent Bar */}
                           {isSelected && (
-                            <motion.div
-                              layoutId="active-group-accent"
+                            <div
                               className="absolute left-0 top-3 bottom-3 w-1 rounded-r-full bg-gradient-to-b from-sky-400 to-indigo-500 shadow-[0_0_10px_rgba(56,189,248,0.8)]"
-                              transition={{ type: "spring", stiffness: 300, damping: 30 }}
                             />
                           )}
 
@@ -364,13 +338,9 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                                 <Users className="w-4 h-4" />
                               </div>
                               {focusingMembers.length > 0 && (
-                                <motion.div
-                                  initial={{ scale: 0 }}
-                                  animate={{ scale: 1 }}
-                                  className="absolute -top-1 -right-1"
-                                >
+                                <div className="absolute -top-1 -right-1">
                                   <div className="w-3 h-3 rounded-full bg-emerald-400 ring-[2px] ring-zinc-950 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
-                                </motion.div>
+                                </div>
                               )}
                             </div>
 
@@ -391,9 +361,7 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                                 </span>
                               )}
                               {isSelected && (
-                                <motion.div
-                                  initial={{ scale: 0 }}
-                                  animate={{ scale: 1 }}
+                                <div
                                   className="w-2 h-2 rounded-full bg-sky-400 shadow-[0_0_10px_rgba(56,189,248,0.8)]"
                                 />
                               )}
@@ -408,22 +376,18 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                                 <div className="flex items-center w-full gap-3">
                                   <div className="relative flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
                                     {/* Glow Layer */}
-                                    <motion.div
-                                      initial={{ width: 0 }}
-                                      animate={{ width: `${progress}%` }}
-                                      transition={{ duration: 0.8, ease: [0.23, 1, 0.32, 1], delay: 0.1 + index * 0.04 }}
+                                    <div
+                                      style={{ width: `${progress}%` }}
                                       className={cn(
-                                        "absolute top-0 bottom-0 left-0 rounded-full blur-[2px] opacity-70",
+                                        "absolute top-0 bottom-0 left-0 rounded-full blur-[2px] opacity-70 transition-[width] duration-500 ease-out",
                                         progress >= 100 ? "bg-emerald-400" : "bg-sky-400"
                                       )}
                                     />
                                     {/* Core Liquid Bar */}
-                                    <motion.div
-                                      initial={{ width: 0 }}
-                                      animate={{ width: `${progress}%` }}
-                                      transition={{ duration: 0.8, ease: [0.23, 1, 0.32, 1], delay: 0.1 + index * 0.04 }}
+                                    <div
+                                      style={{ width: `${progress}%` }}
                                       className={cn(
-                                        "absolute top-0 bottom-0 left-0 rounded-full bg-gradient-to-r transition-all duration-500",
+                                        "absolute top-0 bottom-0 left-0 rounded-full bg-gradient-to-r transition-[width,background-color,border-color] duration-500 ease-out",
                                         progress >= 100
                                           ? "from-emerald-400 to-teal-500 shadow-[0_0_8px_rgba(52,211,153,0.6)]"
                                           : "from-sky-400 to-indigo-500 shadow-[0_0_8px_rgba(56,189,248,0.5)]"
@@ -480,7 +444,7 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                               )}
                             </div>
                           )}
-                        </motion.div>
+                        </div>
                       );
                     })
                   ) : (
