@@ -11,7 +11,7 @@ import {
     Camera, Zap, Clock, Calendar,
     Share2, Pencil, Flame,
     AreaChart,
-    Users, Copy, UserCheck, ChevronRight, Timer, LayoutGrid, UserMinus,
+    Users, UserCheck, ChevronRight, Timer, LayoutGrid, UserMinus,
     ZoomIn, ZoomOut
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -1126,20 +1126,6 @@ function ProfileContent() {
                                             {userData?.displayName || "New Pilot"}
                                         </h1>
 
-                                        {/* User ID for easy searching */}
-                                        <button
-                                            onClick={() => {
-                                                navigator.clipboard.writeText(targetUserId || user.uid);
-                                                toast.success("User ID copied to clipboard!");
-                                            }}
-                                            className="flex items-center gap-2 px-4 py-2 bg-zinc-900/50 border border-white/10 rounded-xl hover:border-white/20 transition-all mb-4 group"
-                                            title="Click to copy"
-                                        >
-                                            <span className="text-[10px] font-mono text-zinc-500 group-hover:text-zinc-400">
-                                                ID: {targetUserId || user.uid}
-                                            </span>
-                                            <Copy className="w-3 h-3 text-zinc-600 group-hover:text-zinc-400" />
-                                        </button>
 
                                         <p className="text-zinc-400 text-sm md:text-base font-medium leading-[1.8] mb-14 max-w-2xl break-all">
                                             {userData?.bio || "No bio yet."}
