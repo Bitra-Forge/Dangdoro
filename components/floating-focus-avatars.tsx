@@ -128,9 +128,13 @@ const MAX_AVATARS = 10;
 function OrbitalAvatarComponent({
   session,
   latestPhoto,
+  overrideElapsedSecs,
 }: {
   session: LiveSession;
   latestPhoto?: string;
+  /** When set, bypasses the startedAt calculation and uses this value directly.
+   *  Used for the local user so the tooltip stays in perfect sync with the timer. */
+  overrideElapsedSecs?: number;
 }) {
   const router = useRouter();
   const [hovered, setHovered] = useState(false);
@@ -139,6 +143,7 @@ function OrbitalAvatarComponent({
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!hovered) return;
+    setNow(Date.now()); // update immediately so there's no stale freeze on hover
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, [hovered]);
@@ -190,7 +195,9 @@ function OrbitalAvatarComponent({
     dotOpacity.set(0.8 + 0.2 * wave);
   });
 
-  const elapsedSecs = startedAtMs ? Math.max(0, Math.floor((Date.now() - startedAtMs) / 1000)) : 0;
+  const elapsedSecs = overrideElapsedSecs !== undefined
+    ? overrideElapsedSecs
+    : startedAtMs ? Math.max(0, Math.floor((now - startedAtMs) / 1000)) : 0;
 
 
   const getInitials = useCallback((name: string) => {
@@ -336,7 +343,8 @@ const OrbitalAvatar = React.memo(OrbitalAvatarComponent, (prev, next) => {
     prev.session.status === next.session.status &&
     toMillis(prev.session.startedAt) === toMillis(next.session.startedAt) &&
     toMillis(prev.session.pausedAt) === toMillis(next.session.pausedAt) &&
-    prev.latestPhoto === next.latestPhoto
+    prev.latestPhoto === next.latestPhoto &&
+    prev.overrideElapsedSecs === next.overrideElapsedSecs
   );
 });
 
@@ -451,6 +459,13 @@ export function FloatingFocusAvatars() {
   const { user } = useAuth();
   const activeGroupId = useTimerStore((s) => s.activeGroupId);
   const activeLiveSessionId = useTimerStore((s) => s.activeLiveSessionId);
+  // Timer store values to keep own avatar perfectly in sync with the countdown
+  const timerTimeLeft = useTimerStore((s) => s.timeLeft);
+  const timerInitialFocusTime = useTimerStore((s) => s.initialFocusTime);
+  const timerMode = useTimerStore((s) => s.mode);
+  const localElapsedSecs = timerMode === "focus"
+    ? Math.max(0, timerInitialFocusTime - timerTimeLeft)
+    : 0;
   const [rawSessions, setRawSessions] = useState<LiveSession[]>([]);
   const [now, setNow] = useState(() => Date.now());
   const [userPhotos, setUserPhotos] = useState<Record<string, string>>({});
@@ -609,6 +624,7 @@ export function FloatingFocusAvatars() {
               key={session.userId}
               session={session}
               latestPhoto={userPhotos[session.userId]}
+              overrideElapsedSecs={session.userId === user?.uid ? localElapsedSecs : undefined}
             />
           ))}
         </AnimatePresence>
