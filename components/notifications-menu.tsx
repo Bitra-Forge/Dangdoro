@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Bell, Check, X, User, Users } from "lucide-react";
 import { Space_Grotesk } from "next/font/google";
 import { useAuth } from "@/components/AuthProvider";
@@ -41,8 +42,14 @@ export function NotificationsMenu() {
     const [profiles, setProfiles] = useState<Record<string, UserProfile>>({});
     const [objectiveAssignments, setObjectiveAssignments] = useState<ObjectiveAssignmentItem[]>([]);
     const menuRef = useRef<HTMLDivElement>(null);
+    const popoverRef = useRef<HTMLDivElement>(null);
+    const [mounted, setMounted] = useState(false);
     const totalUnread = requests.length + groupInvites.length + objectiveAssignments.length;
     const hasUnread = totalUnread > 0;
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
 
     type FriendRequestItem = {
@@ -74,7 +81,9 @@ export function NotificationsMenu() {
     // Close on click outside
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+            const isClickInsideMenu = menuRef.current?.contains(e.target as Node);
+            const isClickInsidePopover = popoverRef.current?.contains(e.target as Node);
+            if (!isClickInsideMenu && !isClickInsidePopover) {
                 closeMenu("notifications");
             }
         };
@@ -252,8 +261,8 @@ export function NotificationsMenu() {
                 )}
             </button>
 
-            {isOpen && (
-                <div className="absolute top-full right-0 mt-2 w-80 bg-zinc-900/95 backdrop-blur-xl border border-white/10 rounded-[15px] shadow-2xl overflow-hidden z-[60] animate-in fade-in slide-in-from-top-2 duration-300">
+            {isOpen && mounted ? createPortal(
+                <div ref={popoverRef} className="fixed top-22 right-2 w-[480px] max-w-[calc(100vw-16px)] z-[100] bg-zinc-950 border border-white/10 rounded-[2rem] shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300 sm:fixed sm:top-22 sm:right-8 sm:w-80 sm:max-w-none sm:rounded-[15px] sm:bg-zinc-900/95 sm:backdrop-blur-xl">
                     <div className="max-h-[400px] overflow-y-auto">
                         {requests.length === 0 && groupInvites.length === 0 && objectiveAssignments.length === 0 ? (
                             <div className="p-8 flex flex-col items-center justify-center text-center opacity-40">
@@ -389,8 +398,9 @@ export function NotificationsMenu() {
                             </div>
                         )}
                     </div>
-                </div>
-            )}
+                </div>,
+                document.body
+            ) : null}
         </div>
     );
 }

@@ -234,7 +234,7 @@ export function NotificationsDock() {
               className="fixed top-22 right-2 sm:right-8 w-[480px] max-w-[calc(100vw-16px)] sm:max-w-[calc(100vw-64px)] z-[100] overflow-visible"
             >
               {/* Glassmorphic container */}
-              <div className="relative bg-zinc-950/90 backdrop-blur-3xl border border-white/[0.08] rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.08)] overflow-hidden p-6">
+              <div className="relative bg-zinc-950 border border-white/[0.08] rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.08)] overflow-hidden p-6">
 
                 {/* Accent border glow */}
                 <div className="absolute -inset-px bg-gradient-to-r from-white/10 to-transparent rounded-[2rem] pointer-events-none" />
