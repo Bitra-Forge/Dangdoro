@@ -941,7 +941,7 @@ function ProfileContent() {
                                         {friendStatus?.isFriend ? (
                                             <Button 
                                                 onClick={() => setUnfriendConfirmOpen(true)}
-                                                className="w-full h-9 rounded-full bg-green-500/20 text-green-400 ubuntu-bold font-black text-[9px] tracking-widest border border-green-500/20 uppercase hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/20 group cursor-pointer transition-colors"
+                                                className="w-full h-9 rounded-full bg-green-500/20 text-green-400 ubuntu-bold font-black text-[11px] tracking-widest border border-green-500/20 uppercase hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/20 group cursor-pointer transition-colors"
                                             >
                                                 <UserCheck className="w-2.5 h-2.5 mr-2 group-hover:hidden" />
                                                 <UserMinus className="w-2.5 h-2.5 mr-2 hidden group-hover:block" />
@@ -959,7 +959,7 @@ function ProfileContent() {
                                                             setFriendStatus({ ...friendStatus, status: undefined, direction: undefined });
                                                         }
                                                     }}
-                                                    className="w-full h-9 rounded-full ubuntu-bold font-black text-[9px] tracking-widest uppercase border transition-colors bg-yellow-500/20 text-yellow-400 border-yellow-500/20 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/20 group cursor-pointer"
+                                                    className="w-full h-9 rounded-full ubuntu-bold font-black text-[11px] tracking-widest uppercase border transition-colors bg-yellow-500/20 text-yellow-400 border-yellow-500/20 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/20 group cursor-pointer"
                                                 >
                                                     <Timer className="w-2.5 h-2.5 mr-2 group-hover:hidden" />
                                                     <UserMinus className="w-2.5 h-2.5 mr-2 hidden group-hover:block" />
@@ -968,56 +968,74 @@ function ProfileContent() {
                                                 </Button>
                                             ) : (
                                                 <div className="flex w-full gap-2">
-                                                    <Button 
-                                                        onClick={async () => {
-                                                            const { getFriendRequest, acceptFriendRequest } = await import("@/lib/friendship");
-                                                            const req = await getFriendRequest(targetUserId!, user.uid);
-                                                            if (req && await acceptFriendRequest(req.id, targetUserId!, user.uid)) {
-                                                                toast.success("Friend request accepted");
-                                                                // the snapshot listener will handle state update automatically
-                                                            }
-                                                        }}
-                                                        className="flex-1 h-9 rounded-full bg-green-500/20 text-green-400 hover:bg-green-500/30 border border-green-500/20 ubuntu-bold font-black text-[9px] tracking-widest uppercase cursor-pointer transition-colors"
+                                                    <motion.div
+                                                        whileTap={{ scale: 0.98 }}
+                                                        className="flex-1"
                                                     >
-                                                        Accept
-                                                    </Button>
-                                                    <Button 
-                                                        onClick={async () => {
-                                                            const { getFriendRequest, declineFriendRequest } = await import("@/lib/friendship");
-                                                            const req = await getFriendRequest(targetUserId!, user.uid);
-                                                            if (req && await declineFriendRequest(req.id)) {
-                                                                toast.success("Friend request declined");
-                                                                // the snapshot listener will handle state update automatically
-                                                            }
-                                                        }}
-                                                        className="flex-1 h-9 rounded-full bg-red-500/20 text-red-500 hover:bg-red-500/30 border border-red-500/20 ubuntu-bold font-black text-[9px] tracking-widest uppercase cursor-pointer transition-colors"
+                                                        <Button 
+                                                            onClick={async () => {
+                                                                const { getFriendRequest, acceptFriendRequest } = await import("@/lib/friendship");
+                                                                const req = await getFriendRequest(targetUserId!, user.uid);
+                                                                if (req && await acceptFriendRequest(req.id, targetUserId!, user.uid)) {
+                                                                    toast.success("Friend request accepted");
+                                                                }
+                                                            }}
+                                                            className="w-full h-9 rounded-full bg-zinc-100 text-zinc-950 hover:bg-white ubuntu-bold font-black text-[11px] tracking-widest transition-all border border-white/20 relative overflow-hidden group/btn cursor-pointer shadow-xl"
+                                                        >
+                                                            <div className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-[-25deg] -translate-x-full group-hover/btn:animate-shine transition-transform" />
+                                                            <span className="relative z-10 uppercase">Accept</span>
+                                                        </Button>
+                                                    </motion.div>
+                                                    <motion.div
+                                                        whileTap={{ scale: 0.98 }}
+                                                        className="flex-1"
                                                     >
-                                                        Decline
-                                                    </Button>
+                                                        <Button 
+                                                            onClick={async () => {
+                                                                const { getFriendRequest, declineFriendRequest } = await import("@/lib/friendship");
+                                                                const req = await getFriendRequest(targetUserId!, user.uid);
+                                                                if (req && await declineFriendRequest(req.id)) {
+                                                                    toast.success("Friend request declined");
+                                                                }
+                                                            }}
+                                                            className="w-full h-9 rounded-full bg-zinc-900/80 text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-all backdrop-blur-sm group/btn relative overflow-hidden text-[11px] ubuntu-bold font-black tracking-widest cursor-pointer active:translate-y-0"
+                                                        >
+                                                            <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/20 group-hover/btn:border-white/40 pointer-events-none transition-colors duration-300" />
+                                                            <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/10 pointer-events-none" />
+                                                            <span className="relative z-10 uppercase">Decline</span>
+                                                        </Button>
+                                                    </motion.div>
                                                 </div>
                                             )
                                         ) : (
-                                            <Button
-                                                onClick={async () => {
-                                                    const { sendFriendRequest } = await import("@/lib/friendship");
-                                                    const success = await sendFriendRequest(user.uid, targetUserId!);
-                                                    if (success) {
-                                                        toast.success("Friend request sent!");
-                                                        setFriendStatus({ ...friendStatus, status: "pending", direction: "sent" });
-                                                    }
-                                                }}
-                                                className="w-full h-9 rounded-full bg-white text-black hover:bg-zinc-200 ubuntu-bold font-black text-[9px] tracking-widest border border-white/20 uppercase shadow-xl"
+                                            <motion.div
+                                                whileTap={{ scale: 0.98 }}
+                                                className="w-full"
                                             >
-                                                <Users className="w-2.5 h-2.5 mr-2" />
-                                                Add Friend
-                                            </Button>
+                                                <Button
+                                                    onClick={async () => {
+                                                        const { sendFriendRequest } = await import("@/lib/friendship");
+                                                        const success = await sendFriendRequest(user.uid, targetUserId!);
+                                                        if (success) {
+                                                            toast.success("Friend request sent!");
+                                                            setFriendStatus({ ...friendStatus, status: "pending", direction: "sent" });
+                                                        }
+                                                    }}
+                                                    className="w-full h-9 rounded-full bg-zinc-100 text-zinc-950 hover:bg-white ubuntu-bold font-black text-[11px] tracking-widest transition-all border border-white/20 relative shadow-xl overflow-hidden group/btn cursor-pointer"
+                                                >
+                                                    <div className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-[-25deg] -translate-x-full group-hover/btn:animate-shine transition-transform" />
+                                                    <div className="flex items-center justify-center gap-2 relative z-10 uppercase">
+                                                        <Users className="w-2.5 h-2.5" />
+                                                        Add Friend
+                                                    </div>
+                                                </Button>
+                                            </motion.div>
                                         )}
                                     </div>
                                 ) : !isEditing && (
                                     <div className="flex flex-col gap-2.5 w-32 md:w-40 items-center z-30">
                                         <motion.div
-                                            whileHover={{ y: -2 }}
-                                            whileTap={{ y: 0 }}
+                                            whileTap={{ scale: 0.98 }}
                                             className="w-full"
                                         >
                                             <Button
@@ -1033,8 +1051,7 @@ function ProfileContent() {
                                         </motion.div>
  
                                         <motion.div
-                                            whileHover={{ y: -1 }}
-                                            whileTap={{ y: 0 }}
+                                            whileTap={{ scale: 0.98 }}
                                             className="w-full"
                                         >
                                             <Button
