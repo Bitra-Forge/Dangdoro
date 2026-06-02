@@ -225,7 +225,7 @@ export function NotificationsDock() {
                 damping: 28,
                 max: 0.8
               }}
-              className="fixed top-22 right-8 w-[420px] max-w-[calc(100vw-32px)] z-[100] overflow-visible"
+              className="fixed top-22 right-8 w-[480px] max-w-[calc(100vw-32px)] z-[100] overflow-visible"
             >
               {/* Glassmorphic container */}
               <div className="relative bg-zinc-950/90 backdrop-blur-3xl border border-white/[0.08] rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.08)] overflow-hidden p-6">
@@ -262,7 +262,7 @@ export function NotificationsDock() {
                             type="button"
                             onClick={() => setFeedbackCategory(cat)}
                             className={cn(
-                              "ubuntu-medium px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all border cursor-pointer shrink-0",
+                              "ubuntu-bold px-3.5 py-2 rounded-lg text-[11px] font-extrabold transition-all border cursor-pointer shrink-0",
                               feedbackCategory === cat
                                 ? "bg-white text-black border-white shadow-md shadow-white/5"
                                 : "bg-black/40 text-zinc-400 border-white/10 hover:text-white hover:border-white/20"
