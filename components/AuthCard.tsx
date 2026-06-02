@@ -42,18 +42,13 @@ export function AuthCard({ redirect, isModal, onSuccess, initialEmailMode = "log
     useEffect(() => {
         if (!user) return;
 
-        // When in linking mode, pre-fill the name field with the guest's unique ID
-        if (user.isAnonymous && !displayName) {
-            setDisplayName(user.displayName || "");
-        }
-
         const unsub = onSnapshot(doc(db, "users", user.uid), (doc) => {
             if (doc.exists()) {
                 setStats(doc.data() as { totalPomodoros: number });
             }
         });
         return () => unsub();
-    }, [user, displayName]);
+    }, [user]);
 
     useEffect(() => {
         if (user?.isAnonymous) {
@@ -86,9 +81,10 @@ export function AuthCard({ redirect, isModal, onSuccess, initialEmailMode = "log
 
         const currentUser = auth.currentUser;
         const isSignup = emailMode === "signup";
+        const trimmedDisplayName = displayName.trim();
 
-        if (isSignup && !displayName) {
-            toast.error("Please identify yourself with a username.");
+        if (isSignup && !trimmedDisplayName) {
+            toast.error("Display name is required.");
             return;
         }
         if (!email || !password) {
@@ -100,11 +96,11 @@ export function AuthCard({ redirect, isModal, onSuccess, initialEmailMode = "log
             setIsSubmitting(true);
             if (isSignup && currentUser && currentUser.isAnonymous) {
                 // Link guest session to email with chosen name
-                await linkAnonymousToEmail(currentUser, email, password, displayName);
+                await linkAnonymousToEmail(currentUser, email, password, trimmedDisplayName);
                 toast.success("Account created! Your data is now saved.");
             } else {
                 if (isSignup) {
-                    await signUpWithEmail(email, password, displayName);
+                    await signUpWithEmail(email, password, trimmedDisplayName);
                     toast.success("Account created. Welcome!");
                 } else {
                     await signInWithEmail(email, password);
@@ -264,6 +260,7 @@ export function AuthCard({ redirect, isModal, onSuccess, initialEmailMode = "log
                                                     value={displayName}
                                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDisplayName(e.target.value)}
                                                     className="bg-zinc-900 border-white/15 h-11 pl-10 rounded-md text-white placeholder:text-zinc-600 focus:border-white/60 focus-visible:ring-0 focus-visible:ring-offset-0 transition-colors"
+                                                    required
                                                 />
                                             </div>
                                         </div>
