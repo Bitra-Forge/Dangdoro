@@ -92,6 +92,7 @@ export interface LiveSession {
     status: "focusing" | "paused" | "stopped";
     startedAt: Timestamp | FirebaseTimestampLike;
     lastHeartbeat: Timestamp | FirebaseTimestampLike;
+    pausedAt?: Timestamp | FirebaseTimestampLike | null;
     displayName?: string;
     photoURL?: string;
     userName?: string;
@@ -180,7 +181,7 @@ export function resolveLiveSessionsForGroup(groupId: string, sessions: LiveSessi
 }
 
 export function normalizeLiveSessions(sessions: LiveSession[]): LiveSession[] {
-    const active = sessions.filter((s) => s?.status === "focusing");
+    const active = sessions.filter((s) => s?.status === "focusing" || s?.status === "paused");
     const byUser = new Map<string, LiveSession>();
     for (const session of active) {
         const userId = session?.userId;

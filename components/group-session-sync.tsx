@@ -53,7 +53,15 @@ export function GroupSessionSync() {
         } else if (activeLiveSessionId && activeGroupId) {
           // Update status based on pause/focus state
           const newStatus = isPaused ? "paused" : "focusing";
-          await updateLiveSessionStatus(activeLiveSessionId, newStatus);
+          let startedAtUpdate: Date | undefined = undefined;
+          if (newStatus === "focusing") {
+            const timeLeft = useTimerStore.getState().timeLeft;
+            const initialFocusTime = useTimerStore.getState().initialFocusTime;
+            const mode = useTimerStore.getState().mode;
+            const elapsedSeconds = mode === "focus" ? Math.max(0, initialFocusTime - timeLeft) : 0;
+            startedAtUpdate = new Date(Date.now() - elapsedSeconds * 1000);
+          }
+          await updateLiveSessionStatus(activeLiveSessionId, newStatus, startedAtUpdate);
         } else if (!activeGroupId && activeLiveSessionId) {
           await endLiveSession(activeLiveSessionId);
           setLiveSessionId(null);

@@ -186,6 +186,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                 isFocusing,
                 sessionStatus,
                 liveSessionStartedAt: memberLiveSession?.startedAt || null,
+                liveSessionLastHeartbeat: memberLiveSession?.lastHeartbeat || null,
                 role,
                 isHost: group.hostId === memberId
             };

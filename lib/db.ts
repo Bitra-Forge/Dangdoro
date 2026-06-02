@@ -306,12 +306,25 @@ export const updateLiveSessionHeartbeat = async (liveSessionId: string) => {
     } catch { /* ignore */ }
 };
 
-export const updateLiveSessionStatus = async (liveSessionId: string, status: "focusing" | "paused") => {
+export const updateLiveSessionStatus = async (
+    liveSessionId: string, 
+    status: "focusing" | "paused",
+    startedAt?: Date
+) => {
     try {
-        await updateDoc(doc(db, "liveSessions", liveSessionId), {
+        const updates: Record<string, unknown> = {
             status,
             lastHeartbeat: serverTimestamp()
-        });
+        };
+        if (status === "paused") {
+            updates.pausedAt = serverTimestamp();
+        } else {
+            updates.pausedAt = null;
+        }
+        if (startedAt) {
+            updates.startedAt = startedAt;
+        }
+        await updateDoc(doc(db, "liveSessions", liveSessionId), updates);
     } catch { /* ignore */ }
 };
 

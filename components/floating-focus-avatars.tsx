@@ -18,6 +18,7 @@ interface LiveSession {
   userPhoto: string | null;
   startedAt: Timestamp | FirebaseTimestampLike | null;
   lastHeartbeat: Timestamp | FirebaseTimestampLike | null;
+  pausedAt?: Timestamp | FirebaseTimestampLike | null;
   status: string;
 }
 
@@ -132,16 +133,16 @@ function OrbitalAvatarComponent({
 }) {
   const router = useRouter();
   const [hovered, setHovered] = useState(false);
-  const isPaused = useTimerStore((s) => s.isPaused);
+  const isSessionPaused = session.status === "paused";
 
   // Local "now" for tooltip countdown — only ticks when hovered to save resources
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    if (!hovered || isPaused) return;
+    if (!hovered || isSessionPaused) return;
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [hovered, isPaused]);
+  }, [hovered, isSessionPaused]);
 
   // All visual properties derived from userId — completely stable
   const startAngleVal = useMemo(() => stableAngle(session.userId), [session.userId]);
@@ -154,7 +155,7 @@ function OrbitalAvatarComponent({
   const y = useMotionValue(0);
 
   useAnimationFrame((time, delta) => {
-    if (isPaused) return;
+    if (isSessionPaused) return;
     elapsedRef.current += delta / 1000;
     const angle = startAngleVal + (elapsedRef.current / speed) * Math.PI * 2;
     x.set(Math.cos(angle) * ORBIT_RX);
@@ -167,7 +168,7 @@ function OrbitalAvatarComponent({
   const glowScale = useMotionValue(1.15);
 
   useAnimationFrame((_, delta) => {
-    if (isPaused) return;
+    if (isSessionPaused) return;
     const duration = hovered ? 1.5 : 3.5;
     glowElapsedRef.current += delta / 1000;
     const t = (glowElapsedRef.current % duration) / duration;
@@ -184,7 +185,7 @@ function OrbitalAvatarComponent({
   const dotOpacity = useMotionValue(0.8);
 
   useAnimationFrame((_, delta) => {
-    if (isPaused) return;
+    if (isSessionPaused) return;
     dotElapsedRef.current += delta / 1000;
     const t = (dotElapsedRef.current % 2) / 2;
     const wave = (Math.sin(t * Math.PI * 2 - Math.PI / 2) + 1) / 2;
@@ -193,7 +194,13 @@ function OrbitalAvatarComponent({
   });
 
   const startedAtMs = toMillis(session.startedAt);
-  const elapsedSecs = startedAtMs ? Math.floor((now - startedAtMs) / 1000) : 0;
+  // Use pausedAt as the freeze anchor — it's written once at pause time and doesn't
+  // advance with heartbeats, so elapsed time stays frozen regardless of background pings.
+  const endMs = isSessionPaused
+    ? (toMillis(session.pausedAt) || toMillis(session.lastHeartbeat) || now)
+    : now;
+  const elapsedSecs = startedAtMs ? Math.max(0, Math.floor((endMs - startedAtMs) / 1000)) : 0;
+
 
   const getInitials = useCallback((name: string) => {
     const parts = name.split(/[\s_]+/).filter(Boolean);
@@ -309,10 +316,17 @@ function OrbitalAvatarComponent({
               >
                 <div className="relative px-3.5 py-2.5 bg-zinc-900/95 backdrop-blur-2xl border border-white/[0.08] rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.7)] whitespace-nowrap">
                   <div className={cn("absolute top-0 left-2.5 right-2.5 h-[1.5px] rounded-full opacity-50", accent.glow)} />
-                  <p className="text-[11px] font-bold text-zinc-100 tracking-tight">{session.userName}</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[11px] font-bold text-zinc-100 tracking-tight">{session.userName}</p>
+                    {isSessionPaused && (
+                      <span className="text-[8px] font-black uppercase tracking-widest text-amber-400 bg-amber-400/10 border border-amber-400/20 px-1.5 py-0.5 rounded-full">
+                        Paused
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <div className={cn("w-1.5 h-1.5 rounded-full", isPaused ? "" : "animate-pulse", accent.dot)} />
-                    <p className={cn("text-[10px] font-bold tabular-nums", accent.text)}>
+                    <div className={cn("w-1.5 h-1.5 rounded-full", isSessionPaused ? "bg-amber-400" : cn("animate-pulse", accent.dot))} />
+                    <p className={cn("text-[10px] font-bold tabular-nums", isSessionPaused ? "text-amber-400" : accent.text)}>
                       {fmtElapsed(elapsedSecs)} focused
                     </p>
                   </div>
@@ -334,7 +348,10 @@ const OrbitalAvatar = React.memo(OrbitalAvatarComponent, (prev, next) => {
     prev.session.userId === next.session.userId &&
     prev.session.userName === next.session.userName &&
     prev.session.userPhoto === next.session.userPhoto &&
+    // status MUST be in equality check so the component re-renders when paused/resumed
+    prev.session.status === next.session.status &&
     toMillis(prev.session.startedAt) === toMillis(next.session.startedAt) &&
+    toMillis(prev.session.pausedAt) === toMillis(next.session.pausedAt) &&
     prev.latestPhoto === next.latestPhoto
   );
 });
@@ -482,7 +499,18 @@ export function FloatingFocusAvatars() {
 
   if (sessions.length === 0) return null;
 
-  const visible = sessions.slice(0, MAX_AVATARS);
+  // Deduplicate by userId (prefer focusing over paused if both docs exist)
+  const visible = sessions
+    .reduce<LiveSession[]>((acc, s) => {
+      const existing = acc.findIndex((a) => a.userId === s.userId);
+      if (existing === -1) {
+        acc.push(s);
+      } else if (s.status === "focusing" && acc[existing].status !== "focusing") {
+        acc[existing] = s;
+      }
+      return acc;
+    }, [])
+    .slice(0, MAX_AVATARS);
 
   return (
     <div className="fixed inset-0 z-20 pointer-events-none overflow-hidden">
