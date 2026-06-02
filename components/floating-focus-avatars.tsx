@@ -124,6 +124,7 @@ const MAX_AVATARS = 10;
 
 /* ─── Avatar Component ────────────────────────────────────── */
 
+// OrbitalAvatarComponent — only receives focusing sessions (never paused)
 function OrbitalAvatarComponent({
   session,
   latestPhoto,
@@ -133,29 +134,27 @@ function OrbitalAvatarComponent({
 }) {
   const router = useRouter();
   const [hovered, setHovered] = useState(false);
-  const isSessionPaused = session.status === "paused";
 
-  // Local "now" for tooltip countdown — only ticks when hovered to save resources
+  // Local "now" for tooltip countdown — only ticks when hovered
   const [now, setNow] = useState(() => Date.now());
-
   useEffect(() => {
-    if (!hovered || isSessionPaused) return;
+    if (!hovered) return;
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [hovered, isSessionPaused]);
+  }, [hovered]);
 
   // All visual properties derived from userId — completely stable
   const startAngleVal = useMemo(() => stableAngle(session.userId), [session.userId]);
   const speed = useMemo(() => stableSpeed(session.userId), [session.userId]);
   const accent = useMemo(() => ACCENT_COLORS[stableColorIndex(session.userId)], [session.userId]);
 
-  // Motion values for orbit position — properly pause/resume
-  const elapsedRef = useRef(0);
+  // Seed elapsed from startedAt so orbit position survives navigation/remount
+  const startedAtMs = toMillis(session.startedAt);
+  const elapsedRef = useRef(startedAtMs ? (Date.now() - startedAtMs) / 1000 : 0);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
 
-  useAnimationFrame((time, delta) => {
-    if (isSessionPaused) return;
+  useAnimationFrame((_, delta) => {
     elapsedRef.current += delta / 1000;
     const angle = startAngleVal + (elapsedRef.current / speed) * Math.PI * 2;
     x.set(Math.cos(angle) * ORBIT_RX);
@@ -168,7 +167,6 @@ function OrbitalAvatarComponent({
   const glowScale = useMotionValue(1.15);
 
   useAnimationFrame((_, delta) => {
-    if (isSessionPaused) return;
     const duration = hovered ? 1.5 : 3.5;
     glowElapsedRef.current += delta / 1000;
     const t = (glowElapsedRef.current % duration) / duration;
@@ -185,7 +183,6 @@ function OrbitalAvatarComponent({
   const dotOpacity = useMotionValue(0.8);
 
   useAnimationFrame((_, delta) => {
-    if (isSessionPaused) return;
     dotElapsedRef.current += delta / 1000;
     const t = (dotElapsedRef.current % 2) / 2;
     const wave = (Math.sin(t * Math.PI * 2 - Math.PI / 2) + 1) / 2;
@@ -193,13 +190,7 @@ function OrbitalAvatarComponent({
     dotOpacity.set(0.8 + 0.2 * wave);
   });
 
-  const startedAtMs = toMillis(session.startedAt);
-  // Use pausedAt as the freeze anchor — it's written once at pause time and doesn't
-  // advance with heartbeats, so elapsed time stays frozen regardless of background pings.
-  const endMs = isSessionPaused
-    ? (toMillis(session.pausedAt) || toMillis(session.lastHeartbeat) || now)
-    : now;
-  const elapsedSecs = startedAtMs ? Math.max(0, Math.floor((endMs - startedAtMs) / 1000)) : 0;
+  const elapsedSecs = startedAtMs ? Math.max(0, Math.floor((Date.now() - startedAtMs) / 1000)) : 0;
 
 
   const getInitials = useCallback((name: string) => {
@@ -316,17 +307,10 @@ function OrbitalAvatarComponent({
               >
                 <div className="relative px-3.5 py-2.5 bg-zinc-900/95 backdrop-blur-2xl border border-white/[0.08] rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.7)] whitespace-nowrap">
                   <div className={cn("absolute top-0 left-2.5 right-2.5 h-[1.5px] rounded-full opacity-50", accent.glow)} />
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-[11px] font-bold text-zinc-100 tracking-tight">{session.userName}</p>
-                    {isSessionPaused && (
-                      <span className="text-[8px] font-black uppercase tracking-widest text-amber-400 bg-amber-400/10 border border-amber-400/20 px-1.5 py-0.5 rounded-full">
-                        Paused
-                      </span>
-                    )}
-                  </div>
+                  <p className="text-[11px] font-bold text-zinc-100 tracking-tight">{session.userName}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <div className={cn("w-1.5 h-1.5 rounded-full", isSessionPaused ? "bg-amber-400" : cn("animate-pulse", accent.dot))} />
-                    <p className={cn("text-[10px] font-bold tabular-nums", isSessionPaused ? "text-amber-400" : accent.text)}>
+                    <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", accent.dot)} />
+                    <p className={cn("text-[10px] font-bold tabular-nums", accent.text)}>
                       {fmtElapsed(elapsedSecs)} focused
                     </p>
                   </div>
@@ -355,6 +339,111 @@ const OrbitalAvatar = React.memo(OrbitalAvatarComponent, (prev, next) => {
     prev.latestPhoto === next.latestPhoto
   );
 });
+
+/* ─── Paused Dock ─────────────────────────────────────────── */
+
+function PausedDock({
+  sessions,
+  userPhotos,
+}: {
+  sessions: LiveSession[];
+  userPhotos: Record<string, string>;
+}) {
+  const router = useRouter();
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  if (sessions.length === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -8, scale: 0.95 }}
+      transition={{ duration: 0.35, ease: [0.23, 1, 0.32, 1] }}
+      className="fixed top-20 right-6 z-40 pointer-events-auto"
+    >
+      <div className="relative flex items-center gap-2 px-3 py-2 rounded-2xl bg-zinc-900/80 backdrop-blur-2xl border border-white/[0.07] shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
+        {/* top accent line */}
+        <div className="absolute top-0 left-4 right-4 h-px bg-amber-400/30 rounded-full" />
+        {/* label */}
+        <div className="flex items-center gap-1.5 pr-2 border-r border-white/[0.07]">
+          <div className="w-1.5 h-1.5 rounded-full bg-amber-400/60" />
+          <span className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-400/70">On Break</span>
+        </div>
+        {/* avatars */}
+        <div className="flex items-center gap-1.5">
+          {sessions.map((s) => {
+            const accent = ACCENT_COLORS[stableColorIndex(s.userId)];
+            const photoUrl = userPhotos[s.userId] || s.userPhoto;
+            const hasPhoto = photoUrl && photoUrl.length > 10 && !photoUrl.includes("null");
+            const isRemote = hasPhoto && (photoUrl!.startsWith("http"));
+            const parts = s.userName.split(/[\s_]+/).filter(Boolean);
+            const initials = parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : s.userName.slice(0, 2).toUpperCase();
+            const startedAtMs = toMillis(s.startedAt);
+            const endMs = toMillis(s.pausedAt) || toMillis(s.lastHeartbeat) || Date.now();
+            const elapsed = startedAtMs ? Math.max(0, Math.floor((endMs - startedAtMs) / 1000)) : 0;
+            return (
+              <div
+                key={s.userId}
+                className="relative"
+                onMouseEnter={() => setHoveredId(s.userId)}
+                onMouseLeave={() => setHoveredId(null)}
+                onClick={() => router.push(`/profile?user=${s.userId}`)}
+              >
+                <motion.div
+                  animate={{ scale: hoveredId === s.userId ? 1.15 : 1 }}
+                  transition={{ duration: 0.2 }}
+                  className="cursor-pointer"
+                >
+                  <div className={cn(
+                    "w-8 h-8 rounded-full overflow-hidden ring-[1.5px] ring-offset-1 ring-offset-zinc-900/80",
+                    accent.ring.replace("/40", "/60")
+                  )}>
+                    {hasPhoto ? (
+                      isRemote ? (
+                        <Image src={photoUrl!} alt={s.userName} width={32} height={32} className="w-full h-full object-cover" unoptimized />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={photoUrl!} alt={s.userName} className="w-full h-full object-cover" />
+                      )
+                    ) : (
+                      <div className={cn("w-full h-full bg-gradient-to-br flex items-center justify-center bg-zinc-800", accent.gradient)}>
+                        <span className="text-[9px] font-black text-white/90">{initials}</span>
+                      </div>
+                    )}
+                  </div>
+                  {/* amber pause dot */}
+                  <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-400 ring-[1.5px] ring-zinc-900/80" />
+                </motion.div>
+                {/* tooltip */}
+                <AnimatePresence>
+                  {hoveredId === s.userId && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 6, scale: 0.9 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 4, scale: 0.9 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute top-full left-1/2 -translate-x-1/2 mt-2.5 pointer-events-none z-50 whitespace-nowrap"
+                    >
+                      <div className="px-3 py-2 bg-zinc-900/95 backdrop-blur-xl border border-white/[0.08] rounded-xl shadow-xl">
+                        <p className="text-[11px] font-bold text-zinc-100">{s.userName}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                          <p className="text-[10px] font-bold text-amber-400 tabular-nums">{fmtElapsed(elapsed)} • paused</p>
+                        </div>
+                      </div>
+                      <div className="w-2 h-2 bg-zinc-900/95 border-l border-t border-white/[0.08] rotate-45 absolute -top-1 left-1/2 -translate-x-1/2" />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
 
 /* ─── Container ───────────────────────────────────────────── */
 
@@ -499,30 +588,37 @@ export function FloatingFocusAvatars() {
 
   if (sessions.length === 0) return null;
 
-  // Deduplicate by userId (prefer focusing over paused if both docs exist)
-  const visible = sessions
-    .reduce<LiveSession[]>((acc, s) => {
-      const existing = acc.findIndex((a) => a.userId === s.userId);
-      if (existing === -1) {
-        acc.push(s);
-      } else if (s.status === "focusing" && acc[existing].status !== "focusing") {
-        acc[existing] = s;
-      }
-      return acc;
-    }, [])
-    .slice(0, MAX_AVATARS);
+  // Deduplicate by userId — prefer focusing over paused if both docs exist for same user
+  const deduped = sessions.reduce<LiveSession[]>((acc, s) => {
+    const idx = acc.findIndex((a) => a.userId === s.userId);
+    if (idx === -1) { acc.push(s); }
+    else if (s.status === "focusing" && acc[idx].status !== "focusing") { acc[idx] = s; }
+    return acc;
+  }, []);
+
+  const focusingSessions = deduped.filter((s) => s.status === "focusing").slice(0, MAX_AVATARS);
+  const pausedSessions = deduped.filter((s) => s.status === "paused");
 
   return (
-    <div className="fixed inset-0 z-20 pointer-events-none overflow-hidden">
+    <>
+      {/* Orbiting avatars — focusing only */}
+      <div className="fixed inset-0 z-20 pointer-events-none overflow-hidden">
+        <AnimatePresence>
+          {focusingSessions.map((session) => (
+            <OrbitalAvatar
+              key={session.userId}
+              session={session}
+              latestPhoto={userPhotos[session.userId]}
+            />
+          ))}
+        </AnimatePresence>
+      </div>
+      {/* Paused users dock — top-right */}
       <AnimatePresence>
-        {visible.map((session) => (
-          <OrbitalAvatar
-            key={session.userId}
-            session={session}
-            latestPhoto={userPhotos[session.userId]}
-          />
-        ))}
+        {pausedSessions.length > 0 && (
+          <PausedDock key="paused-dock" sessions={pausedSessions} userPhotos={userPhotos} />
+        )}
       </AnimatePresence>
-    </div>
+    </>
   );
 }
