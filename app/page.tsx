@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 import { BackgroundTheme } from "@/components/background-theme";
 import { GroupFocusSelector } from "@/components/group-focus-selector";
-import { FloatingFocusAvatars } from "@/components/floating-focus-avatars";
+import { FloatingFocusAvatars, InlinePausedDock } from "@/components/floating-focus-avatars";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -143,13 +143,14 @@ export default function Home() {
         <div
           ref={topLeftRef}
           className={cn(
-            "fixed top-8 left-8 z-40 animate-in slide-in-from-left-4 fade-in duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)] transition-all",
+            "fixed top-8 left-8 z-40 flex items-center gap-3 animate-in slide-in-from-left-4 fade-in duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)] transition-all",
             shouldShowTopLeft
               ? "opacity-100 translate-y-0 pointer-events-auto"
               : "opacity-0 -translate-y-1 pointer-events-none"
           )}
         >
           <GroupFocusSelector onOpenChange={handleTopLeftOpenChange} />
+          <InlinePausedDock />
         </div>
 
         {/* Premium Active Task Card - Top Right */}

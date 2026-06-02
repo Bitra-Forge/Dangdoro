@@ -348,7 +348,91 @@ const OrbitalAvatar = React.memo(OrbitalAvatarComponent, (prev, next) => {
   );
 });
 
-/* ─── Paused Dock ─────────────────────────────────────────── */
+/* ─── Paused avatar item ─────────────────────────────────────── */
+
+function PausedAvatarItem({
+  s,
+  userPhotos,
+  hoveredId,
+  setHoveredId,
+  onNavigate,
+}: {
+  s: LiveSession;
+  userPhotos: Record<string, string>;
+  hoveredId: string | null;
+  setHoveredId: (id: string | null) => void;
+  onNavigate: (userId: string) => void;
+}) {
+  const accent = ACCENT_COLORS[stableColorIndex(s.userId)];
+  const photoUrl = userPhotos[s.userId] || s.userPhoto;
+  const hasPhoto = photoUrl && photoUrl.length > 10 && !photoUrl.includes("null");
+  const isRemote = hasPhoto && photoUrl!.startsWith("http");
+  const parts = s.userName.split(/[\s_]+/).filter(Boolean);
+  const initials = parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : s.userName.slice(0, 2).toUpperCase();
+  const startedAtMs = toMillis(s.startedAt);
+  const endMs = toMillis(s.pausedAt) || toMillis(s.lastHeartbeat) || Date.now();
+  const elapsed = startedAtMs ? Math.max(0, Math.floor((endMs - startedAtMs) / 1000)) : 0;
+  const isHovered = hoveredId === s.userId;
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.7 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.7 }}
+      transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+      className="relative"
+      onMouseEnter={() => setHoveredId(s.userId)}
+      onMouseLeave={() => setHoveredId(null)}
+      onClick={() => onNavigate(s.userId)}
+    >
+      <motion.div
+        animate={{ scale: isHovered ? 1.15 : 1 }}
+        transition={{ duration: 0.2 }}
+        className="cursor-pointer"
+      >
+        <div className={cn(
+          "w-8 h-8 rounded-full overflow-hidden ring-[1.5px] ring-offset-1 ring-offset-zinc-900/80",
+          accent.ring.replace("/40", "/60")
+        )}>
+          {hasPhoto ? (
+            isRemote ? (
+              <Image src={photoUrl!} alt={s.userName} width={32} height={32} className="w-full h-full object-cover" unoptimized />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={photoUrl!} alt={s.userName} className="w-full h-full object-cover" />
+            )
+          ) : (
+            <div className={cn("w-full h-full bg-gradient-to-br flex items-center justify-center bg-zinc-800", accent.gradient)}>
+              <span className="text-[9px] font-black text-white/90">{initials}</span>
+            </div>
+          )}
+        </div>
+        <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-400 ring-[1.5px] ring-zinc-900/80" />
+      </motion.div>
+      <AnimatePresence>
+        {isHovered && (
+          <motion.div
+            initial={{ opacity: 0, y: 6, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 4, scale: 0.9 }}
+            transition={{ duration: 0.15 }}
+            className="absolute top-full left-1/2 -translate-x-1/2 mt-2.5 pointer-events-none z-50 whitespace-nowrap"
+          >
+            <div className="px-3 py-2 bg-zinc-900/95 backdrop-blur-xl border border-white/[0.08] rounded-xl shadow-xl">
+              <p className="text-[11px] font-bold text-zinc-100">{s.userName}</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                <p className="text-[10px] font-bold text-amber-400 tabular-nums">{fmtElapsed(elapsed)} • paused</p>
+              </div>
+            </div>
+            <div className="w-2 h-2 bg-zinc-900/95 border-l border-t border-white/[0.08] rotate-45 absolute -top-1 left-1/2 -translate-x-1/2" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
 
 function PausedDock({
   sessions,
@@ -359,19 +443,26 @@ function PausedDock({
 }) {
   const router = useRouter();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   if (sessions.length === 0) return null;
 
+  const visibleSessions = expanded ? sessions : sessions.slice(0, 5);
+  const overflow = sessions.length - 5;
+
+  const handleNavigate = useCallback((userId: string) => {
+    router.push(`/profile?user=${userId}`);
+  }, [router]);
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: -8, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -8, scale: 0.95 }}
-      transition={{ duration: 0.35, ease: [0.23, 1, 0.32, 1] }}
-      className="fixed top-20 right-6 z-40 pointer-events-auto"
+      initial={{ opacity: 0, x: -8, scale: 0.95 }}
+      animate={{ opacity: 1, x: 0, scale: 1 }}
+      exit={{ opacity: 0, x: -8, scale: 0.95 }}
+      transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+      className="pointer-events-auto"
     >
       <div className="relative flex items-center gap-2 px-3 py-2 rounded-2xl bg-zinc-900/80 backdrop-blur-2xl border border-white/[0.07] shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
-        {/* top accent line */}
         <div className="absolute top-0 left-4 right-4 h-px bg-amber-400/30 rounded-full" />
         {/* label */}
         <div className="flex items-center gap-1.5 pr-2 border-r border-white/[0.07]">
@@ -379,77 +470,116 @@ function PausedDock({
           <span className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-400/70">On Break</span>
         </div>
         {/* avatars */}
-        <div className="flex items-center gap-1.5">
-          {sessions.map((s) => {
-            const accent = ACCENT_COLORS[stableColorIndex(s.userId)];
-            const photoUrl = userPhotos[s.userId] || s.userPhoto;
-            const hasPhoto = photoUrl && photoUrl.length > 10 && !photoUrl.includes("null");
-            const isRemote = hasPhoto && (photoUrl!.startsWith("http"));
-            const parts = s.userName.split(/[\s_]+/).filter(Boolean);
-            const initials = parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : s.userName.slice(0, 2).toUpperCase();
-            const startedAtMs = toMillis(s.startedAt);
-            const endMs = toMillis(s.pausedAt) || toMillis(s.lastHeartbeat) || Date.now();
-            const elapsed = startedAtMs ? Math.max(0, Math.floor((endMs - startedAtMs) / 1000)) : 0;
-            return (
-              <div
+        <motion.div layout className="flex items-center gap-1.5">
+          <AnimatePresence initial={false}>
+            {visibleSessions.map((s) => (
+              <PausedAvatarItem
                 key={s.userId}
-                className="relative"
-                onMouseEnter={() => setHoveredId(s.userId)}
-                onMouseLeave={() => setHoveredId(null)}
-                onClick={() => router.push(`/profile?user=${s.userId}`)}
-              >
-                <motion.div
-                  animate={{ scale: hoveredId === s.userId ? 1.15 : 1 }}
-                  transition={{ duration: 0.2 }}
-                  className="cursor-pointer"
-                >
-                  <div className={cn(
-                    "w-8 h-8 rounded-full overflow-hidden ring-[1.5px] ring-offset-1 ring-offset-zinc-900/80",
-                    accent.ring.replace("/40", "/60")
-                  )}>
-                    {hasPhoto ? (
-                      isRemote ? (
-                        <Image src={photoUrl!} alt={s.userName} width={32} height={32} className="w-full h-full object-cover" unoptimized />
-                      ) : (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={photoUrl!} alt={s.userName} className="w-full h-full object-cover" />
-                      )
-                    ) : (
-                      <div className={cn("w-full h-full bg-gradient-to-br flex items-center justify-center bg-zinc-800", accent.gradient)}>
-                        <span className="text-[9px] font-black text-white/90">{initials}</span>
-                      </div>
-                    )}
-                  </div>
-                  {/* amber pause dot */}
-                  <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-400 ring-[1.5px] ring-zinc-900/80" />
-                </motion.div>
-                {/* tooltip */}
-                <AnimatePresence>
-                  {hoveredId === s.userId && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 6, scale: 0.9 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 4, scale: 0.9 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute top-full left-1/2 -translate-x-1/2 mt-2.5 pointer-events-none z-50 whitespace-nowrap"
-                    >
-                      <div className="px-3 py-2 bg-zinc-900/95 backdrop-blur-xl border border-white/[0.08] rounded-xl shadow-xl">
-                        <p className="text-[11px] font-bold text-zinc-100">{s.userName}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                          <p className="text-[10px] font-bold text-amber-400 tabular-nums">{fmtElapsed(elapsed)} • paused</p>
-                        </div>
-                      </div>
-                      <div className="w-2 h-2 bg-zinc-900/95 border-l border-t border-white/[0.08] rotate-45 absolute -top-1 left-1/2 -translate-x-1/2" />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            );
-          })}
-        </div>
+                s={s}
+                userPhotos={userPhotos}
+                hoveredId={hoveredId}
+                setHoveredId={setHoveredId}
+                onNavigate={handleNavigate}
+              />
+            ))}
+          </AnimatePresence>
+
+          {/* Toggle button */}
+          {overflow > 0 && (
+            <motion.button
+              layout
+              onClick={() => setExpanded((e) => !e)}
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.94 }}
+              className="w-8 h-8 rounded-full bg-zinc-800/80 border border-amber-400/20 ring-[1.5px] ring-offset-1 ring-offset-zinc-900/80 ring-amber-400/30 flex items-center justify-center cursor-pointer transition-colors hover:bg-zinc-700/80 hover:border-amber-400/40"
+              title={expanded ? "Show fewer" : `Show ${overflow} more`}
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                {expanded ? (
+                  <motion.span
+                    key="collapse"
+                    initial={{ opacity: 0, rotate: -90, scale: 0.6 }}
+                    animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                    exit={{ opacity: 0, rotate: 90, scale: 0.6 }}
+                    transition={{ duration: 0.15 }}
+                    className="text-[11px] font-black text-amber-400 leading-none"
+                  >−</motion.span>
+                ) : (
+                  <motion.span
+                    key="expand"
+                    initial={{ opacity: 0, rotate: 90, scale: 0.6 }}
+                    animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                    exit={{ opacity: 0, rotate: -90, scale: 0.6 }}
+                    transition={{ duration: 0.15 }}
+                    className="text-[9px] font-black text-amber-400"
+                  >+{overflow}</motion.span>
+                )}
+              </AnimatePresence>
+            </motion.button>
+          )}
+        </motion.div>
       </div>
     </motion.div>
+  );
+}
+
+
+
+
+/* ─── Self-contained exported dock ─────────────────────────── */
+
+export function InlinePausedDock() {
+  const { user } = useAuth();
+  const activeGroupId = useTimerStore((s) => s.activeGroupId);
+  const [pausedSessions, setPausedSessions] = useState<LiveSession[]>([]);
+  const [userPhotos, setUserPhotos] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!activeGroupId || !user || user.isAnonymous) {
+      setPausedSessions([]);
+      return;
+    }
+    const q = query(
+      collection(db, "liveSessions"),
+      where("groupId", "==", activeGroupId),
+      where("status", "==", "paused")
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const byUser = new Map<string, LiveSession>();
+      snap.docs.forEach((d) => {
+        const s = { id: d.id, ...d.data({ serverTimestamps: "estimate" }) } as LiveSession;
+        if (s.userId) byUser.set(s.userId, s);
+      });
+      setPausedSessions(Array.from(byUser.values()));
+    });
+    return unsub;
+  }, [activeGroupId, user]);
+
+  useEffect(() => {
+    const missing = pausedSessions.map((s) => s.userId).filter((id) => !userPhotos[id]);
+    if (missing.length === 0) return;
+    let cancelled = false;
+    async function fetchPhotos() {
+      const photos: Record<string, string> = {};
+      for (let i = 0; i < missing.length; i += 30) {
+        const batch = missing.slice(i, i + 30);
+        const qP = query(collection(db, "users"), where("__name__", "in", batch));
+        const snap = await getDocs(qP);
+        snap.docs.forEach((d) => { if (d.data().photoURL) photos[d.id] = d.data().photoURL; });
+      }
+      if (!cancelled && Object.keys(photos).length > 0)
+        setUserPhotos((prev) => ({ ...prev, ...photos }));
+    }
+    fetchPhotos();
+    return () => { cancelled = true; };
+  }, [pausedSessions, userPhotos]);
+
+  return (
+    <AnimatePresence>
+      {pausedSessions.length > 0 && (
+        <PausedDock key="inline-paused-dock" sessions={pausedSessions} userPhotos={userPhotos} />
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -612,29 +742,21 @@ export function FloatingFocusAvatars() {
   }, []);
 
   const focusingSessions = deduped.filter((s) => s.status === "focusing").slice(0, MAX_AVATARS);
-  const pausedSessions = deduped.filter((s) => s.status === "paused");
+
+  if (focusingSessions.length === 0) return null;
 
   return (
-    <>
-      {/* Orbiting avatars — focusing only */}
-      <div className="fixed inset-0 z-20 pointer-events-none overflow-hidden">
-        <AnimatePresence>
-          {focusingSessions.map((session) => (
-            <OrbitalAvatar
-              key={session.userId}
-              session={session}
-              latestPhoto={userPhotos[session.userId]}
-              overrideElapsedSecs={session.userId === user?.uid ? localElapsedSecs : undefined}
-            />
-          ))}
-        </AnimatePresence>
-      </div>
-      {/* Paused users dock — top-right */}
+    <div className="fixed inset-0 z-20 pointer-events-none overflow-hidden">
       <AnimatePresence>
-        {pausedSessions.length > 0 && (
-          <PausedDock key="paused-dock" sessions={pausedSessions} userPhotos={userPhotos} />
-        )}
+        {focusingSessions.map((session) => (
+          <OrbitalAvatar
+            key={session.userId}
+            session={session}
+            latestPhoto={userPhotos[session.userId]}
+            overrideElapsedSecs={session.userId === user?.uid ? localElapsedSecs : undefined}
+          />
+        ))}
       </AnimatePresence>
-    </>
+    </div>
   );
 }
