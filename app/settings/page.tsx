@@ -5,7 +5,7 @@ import {
     Bell, Clock, LogOut, Mail, LogIn,
     Zap, Minus, Plus, RotateCcw,
     ChevronRight, PlayCircle, PauseCircle, Repeat, Sparkles, Palette, Check, WandSparkles, Grid3X3,
-    Heart
+    Heart, MessageSquare, Send
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { logOut } from "@/lib/auth";
@@ -159,6 +159,50 @@ export default function SettingsPage() {
 
     const [playingSoundId, setPlayingSoundId] = useState<string | null>(null);
     const audioRef = React.useRef<HTMLAudioElement | null>(null);
+
+    const [feedbackCategory, setFeedbackCategory] = useState("General");
+    const [feedbackMessage, setFeedbackMessage] = useState("");
+    const [sendingFeedback, setSendingFeedback] = useState(false);
+
+    const handleSendFeedback = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!feedbackMessage.trim()) return;
+
+        setSendingFeedback(true);
+        try {
+            const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+            };
+
+            if (user) {
+                const token = await user.getIdToken();
+                headers["Authorization"] = `Bearer ${token}`;
+            }
+
+            const response = await fetch("/api/feedback", {
+                method: "POST",
+                headers,
+                body: JSON.stringify({
+                    message: feedbackMessage,
+                    category: feedbackCategory,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                toast.success("Feedback sent! Thank you.");
+                setFeedbackMessage("");
+            } else {
+                toast.error(data.error || "Failed to send feedback.");
+            }
+        } catch (error) {
+            console.error("Error sending feedback:", error);
+            toast.error("An error occurred while sending feedback.");
+        } finally {
+            setSendingFeedback(false);
+        }
+    };
 
     const hasChanges = !settingsEqual(settings, savedSettings);
 
@@ -802,7 +846,78 @@ export default function SettingsPage() {
                                 )}
                             </div>
                         </section>
- 
+
+                        {/* Feedback Section */}
+                        <section>
+                            <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-1">Feedback</h2>
+                            <div className="bg-zinc-900/50 rounded-lg p-6 border border-white/5 relative overflow-hidden group/feedback-section">
+                                <div className="absolute -inset-px bg-gradient-to-r from-blue-500/10 to-transparent rounded-lg opacity-0 group-hover/feedback-section:opacity-100 transition-opacity duration-700 pointer-events-none" />
+                                <div className="relative z-10">
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center border border-blue-500/20">
+                                            <MessageSquare className="w-5 h-5 text-blue-400" />
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-zinc-200 font-bold">Send Feedback</span>
+                                            <span className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mt-0.5">We'd love to hear from you</span>
+                                        </div>
+                                    </div>
+
+                                    <form onSubmit={handleSendFeedback} className="space-y-4">
+                                        <div>
+                                            <span className="text-xs font-semibold text-zinc-400 block mb-2">Category</span>
+                                            <div className="flex flex-wrap gap-2">
+                                                {["General", "Bug Report", "Feature Request", "Suggestion"].map((cat) => (
+                                                    <button
+                                                        key={cat}
+                                                        type="button"
+                                                        onClick={() => setFeedbackCategory(cat)}
+                                                        className={cn(
+                                                            "px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer",
+                                                            feedbackCategory === cat
+                                                                ? "bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-500/10"
+                                                                : "bg-black/20 text-zinc-400 border-white/10 hover:text-white hover:border-white/20"
+                                                        )}
+                                                    >
+                                                        {cat}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label htmlFor="feedback-message" className="text-xs font-semibold text-zinc-400 block mb-2">Your Message</label>
+                                            <textarea
+                                                id="feedback-message"
+                                                rows={4}
+                                                value={feedbackMessage}
+                                                onChange={(e) => setFeedbackMessage(e.target.value)}
+                                                placeholder="Write your feedback, bug description, or feature request here..."
+                                                className="w-full bg-black/20 border border-white/10 rounded-xl p-4 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/35 transition-all resize-none font-sans"
+                                                required
+                                            />
+                                        </div>
+
+                                        <div className="flex justify-end">
+                                            <button
+                                                type="submit"
+                                                disabled={sendingFeedback || !feedbackMessage.trim()}
+                                                className={cn(
+                                                    "px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 transform active:scale-95 shadow-lg flex items-center gap-2 cursor-pointer",
+                                                    feedbackMessage.trim()
+                                                        ? "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/10 hover:shadow-blue-500/30"
+                                                        : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                                                )}
+                                            >
+                                                <Send className="w-3.5 h-3.5" />
+                                                {sendingFeedback ? "Sending..." : "Submit Feedback"}
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </section>
+
                         {/* Support Section */}
                         <section>
                             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4 px-1">Support</h2>
