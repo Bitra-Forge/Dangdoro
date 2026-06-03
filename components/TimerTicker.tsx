@@ -95,6 +95,13 @@ export function TimerTicker() {
           .then(() => toast.success(`Group focus session completed! Contribution recorded.`))
           .catch(() => toast.error("Failed to save session."));
       }
+
+      // Play completion sound
+      const audioUrl = `/SessionEndSounds/${sessionEndSound || "universfield-new-notification-027-383749.mp3"}`;
+      const audio = new Audio(audioUrl);
+      audio.volume = COMPLETION_AUDIO_VOLUME;
+      audio.play().catch((err) => console.log("Audio blocked:", err));
+
       stop();
       setActiveGroupId(null);
       return;
