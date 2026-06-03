@@ -2,10 +2,11 @@
 
 import { useState, useMemo, useEffect, memo } from "react";
 import { useSearchParams } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, Reorder } from "framer-motion";
 import { 
     Plus, Sparkles, Mail, Target, 
-    Play, Search, Check, Edit2, X, Save, Trash2, Filter
+    Play, Search, Check, Edit2, X, Save, Trash2, Filter,
+    ChevronUp, ChevronDown, GripVertical
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SharedTask } from "@/lib/groups";
@@ -17,7 +18,37 @@ const TASK_STATUS_CONFIG: Record<string, { label: string; color: string; icon: a
     "done":        { label: "Done",        color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20", icon: Check },
 };
 
-export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, onUpdate, onDelete, isAdmin, groupMembers, currentUserId, prefillTemplate, onPrefillHandled, onTemplateSelect }: any) {
+const TasksListWrapper = ({ children, isAdmin, values, onReorder, className }: any) => {
+    if (isAdmin) {
+        return (
+            <Reorder.Group axis="y" values={values} onReorder={onReorder} className={className}>
+                {children}
+            </Reorder.Group>
+        );
+    }
+    return (
+        <div className={className}>
+            {children}
+        </div>
+    );
+};
+
+const TaskWrapper = ({ children, task, isAdmin, ...props }: any) => {
+    if (isAdmin) {
+        return (
+            <Reorder.Item value={task} id={task.id} {...props}>
+                {children}
+            </Reorder.Item>
+        );
+    }
+    return (
+        <motion.div {...props}>
+            {children}
+        </motion.div>
+    );
+};
+
+export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, onUpdate, onDelete, isAdmin, groupMembers, currentUserId, prefillTemplate, onPrefillHandled, onTemplateSelect, onReorder }: any) {
     const searchParams = useSearchParams();
     const [openAdd, setOpenAdd] = useState(false);
     const [title, setTitle] = useState("");
@@ -83,7 +114,7 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
     };
 
     const visibleTasks = useMemo(() => {
-        return tasks.filter((task: any) => {
+        const filtered = tasks.filter((task: any) => {
             const matchesMine = objectiveFilter === "all" || task.assignedTo === "all" || task.assignedTo === currentUserId;
             const matchesSearch = searchTerm.trim() === "" || 
                 task.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -92,6 +123,17 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
             const matchesPriority = priorityFilter === "all" || task.priority === priorityFilter;
             
             return matchesMine && matchesSearch && matchesStatus && matchesPriority;
+        });
+
+        return [...filtered].sort((a: any, b: any) => {
+            const aPos = a.position !== undefined ? a.position : 0;
+            const bPos = b.position !== undefined ? b.position : 0;
+            if (aPos !== bPos) return aPos - bPos;
+
+            // Fallback to createdAt desc
+            const aTime = a.createdAt ? (typeof a.createdAt.toMillis === 'function' ? a.createdAt.toMillis() : (a.createdAt.seconds || 0) * 1000) : 0;
+            const bTime = b.createdAt ? (typeof b.createdAt.toMillis === 'function' ? b.createdAt.toMillis() : (b.createdAt.seconds || 0) * 1000) : 0;
+            return bTime - aTime;
         });
     }, [tasks, objectiveFilter, currentUserId, searchTerm, statusFilter, priorityFilter]);
 
@@ -110,6 +152,48 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
         setObjectiveFilter("all");
         setIsSearchOpen(false);
         setIsFiltersOpen(false);
+    };
+
+    const handleReorderIncomplete = (newIncomplete: any[]) => {
+        if (!onReorder) return;
+        const merged = [...newIncomplete, ...completedTasks];
+        onReorder(merged);
+    };
+
+    const handleReorderCompleted = (newCompleted: any[]) => {
+        if (!onReorder) return;
+        const merged = [...incompleteTasks, ...newCompleted];
+        onReorder(merged);
+    };
+
+    const handleMoveIncomplete = (task: any, direction: 'up' | 'down') => {
+        const idx = incompleteTasks.findIndex(t => t.id === task.id);
+        if (idx === -1) return;
+        const newIncomplete = [...incompleteTasks];
+        if (direction === 'up' && idx > 0) {
+            newIncomplete[idx] = newIncomplete[idx - 1];
+            newIncomplete[idx - 1] = task;
+            handleReorderIncomplete(newIncomplete);
+        } else if (direction === 'down' && idx < incompleteTasks.length - 1) {
+            newIncomplete[idx] = newIncomplete[idx + 1];
+            newIncomplete[idx + 1] = task;
+            handleReorderIncomplete(newIncomplete);
+        }
+    };
+
+    const handleMoveCompleted = (task: any, direction: 'up' | 'down') => {
+        const idx = completedTasks.findIndex(t => t.id === task.id);
+        if (idx === -1) return;
+        const newCompleted = [...completedTasks];
+        if (direction === 'up' && idx > 0) {
+            newCompleted[idx] = newCompleted[idx - 1];
+            newCompleted[idx - 1] = task;
+            handleReorderCompleted(newCompleted);
+        } else if (direction === 'down' && idx < completedTasks.length - 1) {
+            newCompleted[idx] = newCompleted[idx + 1];
+            newCompleted[idx + 1] = task;
+            handleReorderCompleted(newCompleted);
+        }
     };
 
     return (
@@ -448,7 +532,12 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                 </div>
             )}
 
-            <div className="grid grid-cols-1 gap-3">
+            <TasksListWrapper 
+                isAdmin={isAdmin} 
+                values={incompleteTasks} 
+                onReorder={handleReorderIncomplete} 
+                className="grid grid-cols-1 gap-3"
+            >
                 {incompleteTasks.map((task: any, i: number) => {
                     const isEditing = editingTaskId === task.id;
                     const canEdit = isAdmin || task.assignedTo === currentUserId || task.assignedTo === "all";
@@ -519,46 +608,71 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                     }
 
                     return (
-                        <motion.div 
+                        <TaskWrapper 
                             key={task.id} 
+                            task={task}
+                            isAdmin={isAdmin}
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
-                            transition={{ duration: 0.3, delay: i * 0.05 }}
+                            transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.5 }}
                             className={cn(
-                                "flex flex-col gap-3 p-5 rounded-2xl transition-all duration-300 border relative group/task", 
+                                "flex flex-col gap-3 p-5 rounded-2xl transition-colors duration-200 border relative group/task", 
                                 task.status === "done" 
                                     ? "bg-zinc-900/20 border-white/5 opacity-60" 
                                     : "bg-zinc-900/60 border-white/10 hover:border-white/20 active:scale-[0.99]"
                             )}
                         >
                             <div className="flex items-start gap-4">
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <h4 className={cn(
-                                            "text-[13px] font-black tracking-tight transition-all duration-500 truncate", 
-                                            task.status === "done" ? "text-zinc-600 line-through" : "text-white group-hover/task:text-[white]"
-                                        )}>
-                                            {task.title}
-                                        </h4>
-                                        {isAdmin && (
-                                            <button onClick={() => startEditing(task)} className="opacity-0 group-hover/task:opacity-100 p-1 text-zinc-400 hover:text-white transition-all">
-                                                <Edit2 className="w-3.5 h-3.5" />
-                                            </button>
-                                        )}
+                                {isAdmin && (
+                                    <div className="pt-1.5 text-zinc-600 group-hover/task:text-zinc-400 cursor-grab active:cursor-grabbing transition-colors shrink-0">
+                                        <GripVertical className="w-4 h-4" />
                                     </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                    <h4 className={cn(
+                                        "text-[13px] font-black tracking-tight transition-all duration-500 truncate mb-1", 
+                                        task.status === "done" ? "text-zinc-600 line-through" : "text-white group-hover/task:text-[white]"
+                                    )}>
+                                        {task.title}
+                                    </h4>
                                     {task.description && (
                                         <p className="text-[11px] text-zinc-500 line-clamp-2">{task.description}</p>
                                     )}
                                 </div>
 
                                 {isAdmin && (
-                                    <button
-                                        onClick={() => onDelete(task.id)}
-                                        title="Delete objective"
-                                        className="w-7 h-7 rounded-lg text-zinc-700 hover:bg-red-500/10 hover:text-red-500 transition-all flex items-center justify-center opacity-0 group-hover/task:opacity-100"
-                                    >
-                                        <X className="w-3.5 h-3.5" />
-                                    </button>
+                                    <div className="flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-all shrink-0">
+                                        <button 
+                                            onClick={() => startEditing(task)} 
+                                            className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 rounded-md transition-all" 
+                                            title="Edit objective"
+                                        >
+                                            <Edit2 className="w-4 h-4" />
+                                        </button>
+                                        <button 
+                                            disabled={i === 0}
+                                            onClick={() => handleMoveIncomplete(task, 'up')}
+                                            className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all"
+                                            title="Move Up"
+                                        >
+                                            <ChevronUp className="w-4 h-4" />
+                                        </button>
+                                        <button 
+                                            disabled={i === incompleteTasks.length - 1}
+                                            onClick={() => handleMoveIncomplete(task, 'down')}
+                                            className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all"
+                                            title="Move Down"
+                                        >
+                                            <ChevronDown className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => onDelete(task.id)}
+                                            title="Delete objective"
+                                            className="p-1 text-zinc-700 hover:bg-red-500/10 hover:text-red-500 rounded-md transition-all"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
                                 )}
                             </div>
 
@@ -604,10 +718,10 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                     </div>
                                 </div>
                             </div>
-                        </motion.div>
+                        </TaskWrapper>
                     );
                 })}
-                {incompleteTasks.length > 0 && completedTasks.length > 0 && (
+            </TasksListWrapper>    {incompleteTasks.length > 0 && completedTasks.length > 0 && (
                     <div className="py-2">
                         <div className="flex items-center gap-3">
                             <div className="h-px flex-1 bg-white/5" />
@@ -616,6 +730,12 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                         </div>
                     </div>
                 )}
+            <TasksListWrapper 
+                isAdmin={isAdmin} 
+                values={completedTasks} 
+                onReorder={handleReorderCompleted} 
+                className="grid grid-cols-1 gap-3"
+            >
                 {completedTasks.map((task: any, i: number) => {
                     const isEditing = editingTaskId === task.id;
                     const canEdit = isAdmin || task.assignedTo === currentUserId || task.assignedTo === "all";
@@ -686,46 +806,71 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                     }
 
                     return (
-                        <motion.div 
+                        <TaskWrapper 
                             key={task.id} 
+                            task={task}
+                            isAdmin={isAdmin}
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
-                            transition={{ duration: 0.3, delay: i * 0.05 }}
+                            transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.5 }}
                             className={cn(
-                                "flex flex-col gap-3 p-5 rounded-2xl transition-all duration-300 border relative group/task", 
+                                "flex flex-col gap-3 p-5 rounded-2xl transition-colors duration-200 border relative group/task", 
                                 task.status === "done" 
                                     ? "bg-zinc-900/20 border-white/5 opacity-60" 
                                     : "bg-zinc-900/60 border-white/10 hover:border-white/20 active:scale-[0.99]"
                             )}
                         >
                             <div className="flex items-start gap-4">
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <h4 className={cn(
-                                            "text-[13px] font-black tracking-tight transition-all duration-500 truncate", 
-                                            task.status === "done" ? "text-zinc-600 line-through" : "text-white group-hover/task:text-[white]"
-                                        )}>
-                                            {task.title}
-                                        </h4>
-                                        {isAdmin && (
-                                            <button onClick={() => startEditing(task)} className="opacity-0 group-hover/task:opacity-100 p-1 text-zinc-400 hover:text-white transition-all">
-                                                <Edit2 className="w-3.5 h-3.5" />
-                                            </button>
-                                        )}
+                                {isAdmin && (
+                                    <div className="pt-1.5 text-zinc-600 group-hover/task:text-zinc-400 cursor-grab active:cursor-grabbing transition-colors shrink-0">
+                                        <GripVertical className="w-4 h-4" />
                                     </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                    <h4 className={cn(
+                                        "text-[13px] font-black tracking-tight transition-all duration-500 truncate mb-1", 
+                                        task.status === "done" ? "text-zinc-600 line-through" : "text-white group-hover/task:text-[white]"
+                                    )}>
+                                        {task.title}
+                                    </h4>
                                     {task.description && (
                                         <p className="text-[11px] text-zinc-500 line-clamp-2">{task.description}</p>
                                     )}
                                 </div>
 
                                 {isAdmin && (
-                                    <button
-                                        onClick={() => onDelete(task.id)}
-                                        title="Delete objective"
-                                        className="w-7 h-7 rounded-lg text-zinc-700 hover:bg-red-500/10 hover:text-red-500 transition-all flex items-center justify-center opacity-0 group-hover/task:opacity-100"
-                                    >
-                                        <X className="w-3.5 h-3.5" />
-                                    </button>
+                                    <div className="flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-all shrink-0">
+                                        <button 
+                                            onClick={() => startEditing(task)} 
+                                            className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 rounded-md transition-all" 
+                                            title="Edit objective"
+                                        >
+                                            <Edit2 className="w-4 h-4" />
+                                        </button>
+                                        <button 
+                                            disabled={i === 0}
+                                            onClick={() => handleMoveCompleted(task, 'up')}
+                                            className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all"
+                                            title="Move Up"
+                                        >
+                                            <ChevronUp className="w-4 h-4" />
+                                        </button>
+                                        <button 
+                                            disabled={i === completedTasks.length - 1}
+                                            onClick={() => handleMoveCompleted(task, 'down')}
+                                            className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all"
+                                            title="Move Down"
+                                        >
+                                            <ChevronDown className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => onDelete(task.id)}
+                                            title="Delete objective"
+                                            className="p-1 text-zinc-700 hover:bg-red-500/10 hover:text-red-500 rounded-md transition-all"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
                                 )}
                             </div>
 
@@ -771,9 +916,10 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                     </div>
                                 </div>
                             </div>
-                        </motion.div>
+                        </TaskWrapper>
                     );
                 })}
+            </TasksListWrapper>
                 {tasks.length > 0 && visibleTasks.length === 0 && (
                     <div className="py-12 flex flex-col items-center justify-center border border-white/5 rounded-2xl bg-zinc-900/20 space-y-3">
                         <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-500">
@@ -788,7 +934,6 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                         </button>
                     </div>
                 )}
-            </div>
         </div>
     );
 });

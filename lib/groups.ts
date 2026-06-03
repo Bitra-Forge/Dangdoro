@@ -34,6 +34,7 @@ export interface SharedTask {
     createdBy: string;
     createdAt: Timestamp | FirebaseTimestampLike;
     updatedAt?: Timestamp | FirebaseTimestampLike;
+    position?: number;
 }
 
 export interface ObjectiveTemplateDraft {

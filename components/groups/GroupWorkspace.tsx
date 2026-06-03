@@ -125,7 +125,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     // 3. Subscribe to tasks
     useEffect(() => {
         if (!groupId || !user || user.isAnonymous) return;
-        const q = query(collection(db, `focusGroups/${groupId}/tasks`), orderBy("createdAt", "desc"));
+        const q = query(collection(db, `focusGroups/${groupId}/tasks`));
         const unsub = onSnapshot(
             q,
             (snap) => {
@@ -266,9 +266,11 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     // Handlers
     const handleAddTask = async (title: string, priority: string = "medium", assignedTo: string = "all", silent: boolean = false, description: string = "") => {
         if (!isAdmin || !user) return;
+        const maxPos = tasks.length > 0 ? Math.max(...tasks.map(t => t.position ?? 0)) : 0;
         await addDoc(collection(db, `focusGroups/${groupId}/tasks`), {
             title, priority, assignedTo, description, status: "todo",
-            createdBy: user.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+            createdBy: user.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+            position: maxPos + 1000
         });
         if (assignedTo !== "all" && assignedTo !== user.uid) {
             await addDoc(collection(db, "notifications"), {
@@ -287,6 +289,32 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
 
     const handleUpdateTask = async (taskId: string, updates: any) => {
         await updateDoc(doc(db, `focusGroups/${groupId}/tasks`, taskId), { ...updates, updatedAt: serverTimestamp() });
+    };
+
+    const handleReorderTasks = async (newOrderedTasks: SharedTask[]) => {
+        if (!isAdmin) return;
+
+        // Optimistically update local tasks state immediately for instant feedback
+        const updatedTasksMap = new Map<string, SharedTask>();
+        newOrderedTasks.forEach((task, idx) => {
+            updatedTasksMap.set(task.id, { ...task, position: (idx + 1) * 1000 });
+        });
+        setTasks(prev => prev.map(t => updatedTasksMap.get(t.id) || t));
+
+        const batch = writeBatch(db);
+        newOrderedTasks.forEach((task, idx) => {
+            const newPos = (idx + 1) * 1000;
+            if (task.position !== newPos) {
+                const taskRef = doc(db, `focusGroups/${groupId}/tasks`, task.id);
+                batch.update(taskRef, { position: newPos, updatedAt: serverTimestamp() });
+            }
+        });
+        try {
+            await batch.commit();
+        } catch (error) {
+            console.error("Failed to commit reorder batch:", error);
+            toast.error("Failed to save new order.");
+        }
     };
 
     const handleDeleteTask = async (taskId: string) => {
@@ -732,6 +760,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                                 onAdd={handleAddTask}
                                                 onUpdate={handleUpdateTask}
                                                 onDelete={handleDeleteTask}
+                                                onReorder={handleReorderTasks}
                                                 isAdmin={isAdmin}
                                                 groupMembers={enrichedGroup.memberDetails}
                                                 currentUserId={user.uid}
