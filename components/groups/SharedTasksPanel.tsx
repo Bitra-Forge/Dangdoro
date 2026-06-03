@@ -541,8 +541,8 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                             {task.title}
                                         </h4>
                                         {isAdmin && (
-                                            <button onClick={() => startEditing(task)} className="opacity-0 group-hover/task:opacity-100 p-1 text-zinc-600 hover:text-white transition-all">
-                                                <Edit2 className="w-3 h-3" />
+                                            <button onClick={() => startEditing(task)} className="opacity-0 group-hover/task:opacity-100 p-1 text-zinc-400 hover:text-white transition-all">
+                                                <Edit2 className="w-3.5 h-3.5" />
                                             </button>
                                         )}
                                     </div>
@@ -708,8 +708,8 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                             {task.title}
                                         </h4>
                                         {isAdmin && (
-                                            <button onClick={() => startEditing(task)} className="opacity-0 group-hover/task:opacity-100 p-1 text-zinc-600 hover:text-white transition-all">
-                                                <Edit2 className="w-3 h-3" />
+                                            <button onClick={() => startEditing(task)} className="opacity-0 group-hover/task:opacity-100 p-1 text-zinc-400 hover:text-white transition-all">
+                                                <Edit2 className="w-3.5 h-3.5" />
                                             </button>
                                         )}
                                     </div>
