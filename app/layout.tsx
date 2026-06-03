@@ -11,6 +11,8 @@ import { NotificationsDock } from "@/components/notifications-dock";
 import { Heartbeat } from "@/components/Heartbeat";
 import { GroupSessionSync } from "@/components/group-session-sync";
 import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from "@vercel/speed-insights/next";
+
 
 
 
@@ -83,6 +85,7 @@ export default function RootLayout({
           <Heartbeat />
         </AuthProvider>
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
