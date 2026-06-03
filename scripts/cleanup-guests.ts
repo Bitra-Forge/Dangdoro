@@ -147,8 +147,8 @@ async function cleanupAnonymousUsers() {
             if (processedUids.has(uid)) continue;
 
             const data = doc.data();
-            const isGuest = !data.email || (data.displayName && data.displayName.startsWith("Guest #"));
-            
+            const isGuest = !data.email && data.isAnonymous;
+
             if (isGuest) {
                 const createdAt = data.createdAt?.toDate?.() || new Date(data.createdAt || 0);
                 const hoursSinceCreated = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
