@@ -14,7 +14,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { cn, getHighQualityAvatarUrl } from "@/lib/utils";
 import {
     UserPlus, X, Search, Users, Check, ArrowLeft,
     UserCheck, UserMinus
@@ -142,7 +142,7 @@ export default function FriendsPage() {
             try {
                 const userDoc = await getDoc(doc(db, "users", user.uid));
                 const photoFromDoc = userDoc.exists() ? userDoc.data()?.photoURL : undefined;
-                setProfileImageUrl(photoFromDoc || user.photoURL || "");
+                setProfileImageUrl(getHighQualityAvatarUrl(photoFromDoc || user.photoURL) || "");
             } catch {
                 setProfileImageUrl(user.photoURL || "");
             }
@@ -356,12 +356,10 @@ export default function FriendsPage() {
                                 <div className="flex items-center gap-4 md:gap-5">
                                     <div className="w-20 h-20 md:w-24 md:h-24 overflow-hidden rounded-[2px] border-2 border-sky-900/60 shadow-[0_0_15px_rgba(12,74,110,0.25)] bg-zinc-800">
                                         {profileImageUrl ? (
-                                            <Image
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img
                                                 src={profileImageUrl}
                                                 alt="User profile"
-                                                width={96}
-                                                height={96}
-                                                unoptimized
                                                 className="w-full h-full object-cover"
                                             />
                                         ) : (
@@ -522,7 +520,7 @@ const FriendCard = memo(({ friend, online, onRemoveFriend }: FriendCardProps) =>
 
                 <div className="relative z-10 flex items-start gap-3">
                     <Avatar className="w-12 h-12 rounded-full overflow-hidden border border-white/10">
-                        <AvatarImage src={userData?.photoURL} className="rounded-full object-cover" />
+                        <AvatarImage src={getHighQualityAvatarUrl(userData?.photoURL)} className="rounded-full object-cover" />
                         <AvatarFallback className="rounded-full">{userData?.displayName?.[0]}</AvatarFallback>
                     </Avatar>
 
@@ -703,7 +701,7 @@ function RequestsTab({ receivedRequests, sentRequests, onAccept, onDecline, onCa
                                     <div className="relative z-10 p-5">
                                         <Link href={`/profile?user=${profileUserId}`} className="flex items-center gap-3 rounded-[8px] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/60" aria-label={`Open ${req.fromUserData?.displayName || "user"} profile`}>
                                             <Avatar className="w-12 h-12 rounded-full overflow-hidden border border-white/10">
-                                                <AvatarImage src={req.fromUserData?.photoURL} className="rounded-full object-cover" />
+                                                <AvatarImage src={getHighQualityAvatarUrl(req.fromUserData?.photoURL)} className="rounded-full object-cover" />
                                                 <AvatarFallback className="rounded-full">{req.fromUserData?.displayName?.[0]}</AvatarFallback>
                                             </Avatar>
 
@@ -767,7 +765,7 @@ function RequestsTab({ receivedRequests, sentRequests, onAccept, onDecline, onCa
                                     <div className="relative z-10 p-5">
                                         <Link href={`/profile?user=${profileUserId}`} className="flex items-center gap-3 rounded-[8px] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60" aria-label={`Open ${req.toUserData?.displayName || "user"} profile`}>
                                             <Avatar className="w-12 h-12 rounded-full overflow-hidden border border-white/10">
-                                                <AvatarImage src={req.toUserData?.photoURL} className="rounded-full object-cover" />
+                                                <AvatarImage src={getHighQualityAvatarUrl(req.toUserData?.photoURL)} className="rounded-full object-cover" />
                                                 <AvatarFallback className="rounded-full">{req.toUserData?.displayName?.[0]}</AvatarFallback>
                                             </Avatar>
 
@@ -859,7 +857,7 @@ function SearchTab({ searchQuery, setSearchQuery, searching, searchResults, onSe
                     const isRequesting = requestingIds.has(recipientId);
                     return (
                         <div key={recipientId} className="ubuntu-regular flex items-center gap-4 p-4 bg-zinc-900/40 rounded-[10px] border border-white/5">
-                            <Avatar className="w-10 h-10"><AvatarImage src={res.photoURL} /><AvatarFallback>{res.displayName?.[0]}</AvatarFallback></Avatar>
+                                                            <Avatar className="w-10 h-10"><AvatarImage src={getHighQualityAvatarUrl(res.photoURL)} /><AvatarFallback>{res.displayName?.[0]}</AvatarFallback></Avatar>
                             <div className="flex-1"><p className="ubuntu-bold text-sm font-bold text-white">{res.displayName}</p></div>
                             {isFriend ? (
                                 <span className="px-3 py-1.5 bg-green-500/10 text-green-400 rounded-[5px] text-[10px] font-black uppercase tracking-widest">Friend</span>

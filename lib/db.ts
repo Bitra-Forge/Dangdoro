@@ -77,17 +77,21 @@ export const syncUserProfile = async (user: User) => {
         const userRef = doc(db, "users", user.uid);
         const userSnap = await getDoc(userRef);
 
+        const isValidPhoto = (url: any) => url && typeof url === 'string' && url.trim() !== '' && url !== 'null' && url !== 'undefined';
+
         if (!userSnap.exists()) {
             console.log(`syncUserProfile: Creating new Firestore profile for: ${user.uid}`);
             // Generate a unique signature for guests (e.g., Guest #8F2A)
             const signature = user.uid.slice(0, 4).toUpperCase();
             const finalName = user.isAnonymous ? `Guest #${signature}` : "Focus Hero";
 
+            const photoURLCandidate = user.photoURL;
+
             // Initial profile creation
             await setDoc(userRef, {
                 uid: user.uid,
                 displayName: user.displayName || finalName,
-                photoURL: user.photoURL || null,
+                photoURL: isValidPhoto(photoURLCandidate) ? photoURLCandidate : null,
                 email: user.email || null,
                 totalPomodoros: 0,
                 totalMinutes: 0,
@@ -129,7 +133,7 @@ export const syncUserProfile = async (user: User) => {
 
                 // PHOTO SYNC PRIORITY: Firestore > Auth > Provider.
                 // This ensures manual uploads in our app aren't overwritten by Google.
-                updateData.photoURL = existingData.photoURL || user.photoURL || photoFromProvider;
+                updateData.photoURL = [existingData.photoURL, user.photoURL, photoFromProvider].find(isValidPhoto) || null;
             } else {
                 // For Anonymous users
                 let finalName = existingData.displayName;
@@ -145,7 +149,7 @@ export const syncUserProfile = async (user: User) => {
                 }
 
                 // Preserve custom avatar if set
-                updateData.photoURL = existingData.photoURL || user.photoURL || null;
+                updateData.photoURL = [existingData.photoURL, user.photoURL].find(isValidPhoto) || null;
             }
 
             await updateDoc(userRef, updateData);

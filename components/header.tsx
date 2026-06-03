@@ -1,7 +1,7 @@
 "use client";
 
 import { User, Heart } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getHighQualityAvatarUrl } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -69,7 +69,7 @@ export function Header() {
 
                 <Link href="/profile">
                     <Avatar className="w-10 h-10 border-2 border-primary/20 p-0.5 hover:border-primary transition-colors duration-500 hover:scale-105 transform cursor-pointer">
-                        {user?.photoURL && <AvatarImage src={user.photoURL ?? undefined} />}
+                        <AvatarImage src={getHighQualityAvatarUrl(user?.photoURL)} />
                         <AvatarFallback className="bg-zinc-900 text-[10px] font-black">{user?.displayName?.slice(0, 2) || "!!"}</AvatarFallback>
                     </Avatar>
                 </Link>

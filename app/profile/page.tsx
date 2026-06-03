@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo, Suspense, memo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
-import { cn } from "@/lib/utils";
+import { cn, getHighQualityAvatarUrl } from "@/lib/utils";
 import { onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { updateProfilePictureBase64, getSessionHistory, updateUserProfile } from "@/lib/db";
@@ -805,14 +805,12 @@ function ProfileContent() {
                                         <Avatar
                                             className="w-40 h-40 md:w-48 md:h-48 rounded-[2.2rem] border border-white/10 relative z-10 overflow-hidden transition-all duration-500 group-hover:border-white/30"
                                         >
-                                            {(userData?.photoURL || user.photoURL) && (
-                                                <AvatarImage
-                                                    src={(userData?.photoURL || user.photoURL) ?? undefined}
-                                                    className="object-cover w-full h-full scale-100 group-hover:scale-105 transition-transform duration-[2s] ease-out rounded-[2.2rem]"
-                                                />
-                                            )}
+                                            <AvatarImage
+                                                src={getHighQualityAvatarUrl(userData?.photoURL || (isOwnProfile ? user.photoURL : undefined))}
+                                                className="object-cover w-full h-full scale-100 group-hover:scale-105 transition-transform duration-[2s] ease-out rounded-[2.2rem]"
+                                            />
                                             <AvatarFallback className="bg-zinc-900 font-black text-6xl text-white rounded-[2.2rem] transition-all group-hover:bg-zinc-800">
-                                                {user.displayName?.charAt(0) || "D"}
+                                                {userData?.displayName?.charAt(0) || user.displayName?.charAt(0) || "D"}
                                             </AvatarFallback>
 
                                             {isEditing && (

@@ -8,7 +8,6 @@ import { collection, query, where, onSnapshot, getDocs, Timestamp } from "fireba
 import { db } from "@/lib/firebase";
 import { motion, AnimatePresence, useMotionValue, useAnimationFrame } from "framer-motion";
 import { cn } from "@/lib/utils";
-import Image from "next/image";
 import { FirebaseTimestampLike } from "@/lib/groups";
 
 interface LiveSession {
@@ -206,9 +205,9 @@ function OrbitalAvatarComponent({
     return name.slice(0, 2).toUpperCase();
   }, []);
 
-  const photoUrl = latestPhoto || session.userPhoto;
-  const hasPhoto = photoUrl && photoUrl.length > 10 && !photoUrl.includes("null");
-  const isRemotePhoto = hasPhoto && (photoUrl!.startsWith("http://") || photoUrl!.startsWith("https://"));
+  const isValidPhoto = (url: any) => url && typeof url === 'string' && url.trim() !== '' && url !== 'null' && url !== 'undefined';
+  const photoUrl = isValidPhoto(latestPhoto) ? latestPhoto : (isValidPhoto(session.userPhoto) ? session.userPhoto : null);
+  const hasPhoto = !!photoUrl;
 
   const handleClick = useCallback(() => {
     router.push(`/profile?user=${session.userId}`);
@@ -267,23 +266,12 @@ function OrbitalAvatarComponent({
               style={{ "--glow-color": accent.hoverGlow } as React.CSSProperties}
             >
               {hasPhoto ? (
-                isRemotePhoto ? (
-                  <Image
-                    src={photoUrl!}
-                    alt={session.userName}
-                    width={40}
-                    height={40}
-                    className="w-full h-full object-cover"
-                    unoptimized={photoUrl!.includes("dicebear")}
-                  />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={photoUrl!}
-                    alt={session.userName}
-                    className="w-full h-full object-cover"
-                  />
-                )
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={photoUrl!}
+                  alt={session.userName}
+                  className="w-full h-full object-cover"
+                />
               ) : (
                 <div className={cn("w-full h-full bg-gradient-to-br flex items-center justify-center bg-zinc-900", accent.gradient)}>
                   <span className="text-[11px] font-black text-white/90 drop-shadow-md tracking-wide">
@@ -364,9 +352,9 @@ function PausedAvatarItem({
   onNavigate: (userId: string) => void;
 }) {
   const accent = ACCENT_COLORS[stableColorIndex(s.userId)];
-  const photoUrl = userPhotos[s.userId] || s.userPhoto;
-  const hasPhoto = photoUrl && photoUrl.length > 10 && !photoUrl.includes("null");
-  const isRemote = hasPhoto && photoUrl!.startsWith("http");
+  const isValidPhoto = (url: any) => url && typeof url === 'string' && url.trim() !== '' && url !== 'null' && url !== 'undefined';
+  const photoUrl = isValidPhoto(userPhotos[s.userId]) ? userPhotos[s.userId] : (isValidPhoto(s.userPhoto) ? s.userPhoto : null);
+  const hasPhoto = !!photoUrl;
   const parts = s.userName.split(/[\s_]+/).filter(Boolean);
   const initials = parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : s.userName.slice(0, 2).toUpperCase();
   const startedAtMs = toMillis(s.startedAt);
@@ -396,12 +384,8 @@ function PausedAvatarItem({
           accent.ring.replace("/40", "/60")
         )}>
           {hasPhoto ? (
-            isRemote ? (
-              <Image src={photoUrl!} alt={s.userName} width={32} height={32} className="w-full h-full object-cover" unoptimized />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={photoUrl!} alt={s.userName} className="w-full h-full object-cover" />
-            )
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photoUrl!} alt={s.userName} className="w-full h-full object-cover" />
           ) : (
             <div className={cn("w-full h-full bg-gradient-to-br flex items-center justify-center bg-zinc-800", accent.gradient)}>
               <span className="text-[9px] font-black text-white/90">{initials}</span>

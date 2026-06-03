@@ -8,7 +8,7 @@ import {
 import { getLeaderboard, getGroupLeaderboard, fetchUserProfiles } from "@/lib/db";
 import { getFriendsLeaderboard } from "@/lib/friendship";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { cn } from "@/lib/utils";
+import { cn, getHighQualityAvatarUrl } from "@/lib/utils";
 import { syncUserProfile } from "@/lib/db";
 import { useAuth } from "@/components/AuthProvider";
 import { ProfileStatsCard } from "@/components/profile-stats-card";
@@ -384,8 +384,8 @@ function LeaderboardContent() {
                                                 <div className="relative mb-6">
                                                     <div onClick={() => router.push(`/profile?user=${player.uid}`)} className={cn("rounded-full border transition-all duration-300 group-hover:border-opacity-100 overflow-hidden cursor-pointer", isGold ? "border-[#C9B037]/40 w-20 h-20 sm:w-24 sm:h-24" : isSilver ? "border-zinc-400/30 w-16 h-16 sm:w-20 sm:h-20" : "border-orange-700/20 w-16 h-16 sm:w-20 sm:h-20")}>
                                                         <Avatar className="w-full h-full border-0 rounded-full">
-                                                            {player.photoURL && <AvatarImage src={player.photoURL} className="object-cover" />}
-                                                            <AvatarFallback className="rounded-full">{player.displayName?.slice(0, 1)}</AvatarFallback>
+                                                            <AvatarImage src={getHighQualityAvatarUrl(player.photoURL)} className="object-cover" />
+                                                            <AvatarFallback className="rounded-full">{player.displayName?.slice(0, 1) || "U"}</AvatarFallback>
                                                         </Avatar>
                                                     </div>
                                                     <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full border border-zinc-800 flex items-center justify-center bg-zinc-950 shadow-xl overflow-hidden pt-0.5">
@@ -431,8 +431,8 @@ function LeaderboardContent() {
                                                 <div className="w-8 text-center font-sans font-bold text-zinc-500 group-hover:text-zinc-300 transition-colors">{rank}</div>
                                                 <div onClick={() => router.push(`/profile?user=${player.uid}`)} className="relative w-10 h-10 rounded-full border border-white/10 group-hover:border-white/20 transition-all duration-300 overflow-hidden cursor-pointer">
                                                     <Avatar className="w-full h-full border-0 rounded-full">
-                                                        {player.photoURL && <AvatarImage src={player.photoURL} className="object-cover w-full h-full" />}
-                                                        <AvatarFallback className="text-[9px] rounded-full">{player.displayName?.slice(0, 1)}</AvatarFallback>
+                                                        <AvatarImage src={getHighQualityAvatarUrl(player.photoURL)} className="object-cover w-full h-full" />
+                                                        <AvatarFallback className="text-[9px] rounded-full">{player.displayName?.slice(0, 1) || "U"}</AvatarFallback>
                                                     </Avatar>
                                                 </div>
                                                 <div className="flex-1 min-w-0">

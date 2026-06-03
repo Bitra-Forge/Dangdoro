@@ -7,8 +7,7 @@ import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Users, ChevronDown, Zap, Globe, Key, Mail, Sparkles, Crown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/lib/utils";
-import Image from "next/image";
+import { cn, getHighQualityAvatarUrl } from "@/lib/utils";
 
 interface FocusGroup {
   id: string;
@@ -406,25 +405,23 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                                   <span className="text-[8px] font-black uppercase tracking-wider text-zinc-500">Active:</span>
                                   <div className="flex items-center -space-x-2">
                                     {focusingAvatars.map((a, i) => {
-                                      const photoUrl = a.photo;
-                                      const isRemote = photoUrl && (photoUrl.startsWith("http://") || photoUrl.startsWith("https://"));
+                                      const photoUrl = getHighQualityAvatarUrl(a.photo);
 
                                       return (
                                         <div
                                           key={i}
-                                          className="relative w-6 h-6 rounded-full overflow-hidden ring-2 ring-emerald-500/40 border border-zinc-950 transition-all duration-300 hover:scale-125 hover:z-10 hover:ring-emerald-400 flex items-center justify-center bg-zinc-800"
+                                          className="relative w-6 h-6 rounded-full overflow-hidden ring-2 ring-emerald-500/40 border border-zinc-950 transition-all duration-300 hover:scale-125 hover:z-10 hover:ring-emerald-400 bg-zinc-800 flex items-center justify-center text-white"
                                           title={a.name}
                                         >
-                                          {isRemote ? (
-                                            <Image
+                                          {photoUrl ? (
+                                            /* eslint-disable-next-line @next/next/no-img-element */
+                                            <img
                                               src={photoUrl}
                                               alt={a.name}
-                                              width={24}
-                                              height={24}
                                               className="w-full h-full object-cover"
                                             />
                                           ) : (
-                                            <span className="text-[9px] font-black text-zinc-300 uppercase select-none">{a.name?.slice(0, 1)}</span>
+                                            <span className="text-[9px] font-black uppercase">{a.name?.slice(0, 1) || "U"}</span>
                                           )}
                                         </div>
                                       );
