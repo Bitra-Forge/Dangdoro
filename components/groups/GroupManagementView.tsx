@@ -4,7 +4,7 @@ import { memo, useState, useEffect } from "react";
 import { useTimerStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { 
-    Target, Users, Copy, Crown, Zap, UserX, Calendar, RotateCcw, Tag
+    Target, Users, Copy, Crown, Zap, UserX, Calendar, RotateCcw, Tag, AlignLeft
 } from "lucide-react";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -22,6 +22,7 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
 
     // Draft states for Unit Configuration
     const [draftName, setDraftName] = useState(group.name || "");
+    const [draftDescription, setDraftDescription] = useState(group.description || "");
     const [draftGoalHours, setDraftGoalHours] = useState(String(group.settings?.goalHours ?? ""));
     const [draftMaxMembers, setDraftMaxMembers] = useState(String(group.settings?.maxMembers ?? ""));
     const [draftGoalType, setDraftGoalType] = useState<GoalType>(group.settings?.goalType || "weekly");
@@ -31,14 +32,16 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
     // Sync draft states when group updates from Firestore
     useEffect(() => {
         setDraftName(group.name || "");
+        setDraftDescription(group.description || "");
         setDraftGoalHours(String(group.settings?.goalHours ?? ""));
         setDraftMaxMembers(String(group.settings?.maxMembers ?? ""));
         setDraftGoalType(group.settings?.goalType || "weekly");
         setDraftCustomDays(group.settings?.customDays ? String(group.settings.customDays) : "");
-    }, [group.name, group.settings?.goalHours, group.settings?.maxMembers, group.settings?.goalType, group.settings?.customDays]);
+    }, [group.name, group.description, group.settings?.goalHours, group.settings?.maxMembers, group.settings?.goalType, group.settings?.customDays]);
 
     const hasChanges = 
         draftName.trim() !== (group.name || "").trim() ||
+        draftDescription.trim() !== (group.description || "").trim() ||
         draftGoalHours !== String(group.settings?.goalHours ?? "") ||
         draftMaxMembers !== String(group.settings?.maxMembers ?? "") ||
         draftGoalType !== (group.settings?.goalType || "weekly") ||
@@ -50,6 +53,7 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
         try {
             const updates: any = {
                 name: draftName.trim(),
+                description: draftDescription.trim(),
                 "settings.goalHours": parseInt(draftGoalHours) || 0,
                 "settings.maxMembers": parseInt(draftMaxMembers) || 0,
                 "settings.goalType": draftGoalType,
@@ -137,6 +141,20 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                             onKeyDown={handleKeyDown}
                             placeholder="Unit Name" 
                             className="w-full bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-[white]/40 outline-none" 
+                        />
+                    </div>
+
+                    <div className="p-5 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4">
+                        <div className="flex items-center gap-2 text-zinc-400">
+                            <AlignLeft className="w-4 h-4" />
+                            <span className="text-[10px] font-black uppercase tracking-widest">Group Description</span>
+                        </div>
+                        <textarea 
+                            value={draftDescription} 
+                            onChange={(e) => setDraftDescription(e.target.value)}
+                            placeholder="Unit Description" 
+                            rows={3}
+                            className="w-full bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-[white]/40 outline-none resize-none scrollbar-none [ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" 
                         />
                     </div>
 
