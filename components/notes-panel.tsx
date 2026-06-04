@@ -15,6 +15,7 @@ import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
 import DOMPurify from "dompurify";
+import { Tooltip } from "@/components/ui/tooltip";
 
 /** Sanitize HTML to prevent XSS via stored notes */
 const sanitizeHtml = (html: string): string => {
@@ -199,44 +200,48 @@ export function NotesPanel() {
               </div>
               
               <div className="flex items-center gap-2">
-                <button
-                  onClick={handleCopy}
-                  className="p-2 rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 transition-all cursor-pointer group relative"
-                  title="Copy all"
-                >
-                  {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                </button>
-                <button
-                  onClick={handleClear}
-                  className="p-2 rounded-xl text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer group"
-                  title="Clear notes"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => {
-                    if (timerIsActive) {
-                      timerPause();
-                    } else {
-                      timerStart();
-                    }
-                  }}
-                  className="p-2 rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
-                  title={timerIsActive ? "Pause Timer" : "Start Timer"}
-                >
-                  {timerIsActive ? (
-                    <Pause className="w-4 h-4 text-white/80" />
-                  ) : (
-                    <Play className="w-4 h-4 text-white/80 fill-current ml-0.5" />
-                  )}
-                </button>
-                <button
-                  onClick={() => setIsOpen(false)}
-                  className="p-2 rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
-                  title="Close"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                <Tooltip content="Copy all">
+                  <button
+                    onClick={handleCopy}
+                    className="flex items-center justify-center p-2 rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 transition-all cursor-pointer group relative"
+                  >
+                    {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </Tooltip>
+                <Tooltip content="Clear notes">
+                  <button
+                    onClick={handleClear}
+                    className="flex items-center justify-center p-2 rounded-xl text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer group"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </Tooltip>
+                <Tooltip content={timerIsActive ? "Pause Timer" : "Start Timer"}>
+                  <button
+                    onClick={() => {
+                      if (timerIsActive) {
+                        timerPause();
+                      } else {
+                        timerStart();
+                      }
+                    }}
+                    className="flex items-center justify-center p-2 rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                  >
+                    {timerIsActive ? (
+                      <Pause className="w-4 h-4 text-white/80" />
+                    ) : (
+                      <Play className="w-4 h-4 text-white/80 fill-current ml-0.5" />
+                    )}
+                  </button>
+                </Tooltip>
+                <Tooltip content="Close">
+                  <button
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center justify-center p-2 rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </Tooltip>
               </div>
             </div>
 
@@ -269,63 +274,70 @@ export function NotesPanel() {
 
             {/* Formatting Toolbar */}
             <div className="flex items-center justify-center gap-2">
-              <button
-                onMouseDown={keepSelectionOnToolbarMouseDown}
-                onClick={() => applyFormat("bold")}
-                className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-xs font-semibold text-zinc-400 hover:text-white"
-                title="Bold"
-              >
-                B
-              </button>
-              <button
-                onMouseDown={keepSelectionOnToolbarMouseDown}
-                onClick={() => applyFormat("italic")}
-                className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-xs italic font-semibold text-zinc-400 hover:text-white"
-                title="Italic"
-              >
-                I
-              </button>
-              <button
-                onMouseDown={keepSelectionOnToolbarMouseDown}
-                onClick={() => applyFormat("underline")}
-                className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-xs underline font-semibold text-zinc-400 hover:text-white"
-                title="Underline"
-              >
-                U
-              </button>
+              <Tooltip content="Bold">
+                <button
+                  onMouseDown={keepSelectionOnToolbarMouseDown}
+                  onClick={() => applyFormat("bold")}
+                  className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-xs font-semibold text-zinc-400 hover:text-white"
+                >
+                  B
+                </button>
+              </Tooltip>
+              <Tooltip content="Italic">
+                <button
+                  onMouseDown={keepSelectionOnToolbarMouseDown}
+                  onClick={() => applyFormat("italic")}
+                  className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-xs italic font-semibold text-zinc-400 hover:text-white"
+                >
+                  I
+                </button>
+              </Tooltip>
+              <Tooltip content="Underline">
+                <button
+                  onMouseDown={keepSelectionOnToolbarMouseDown}
+                  onClick={() => applyFormat("underline")}
+                  className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-xs underline font-semibold text-zinc-400 hover:text-white"
+                >
+                  U
+                </button>
+              </Tooltip>
               <div className="w-px h-5 bg-white/10 mx-1" />
-              <button
-                onMouseDown={keepSelectionOnToolbarMouseDown}
-                onClick={() => applyFormat("fontSize", "2")}
-                className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-[10px] font-bold text-zinc-400 hover:text-white"
-                title="Extra small text"
-              >
-                A
-              </button>
-              <button
-                onMouseDown={keepSelectionOnToolbarMouseDown}
-                onClick={() => applyFormat("fontSize", "3")}
-                className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-xs font-bold text-zinc-400 hover:text-white"
-                title="Small text"
-              >
-                A
-              </button>
-              <button
-                onMouseDown={keepSelectionOnToolbarMouseDown}
-                onClick={() => applyFormat("fontSize", "4")}
-                className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-sm font-bold text-zinc-400 hover:text-white"
-                title="Medium text"
-              >
-                A
-              </button>
-              <button
-                onMouseDown={keepSelectionOnToolbarMouseDown}
-                onClick={() => applyFormat("fontSize", "5")}
-                className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-base font-bold text-zinc-400 hover:text-white"
-                title="Large text"
-              >
-                A
-              </button>
+              <Tooltip content="Extra small text">
+                <button
+                  onMouseDown={keepSelectionOnToolbarMouseDown}
+                  onClick={() => applyFormat("fontSize", "2")}
+                  className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-[10px] font-bold text-zinc-400 hover:text-white"
+                >
+                  A
+                </button>
+              </Tooltip>
+              <Tooltip content="Small text">
+                <button
+                  onMouseDown={keepSelectionOnToolbarMouseDown}
+                  onClick={() => applyFormat("fontSize", "3")}
+                  className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-xs font-bold text-zinc-400 hover:text-white"
+                >
+                  A
+                </button>
+              </Tooltip>
+              <Tooltip content="Medium text">
+                <button
+                  onMouseDown={keepSelectionOnToolbarMouseDown}
+                  onClick={() => applyFormat("fontSize", "4")}
+                  className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-sm font-bold text-zinc-400 hover:text-white"
+                >
+                  A
+                </button>
+              </Tooltip>
+              <Tooltip content="Large text">
+                <button
+                  onMouseDown={keepSelectionOnToolbarMouseDown}
+                  onClick={() => applyFormat("fontSize", "5")}
+                  className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-base font-bold text-zinc-400 hover:text-white"
+                >
+                  A
+                </button>
+              </Tooltip>
             </div>
           </div>
         </motion.div>

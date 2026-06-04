@@ -6,6 +6,7 @@ import { useNotesStore } from "@/lib/notes-store";
 import { useQuickTasksStore } from "@/lib/quick-tasks-store";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { Tooltip } from "@/components/ui/tooltip";
 
 export function FloatingNotesTrigger() {
   const pathname = usePathname();
@@ -65,44 +66,45 @@ export function FloatingNotesTrigger() {
         )}
       >
         {tools.map((tool) => (
-          <button
-            key={tool.id}
-            onClick={tool.onClick}
-            data-quick-action-trigger="true"
-            className={cn(
-              "w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-300 group relative border backdrop-blur-xl shadow-[0_10px_24px_rgba(0,0,0,0.45)]",
-              tool.active
-                ? "bg-[#1E6F99] text-sky-100 border-[#2F95C5] shadow-[0_0_18px_rgba(30,111,153,0.42)]"
-                : "bg-slate-900/80 text-zinc-400 border-white/10 hover:text-white hover:border-[#2F95C5]/45 hover:bg-slate-800"
-            )}
-            title={tool.label}
-          >
-            {tool.icon}
-          </button>
+          <Tooltip key={tool.id} content={tool.label} side="right">
+            <button
+              onClick={tool.onClick}
+              data-quick-action-trigger="true"
+              className={cn(
+                "w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-300 group relative border backdrop-blur-xl shadow-[0_10px_24px_rgba(0,0,0,0.45)]",
+                tool.active
+                  ? "bg-[#1E6F99] text-sky-100 border-[#2F95C5] shadow-[0_0_18px_rgba(30,111,153,0.42)]"
+                  : "bg-slate-900/80 text-zinc-400 border-white/10 hover:text-white hover:border-[#2F95C5]/45 hover:bg-slate-800"
+              )}
+            >
+              {tool.icon}
+            </button>
+          </Tooltip>
         ))}
       </div>
 
-      <button
-        onClick={() => {
-          if (isAnyPanelOpen) return;
-          setIsExpanded((value) => !value);
-        }}
-        data-quick-action-trigger="true"
-        className={cn(
-          "w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-300 group relative border backdrop-blur-xl shadow-[0_10px_24px_rgba(0,0,0,0.45)]",
-          isDockActive
-            ? "bg-[#49B6E5] text-slate-950 border-[#49B6E5] shadow-[0_0_20px_rgba(73,182,229,0.4)]" 
-            : "bg-slate-900/80 text-zinc-400 border-white/10 hover:text-white hover:border-[#49B6E5]/40 hover:bg-slate-800"
-        )}
-        title="Toggle quick tools"
-      >
-        <ChevronUp
+      <Tooltip content="Toggle quick tools" side="right">
+        <button
+          onClick={() => {
+            if (isAnyPanelOpen) return;
+            setIsExpanded((value) => !value);
+          }}
+          data-quick-action-trigger="true"
           className={cn(
-            "w-4 h-4 transition-transform duration-300",
-            isDockActive ? "rotate-180" : "group-hover:-translate-y-0.5"
+            "w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-300 group relative border backdrop-blur-xl shadow-[0_10px_24px_rgba(0,0,0,0.45)]",
+            isDockActive
+              ? "bg-[#49B6E5] text-slate-950 border-[#49B6E5] shadow-[0_0_20px_rgba(73,182,229,0.4)]" 
+              : "bg-slate-900/80 text-zinc-400 border-white/10 hover:text-white hover:border-[#49B6E5]/40 hover:bg-slate-800"
           )}
-        />
-      </button>
+        >
+          <ChevronUp
+            className={cn(
+              "w-4 h-4 transition-transform duration-300",
+              isDockActive ? "rotate-180" : "group-hover:-translate-y-0.5"
+            )}
+          />
+        </button>
+      </Tooltip>
     </div>
   );
 }

@@ -11,6 +11,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useBackgroundTheme } from "@/lib/use-background-theme";
+import { Tooltip } from "@/components/ui/tooltip";
 
 let isGlobalHydrated = false;
 
@@ -346,15 +347,16 @@ export function TimerCard() {
 
   const focusToggle = (
     <div className="fixed bottom-8 right-4 sm:right-6 z-40">
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={handleFocusToggle}
-        title={isNavFocusMode ? "Disable Focus Mode (show nav)" : "Enable Focus Mode (hide nav)"}
-        className="h-11 w-11 sm:h-14 sm:w-14 rounded-xl sm:rounded-2xl transition-all duration-300 shrink-0 cursor-pointer text-white border border-white/25 bg-white/10 hover:bg-white/20 backdrop-blur-md"
-      >
-        {isNavFocusMode ? <Eye className="w-5 h-5 sm:w-6 sm:h-6" /> : <EyeOff className="w-5 h-5 sm:w-6 sm:h-6" />}
-      </Button>
+      <Tooltip content={isNavFocusMode ? "Disable Focus Mode (show nav)" : "Enable Focus Mode (hide nav)"} side="left">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleFocusToggle}
+          className="h-11 w-11 sm:h-14 sm:w-14 rounded-xl sm:rounded-2xl transition-all duration-300 shrink-0 cursor-pointer text-white border border-white/25 bg-white/10 hover:bg-white/20 backdrop-blur-md"
+        >
+          {isNavFocusMode ? <Eye className="w-5 h-5 sm:w-6 sm:h-6" /> : <EyeOff className="w-5 h-5 sm:w-6 sm:h-6" />}
+        </Button>
+      </Tooltip>
     </div>
   );
 
@@ -483,17 +485,18 @@ export function TimerCard() {
                 </div>
 
                 <div className="w-fit flex justify-center items-center">
-                  <h1
-                    onClick={startEditing}
-                    title="Click to edit"
-                    className={cn(
-                      "text-[5rem] md:text-[8rem] font-black leading-none select-none drop-shadow-2xl cursor-pointer tabular-nums",
-                      "bg-gradient-to-br from-white via-white/90 to-white/60 bg-clip-text text-transparent",
-                      "font-sans transition-all duration-700"
-                    )}
-                  >
-                    {formatTime(timeLeft)}
-                  </h1>
+                  <Tooltip content="Click to edit">
+                    <h1
+                      onClick={startEditing}
+                      className={cn(
+                        "text-[5rem] md:text-[8rem] font-black leading-none select-none drop-shadow-2xl cursor-pointer tabular-nums",
+                        "bg-gradient-to-br from-white via-white/90 to-white/60 bg-clip-text text-transparent",
+                        "font-sans transition-all duration-700"
+                      )}
+                    >
+                      {formatTime(timeLeft)}
+                    </h1>
+                  </Tooltip>
                 </div>
 
                 <div className="w-8 flex justify-center shrink-0">
@@ -540,74 +543,78 @@ export function TimerCard() {
               )}>
                 {/* Center: Start / Stop */}
                 <div className="flex items-center gap-3">
-                  <Button
-                    onClick={async () => {
-                      if (isActive) {
-                        pause();
-                      } else {
-                        let currentUser = user;
-                        if (!currentUser) {
-                          const { signInGuest } = await import("@/lib/auth");
-                          currentUser = await signInGuest();
-                        }
+                  <Tooltip content={isActive ? "Pause" : isPaused ? "Resume" : "Start"}>
+                    <Button
+                      onClick={async () => {
+                        if (isActive) {
+                          pause();
+                        } else {
+                          let currentUser = user;
+                          if (!currentUser) {
+                            const { signInGuest } = await import("@/lib/auth");
+                            currentUser = await signInGuest();
+                          }
 
-                        if (currentUser && currentUser.isAnonymous) {
-                          const { syncUserProfile } = await import("@/lib/db");
-                          syncUserProfile(currentUser);
+                          if (currentUser && currentUser.isAnonymous) {
+                            const { syncUserProfile } = await import("@/lib/db");
+                            syncUserProfile(currentUser);
+                          }
+                          start();
                         }
-                        start();
-                      }
-                    }}
-                    className={cn(
-                      "h-14 min-w-[132px] rounded-[20px] px-7 font-bold transition-all duration-300 active:scale-95 cursor-pointer",
-                      isActive
-                        ? "bg-white/10 text-white border border-white/25 hover:bg-white/20"
-                        : "bg-white/90 text-black border border-white/90 hover:bg-white"
-                    )}
-                    style={{ fontSize: "17px", fontFamily: "'Space Grotesk', sans-serif" }}
-                    title={isActive ? "Pause" : isPaused ? "Resume" : "Start"}
-                  >
-                    {isActive ? "Pause" : isPaused ? "Resume" : "Start"}
-                  </Button>
+                      }}
+                      className={cn(
+                        "h-14 min-w-[132px] rounded-[20px] px-7 font-bold transition-all duration-300 active:scale-95 cursor-pointer",
+                        isActive
+                          ? "bg-white/10 text-white border border-white/25 hover:bg-white/20"
+                          : "bg-white/90 text-black border border-white/90 hover:bg-white"
+                      )}
+                      style={{ fontSize: "17px", fontFamily: "'Space Grotesk', sans-serif" }}
+                    >
+                      {isActive ? "Pause" : isPaused ? "Resume" : "Start"}
+                    </Button>
+                  </Tooltip>
 
                   {isActive && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleStop}
-                      className="h-14 w-14 rounded-2xl transition-all duration-300 text-red-500 border border-white/25 bg-white/10 hover:bg-white/20 active:scale-95 cursor-pointer flex items-center justify-center"
-                      title="Stop"
-                    >
-                      <Square className="w-6 h-6 fill-current" />
-                    </Button>
+                    <Tooltip content="Stop">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleStop}
+                        className="h-14 w-14 rounded-2xl transition-all duration-300 text-red-500 border border-white/25 bg-white/10 hover:bg-white/20 active:scale-95 cursor-pointer flex items-center justify-center"
+                      >
+                        <Square className="w-6 h-6 fill-current" />
+                      </Button>
+                    </Tooltip>
                   )}
                 </div>
 
                 {/* Right: Reset and Settings icons */}
                 <div className="flex items-center gap-2 shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={reset}
-                    title="Reset timer"
-                    className="h-14 w-14 rounded-2xl text-white border border-white/25 bg-white/10 hover:bg-white/20 transition-all duration-300 shrink-0 cursor-pointer"
-                  >
-                    <RotateCcw className="w-6 h-6" />
-                  </Button>
-
-                  <div className="relative flex items-center">
+                  <Tooltip content="Reset timer">
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                      title="Toggle settings"
-                      className="h-14 w-14 rounded-2xl transition-all duration-300 cursor-pointer text-white border border-white/25 bg-white/10 hover:bg-white/20 shrink-0"
+                      onClick={reset}
+                      className="h-14 w-14 rounded-2xl text-white border border-white/25 bg-white/10 hover:bg-white/20 transition-all duration-300 shrink-0 cursor-pointer"
                     >
-                      <Settings className={cn(
-                        "w-6 h-6 transition-transform duration-300",
-                        isSettingsOpen && "rotate-90"
-                      )} />
+                      <RotateCcw className="w-6 h-6" />
                     </Button>
+                  </Tooltip>
+
+                  <div className="relative flex items-center">
+                    <Tooltip content="Toggle settings">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                        className="h-14 w-14 rounded-2xl transition-all duration-300 cursor-pointer text-white border border-white/25 bg-white/10 hover:bg-white/20 shrink-0"
+                      >
+                        <Settings className={cn(
+                          "w-6 h-6 transition-transform duration-300",
+                          isSettingsOpen && "rotate-90"
+                        )} />
+                      </Button>
+                    </Tooltip>
 
                     {/* Settings popup - appears upper-right with connector */}
                     {isSettingsOpen && (
@@ -681,21 +688,21 @@ export function TimerCard() {
                               {BACKGROUND_COLORS.map((color) => {
                                 const isActiveColor = noneBackgroundMode === "solid" && backgroundSolidColor.toLowerCase() === color.value;
                                 return (
-                                  <button
-                                    key={color.value}
-                                    onClick={() => {
-                                      setBackgroundSolidColor(color.value);
-                                      setNoneBackgroundMode("solid");
-                                    }}
-                                    title={color.name}
-                                    className={cn(
-                                      "w-7 h-7 rounded-full border transition-all duration-200 flex items-center justify-center cursor-pointer",
-                                      isActiveColor
-                                        ? "border-white scale-110"
-                                        : "border-white/15 hover:border-white/40"
-                                    )}
-                                    style={{ backgroundColor: color.value }}
-                                  />
+                                  <Tooltip key={color.value} content={color.name}>
+                                    <button
+                                      onClick={() => {
+                                        setBackgroundSolidColor(color.value);
+                                        setNoneBackgroundMode("solid");
+                                      }}
+                                      className={cn(
+                                        "w-7 h-7 rounded-full border transition-all duration-200 flex items-center justify-center cursor-pointer",
+                                        isActiveColor
+                                          ? "border-white scale-110"
+                                          : "border-white/15 hover:border-white/40"
+                                      )}
+                                      style={{ backgroundColor: color.value }}
+                                    />
+                                  </Tooltip>
                                 );
                               })}
                             </div>

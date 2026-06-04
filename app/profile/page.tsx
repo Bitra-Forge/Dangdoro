@@ -1256,24 +1256,68 @@ function ProfileContent() {
 
                                  {/* Grid */}
                                  <div className="grid grid-rows-7 grid-flow-col gap-1.5 w-full h-[90px] sm:h-[140px]">
-                                     {productivityData.map((day, i) => (
-                                         <div key={i} title={day.tooltip} className="w-full h-full flex items-center justify-center relative group/day">
-                                             <div
-                                                 className="w-[8px] h-[8px] sm:w-full sm:h-full md:w-auto md:aspect-square lg:w-full lg:aspect-auto rounded-[1.5px] sm:rounded-[3px] transition-all duration-300 pointer-events-none relative z-10"
-                                                 style={{
-                                                     backgroundColor: day.level > 0 ? currentTheme.accent : "rgba(255,255,255,0.06)",
-                                                     opacity: day.level === 0 ? 1 : day.level === 1 ? 0.35 : day.level === 2 ? 0.65 : 1,
-                                                     boxShadow: day.level > 1 ? `0 0-8px ${currentTheme.accent}33` : 'none',
-                                                 }}
-                                             />
-                                             {day.level > 0 && (
+                                     {productivityData.map((day, i) => {
+                                         const colIndex = Math.floor(i / 7);
+                                         const isFarLeft = colIndex < 2;
+                                         const isFarRight = colIndex > 17;
+                                         return (
+                                             <div key={i} className="w-full h-full flex items-center justify-center relative group/day">
                                                  <div
-                                                     className="absolute w-[8px] h-[8px] sm:w-full sm:h-full md:w-auto md:h-full md:aspect-square lg:w-full lg:aspect-auto blur-[6px] opacity-[0.15] pointer-events-none hidden sm:block"
-                                                     style={{ backgroundColor: currentTheme.accent }}
+                                                     className="w-[8px] h-[8px] sm:w-full sm:h-full md:w-auto md:aspect-square lg:w-full lg:aspect-auto rounded-[1.5px] sm:rounded-[3px] transition-all duration-300 pointer-events-none relative z-10"
+                                                     style={{
+                                                         backgroundColor: day.level > 0 ? currentTheme.accent : "rgba(255,255,255,0.06)",
+                                                         opacity: day.level === 0 ? 1 : day.level === 1 ? 0.35 : day.level === 2 ? 0.65 : 1,
+                                                         boxShadow: day.level > 1 ? `0 0 -8px ${currentTheme.accent}33` : 'none',
+                                                     }}
                                                  />
-                                             )}
-                                         </div>
-                                     ))}
+                                                 {day.level > 0 && (
+                                                     <div
+                                                         className="absolute w-[8px] h-[8px] sm:w-full sm:h-full md:w-auto md:h-full md:aspect-square lg:w-full lg:aspect-auto blur-[6px] opacity-[0.15] pointer-events-none hidden sm:block"
+                                                         style={{ backgroundColor: currentTheme.accent }}
+                                                     />
+                                                 )}
+
+                                                 {/* Custom Styled Tooltip */}
+                                                 <div 
+                                                     className={cn(
+                                                         "pointer-events-none absolute bottom-full pb-2 z-50 opacity-0 scale-95 translate-y-1 group-hover/day:opacity-100 group-hover/day:scale-100 group-hover/day:translate-y-0 transition-all duration-200 ease-out flex flex-col",
+                                                         isFarLeft ? "left-0 translate-x-0" : isFarRight ? "right-0 translate-x-0" : "left-1/2 -translate-x-1/2 items-center"
+                                                     )}
+                                                 >
+                                                     <div 
+                                                         className="bg-zinc-950/95 border text-white rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.8)] backdrop-blur-md p-3 min-w-[130px] flex flex-col gap-1 transition-colors duration-300 relative z-10"
+                                                         style={{ borderColor: `${currentTheme.accent}33` }}
+                                                     >
+                                                         <span className="text-[9px] font-black text-zinc-500 uppercase tracking-wider leading-none">
+                                                             {format(day.date, 'eee, MMM d')}
+                                                         </span>
+                                                         <div className="flex items-center gap-2 mt-0.5">
+                                                             <div 
+                                                                 className="w-1.5 h-1.5 rounded-full shrink-0" 
+                                                                 style={{ 
+                                                                     backgroundColor: day.level > 0 ? currentTheme.accent : "rgba(255,255,255,0.15)",
+                                                                     boxShadow: day.level > 0 ? `0 0 8px ${currentTheme.accent}` : "none"
+                                                                 }} 
+                                                             />
+                                                             <span className="text-[11px] font-extrabold text-white leading-none">
+                                                                 {day.minutes > 0 ? formatFocusedTime(day.minutes) : "0m"}
+                                                             </span>
+                                                             <span className="text-[9px] font-medium text-zinc-400 leading-none">
+                                                                 focused
+                                                             </span>
+                                                         </div>
+                                                     </div>
+                                                     <div 
+                                                         className={cn(
+                                                             "w-1.5 h-1.5 rotate-45 border-r border-b bg-zinc-950/95 absolute bottom-[5px] z-0 transition-colors duration-300",
+                                                             isFarLeft ? "left-3" : isFarRight ? "right-3" : "left-1/2 -translate-x-1/2"
+                                                         )}
+                                                         style={{ borderColor: `${currentTheme.accent}33` }}
+                                                     />
+                                                 </div>
+                                             </div>
+                                         );
+                                     })}
                                  </div>
                             </div>
                         </motion.div>

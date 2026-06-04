@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SharedTask } from "@/lib/groups";
+import { Tooltip } from "@/components/ui/tooltip";
 
 const TASK_STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
     "todo":        { label: "Todo",        color: "text-zinc-400 bg-zinc-500/10 border-zinc-500/20",    icon: Check },
@@ -336,67 +337,69 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                         </div>
                                     </motion.div>
                                 ) : (
-                                    <motion.button 
-                                        key="search-toggle"
-                                        layout
-                                        initial={{ opacity: 0, scale: 0.5, rotate: -90 }}
-                                        animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                                        exit={{ opacity: 0, scale: 0.5, rotate: 90 }}
-                                        transition={{ type: "spring", stiffness: 500, damping: 25 }}
-                                        whileHover={{ backgroundColor: "rgba(255,255,255,0.1)" }}
-                                        whileTap={{ scale: 0.95 }}
-                                        onClick={() => setIsSearchOpen(true)}
-                                        className={cn(
-                                            "p-2.5 rounded-[10px] border-none transition-all duration-300 shadow-sm relative overflow-hidden group/btn cursor-pointer",
-                                            searchTerm 
-                                                ? "bg-white/15 text-white" 
-                                                : "bg-white/5 text-zinc-500 hover:text-zinc-300"
-                                        )}
-                                        title="Search objectives"
-                                    >
-                                        {/* Curved Glass Edge Lights */}
-                                        <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none z-10" />
-                                        <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
-                                        
-                                        <Search className="w-4 h-4 relative z-10" />
-                                    </motion.button>
+                                    <Tooltip content="Search objectives">
+                                        <motion.button 
+                                            key="search-toggle"
+                                            layout
+                                            initial={{ opacity: 0, scale: 0.5, rotate: -90 }}
+                                            animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                                            exit={{ opacity: 0, scale: 0.5, rotate: 90 }}
+                                            transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                                            whileHover={{ backgroundColor: "rgba(255,255,255,0.1)" }}
+                                            whileTap={{ scale: 0.95 }}
+                                            onClick={() => setIsSearchOpen(true)}
+                                            className={cn(
+                                                "flex items-center justify-center p-2.5 rounded-[10px] border-none transition-all duration-300 shadow-sm relative overflow-hidden group/btn cursor-pointer",
+                                                searchTerm 
+                                                    ? "bg-white/15 text-white" 
+                                                    : "bg-white/5 text-zinc-500 hover:text-zinc-300"
+                                            )}
+                                        >
+                                            {/* Curved Glass Edge Lights */}
+                                            <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none z-10" />
+                                            <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
+                                            
+                                            <Search className="w-4 h-4 relative z-10" />
+                                        </motion.button>
+                                    </Tooltip>
                                 )}
                             </AnimatePresence>
 
-                            <motion.button 
-                                onClick={() => setIsFiltersOpen(!isFiltersOpen)}
-                                className={cn(
-                                    "p-2.5 rounded-[10px] border-none shadow-sm flex items-center gap-2 relative overflow-hidden transition-all duration-300 group/btn cursor-pointer",
-                                    isFiltersOpen || statusFilter !== "all" || priorityFilter !== "all"
-                                        ? "bg-white/15 text-white" 
-                                        : "bg-white/5 text-zinc-500 hover:text-zinc-300"
-                                )}
-                                whileTap={{ scale: 0.95 }}
-                                transition={{ type: "spring", stiffness: 400, damping: 17 }}
-                                title="Toggle status & priority filters"
-                            >
-                                {/* Curved Glass Edge Lights */}
-                                <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none z-10" />
-                                <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
-
-                                <motion.div
-                                    animate={{ rotate: isFiltersOpen ? 180 : 0 }}
-                                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                                    className="relative z-10"
-                                >
-                                    <Filter className="w-4 h-4" />
-                                </motion.div>
-                                <AnimatePresence>
-                                    {(statusFilter !== "all" || priorityFilter !== "all") && !isFiltersOpen && (
-                                        <motion.div 
-                                            initial={{ scale: 0 }}
-                                            animate={{ scale: 1 }}
-                                            exit={{ scale: 0 }}
-                                            className="w-1.5 h-1.5 rounded-full bg-white animate-pulse relative z-10"
-                                        />
+                            <Tooltip content="Toggle status & priority filters">
+                                <motion.button 
+                                    onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+                                    className={cn(
+                                        "flex items-center justify-center p-2.5 rounded-[10px] border-none shadow-sm flex items-center gap-2 relative overflow-hidden transition-all duration-300 group/btn cursor-pointer",
+                                        isFiltersOpen || statusFilter !== "all" || priorityFilter !== "all"
+                                            ? "bg-white/15 text-white" 
+                                            : "bg-white/5 text-zinc-500 hover:text-zinc-300"
                                     )}
-                                </AnimatePresence>
-                            </motion.button>
+                                    whileTap={{ scale: 0.95 }}
+                                    transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                                >
+                                    {/* Curved Glass Edge Lights */}
+                                    <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none z-10" />
+                                    <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
+
+                                    <motion.div
+                                        animate={{ rotate: isFiltersOpen ? 180 : 0 }}
+                                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                                        className="relative z-10"
+                                    >
+                                        <Filter className="w-4 h-4" />
+                                    </motion.div>
+                                    <AnimatePresence>
+                                        {(statusFilter !== "all" || priorityFilter !== "all") && !isFiltersOpen && (
+                                            <motion.div 
+                                                initial={{ scale: 0 }}
+                                                animate={{ scale: 1 }}
+                                                exit={{ scale: 0 }}
+                                                className="w-1.5 h-1.5 rounded-full bg-white animate-pulse relative z-10"
+                                            />
+                                        )}
+                                    </AnimatePresence>
+                                </motion.button>
+                            </Tooltip>
                         </div>
 
                         <div className="flex p-1 bg-white/5 rounded-xl border border-white/5 h-fit relative">
@@ -509,15 +512,18 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                             { id: "review-respond", title: "Review & Respond", icon: Mail },
                             { id: "learning-sprint", title: "Learning Sprint", icon: Target }
                         ].map((tpl) => (
-                            <button
+                            <Tooltip
                                 key={tpl.id}
-                                onClick={() => onTemplateSelect?.(tpl.id)}
-                                className="flex flex-col items-center gap-2 p-4 bg-zinc-900/60 border border-white/5 rounded-2xl transition-all group hover:border-[white]/40 cursor-pointer"
-                                title={`Use "${tpl.title}" template`}
+                                content={`Use "${tpl.title}" template`}
                             >
-                                <tpl.icon className="w-4 h-4 text-zinc-600 group-hover:text-[white]" />
-                                <span className="text-[9px] font-black uppercase text-zinc-500 tracking-wider text-center">{tpl.title}</span>
-                            </button>
+                                <button
+                                    onClick={() => onTemplateSelect?.(tpl.id)}
+                                    className="flex flex-col items-center gap-2 p-4 bg-zinc-900/60 border border-white/5 rounded-2xl transition-all group hover:border-[white]/40 cursor-pointer w-full justify-center"
+                                >
+                                    <tpl.icon className="w-4 h-4 text-zinc-600 group-hover:text-[white]" />
+                                    <span className="text-[9px] font-black uppercase text-zinc-500 tracking-wider text-center">{tpl.title}</span>
+                                </button>
+                            </Tooltip>
                         ))}
                     </div>
                 </div>
@@ -633,40 +639,44 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
 
                                 {canEdit && (
                                     <div className="flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-all shrink-0">
-                                        <button 
-                                            onClick={() => startEditing(task)} 
-                                            className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 rounded-md transition-all cursor-pointer" 
-                                            title="Edit objective"
-                                        >
-                                            <Edit2 className="w-4 h-4" />
-                                        </button>
+                                        <Tooltip content="Edit objective">
+                                            <button 
+                                                onClick={() => startEditing(task)} 
+                                                className="flex items-center justify-center p-1 text-zinc-400 hover:text-white hover:bg-white/5 rounded-md transition-all cursor-pointer" 
+                                            >
+                                                <Edit2 className="w-4 h-4" />
+                                            </button>
+                                        </Tooltip>
                                         {isAdmin && (
                                             <>
-                                                <button 
-                                                    disabled={i === 0}
-                                                    onClick={() => handleMoveIncomplete(task, 'up')}
-                                                    className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all cursor-pointer"
-                                                    title="Move Up"
-                                                >
-                                                    <ChevronUp className="w-4 h-4" />
-                                                </button>
-                                                <button 
-                                                    disabled={i === incompleteTasks.length - 1}
-                                                    onClick={() => handleMoveIncomplete(task, 'down')}
-                                                    className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all cursor-pointer"
-                                                    title="Move Down"
-                                                >
-                                                    <ChevronDown className="w-4 h-4" />
-                                                </button>
+                                                <Tooltip content="Move Up">
+                                                    <button 
+                                                        disabled={i === 0}
+                                                        onClick={() => handleMoveIncomplete(task, 'up')}
+                                                        className="flex items-center justify-center p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all cursor-pointer"
+                                                    >
+                                                        <ChevronUp className="w-4 h-4" />
+                                                    </button>
+                                                </Tooltip>
+                                                <Tooltip content="Move Down">
+                                                    <button 
+                                                        disabled={i === incompleteTasks.length - 1}
+                                                        onClick={() => handleMoveIncomplete(task, 'down')}
+                                                        className="flex items-center justify-center p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all cursor-pointer"
+                                                    >
+                                                        <ChevronDown className="w-4 h-4" />
+                                                    </button>
+                                                </Tooltip>
                                             </>
                                         )}
-                                        <button
-                                            onClick={() => onDelete(task.id)}
-                                            title="Delete objective"
-                                            className="p-1 text-zinc-700 hover:bg-red-500/10 hover:text-red-500 rounded-md transition-all cursor-pointer"
-                                        >
-                                            <X className="w-4 h-4" />
-                                        </button>
+                                        <Tooltip content="Delete objective">
+                                            <button
+                                                onClick={() => onDelete(task.id)}
+                                                className="flex items-center justify-center p-1 text-zinc-700 hover:bg-red-500/10 hover:text-red-500 rounded-md transition-all cursor-pointer"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </Tooltip>
                                     </div>
                                 )}
                             </div>
@@ -679,21 +689,24 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                         const Icon = cfg.icon;
                                         
                                         return (
-                                            <button
+                                            <Tooltip
                                                 key={status}
-                                                disabled={!canEdit}
-                                                onClick={() => onUpdate(task.id, { status })}
-                                                className={cn(
-                                                    "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border",
-                                                    isActive 
-                                                        ? cfg.color 
-                                                        : "bg-white/5 border-transparent text-zinc-600 hover:bg-white/10 hover:text-zinc-400 disabled:hover:bg-white/5 disabled:hover:text-zinc-600"
-                                                )}
-                                                title={canEdit ? `Mark as ${cfg.label}` : "Only assignee or admins can change status"}
+                                                content={canEdit ? `Mark as ${cfg.label}` : "Only assignee or admins can change status"}
                                             >
-                                                <Icon className="w-2.5 h-2.5" />
-                                                <span className={cn(isActive ? "inline" : "hidden sm:inline")}>{cfg.label}</span>
-                                            </button>
+                                                <button
+                                                    disabled={!canEdit}
+                                                    onClick={() => onUpdate(task.id, { status })}
+                                                    className={cn(
+                                                        "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border",
+                                                        isActive 
+                                                            ? cfg.color 
+                                                            : "bg-white/5 border-transparent text-zinc-600 hover:bg-white/10 hover:text-zinc-400 disabled:hover:bg-white/5 disabled:hover:text-zinc-600"
+                                                    )}
+                                                >
+                                                    <Icon className="w-2.5 h-2.5" />
+                                                    <span className={cn(isActive ? "inline" : "hidden sm:inline")}>{cfg.label}</span>
+                                                </button>
+                                            </Tooltip>
                                         );
                                     })}
                                 </div>
@@ -835,40 +848,44 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
 
                                 {canEdit && (
                                     <div className="flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-all shrink-0">
-                                        <button 
-                                            onClick={() => startEditing(task)} 
-                                            className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 rounded-md transition-all cursor-pointer" 
-                                            title="Edit objective"
-                                        >
-                                            <Edit2 className="w-4 h-4" />
-                                        </button>
+                                        <Tooltip content="Edit objective">
+                                            <button 
+                                                onClick={() => startEditing(task)} 
+                                                className="flex items-center justify-center p-1 text-zinc-400 hover:text-white hover:bg-white/5 rounded-md transition-all cursor-pointer" 
+                                            >
+                                                <Edit2 className="w-4 h-4" />
+                                            </button>
+                                        </Tooltip>
                                         {isAdmin && (
                                             <>
-                                                <button 
-                                                    disabled={i === 0}
-                                                    onClick={() => handleMoveCompleted(task, 'up')}
-                                                    className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all cursor-pointer"
-                                                    title="Move Up"
-                                                >
-                                                    <ChevronUp className="w-4 h-4" />
-                                                </button>
-                                                <button 
-                                                    disabled={i === completedTasks.length - 1}
-                                                    onClick={() => handleMoveCompleted(task, 'down')}
-                                                    className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all cursor-pointer"
-                                                    title="Move Down"
-                                                >
-                                                    <ChevronDown className="w-4 h-4" />
-                                                </button>
+                                                <Tooltip content="Move Up">
+                                                    <button 
+                                                        disabled={i === 0}
+                                                        onClick={() => handleMoveCompleted(task, 'up')}
+                                                        className="flex items-center justify-center p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all cursor-pointer"
+                                                    >
+                                                        <ChevronUp className="w-4 h-4" />
+                                                    </button>
+                                                </Tooltip>
+                                                <Tooltip content="Move Down">
+                                                    <button 
+                                                        disabled={i === completedTasks.length - 1}
+                                                        onClick={() => handleMoveCompleted(task, 'down')}
+                                                        className="flex items-center justify-center p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all cursor-pointer"
+                                                    >
+                                                        <ChevronDown className="w-4 h-4" />
+                                                    </button>
+                                                </Tooltip>
                                             </>
                                         )}
-                                        <button
-                                            onClick={() => onDelete(task.id)}
-                                            title="Delete objective"
-                                            className="p-1 text-zinc-700 hover:bg-red-500/10 hover:text-red-500 rounded-md transition-all cursor-pointer"
-                                        >
-                                            <X className="w-4 h-4" />
-                                        </button>
+                                        <Tooltip content="Delete objective">
+                                            <button
+                                                onClick={() => onDelete(task.id)}
+                                                className="flex items-center justify-center p-1 text-zinc-700 hover:bg-red-500/10 hover:text-red-500 rounded-md transition-all cursor-pointer"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </Tooltip>
                                     </div>
                                 )}
                             </div>
@@ -881,21 +898,24 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                         const Icon = cfg.icon;
                                         
                                         return (
-                                            <button
+                                            <Tooltip
                                                 key={status}
-                                                disabled={!canEdit}
-                                                onClick={() => onUpdate(task.id, { status })}
-                                                className={cn(
-                                                    "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border",
-                                                    isActive 
-                                                        ? cfg.color 
-                                                        : "bg-white/5 border-transparent text-zinc-600 hover:bg-white/10 hover:text-zinc-400 disabled:hover:bg-white/5 disabled:hover:text-zinc-600"
-                                                )}
-                                                title={canEdit ? `Mark as ${cfg.label}` : "Only assignee or admins can change status"}
+                                                content={canEdit ? `Mark as ${cfg.label}` : "Only assignee or admins can change status"}
                                             >
-                                                <Icon className="w-2.5 h-2.5" />
-                                                <span className={cn(isActive ? "inline" : "hidden sm:inline")}>{cfg.label}</span>
-                                            </button>
+                                                <button
+                                                    disabled={!canEdit}
+                                                    onClick={() => onUpdate(task.id, { status })}
+                                                    className={cn(
+                                                        "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border",
+                                                        isActive 
+                                                            ? cfg.color 
+                                                            : "bg-white/5 border-transparent text-zinc-600 hover:bg-white/10 hover:text-zinc-400 disabled:hover:bg-white/5 disabled:hover:text-zinc-600"
+                                                    )}
+                                                >
+                                                    <Icon className="w-2.5 h-2.5" />
+                                                    <span className={cn(isActive ? "inline" : "hidden sm:inline")}>{cfg.label}</span>
+                                                </button>
+                                            </Tooltip>
                                         );
                                     })}
                                 </div>

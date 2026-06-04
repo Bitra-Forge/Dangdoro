@@ -6,6 +6,7 @@ import Cropper, { type Area as CropArea } from "react-easy-crop";
 import { ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { Tooltip } from "@/components/ui/tooltip";
 
 interface ProfilePicCropperModalProps {
     image: string;
@@ -92,14 +93,15 @@ export default function ProfilePicCropperModal({ image, currentTheme, onClose, o
                     />
                 </div>
                 <div className="flex items-center gap-4 px-8 py-4 bg-zinc-900/90 border-t border-white/5">
-                    <button
-                        type="button"
-                        onClick={() => setZoom(Math.max(1, zoom - 0.2))}
-                        className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                        title="Zoom Out"
-                    >
-                        <ZoomOut className="w-4 h-4" />
-                    </button>
+                    <Tooltip content="Zoom Out" accentColor={currentTheme.accent}>
+                        <button
+                            type="button"
+                            onClick={() => setZoom(Math.max(1, zoom - 0.2))}
+                            className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                        >
+                            <ZoomOut className="w-4 h-4" />
+                        </button>
+                    </Tooltip>
                     <input
                         type="range"
                         value={zoom}
@@ -111,14 +113,15 @@ export default function ProfilePicCropperModal({ image, currentTheme, onClose, o
                         className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-white transition-all"
                         style={{ accentColor: currentTheme.accent }}
                     />
-                    <button
-                        type="button"
-                        onClick={() => setZoom(Math.min(3, zoom + 0.2))}
-                        className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                        title="Zoom In"
-                    >
-                        <ZoomIn className="w-4 h-4" />
-                    </button>
+                    <Tooltip content="Zoom In" accentColor={currentTheme.accent}>
+                        <button
+                            type="button"
+                            onClick={() => setZoom(Math.min(3, zoom + 0.2))}
+                            className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                        >
+                            <ZoomIn className="w-4 h-4" />
+                        </button>
+                    </Tooltip>
                 </div>
                 <div className="p-8 bg-zinc-950/80 backdrop-blur-xl flex items-center justify-between border-t border-white/5">
                     <Button variant="ghost" disabled={isSaving} onClick={onClose} className="text-zinc-500 hover:text-white uppercase ubuntu-bold font-black text-xs tracking-[0.2em] active:translate-y-0">Cancel</Button>

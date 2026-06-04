@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/components/AuthProvider";
 import { NotificationsMenu } from "@/components/notifications-menu";
+import { Tooltip } from "@/components/ui/tooltip";
 
 const navLinks = [
     { label: "Timer", href: "/" },
@@ -55,15 +56,16 @@ export function Header() {
                     </span>
                 </div>
 
-                <a
-                    href="https://ko-fi.com/morales002"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="Support Dangdoro"
-                    className="p-2 bg-rose-500/10 hover:bg-rose-500 border border-rose-500/20 hover:border-rose-500 rounded-xl transition-all duration-300 transform active:scale-90 flex items-center justify-center group shadow-lg shadow-rose-500/0 hover:shadow-rose-500/20"
-                >
-                    <Heart className="w-4 h-4 text-rose-400 group-hover:text-black transition-colors duration-300 group-hover:scale-110 transition-transform" />
-                </a>
+                <Tooltip content="Support Dangdoro" side="bottom">
+                    <a
+                        href="https://ko-fi.com/morales002"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 bg-rose-500/10 hover:bg-rose-500 border border-rose-500/20 hover:border-rose-500 rounded-xl transition-all duration-300 transform active:scale-90 flex items-center justify-center group shadow-lg shadow-rose-500/0 hover:shadow-rose-500/20"
+                    >
+                        <Heart className="w-4 h-4 text-rose-400 group-hover:text-black transition-colors duration-300 group-hover:scale-110 transition-transform" />
+                    </a>
+                </Tooltip>
 
                 <NotificationsMenu />
 

@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { AuthRequired } from "@/components/auth-required";
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import { BG_PALETTES as BG_PALETTES_CONFIG, BG_CONFIG } from "@/lib/background-config";
 import { AnimatedDotGrid as AnimatedDotGridComponent } from "@/components/animated-dot-grid";
 import { useBackgroundTheme } from "@/lib/use-background-theme";
@@ -63,23 +64,23 @@ function PriorityPicker({ taskId, priority, onClose }: {
     return (
         <div className="flex items-center gap-1 bg-zinc-800/90 rounded-lg p-1 border border-white/10 shadow-lg">
             {PRIORITIES.map(p => (
-                <button
-                    key={p.value}
-                    onClick={async (e) => {
-                        e.stopPropagation();
-                        await updateTaskPriority(taskId, p.value);
-                        onClose();
-                    }}
-                    title={p.label}
-                    className={cn(
-                        "w-4 h-4 rounded-full transition-all flex items-center justify-center",
-                        priority === p.value
-                            ? "ring-2 ring-white/30 scale-110"
-                            : "hover:scale-110 opacity-60 hover:opacity-100"
-                    )}
-                >
-                    <span className={cn("w-2.5 h-2.5 rounded-full", p.dot)} />
-                </button>
+                <Tooltip key={p.value} content={p.label}>
+                    <button
+                        onClick={async (e) => {
+                            e.stopPropagation();
+                            await updateTaskPriority(taskId, p.value);
+                            onClose();
+                        }}
+                        className={cn(
+                            "w-4 h-4 rounded-full transition-all flex items-center justify-center",
+                            priority === p.value
+                                ? "ring-2 ring-white/30 scale-110"
+                                : "hover:scale-110 opacity-60 hover:opacity-100"
+                        )}
+                    >
+                        <span className={cn("w-2.5 h-2.5 rounded-full", p.dot)} />
+                    </button>
+                </Tooltip>
             ))}
             <button
                 onClick={(e) => { e.stopPropagation(); onClose(); }}
@@ -199,39 +200,46 @@ function TaskRow({ task, onDragStart }: { task: any; onDragStart: (e: React.Poin
                         <>
                             <div className="flex items-center gap-1 overflow-hidden max-w-0 group-hover/row:max-w-[100px] transition-all duration-200 ease-out">
                                 {/* Edit */}
-                                <button
-                                    onClick={() => setIsEditing(true)}
-                                    className="p-1 rounded-md text-zinc-600 hover:text-zinc-300 hover:bg-white/5 transition-colors flex-shrink-0"
-                                >
-                                    <Pencil className="w-3 h-3" />
-                                </button>
+                                <Tooltip content="Edit task">
+                                    <button
+                                        onClick={() => setIsEditing(true)}
+                                        className="flex items-center justify-center p-1 rounded-md text-zinc-600 hover:text-zinc-300 hover:bg-white/5 transition-colors flex-shrink-0"
+                                    >
+                                        <Pencil className="w-3 h-3" />
+                                    </button>
+                                </Tooltip>
 
                                 {/* Start on timer */}
-                                <button
-                                    onClick={handleStart}
-                                    title="Start on timer"
-                                    className="p-1 rounded-md text-emerald-500/70 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors flex-shrink-0"
-                                >
-                                    <Play className="w-3 h-3 fill-current" />
-                                </button>
+                                <Tooltip content="Start on timer">
+                                    <button
+                                        onClick={handleStart}
+                                        className="flex items-center justify-center p-1 rounded-md text-emerald-500/70 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors flex-shrink-0"
+                                    >
+                                        <Play className="w-3 h-3 fill-current" />
+                                    </button>
+                                </Tooltip>
 
                                 {/* Priority dot (shown when picker is closed) */}
                                 {!showPriority && (
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); setShowPriority(true); }}
-                                        className="p-1 rounded-md hover:bg-white/5 transition-colors flex-shrink-0"
-                                    >
-                                        <span className={cn("w-2.5 h-2.5 rounded-full block", p.dot)} />
-                                    </button>
+                                    <Tooltip content="Set priority">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setShowPriority(true); }}
+                                            className="flex items-center justify-center p-1 rounded-md hover:bg-white/5 transition-colors flex-shrink-0"
+                                        >
+                                            <span className={cn("w-2.5 h-2.5 rounded-full block", p.dot)} />
+                                        </button>
+                                    </Tooltip>
                                 )}
 
                                 {/* Delete */}
-                                <button
-                                    onClick={() => deleteTask(task.id)}
-                                    className="p-1 rounded-md text-zinc-700 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0"
-                                >
-                                    <Trash2 className="w-3 h-3" />
-                                </button>
+                                <Tooltip content="Delete task">
+                                    <button
+                                        onClick={() => deleteTask(task.id)}
+                                        className="flex items-center justify-center p-1 rounded-md text-zinc-700 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0"
+                                    >
+                                        <Trash2 className="w-3 h-3" />
+                                    </button>
+                                </Tooltip>
                             </div>
 
                             {/* Priority picker - outside overflow-hidden container */}
@@ -486,19 +494,19 @@ function GroupCard({
                         {showColorPicker ? (
                             <div className="flex items-center gap-1 bg-zinc-900/95 backdrop-blur-md rounded-lg p-1 border border-white/10 shadow-xl absolute right-0 bottom-full mb-1.5 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
                                 {GROUP_COLORS.map(c => (
-                                    <button
-                                        key={c.value}
-                                        onClick={() => handleColorChange(c.value)}
-                                        title={c.label}
-                                        className={cn(
-                                            "w-4 h-4 rounded-full transition-all flex items-center justify-center",
-                                            (group.color ?? "zinc") === c.value
-                                                ? "ring-2 ring-white/30 scale-110"
-                                                : "hover:scale-110 opacity-60 hover:opacity-100"
-                                        )}
-                                    >
-                                        <span className={cn("w-2.5 h-2.5 rounded-full", c.bg)} />
-                                    </button>
+                                    <Tooltip key={c.value} content={c.label}>
+                                        <button
+                                            onClick={() => handleColorChange(c.value)}
+                                            className={cn(
+                                                "w-4 h-4 rounded-full transition-all flex items-center justify-center",
+                                                (group.color ?? "zinc") === c.value
+                                                    ? "ring-2 ring-white/30 scale-110"
+                                                    : "hover:scale-110 opacity-60 hover:opacity-100"
+                                            )}
+                                        >
+                                            <span className={cn("w-2.5 h-2.5 rounded-full", c.bg)} />
+                                        </button>
+                                    </Tooltip>
                                 ))}
                                 <button
                                     onClick={() => setShowColorPicker(false)}
@@ -508,13 +516,14 @@ function GroupCard({
                                 </button>
                             </div>
                         ) : (
-                            <button
-                                onClick={() => { setShowColorPicker(v => !v); setShowSortPicker(false); }}
-                                className="text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center flex-shrink-0"
-                                title="Change color"
-                            >
-                                <span className={cn("w-3.5 h-3.5 rounded-full block border border-white/15", groupColor.bg)} />
-                            </button>
+                            <Tooltip content="Change color">
+                                <button
+                                    onClick={() => { setShowColorPicker(v => !v); setShowSortPicker(false); }}
+                                    className="text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center flex-shrink-0"
+                                >
+                                    <span className={cn("w-3.5 h-3.5 rounded-full block border border-white/15", groupColor.bg)} />
+                                </button>
+                            </Tooltip>
                         )}
                     </div>
 
@@ -522,46 +531,51 @@ function GroupCard({
                     <div className="relative">
                         {showSortPicker ? (
                             <div className="flex items-center gap-1 bg-zinc-900/95 backdrop-blur-md rounded-lg p-1 border border-white/10 shadow-xl absolute right-0 bottom-full mb-1.5 z-50 whitespace-nowrap text-[9px] font-bold uppercase tracking-wider animate-in fade-in slide-in-from-bottom-2 duration-150">
-                                <button
-                                    onClick={() => handleSortChange("custom")}
-                                    className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", sortBy === "custom" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
-                                    title="Custom manual order"
-                                >
-                                    {sortBy === "custom" && <Check className="w-2.5 h-2.5" />}
-                                    Custom
-                                </button>
-                                <button
-                                    onClick={() => handleSortChange("priority")}
-                                    className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", sortBy === "priority" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
-                                    title="Sort by Priority"
-                                >
-                                    {sortBy === "priority" && <Check className="w-2.5 h-2.5" />}
-                                    Priority
-                                </button>
-                                <button
-                                    onClick={() => handleSortChange("title")}
-                                    className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", sortBy === "title" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
-                                    title="Sort A-Z"
-                                >
-                                    {sortBy === "title" && <Check className="w-2.5 h-2.5" />}
-                                    A-Z
-                                </button>
-                                <button
-                                    onClick={() => handleSortChange("date-desc")}
-                                    className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", sortBy === "date-desc" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
-                                    title="Sort Newest"
-                                >
-                                    {sortBy === "date-desc" && <Check className="w-2.5 h-2.5" />}
-                                    Newest
-                                </button>
-                                <button
-                                    onClick={() => handleSortChange("date-asc")}
-                                    className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", sortBy === "date-asc" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
-                                    title="Sort Oldest"
-                                >
-                                    {sortBy === "date-asc" && <Check className="w-2.5 h-2.5" />}
-                                    Oldest
-                                </button>
+                                <Tooltip content="Custom manual order">
+                                    <button
+                                        onClick={() => handleSortChange("custom")}
+                                        className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", sortBy === "custom" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
+                                    >
+                                        {sortBy === "custom" && <Check className="w-2.5 h-2.5" />}
+                                        Custom
+                                    </button>
+                                </Tooltip>
+                                <Tooltip content="Sort by Priority">
+                                    <button
+                                        onClick={() => handleSortChange("priority")}
+                                        className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", sortBy === "priority" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
+                                    >
+                                        {sortBy === "priority" && <Check className="w-2.5 h-2.5" />}
+                                        Priority
+                                    </button>
+                                </Tooltip>
+                                <Tooltip content="Sort A-Z">
+                                    <button
+                                        onClick={() => handleSortChange("title")}
+                                        className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", sortBy === "title" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
+                                    >
+                                        {sortBy === "title" && <Check className="w-2.5 h-2.5" />}
+                                        A-Z
+                                    </button>
+                                </Tooltip>
+                                <Tooltip content="Sort Newest">
+                                    <button
+                                        onClick={() => handleSortChange("date-desc")}
+                                        className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", sortBy === "date-desc" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
+                                    >
+                                        {sortBy === "date-desc" && <Check className="w-2.5 h-2.5" />}
+                                        Newest
+                                    </button>
+                                </Tooltip>
+                                <Tooltip content="Sort Oldest">
+                                    <button
+                                        onClick={() => handleSortChange("date-asc")}
+                                        className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", sortBy === "date-asc" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
+                                    >
+                                        {sortBy === "date-asc" && <Check className="w-2.5 h-2.5" />}
+                                        Oldest
+                                    </button>
+                                </Tooltip>
                                 <button
                                     onClick={() => setShowSortPicker(false)}
                                     className="ml-0.5 text-zinc-500 hover:text-zinc-300 transition-colors"
@@ -570,28 +584,34 @@ function GroupCard({
                                 </button>
                             </div>
                         ) : (
-                            <button
-                                onClick={() => { setShowSortPicker(v => !v); setShowColorPicker(false); }}
-                                className={cn(
-                                    "text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center relative flex-shrink-0",
-                                    sortBy !== "priority" && cn(groupColor.text, "bg-white/5")
-                                )}
-                                title={`Sort order: ${sortBy}`}
-                            >
-                                <ArrowUpDown className="w-4 h-4" />
-                                {sortBy !== "priority" && (
-                                    <span className={cn("absolute top-1 right-1 w-1.5 h-1.5 rounded-full animate-pulse", groupColor.bg)} />
-                                )}
-                            </button>
+                            <Tooltip content={`Sort order: ${sortBy}`}>
+                                <button
+                                    onClick={() => { setShowSortPicker(v => !v); setShowColorPicker(false); }}
+                                    className={cn(
+                                        "text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center relative flex-shrink-0",
+                                        sortBy !== "priority" && cn(groupColor.text, "bg-white/5")
+                                    )}
+                                >
+                                    <ArrowUpDown className="w-4 h-4" />
+                                    {sortBy !== "priority" && (
+                                        <span className={cn("absolute top-1 right-1 w-1.5 h-1.5 rounded-full animate-pulse", groupColor.bg)} />
+                                    )}
+                                </button>
+                            </Tooltip>
                         )}
                     </div>
 
-                    <button onClick={() => { setIsRenaming(true); setRenameVal(group.name); }} className="text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center flex-shrink-0" title="Rename group">
-                        <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={handleDelete} className="text-zinc-500 hover:text-red-400 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center flex-shrink-0" title="Delete group">
-                        <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <Tooltip content="Rename group">
+                        <button onClick={() => { setIsRenaming(true); setRenameVal(group.name); }} className="text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                    </Tooltip>
+                    
+                    <Tooltip content="Delete group">
+                        <button onClick={handleDelete} className="text-zinc-500 hover:text-red-400 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                    </Tooltip>
                 </div>
             </div>
 
@@ -602,9 +622,11 @@ function GroupCard({
                         <div className="flex items-center gap-1.5">
                             <input value={newTask} onChange={e => setNewTask(e.target.value)} placeholder="Task title…"
                                 className="flex-1 text-xs bg-transparent border-none rounded-lg px-2 py-1.5 text-white placeholder:text-zinc-700 outline-none font-semibold min-w-0" />
-                            <input value={newDuration} onChange={e => setNewDuration(e.target.value.replace(/\D/g, "").slice(0, 3))}
-                                placeholder="m" title="Duration"
-                                className="w-10 text-xs bg-white/5 border border-white/5 rounded-lg px-1.5 py-1 text-zinc-400 placeholder:text-zinc-700 outline-none text-center" />
+                            <Tooltip content="Duration (minutes)">
+                                <input value={newDuration} onChange={e => setNewDuration(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                                    placeholder="m"
+                                    className="w-10 text-xs bg-white/5 border border-white/5 rounded-lg px-1.5 py-1 text-zinc-400 placeholder:text-zinc-700 outline-none text-center" />
+                            </Tooltip>
                             <button type="button" onClick={() => setShowNotesForm(v => !v)} className={cn("p-1.5 rounded-lg transition-colors", showNotesForm ? "bg-white/10 text-white" : "text-zinc-600 hover:text-zinc-400")}>
                                 <Pencil className="w-3 h-3" />
                             </button>
@@ -681,15 +703,16 @@ function GroupCard({
             )}
 
             {/* Resize Handle */}
-            <div
-                onPointerDown={onResizePointerDown}
-                onPointerMove={onResizePointerMove}
-                onPointerUp={onResizePointerUp}
-                className="absolute bottom-1 right-1 cursor-nwse-resize p-1 text-white/5 hover:text-emerald-500/40 transition-colors"
-                title="Resize Group"
-            >
-                <Maximize2 className="w-3 h-3 rotate-90" />
-            </div>
+            <Tooltip content="Resize Group">
+                <div
+                    onPointerDown={onResizePointerDown}
+                    onPointerMove={onResizePointerMove}
+                    onPointerUp={onResizePointerUp}
+                    className="absolute bottom-1 right-1 cursor-nwse-resize p-1 text-white/5 hover:text-emerald-500/40 transition-colors"
+                >
+                    <Maximize2 className="w-3 h-3 rotate-90" />
+                </div>
+            </Tooltip>
         </div>
     );
 }
@@ -925,19 +948,19 @@ function AssignedTasksCard({
                         {showColorPicker ? (
                             <div className="flex items-center gap-1 bg-zinc-900/95 backdrop-blur-md rounded-lg p-1 border border-white/10 shadow-xl absolute right-0 bottom-full mb-1.5 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
                                 {GROUP_COLORS.map(c => (
-                                    <button
-                                        key={c.value}
-                                        onClick={() => handleColorChange(c.value)}
-                                        title={c.label}
-                                        className={cn(
-                                            "w-4 h-4 rounded-full transition-all flex items-center justify-center",
-                                            assignedColor === c.value
-                                                ? "ring-2 ring-white/30 scale-110"
-                                                : "hover:scale-110 opacity-60 hover:opacity-100"
-                                        )}
-                                    >
-                                        <span className={cn("w-2.5 h-2.5 rounded-full", c.bg)} />
-                                    </button>
+                                    <Tooltip key={c.value} content={c.label}>
+                                        <button
+                                            onClick={() => handleColorChange(c.value)}
+                                            className={cn(
+                                                "w-4 h-4 rounded-full transition-all flex items-center justify-center",
+                                                assignedColor === c.value
+                                                    ? "ring-2 ring-white/30 scale-110"
+                                                    : "hover:scale-110 opacity-60 hover:opacity-100"
+                                            )}
+                                        >
+                                            <span className={cn("w-2.5 h-2.5 rounded-full", c.bg)} />
+                                        </button>
+                                    </Tooltip>
                                 ))}
                                 <button
                                     onClick={() => setShowColorPicker(false)}
@@ -947,13 +970,14 @@ function AssignedTasksCard({
                                 </button>
                             </div>
                         ) : (
-                            <button
-                                onClick={() => { setShowColorPicker(v => !v); setShowSortPicker(false); }}
-                                className="cursor-pointer text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center flex-shrink-0"
-                                title="Change color"
-                            >
-                                <span className={cn("w-3.5 h-3.5 rounded-full block border border-white/15", assignedGroupColor.bg)} />
-                            </button>
+                            <Tooltip content="Change color">
+                                <button
+                                    onClick={() => { setShowColorPicker(v => !v); setShowSortPicker(false); }}
+                                    className="cursor-pointer text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center flex-shrink-0"
+                                >
+                                    <span className={cn("w-3.5 h-3.5 rounded-full block border border-white/15", assignedGroupColor.bg)} />
+                                </button>
+                            </Tooltip>
                         )}
                     </div>
 
@@ -961,38 +985,42 @@ function AssignedTasksCard({
                     <div className="relative">
                         {showSortPicker ? (
                             <div className="flex items-center gap-1 bg-zinc-900/95 backdrop-blur-md rounded-lg p-1 border border-white/10 shadow-xl absolute right-0 bottom-full mb-1.5 z-50 whitespace-nowrap text-[9px] font-bold uppercase tracking-wider animate-in fade-in slide-in-from-bottom-2 duration-150">
-                                <button
-                                    onClick={() => handleSortChange("priority")}
-                                    className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", assignedSort === "priority" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
-                                    title="Sort by Priority"
-                                >
-                                    {assignedSort === "priority" && <Check className="w-2.5 h-2.5" />}
-                                    Priority
-                                </button>
-                                <button
-                                    onClick={() => handleSortChange("title")}
-                                    className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", assignedSort === "title" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
-                                    title="Sort A-Z"
-                                >
-                                    {assignedSort === "title" && <Check className="w-2.5 h-2.5" />}
-                                    A-Z
-                                </button>
-                                <button
-                                    onClick={() => handleSortChange("date-desc")}
-                                    className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", assignedSort === "date-desc" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
-                                    title="Sort Newest"
-                                >
-                                    {assignedSort === "date-desc" && <Check className="w-2.5 h-2.5" />}
-                                    Newest
-                                </button>
-                                <button
-                                    onClick={() => handleSortChange("date-asc")}
-                                    className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", assignedSort === "date-asc" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
-                                    title="Sort Oldest"
-                                >
-                                    {assignedSort === "date-asc" && <Check className="w-2.5 h-2.5" />}
-                                    Oldest
-                                </button>
+                                <Tooltip content="Sort by Priority">
+                                    <button
+                                        onClick={() => handleSortChange("priority")}
+                                        className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", assignedSort === "priority" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
+                                    >
+                                        {assignedSort === "priority" && <Check className="w-2.5 h-2.5" />}
+                                        Priority
+                                    </button>
+                                </Tooltip>
+                                <Tooltip content="Sort A-Z">
+                                    <button
+                                        onClick={() => handleSortChange("title")}
+                                        className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", assignedSort === "title" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
+                                    >
+                                        {assignedSort === "title" && <Check className="w-2.5 h-2.5" />}
+                                        A-Z
+                                    </button>
+                                </Tooltip>
+                                <Tooltip content="Sort Newest">
+                                    <button
+                                        onClick={() => handleSortChange("date-desc")}
+                                        className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", assignedSort === "date-desc" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
+                                    >
+                                        {assignedSort === "date-desc" && <Check className="w-2.5 h-2.5" />}
+                                        Newest
+                                    </button>
+                                </Tooltip>
+                                <Tooltip content="Sort Oldest">
+                                    <button
+                                        onClick={() => handleSortChange("date-asc")}
+                                        className={cn("px-1.5 py-0.5 rounded transition-all flex items-center gap-0.5", assignedSort === "date-asc" ? "bg-white/15 text-white" : "text-zinc-400 hover:text-white")}
+                                    >
+                                        {assignedSort === "date-asc" && <Check className="w-2.5 h-2.5" />}
+                                        Oldest
+                                    </button>
+                                </Tooltip>
                                 <button
                                     onClick={() => setShowSortPicker(false)}
                                     className="ml-0.5 text-zinc-500 hover:text-zinc-300 transition-colors"
@@ -1001,19 +1029,20 @@ function AssignedTasksCard({
                                 </button>
                             </div>
                         ) : (
-                            <button
-                                onClick={() => { setShowSortPicker(v => !v); setShowColorPicker(false); }}
-                                className={cn(
-                                    "cursor-pointer text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center relative flex-shrink-0",
-                                    assignedSort !== "priority" && cn(assignedGroupColor.text, "bg-white/5")
-                                )}
-                                title={`Sort order: ${assignedSort}`}
-                            >
-                                <ArrowUpDown className="w-4 h-4" />
-                                {assignedSort !== "priority" && (
-                                    <span className={cn("absolute top-1 right-1 w-1.5 h-1.5 rounded-full animate-pulse", assignedGroupColor.bg)} />
-                                )}
-                            </button>
+                            <Tooltip content={`Sort order: ${assignedSort}`}>
+                                <button
+                                    onClick={() => { setShowSortPicker(v => !v); setShowColorPicker(false); }}
+                                    className={cn(
+                                        "cursor-pointer text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center relative flex-shrink-0",
+                                        assignedSort !== "priority" && cn(assignedGroupColor.text, "bg-white/5")
+                                    )}
+                                >
+                                    <ArrowUpDown className="w-4 h-4" />
+                                    {assignedSort !== "priority" && (
+                                        <span className={cn("absolute top-1 right-1 w-1.5 h-1.5 rounded-full animate-pulse", assignedGroupColor.bg)} />
+                                    )}
+                                </button>
+                            </Tooltip>
                         )}
                     </div>
                 </div>
@@ -1063,15 +1092,16 @@ function AssignedTasksCard({
             )}
 
             {/* Resize Handle */}
-            <div
-                onPointerDown={onResizePointerDown}
-                onPointerMove={onResizePointerMove}
-                onPointerUp={onResizePointerUp}
-                className={cn("absolute bottom-1 right-1 cursor-nwse-resize p-1 text-white/5 transition-colors", isResizing ? assignedGroupColor.resizeActive : assignedGroupColor.resizeHover)}
-                title="Resize"
-            >
-                <Maximize2 className="w-3 h-3 rotate-90" />
-            </div>
+            <Tooltip content="Resize">
+                <div
+                    onPointerDown={onResizePointerDown}
+                    onPointerMove={onResizePointerMove}
+                    onPointerUp={onResizePointerUp}
+                    className={cn("absolute bottom-1 right-1 cursor-nwse-resize p-1 text-white/5 transition-colors", isResizing ? assignedGroupColor.resizeActive : assignedGroupColor.resizeHover)}
+                >
+                    <Maximize2 className="w-3 h-3 rotate-90" />
+                </div>
+            </Tooltip>
         </div>
     );
 }
@@ -1139,33 +1169,36 @@ function AssignedTaskRow({
                     {!isDone && (
                         <div className="flex items-center gap-1 overflow-hidden max-w-0 group-hover/row:max-w-[80px] transition-all duration-200 ease-out">
                             {/* Start on timer */}
-                            <button
-                                onClick={(e) => { e.stopPropagation(); handleStart(); }}
-                                title="Start on timer"
-                                className="p-1 rounded-md text-emerald-500/70 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors flex-shrink-0"
-                            >
-                                <Play className="w-3 h-3 fill-current" />
-                            </button>
+                            <Tooltip content="Start on timer">
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleStart(); }}
+                                    className="flex items-center justify-center p-1 rounded-md text-emerald-500/70 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors flex-shrink-0"
+                                >
+                                    <Play className="w-3 h-3 fill-current" />
+                                </button>
+                            </Tooltip>
 
                             {/* Delete task */}
-                            <button
-                                onClick={(e) => { e.stopPropagation(); handleDelete(); }}
-                                title="Delete task"
-                                className="p-1 rounded-md text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0"
-                            >
-                                <Trash2 className="w-3 h-3" />
-                            </button>
+                            <Tooltip content="Delete task">
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleDelete(); }}
+                                    className="flex items-center justify-center p-1 rounded-md text-zinc-600 hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0"
+                                >
+                                    <Trash2 className="w-3 h-3" />
+                                </button>
+                            </Tooltip>
                         </div>
                     )}
 
                     {isDone && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); handleDelete(); }}
-                            title="Delete task"
-                            className="p-1 rounded-md text-zinc-700 hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover/row:opacity-100"
-                        >
-                            <Trash2 className="w-3 h-3" />
-                        </button>
+                        <Tooltip content="Delete task">
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleDelete(); }}
+                                className="flex items-center justify-center p-1 rounded-md text-zinc-700 hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover/row:opacity-100"
+                            >
+                                <Trash2 className="w-3 h-3" />
+                            </button>
+                        </Tooltip>
                     )}
                 </div>
             </div>

@@ -7,6 +7,7 @@ import { useQuickTasksStore } from "@/lib/quick-tasks-store";
 import { useTimerStore } from "@/lib/store";
 import { toast } from "sonner";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
+import { Tooltip } from "@/components/ui/tooltip";
 
 export function QuickTasksPanel() {
   const isOpen = useQuickTasksStore((state) => state.isTasksOpen);
@@ -120,38 +121,41 @@ export function QuickTasksPanel() {
               
               <div className="flex items-center gap-2">
                 {tasks.length - pendingCount > 0 && (
-                  <button
-                    onClick={handleClearCompleted}
-                    className="p-2 rounded-xl text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer group"
-                    title="Clear completed tasks"
-                  >
-                    <Trash2 className="w-4 h-4 text-zinc-500 group-hover:text-red-400" />
-                  </button>
+                  <Tooltip content="Clear completed tasks">
+                    <button
+                      onClick={handleClearCompleted}
+                      className="flex items-center justify-center p-2 rounded-xl text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer group"
+                    >
+                      <Trash2 className="w-4 h-4 text-zinc-500 group-hover:text-red-400" />
+                    </button>
+                  </Tooltip>
                 )}
-                <button
-                  onClick={() => {
-                    if (timerIsActive) {
-                      timerPause();
-                    } else {
-                      timerStart();
-                    }
-                  }}
-                  className="p-2 rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
-                  title={timerIsActive ? "Pause Timer" : "Start Timer"}
-                >
-                  {timerIsActive ? (
-                    <Pause className="w-4 h-4 text-white/80" />
-                  ) : (
-                    <Play className="w-4 h-4 text-white/80 fill-current ml-0.5" />
-                  )}
-                </button>
-                <button
-                  onClick={() => setIsOpen(false)}
-                  className="p-2 rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
-                  title="Close"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                <Tooltip content={timerIsActive ? "Pause Timer" : "Start Timer"}>
+                  <button
+                    onClick={() => {
+                      if (timerIsActive) {
+                        timerPause();
+                      } else {
+                        timerStart();
+                      }
+                    }}
+                    className="flex items-center justify-center p-2 rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                  >
+                    {timerIsActive ? (
+                      <Pause className="w-4 h-4 text-white/80" />
+                    ) : (
+                      <Play className="w-4 h-4 text-white/80 fill-current ml-0.5" />
+                    )}
+                  </button>
+                </Tooltip>
+                <Tooltip content="Close">
+                  <button
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center justify-center p-2 rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </Tooltip>
               </div>
             </div>
 
@@ -233,12 +237,13 @@ export function QuickTasksPanel() {
                           overTaskId === task.id && draggingTaskId !== task.id && "border-white/30 bg-white/5"
                         )}
                       >
-                        <div
-                          className="text-zinc-600 transition-colors group-hover:text-zinc-400"
-                          title="Drag to reorder"
-                        >
-                          <GripVertical className="w-4 h-4" />
-                        </div>
+                        <Tooltip content="Drag to reorder" side="right">
+                          <div
+                            className="text-zinc-600 transition-colors group-hover:text-zinc-400"
+                          >
+                            <GripVertical className="w-4 h-4" />
+                          </div>
+                        </Tooltip>
 
                         <button
                           onClick={() => toggleTask(task.id)}

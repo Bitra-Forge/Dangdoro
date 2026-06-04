@@ -12,6 +12,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { toast } from "sonner";
 import Image from "next/image";
 import feedbackImg from "@/components/ui/feedback.png";
+import { Tooltip } from "@/components/ui/tooltip";
 
 export function NotificationsDock() {
   const { user } = useAuth();
@@ -165,51 +166,53 @@ export function NotificationsDock() {
         )}
       >
         {!isGroupPage && (
-          <a
-            href="https://ko-fi.com/morales002"
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Support Dangdoro"
-            className="p-2.5 rounded-full bg-zinc-900/80 text-zinc-400 hover:text-rose-400 backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-visible hover:bg-rose-500/10 group"
-          >
-            {/* Glass highlights */}
-            <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/20 pointer-events-none group-hover:border-rose-500/30 transition-colors duration-300" />
-            <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/10 pointer-events-none" />
+          <Tooltip content="Support Dangdoro" side="bottom">
+            <a
+              href="https://ko-fi.com/morales002"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center p-2.5 rounded-full bg-zinc-900/80 text-zinc-400 hover:text-rose-400 backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-visible hover:bg-rose-500/10 group"
+            >
+              {/* Glass highlights */}
+              <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/20 pointer-events-none group-hover:border-rose-500/30 transition-colors duration-300" />
+              <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/10 pointer-events-none" />
 
-            <Heart className="w-4 h-4 transition-transform group-hover:scale-110 duration-300" />
-          </a>
+              <Heart className="w-4 h-4 transition-transform group-hover:scale-110 duration-300" />
+            </a>
+          </Tooltip>
         )}
 
         {!isGroupPage && (
           /* Floating Feedback Trigger Button */
-          <button
-            onClick={() => toggleFeedback("feedback")}
-            className={cn(
-              "p-2.5 rounded-full bg-zinc-900/80 backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-visible group",
-              isFeedbackOpen
-                ? "bg-white/15 text-white shadow-[inset_0_0_10px_rgba(255,255,255,0.1)]"
-                : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
-            )}
-            title="Send Feedback"
-          >
-            {/* Glass highlights */}
-            <div className={cn(
-              "absolute inset-0 rounded-full border-t-[0.5px] pointer-events-none transition-colors duration-300",
-              isFeedbackOpen ? "border-white/40" : "border-white/20 group-hover:border-white/30"
-            )} />
-            <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/10 pointer-events-none" />
-
-            <Image
-              src={feedbackImg}
-              alt="Feedback"
-              width={16}
-              height={16}
+          <Tooltip content="Send Feedback" side="bottom">
+            <button
+              onClick={() => toggleFeedback("feedback")}
               className={cn(
-                "w-4 h-4 object-contain transition-all duration-300 filter group-hover:scale-110 relative z-10",
-                isFeedbackOpen ? "invert" : "invert opacity-60 group-hover:opacity-100"
+                "p-2.5 rounded-full bg-zinc-900/80 backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-visible group",
+                isFeedbackOpen
+                  ? "bg-white/15 text-white shadow-[inset_0_0_10px_rgba(255,255,255,0.1)]"
+                  : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
               )}
-            />
-          </button>
+            >
+              {/* Glass highlights */}
+              <div className={cn(
+                "absolute inset-0 rounded-full border-t-[0.5px] pointer-events-none transition-colors duration-300",
+                isFeedbackOpen ? "border-white/40" : "border-white/20 group-hover:border-white/30"
+              )} />
+              <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/10 pointer-events-none" />
+
+              <Image
+                src={feedbackImg}
+                alt="Feedback"
+                width={16}
+                height={16}
+                className={cn(
+                  "w-4 h-4 object-contain transition-all duration-300 filter group-hover:scale-110 relative z-10",
+                  isFeedbackOpen ? "invert" : "invert opacity-60 group-hover:opacity-100"
+                )}
+              />
+            </button>
+          </Tooltip>
         )}
 
         <NotificationsMenu />

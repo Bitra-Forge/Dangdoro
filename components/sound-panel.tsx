@@ -7,6 +7,7 @@ import {
   X, Bird, Coffee, Flame, Waves, Moon, Wind, CloudRain,
   Anchor, Radio, CloudLightning, Droplets, TrainFront, Activity, Play, Pause
 } from "lucide-react";
+import { Tooltip } from "@/components/ui/tooltip";
 
 const sounds = [
   { id: "Birds.mp3", name: "Birds", icon: Bird },
@@ -78,22 +79,23 @@ export function SoundPanel() {
               </span>
               <div className="flex items-center gap-4">
                 {(hasActiveSounds || lastActiveSounds) && (
-                  <button
-                    onClick={toggleAllSounds}
-                    className={cn(
-                      "transition-all cursor-pointer text-white",
-                      hasActiveSounds 
-                        ? "drop-shadow-[0_0_12px_rgba(255,255,255,0.6)] opacity-100" 
-                        : "opacity-20 hover:opacity-100 hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]"
-                    )}
-                    title={hasActiveSounds ? "Stop all" : "Restore session"}
-                  >
-                    {hasActiveSounds ? (
-                      <Pause className="w-3.5 h-3.5 fill-current border-none" />
-                    ) : (
-                      <Play className="w-3.5 h-3.5 fill-current ml-0.5 border-none" />
-                    )}
-                  </button>
+                  <Tooltip content={hasActiveSounds ? "Stop all" : "Restore session"}>
+                    <button
+                      onClick={toggleAllSounds}
+                      className={cn(
+                        "transition-all cursor-pointer text-white",
+                        hasActiveSounds 
+                          ? "drop-shadow-[0_0_12px_rgba(255,255,255,0.6)] opacity-100" 
+                          : "opacity-20 hover:opacity-100 hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]"
+                      )}
+                    >
+                      {hasActiveSounds ? (
+                        <Pause className="w-3.5 h-3.5 fill-current border-none" />
+                      ) : (
+                        <Play className="w-3.5 h-3.5 fill-current ml-0.5 border-none" />
+                      )}
+                    </button>
+                  </Tooltip>
                 )}
                 <button
                   onClick={() => setIsOpen(false)}
