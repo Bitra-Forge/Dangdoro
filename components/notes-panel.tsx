@@ -36,7 +36,7 @@ export function NotesPanel() {
   const didOpenFocusRef = useRef(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const hasHtmlTags = /<\/?[a-z][\s\S]*>/i.test(notes);
+  const hasHtmlTags = /<\/?[a-z][\s\S]*>/i.test(notes) || /&[a-z0-9#]{2,8};/i.test(notes);
   const htmlFromPlainText = notes
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
