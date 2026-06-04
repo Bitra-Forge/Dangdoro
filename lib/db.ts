@@ -72,6 +72,20 @@ const toMillis = (ts: FirebaseTimestampLike | Date | number | null | undefined):
  * Syncs user authentication data with the Firestore 'users' collection.
  * This ensures every user (including anonymous ones) has a profile document.
  */
+/**
+ * Pure helper to resolve a user's display name based on provider, auth, and database records.
+ */
+export function resolveUserDisplayName(
+    providerData: { displayName: string | null }[],
+    authDisplayName: string | null | undefined,
+    existingDisplayName: string | null | undefined
+): string {
+    const provider = providerData.find(p => p.displayName && !p.displayName.startsWith("Guest #"));
+    const nameFromProvider = provider?.displayName || null;
+    const nameFromAuth = authDisplayName && !authDisplayName.startsWith("Guest #") ? authDisplayName : null;
+    return nameFromProvider || nameFromAuth || existingDisplayName || "Focus Hero";
+}
+
 export const syncUserProfile = async (user: User) => {
     try {
         const userRef = doc(db, "users", user.uid);
@@ -118,17 +132,28 @@ export const syncUserProfile = async (user: User) => {
 
             // If user is NOT anonymous (Google/Email), we update their profile info from the provider
             if (!user.isAnonymous) {
-                // ... (Verified user logic)
-                const provider = user.providerData[0];
-                const nameFromProvider = provider?.displayName;
+                // Find a provider (like Google) that has a real display name
+                const provider = user.providerData.find(p => p.displayName && !p.displayName.startsWith("Guest #"));
                 const photoFromProvider = provider?.photoURL;
 
-                const currentName = user.displayName || nameFromProvider || existingData.displayName;
+                const resolvedName = resolveUserDisplayName(
+                    user.providerData || [],
+                    user.displayName,
+                    existingData.displayName
+                );
 
-                if (currentName && !currentName.startsWith("Guest #")) {
-                    updateData.displayName = currentName;
-                } else if (!existingData.displayName || existingData.displayName.startsWith("Guest #")) {
-                    updateData.displayName = currentName || "Focus Hero";
+                console.log("🔍 syncUserProfile [Debug]: providerData =", user.providerData);
+                console.log("🔍 syncUserProfile [Debug]: user.displayName =", user.displayName);
+                console.log("🔍 syncUserProfile [Debug]: existingData.displayName =", existingData?.displayName);
+                console.log("🔍 syncUserProfile [Debug]: resolvedName =", resolvedName);
+
+                updateData.displayName = resolvedName;
+
+                // Sync the name BACK to the Auth user so the UI/Header updates immediately
+                if (user.displayName !== resolvedName) {
+                    console.log(`syncUserProfile: Syncing name "${resolvedName}" back to Auth user profile.`);
+                    await updateProfile(user, { displayName: resolvedName });
+                    await user.reload();
                 }
 
                 // PHOTO SYNC PRIORITY: Firestore > Auth > Provider.
