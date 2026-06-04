@@ -214,6 +214,18 @@ export const syncUserProfile = async (user: User) => {
 
             await updateDoc(userRef, updateData);
         }
+
+        // Clear caches so the new profile/display name is immediately visible
+        userProfileCache.delete(user.uid);
+        saveMapToSession("dangdoro_profile_cache", userProfileCache);
+        cachedLeaderboard = null;
+        if (typeof window !== "undefined") {
+            try {
+                sessionStorage.removeItem("dangdoro_leaderboard_cache");
+                sessionStorage.removeItem("dangdoro_group_leaderboard_cache");
+            } catch {}
+        }
+        groupLeaderboardCache.clear();
     } catch (error) {
         console.error("❌ syncUserProfile FAILED:", error);
         throw error;
@@ -1214,6 +1226,19 @@ export const updateUserProfile = async (userId: string, data: { displayName?: st
         if (data.displayName && auth.currentUser) {
             await updateProfile(auth.currentUser, { displayName: data.displayName });
         }
+
+        // Clear caches so the new profile/display name is immediately visible
+        userProfileCache.delete(userId);
+        saveMapToSession("dangdoro_profile_cache", userProfileCache);
+        cachedLeaderboard = null;
+        if (typeof window !== "undefined") {
+            try {
+                sessionStorage.removeItem("dangdoro_leaderboard_cache");
+                sessionStorage.removeItem("dangdoro_group_leaderboard_cache");
+            } catch {}
+        }
+        groupLeaderboardCache.clear();
+
         return true;
     } catch {
         console.error("Error updating user profile");
