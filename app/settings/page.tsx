@@ -18,6 +18,7 @@ import { useTimerStore } from "@/lib/store";
 import { BackgroundTheme } from "@/components/background-theme";
 import { BG_PALETTES } from "@/lib/background-config";
 import { useBackgroundTheme } from "@/lib/use-background-theme";
+import { Tooltip } from "@/components/ui/tooltip";
 
 type AppSettings = typeof DEFAULT_SETTINGS;
 
@@ -315,13 +316,14 @@ export default function SettingsPage() {
                         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
                         <div className="flex items-center gap-2">
                             {hasChanges && (
-                                <button
-                                    onClick={handleRestoreDefaults}
-                                    className="p-2 text-zinc-500 hover:text-white transition-colors"
-                                    title="Restore Defaults"
-                                >
-                                    <RotateCcw className="w-4 h-4" />
-                                </button>
+                                <Tooltip content="Restore Defaults">
+                                    <button
+                                        onClick={handleRestoreDefaults}
+                                        className="flex items-center justify-center p-2 text-zinc-500 hover:text-white transition-colors cursor-pointer"
+                                    >
+                                        <RotateCcw className="w-4 h-4" />
+                                    </button>
+                                </Tooltip>
                             )}
                             <button
                                 onClick={handleSaveSettings}
@@ -865,24 +867,26 @@ export default function SettingsPage() {
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <a
-                                                href={dev.github}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="p-2 bg-white/5 hover:bg-white/10 hover:text-white border border-white/10 hover:border-white/20 rounded-xl transition-all duration-300 text-zinc-400"
-                                                title="GitHub Profile"
-                                            >
-                                                <GithubIcon className="w-4 h-4" />
-                                            </a>
-                                            <a
-                                                href={dev.linkedin}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="p-2 bg-white/5 hover:bg-white/10 hover:text-white border border-white/10 hover:border-white/20 rounded-xl transition-all duration-300 text-zinc-400"
-                                                title="LinkedIn Profile"
-                                            >
-                                                <LinkedinIcon className="w-4 h-4" />
-                                            </a>
+                                            <Tooltip content="GitHub Profile">
+                                                <a
+                                                    href={dev.github}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center justify-center p-2 bg-white/5 hover:bg-white/10 hover:text-white border border-white/10 hover:border-white/20 rounded-xl transition-all duration-300 text-zinc-400 cursor-pointer"
+                                                >
+                                                    <GithubIcon className="w-4 h-4" />
+                                                </a>
+                                            </Tooltip>
+                                            <Tooltip content="LinkedIn Profile">
+                                                <a
+                                                    href={dev.linkedin}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center justify-center p-2 bg-white/5 hover:bg-white/10 hover:text-white border border-white/10 hover:border-white/20 rounded-xl transition-all duration-300 text-zinc-400 cursor-pointer"
+                                                >
+                                                    <LinkedinIcon className="w-4 h-4" />
+                                                </a>
+                                            </Tooltip>
                                         </div>
                                     </div>
                                 ))}
