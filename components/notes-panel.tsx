@@ -1,16 +1,17 @@
 "use client";
 
 import { useNotesStore } from "@/lib/notes-store";
+import { useTimerStore } from "@/lib/store";
 import {
   X,
   Trash2,
   Copy,
   Check,
-  Bold,
-  Italic,
-  Underline,
+  Pencil,
+  Play,
+  Pause,
 } from "lucide-react";
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
 import DOMPurify from "dompurify";
@@ -29,6 +30,10 @@ export function NotesPanel() {
   const setIsOpen = useNotesStore((state) => state.setIsNotesOpen);
   const notes = useNotesStore((state) => state.notes);
   const setNotes = useNotesStore((state) => state.setNotes);
+
+  const timerIsActive = useTimerStore((state) => state.isActive);
+  const timerStart = useTimerStore((state) => state.start);
+  const timerPause = useTimerStore((state) => state.pause);
 
   const [copied, setCopied] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -183,128 +188,145 @@ export function NotesPanel() {
           transition={{ type: "spring", stiffness: 360, damping: 34, mass: 0.7 }}
           className="fixed left-1/2 -translate-x-1/2 bottom-40 sm:bottom-28 w-[92vw] sm:w-full max-w-[420px] transform origin-bottom z-[60]"
         >
-          <div className="bg-slate-950/80 backdrop-blur-3xl border border-white/10 rounded-[10px] shadow-[0_25px_50px_rgba(0,0,0,0.7)] flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between bg-white/5">
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-[#49B6E5] shadow-[0_0_8px_#49B6E5]" />
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50">
-                Quick Notes
-              </span>
+          <div className="bg-[#13161C]/95 backdrop-blur-3xl border border-white/[0.06] rounded-[28px] shadow-[0_30px_60px_rgba(0,0,0,0.8)] flex flex-col p-6 gap-6 overflow-hidden h-[530px]">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-2 h-2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.5)]" />
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50">
+                  Quick Notes
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCopy}
+                  className="p-2 rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 transition-all cursor-pointer group relative"
+                  title="Copy all"
+                >
+                  {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={handleClear}
+                  className="p-2 rounded-xl text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer group"
+                  title="Clear notes"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    if (timerIsActive) {
+                      timerPause();
+                    } else {
+                      timerStart();
+                    }
+                  }}
+                  className="p-2 rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                  title={timerIsActive ? "Pause Timer" : "Start Timer"}
+                >
+                  {timerIsActive ? (
+                    <Pause className="w-4 h-4 text-white/80" />
+                  ) : (
+                    <Play className="w-4 h-4 text-white/80 fill-current ml-0.5" />
+                  )}
+                </button>
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="p-2 rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                  title="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-            <span className="text-[9px] text-white/20 font-medium mt-1 uppercase tracking-wider">
-              {wordCount} words · {charCount} chars
-            </span>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleCopy}
-              className="p-2 rounded-[10px] hover:bg-white/10 text-white/30 hover:text-white transition-all cursor-pointer group relative"
-              title="Copy all"
-            >
-              {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-            </button>
-            <button
-              onClick={handleClear}
-              className="p-2 rounded-[10px] hover:bg-red-500/20 text-white/30 hover:text-red-400 transition-all cursor-pointer group"
-              title="Clear notes"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="p-2 rounded-[10px] hover:bg-white/10 text-white/30 hover:text-white transition-all cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
 
-        {/* Editor Toolbar */}
-        <div className="px-4 pt-3 pb-2 border-b border-white/5 bg-black/20">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              onMouseDown={keepSelectionOnToolbarMouseDown}
-              onClick={() => applyFormat("bold")}
-              className="p-1.5 rounded-[10px] hover:bg-white/10 text-white/40 hover:text-white transition-all"
-              title="Bold"
-            >
-              <Bold className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onMouseDown={keepSelectionOnToolbarMouseDown}
-              onClick={() => applyFormat("italic")}
-              className="p-1.5 rounded-[10px] hover:bg-white/10 text-white/40 hover:text-white transition-all"
-              title="Italic"
-            >
-              <Italic className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onMouseDown={keepSelectionOnToolbarMouseDown}
-              onClick={() => applyFormat("underline")}
-              className="p-1.5 rounded-[10px] hover:bg-white/10 text-white/40 hover:text-white transition-all"
-              title="Underline"
-            >
-              <Underline className="w-3.5 h-3.5" />
-            </button>
-            <div className="w-px h-4 bg-white/10 mx-1" />
-            <button
-              onMouseDown={keepSelectionOnToolbarMouseDown}
-              onClick={() => applyFormat("fontSize", "2")}
-              className="px-2 py-1.5 rounded-[10px] hover:bg-white/10 text-[10px] font-semibold leading-none tracking-wide text-white/40 hover:text-white transition-all"
-              title="Extra small text"
-            >
-              A
-            </button>
-            <button
-              onMouseDown={keepSelectionOnToolbarMouseDown}
-              onClick={() => applyFormat("fontSize", "3")}
-              className="px-2 py-1.5 rounded-[10px] hover:bg-white/10 text-xs font-semibold leading-none tracking-wide text-white/40 hover:text-white transition-all"
-              title="Small text"
-            >
-              A
-            </button>
-            <button
-              onMouseDown={keepSelectionOnToolbarMouseDown}
-              onClick={() => applyFormat("fontSize", "4")}
-              className="px-2 py-1.5 rounded-[10px] hover:bg-white/10 text-sm font-semibold leading-none tracking-wide text-white/40 hover:text-white transition-all"
-              title="Medium text"
-            >
-              A
-            </button>
-            <button
-              onMouseDown={keepSelectionOnToolbarMouseDown}
-              onClick={() => applyFormat("fontSize", "5")}
-              className="px-2 py-1.5 rounded-[10px] hover:bg-white/10 text-base font-semibold leading-none tracking-wide text-white/40 hover:text-white transition-all"
-              title="Large text"
-            >
-              A
-            </button>
-          </div>
-        </div>
+            {/* Central Graphic */}
+            <div className="flex flex-col items-center justify-center my-1">
+              <div className="w-20 h-20 rounded-full border border-white/[0.08] bg-white/[0.02] flex items-center justify-center relative shadow-[0_0_20px_rgba(255,255,255,0.02)]">
+                <div className="absolute inset-0 rounded-full bg-white/[0.01] blur-md" />
+                <Pencil className="w-8 h-8 text-white/80 relative z-10" />
+              </div>
+              <div className="w-24 h-1 bg-white rounded-full mt-5 shadow-[0_0_12px_rgba(255,255,255,0.8)]" />
+            </div>
 
-        {/* Rich Text Editor */}
-        <div className="p-4 bg-black/20 relative">
-          {!plainText && (
-            <p className="absolute left-4 top-4 text-zinc-600 pointer-events-none text-sm font-[family-name:var(--font-jetbrains)]">
-              Capture your thoughts here and keep your flow uninterrupted...
-            </p>
-          )}
-          <div
-            ref={editorRef}
-            contentEditable
-            suppressContentEditableWarning
-            onInput={handleEditorInput}
-            onMouseUp={saveSelection}
-            onKeyUp={saveSelection}
-            className="w-full h-64 bg-transparent border-none outline-none text-zinc-200 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden font-[family-name:var(--font-jetbrains)] text-sm leading-relaxed"
-          />
-        </div>
+            {/* Rich Text Editor Container */}
+            <div className="p-5 bg-black/20 rounded-[20px] border border-white/[0.04] relative flex-1 min-h-0">
+              {!plainText && (
+                <p className="absolute left-5 top-5 text-zinc-600 pointer-events-none text-sm font-[family-name:var(--font-jetbrains)] leading-relaxed italic">
+                  Capture your thoughts here and keep your flow uninterrupted...
+                </p>
+              )}
+              <div
+                ref={editorRef}
+                contentEditable
+                suppressContentEditableWarning
+                onInput={handleEditorInput}
+                onMouseUp={saveSelection}
+                onKeyUp={saveSelection}
+                className="w-full h-full bg-transparent border-none outline-none text-zinc-200 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden font-[family-name:var(--font-jetbrains)] text-sm leading-relaxed"
+              />
+            </div>
 
-        {/* Perspective Decoration */}
-        <div className="h-1.5 w-full bg-gradient-to-r from-transparent via-[#49B6E5]/20 to-transparent opacity-30" />
+            {/* Formatting Toolbar */}
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onMouseDown={keepSelectionOnToolbarMouseDown}
+                onClick={() => applyFormat("bold")}
+                className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-xs font-semibold text-zinc-400 hover:text-white"
+                title="Bold"
+              >
+                B
+              </button>
+              <button
+                onMouseDown={keepSelectionOnToolbarMouseDown}
+                onClick={() => applyFormat("italic")}
+                className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-xs italic font-semibold text-zinc-400 hover:text-white"
+                title="Italic"
+              >
+                I
+              </button>
+              <button
+                onMouseDown={keepSelectionOnToolbarMouseDown}
+                onClick={() => applyFormat("underline")}
+                className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-xs underline font-semibold text-zinc-400 hover:text-white"
+                title="Underline"
+              >
+                U
+              </button>
+              <div className="w-px h-5 bg-white/10 mx-1" />
+              <button
+                onMouseDown={keepSelectionOnToolbarMouseDown}
+                onClick={() => applyFormat("fontSize", "2")}
+                className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-[10px] font-bold text-zinc-400 hover:text-white"
+                title="Extra small text"
+              >
+                A
+              </button>
+              <button
+                onMouseDown={keepSelectionOnToolbarMouseDown}
+                onClick={() => applyFormat("fontSize", "3")}
+                className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-xs font-bold text-zinc-400 hover:text-white"
+                title="Small text"
+              >
+                A
+              </button>
+              <button
+                onMouseDown={keepSelectionOnToolbarMouseDown}
+                onClick={() => applyFormat("fontSize", "4")}
+                className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-sm font-bold text-zinc-400 hover:text-white"
+                title="Medium text"
+              >
+                A
+              </button>
+              <button
+                onMouseDown={keepSelectionOnToolbarMouseDown}
+                onClick={() => applyFormat("fontSize", "5")}
+                className="w-10 h-10 rounded-full bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.08] transition-all flex items-center justify-center text-base font-bold text-zinc-400 hover:text-white"
+                title="Large text"
+              >
+                A
+              </button>
+            </div>
           </div>
         </motion.div>
       )}
