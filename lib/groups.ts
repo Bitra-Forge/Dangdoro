@@ -201,7 +201,7 @@ export function normalizeLiveSessions(sessions: LiveSession[]): LiveSession[] {
 
 export function getManagementGroupKey(group: FocusGroup | null | undefined): string {
     if (!group) return "";
-    return `${group.id}-${group.members?.length}-${group.settings?.goalHours}-${group.settings?.maxMembers}-${group.hostId}`;
+    return `${group.id}-${group.name}-${group.members?.length}-${group.settings?.goalHours}-${group.settings?.maxMembers}-${group.hostId}`;
 }
 
 export function fmtElapsed(secs: number) {

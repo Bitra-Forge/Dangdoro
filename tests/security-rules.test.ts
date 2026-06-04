@@ -66,6 +66,21 @@ describe("Security Rules Logic", () => {
     });
   });
 
+  describe("Group admin privileges", () => {
+    function isGroupAdmin(uid: string, memberStats: Record<string, { role: string }>): boolean {
+      return memberStats && memberStats[uid] && memberStats[uid].role === "admin";
+    }
+
+    it("admin is recognized", () => {
+      expect(isGroupAdmin("admin-1", { "admin-1": { role: "admin" } })).toBe(true);
+    });
+
+    it("non-admin is rejected", () => {
+      expect(isGroupAdmin("member-1", { "member-1": { role: "member" } })).toBe(false);
+      expect(isGroupAdmin("host-1", { "host-1": { role: "host" } })).toBe(false);
+    });
+  });
+
   describe("Member field update restrictions", () => {
     it("allows updating only permitted fields", () => {
       expect(onlyUpdatingAllowedMemberFields(["memberStats", "totalMinutes"])).toBe(true);
@@ -82,6 +97,33 @@ describe("Security Rules Logic", () => {
 
     it("allows empty changeset", () => {
       expect(onlyUpdatingAllowedMemberFields([])).toBe(true);
+    });
+  });
+
+  describe("Admin field update restrictions", () => {
+    function onlyUpdatingAllowedAdminFields(
+      changedKeys: string[],
+      allowedKeys = [
+        "name", "description", "privacy", "accessCode", "inviteToken",
+        "memberStats", "totalMinutes", "memberCount", "members", "pendingInvites",
+        "settings", "lastResetAt"
+      ]
+    ): boolean {
+      return changedKeys.every((key) => allowedKeys.includes(key));
+    }
+
+    it("allows updating permitted admin fields including name", () => {
+      expect(onlyUpdatingAllowedAdminFields(["name", "memberStats", "totalMinutes"])).toBe(true);
+    });
+
+    it("allows updating settings, description, and resetting stats", () => {
+      expect(onlyUpdatingAllowedAdminFields(["name", "settings", "totalMinutes", "lastResetAt"])).toBe(true);
+      expect(onlyUpdatingAllowedAdminFields(["description", "privacy"])).toBe(true);
+    });
+
+    it("blocks updates to other restricted fields", () => {
+      expect(onlyUpdatingAllowedAdminFields(["name", "hostId"])).toBe(false);
+      expect(onlyUpdatingAllowedAdminFields(["settings", "createdAt"])).toBe(false);
     });
   });
 

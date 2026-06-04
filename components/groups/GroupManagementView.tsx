@@ -4,7 +4,7 @@ import { memo, useState, useEffect } from "react";
 import { useTimerStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { 
-    Target, Users, Copy, Crown, Zap, UserX, Calendar, RotateCcw
+    Target, Users, Copy, Crown, Zap, UserX, Calendar, RotateCcw, Tag
 } from "lucide-react";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -14,11 +14,36 @@ import { fmtMinutes, getManagementGroupKey, getGoalTypeLabel, GoalType } from "@
 
 export const GroupManagementView = memo(function GroupManagementView({ group, user, onUpdateRole, onRemove, userRole, roleActionPendingId }: any) {
     const isHost = userRole === "host";
+    const isAdmin = userRole === "admin";
+    const isHostOrAdmin = isHost || isAdmin;
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
     const [goalType, setGoalType] = useState<GoalType>(group.settings?.goalType || "weekly");
     const [customDays, setCustomDays] = useState<string>("");
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
+    const [name, setName] = useState(group.name || "");
+
+    useEffect(() => {
+        setName(group.name || "");
+    }, [group.name]);
+
+    const handleNameBlur = async () => {
+        if (!name.trim() || name.trim() === group.name) return;
+        try {
+            await updateDoc(doc(db, "focusGroups", group.id), { name: name.trim() });
+            toast.success("Group name updated!");
+        } catch (error) {
+            console.error("Failed to update group name:", error);
+            toast.error("Failed to update group name.");
+            setName(group.name || "");
+        }
+    };
+
+    const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter") {
+            e.currentTarget.blur();
+        }
+    };
 
     const handleResetStats = async () => {
         setIsResetting(true);
@@ -79,12 +104,29 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
 
     return (
         <div className="space-y-12 animate-in fade-in slide-in-from-right-4 duration-150">
-            {isHost && (
+            {isHostOrAdmin && (
                 <div className="space-y-6">
                     <div>
                         <h3 className="text-lg font-bold text-white mb-1">Unit Configuration</h3>
                         <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Manage core parameters.</p>
                     </div>
+
+                    <div className="p-5 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4">
+                        <div className="flex items-center gap-2 text-zinc-400">
+                            <Tag className="w-4 h-4" />
+                            <span className="text-[10px] font-black uppercase tracking-widest">Group Name</span>
+                        </div>
+                        <input 
+                            type="text" 
+                            value={name} 
+                            onChange={(e) => setName(e.target.value)}
+                            onBlur={handleNameBlur}
+                            onKeyDown={handleNameKeyDown}
+                            placeholder="Unit Name" 
+                            className="w-full bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-[white]/40 outline-none" 
+                        />
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="p-5 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4">
                             <div className="flex items-center gap-2 text-zinc-400">

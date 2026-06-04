@@ -21,6 +21,13 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == groupData.hostId;
     }
 
+    function isGroupAdmin(groupData) {
+      return isSignedIn() &&
+        groupData.memberStats != null &&
+        request.auth.uid in groupData.memberStats &&
+        groupData.memberStats[request.auth.uid].role == 'admin';
+    }
+
     // ─── Users ───────────────────────────────────────────────────
     match /users/{userId} {
       // Anyone signed in can read public profiles (for leaderboard, groups, friends)
@@ -96,9 +103,10 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.hostId == request.auth.uid;
 
       // Only the host can update core group settings
-      // Members can update specific fields (memberStats, totalMinutes)
+      // Admins and host can change group name, members can update specific fields (memberStats, totalMinutes)
       allow update: if isSignedIn() && (
         isGroupHost(resource.data) ||
+        (isGroupAdmin(resource.data) && onlyUpdatingAllowedAdminFields()) ||
         (isGroupMember(resource.data) && onlyUpdatingAllowedMemberFields()) ||
         // Allow users to accept/decline invites (modify pendingInvites, members)
         (request.auth.uid in resource.data.pendingInvites && onlyUpdatingInviteFields()) ||
@@ -129,6 +137,25 @@ service cloud.firestore {
           get(/databases/$(database)/documents/focusGroups/$(groupId)).data
         );
       }
+    }
+
+    // Helper: only allow admins to update name, description, settings, and member/invite fields
+    function onlyUpdatingAllowedAdminFields() {
+      let allowed = [
+        'name',
+        'description',
+        'privacy',
+        'accessCode',
+        'inviteToken',
+        'memberStats',
+        'totalMinutes',
+        'memberCount',
+        'members',
+        'pendingInvites',
+        'settings',
+        'lastResetAt'
+      ].toSet();
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
     }
 
     // Helper: only allow members to update their own stats + group aggregates
