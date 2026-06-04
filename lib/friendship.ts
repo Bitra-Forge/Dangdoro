@@ -17,6 +17,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { FirebaseTimestampLike, toMillis } from "./groups";
+import { fetchUserProfiles } from "./db";
 
 /**
  * Friendship Data Model:
@@ -323,15 +324,11 @@ export const getReceivedFriendRequests = async (userId: string): Promise<FriendR
         const fromUserIds = requests.map(r => r.fromUserId);
         if (fromUserIds.length === 0) return [];
 
+        const profiles = await fetchUserProfiles(fromUserIds);
         const userProfilesMap = new Map<string, UserProfileData>();
-        for (let i = 0; i < fromUserIds.length; i += 30) {
-            const batchIds = fromUserIds.slice(i, i + 30);
-            const qProfiles = query(collection(db, "users"), where("__name__", "in", batchIds));
-            const querySnap = await getDocs(qProfiles);
-            querySnap.docs.forEach(docSnap => {
-                userProfilesMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as UserProfileData);
-            });
-        }
+        profiles.forEach(p => {
+            userProfilesMap.set(p.uid, { id: p.uid, ...p });
+        });
 
         return requests.map(request => ({
             ...request,
@@ -366,15 +363,11 @@ export const getSentFriendRequests = async (userId: string): Promise<FriendReque
         const toUserIds = requests.map(r => r.toUserId);
         if (toUserIds.length === 0) return [];
 
+        const profiles = await fetchUserProfiles(toUserIds);
         const userProfilesMap = new Map<string, UserProfileData>();
-        for (let i = 0; i < toUserIds.length; i += 30) {
-            const batchIds = toUserIds.slice(i, i + 30);
-            const qProfiles = query(collection(db, "users"), where("__name__", "in", batchIds));
-            const querySnap = await getDocs(qProfiles);
-            querySnap.docs.forEach(docSnap => {
-                userProfilesMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as UserProfileData);
-            });
-        }
+        profiles.forEach(p => {
+            userProfilesMap.set(p.uid, { id: p.uid, ...p });
+        });
 
         return requests.map(request => ({
             ...request,
@@ -406,15 +399,11 @@ export const getFriendsList = async (userId: string): Promise<Friend[]> => {
         const friendIds = friends.map(f => f.friendId);
         if (friendIds.length === 0) return [];
 
+        const profiles = await fetchUserProfiles(friendIds);
         const userProfilesMap = new Map<string, UserProfileData>();
-        for (let i = 0; i < friendIds.length; i += 30) {
-            const batchIds = friendIds.slice(i, i + 30);
-            const qProfiles = query(collection(db, "users"), where("__name__", "in", batchIds));
-            const querySnap = await getDocs(qProfiles);
-            querySnap.docs.forEach(docSnap => {
-                userProfilesMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as UserProfileData);
-            });
-        }
+        profiles.forEach(p => {
+            userProfilesMap.set(p.uid, { id: p.uid, ...p });
+        });
 
         return friends.map(friend => ({
             ...friend,
@@ -480,15 +469,11 @@ export const subscribeToReceivedFriendRequests = (
             return;
         }
 
+        const profiles = await fetchUserProfiles(fromUserIds);
         const userProfilesMap = new Map<string, UserProfileData>();
-        for (let i = 0; i < fromUserIds.length; i += 30) {
-            const batchIds = fromUserIds.slice(i, i + 30);
-            const qProfiles = query(collection(db, "users"), where("__name__", "in", batchIds));
-            const querySnap = await getDocs(qProfiles);
-            querySnap.docs.forEach(docSnap => {
-                userProfilesMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as UserProfileData);
-            });
-        }
+        profiles.forEach(p => {
+            userProfilesMap.set(p.uid, { id: p.uid, ...p });
+        });
 
         const requestsWithData = requests.map(request => ({
             ...request,
@@ -528,15 +513,11 @@ export const subscribeToFriendsList = (
             return;
         }
 
+        const profiles = await fetchUserProfiles(friendIds);
         const userProfilesMap = new Map<string, UserProfileData>();
-        for (let i = 0; i < friendIds.length; i += 30) {
-            const batchIds = friendIds.slice(i, i + 30);
-            const qProfiles = query(collection(db, "users"), where("__name__", "in", batchIds));
-            const querySnap = await getDocs(qProfiles);
-            querySnap.docs.forEach(docSnap => {
-                userProfilesMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as UserProfileData);
-            });
-        }
+        profiles.forEach(p => {
+            userProfilesMap.set(p.uid, { id: p.uid, ...p });
+        });
 
         const friendsWithData = friends.map(friend => ({
             ...friend,

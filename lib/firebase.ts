@@ -1,6 +1,12 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { 
+    initializeFirestore, 
+    getFirestore, 
+    persistentLocalCache, 
+    persistentMultipleTabManager,
+    Firestore
+} from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -15,7 +21,25 @@ const firebaseConfig = {
 // Initialize Firebase only if it hasn't been initialized already
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
-const db = getFirestore(app);
+
+// Configure Firestore with persistent local cache on client side
+let db: Firestore;
+if (typeof window !== "undefined") {
+    try {
+        db = initializeFirestore(app, {
+            localCache: persistentLocalCache({
+                tabManager: persistentMultipleTabManager(),
+            }),
+        });
+    } catch {
+        db = getFirestore(app);
+    }
+} else {
+    db = getFirestore(app);
+}
+
 const storage = getStorage(app);
 
 export { app, auth, db, storage };
+
+

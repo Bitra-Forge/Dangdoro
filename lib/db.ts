@@ -486,10 +486,27 @@ export const declineGroupInvite = async (groupId: string, userId: string) => {
     }
 };
 
+// --- CACHING LAYER TO REDUCE FIREBASE READS ---
+const userProfileCache = new Map<string, { data: UserProfileData; timestamp: number }>();
+const USER_PROFILE_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+
+let cachedLeaderboard: { data: any[]; timestamp: number } | null = null;
+const LEADERBOARD_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+const groupLeaderboardCache = new Map<string, { data: FocusGroup[]; timestamp: number }>();
+const GROUP_LEADERBOARD_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Fetches the top focusers for the leaderboard.
  */
 export const getLeaderboard = async (limitCount: number = 10) => {
+    const now = Date.now();
+    if (cachedLeaderboard && now - cachedLeaderboard.timestamp < LEADERBOARD_CACHE_TTL) {
+        if (cachedLeaderboard.data.length >= limitCount) {
+            return cachedLeaderboard.data.slice(0, limitCount);
+        }
+    }
+
     const usersRef = collection(db, "users");
     const q = query(
         usersRef,
@@ -499,10 +516,13 @@ export const getLeaderboard = async (limitCount: number = 10) => {
     );
 
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
+    const data = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
     }));
+
+    cachedLeaderboard = { data, timestamp: now };
+    return data;
 };
 
 
@@ -516,6 +536,13 @@ export const getGroupLeaderboard = async (options: {
     sortBy?: "members" | "minutes";
     limitCount?: number;
 } = {}) => {
+    const now = Date.now();
+    const cacheKey = JSON.stringify(options);
+    const cached = groupLeaderboardCache.get(cacheKey);
+    if (cached && now - cached.timestamp < GROUP_LEADERBOARD_CACHE_TTL) {
+        return cached.data;
+    }
+
     const { userId, filter = "all", sortBy = "minutes", limitCount = 20 } = options;
     const groupsRef = collection(db, "focusGroups");
     
@@ -557,7 +584,9 @@ export const getGroupLeaderboard = async (options: {
         return (b.memberCount || b.members?.length || 0) - (a.memberCount || a.members?.length || 0);
     });
 
-    return groups.slice(0, limitCount);
+    const result = groups.slice(0, limitCount);
+    groupLeaderboardCache.set(cacheKey, { data: result, timestamp: now });
+    return result;
 };
 
 /**
@@ -566,27 +595,48 @@ export const getGroupLeaderboard = async (options: {
  */
 export const fetchUserProfiles = async (uids: string[]) => {
     if (!uids.length) return [];
-    
-    // Firestore 'in' queries are limited to 30 items.
-    // Chunk the UIDs and merge results.
-    const CHUNK_SIZE = 30;
-    const usersRef = collection(db, "users");
-    const allProfiles: UserProfileData[] = [];
 
-    for (let i = 0; i < uids.length; i += CHUNK_SIZE) {
-        const chunk = uids.slice(i, i + CHUNK_SIZE);
-        const q = query(usersRef, where("uid", "in", chunk));
-        const querySnapshot = await getDocs(q);
-        
-        allProfiles.push(
-            ...querySnapshot.docs.map(doc => ({
-                uid: doc.id,
-                ...doc.data()
-            } as unknown as UserProfileData))
-        );
+    const now = Date.now();
+    const result: UserProfileData[] = [];
+    const missingUids: string[] = [];
+
+    // Check what we have in cache
+    for (const uid of uids) {
+        const cached = userProfileCache.get(uid);
+        if (cached && now - cached.timestamp < USER_PROFILE_CACHE_TTL) {
+            result.push(cached.data);
+        } else {
+            missingUids.push(uid);
+        }
     }
 
-    return allProfiles;
+    if (missingUids.length > 0) {
+        const CHUNK_SIZE = 30;
+        const usersRef = collection(db, "users");
+
+        for (let i = 0; i < missingUids.length; i += CHUNK_SIZE) {
+            const chunk = missingUids.slice(i, i + CHUNK_SIZE);
+            const q = query(usersRef, where("uid", "in", chunk));
+            const querySnapshot = await getDocs(q);
+
+            querySnapshot.docs.forEach(doc => {
+                const profileData = {
+                    uid: doc.id,
+                    ...doc.data()
+                } as unknown as UserProfileData;
+                
+                // Save to cache
+                userProfileCache.set(doc.id, { data: profileData, timestamp: now });
+                result.push(profileData);
+            });
+        }
+    }
+
+    // Preserve the original order of requested UIDs
+    const profileMap = new Map(result.map(p => [p.uid, p]));
+    return uids
+        .map(uid => profileMap.get(uid))
+        .filter(Boolean) as UserProfileData[];
 };
 
 /**
