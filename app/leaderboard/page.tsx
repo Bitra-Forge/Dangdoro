@@ -81,7 +81,7 @@ function LeaderboardContent() {
                     setPlayers(rankedMembers);
                 }
             } else if (activeTab === "global") {
-                const tops = await getLeaderboard(100);
+                const tops = await getLeaderboard(150);
                 if (isMounted) {
                     const nonGuests = tops.filter(
                         (player: any) => !player.isAnonymous
@@ -89,14 +89,14 @@ function LeaderboardContent() {
                     setPlayers(nonGuests);
                 }
             } else if (activeTab === "friends") {
-                const friendsTops = await getFriendsLeaderboard(user!.uid, 100);
+                const friendsTops = await getFriendsLeaderboard(user!.uid, 200);
                 if (isMounted) setPlayers(friendsTops);
             } else if (activeTab === "groups") {
                 const groups = await getGroupLeaderboard({
                     userId: user!.uid,
                     filter: "joined",
                     sortBy: "minutes",
-                    limitCount: 100
+                    limitCount: 200
                 });
                 if (isMounted) setPlayers(groups);
             }
@@ -108,6 +108,10 @@ function LeaderboardContent() {
             isMounted = false;
         };
     }, [user, authLoading, activeTab, selectedGroup, searchParams]);
+
+    const handleSeeMore = () => {
+        setVisibleCount(prev => prev + 20);
+    };
 
     const { topThree, others, userRank, currentUserData, podiumOrder } = useMemo(() => {
         const top3 = players.slice(0, 3);
@@ -329,7 +333,7 @@ function LeaderboardContent() {
                                     {players.length > visibleCount && (
                                         <div className="flex justify-center w-full pt-6">
                                             <button
-                                                onClick={() => setVisibleCount(prev => prev + 20)}
+                                                onClick={handleSeeMore}
                                                 className="px-8 py-3 rounded-full border border-white/10 hover:border-[#C9B037]/40 bg-zinc-900/50 hover:bg-zinc-900/80 text-xs font-black uppercase tracking-widest text-zinc-400 hover:text-[#C9B037] transition-all duration-300 shadow-sm hover:shadow-[0_0_25px_rgba(201,176,55,0.1)] active:scale-95 cursor-pointer"
                                             >
                                                 See More
@@ -456,7 +460,7 @@ function LeaderboardContent() {
                             {players.length > visibleCount && (
                                 <div className="flex justify-center w-full -mt-8">
                                     <button
-                                        onClick={() => setVisibleCount(prev => prev + 20)}
+                                        onClick={handleSeeMore}
                                         className="px-8 py-3 rounded-full border border-white/10 hover:border-[#C9B037]/40 bg-zinc-900/50 hover:bg-zinc-900/80 text-xs font-black uppercase tracking-widest text-zinc-400 hover:text-[#C9B037] transition-all duration-300 shadow-sm hover:shadow-[0_0_25px_rgba(201,176,55,0.1)] active:scale-95 cursor-pointer"
                                     >
                                         See More

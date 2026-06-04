@@ -505,6 +505,7 @@ export const getLeaderboard = async (limitCount: number = 10) => {
     }));
 };
 
+
 /**
  * Fetches focus groups for the leaderboard with filtering and sorting.
  * Sorting is done client-side to avoid composite Firestore index requirements.
