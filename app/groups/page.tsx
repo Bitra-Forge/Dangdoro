@@ -82,10 +82,10 @@ export default function GroupsPage() {
 
                 if (memberId === user?.uid) {
                     memberDetails.push({
+                        ...stats,
                         uid: user.uid,
                         displayName: hydration?.displayName || user.displayName || liveDisplayName || "You",
                         photoURL: hydration?.photoURL || user.photoURL || livePhotoURL || null,
-                        ...stats,
                         isFocusing,
                         liveSessionStartedAt: memberLiveSession?.startedAt || null,
                         role,
@@ -94,9 +94,9 @@ export default function GroupsPage() {
                 } else if (friend?.userData) {
                     memberDetails.push({
                         ...friend.userData,
+                        ...stats,
                         displayName: friend.userData.displayName || liveDisplayName || "Member",
                         photoURL: friend.userData.photoURL || livePhotoURL || null,
-                        ...stats,
                         isFocusing,
                         liveSessionStartedAt: memberLiveSession?.startedAt || null,
                         role,
@@ -105,9 +105,9 @@ export default function GroupsPage() {
                 } else if (hydration) {
                     memberDetails.push({
                         ...hydration,
+                        ...stats,
                         displayName: hydration.displayName || liveDisplayName || "Member",
                         photoURL: hydration.photoURL || livePhotoURL || null,
-                        ...stats,
                         isFocusing,
                         liveSessionStartedAt: memberLiveSession?.startedAt || null,
                         role,
@@ -115,10 +115,10 @@ export default function GroupsPage() {
                     });
                 } else {
                     memberDetails.push({
+                        ...stats,
                         uid: memberId,
                         displayName: liveDisplayName || "Member",
                         photoURL: livePhotoURL || null,
-                        ...stats,
                         isFocusing,
                         liveSessionStartedAt: memberLiveSession?.startedAt || null,
                         role,

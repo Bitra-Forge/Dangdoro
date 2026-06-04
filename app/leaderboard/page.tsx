@@ -73,9 +73,15 @@ function LeaderboardContent() {
                     const profiles: any = await fetchUserProfiles(memberUids);
                     
                     const rankedMembers = memberUids.map((uid: string) => {
-                        const profile = profiles.find((p: any) => p.uid === uid) || { displayName: "Member" };
+                        const profile = profiles.find((p: any) => p.uid === uid) || {};
                         const stats = groupToLoad.memberStats?.[uid] || { totalMinutes: 0 };
-                        return { ...profile, ...stats, uid };
+                        return {
+                            ...profile,
+                            ...stats,
+                            displayName: profile.displayName || stats.displayName || "Member",
+                            photoURL: profile.photoURL || stats.photoURL || null,
+                            uid
+                        };
                     }).sort((a: any, b: any) => (b.totalMinutes || 0) - (a.totalMinutes || 0));
 
                     setPlayers(rankedMembers);
