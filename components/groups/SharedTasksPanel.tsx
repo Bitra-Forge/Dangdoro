@@ -198,7 +198,7 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
 
     return (
         <div className="space-y-6">
-            {isAdmin && !openAdd && (
+            {!openAdd && (
                 <button 
                     onClick={() => setOpenAdd(true)} 
                     className="w-full p-5 flex items-center gap-4 bg-zinc-900 border-none rounded-[10px] group/mgt transition-all duration-300 relative overflow-hidden cursor-pointer"
@@ -511,24 +511,15 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                         ].map((tpl) => (
                             <button
                                 key={tpl.id}
-                                disabled={!isAdmin}
                                 onClick={() => onTemplateSelect?.(tpl.id)}
-                                className={cn(
-                                    "flex flex-col items-center gap-2 p-4 bg-zinc-900/60 border border-white/5 rounded-2xl transition-all group",
-                                    isAdmin ? "hover:border-[white]/40" : "opacity-55 cursor-not-allowed"
-                                )}
-                                title={isAdmin ? `Use "${tpl.title}" template` : "Only hosts/admins can create shared objectives"}
+                                className="flex flex-col items-center gap-2 p-4 bg-zinc-900/60 border border-white/5 rounded-2xl transition-all group hover:border-[white]/40 cursor-pointer"
+                                title={`Use "${tpl.title}" template`}
                             >
                                 <tpl.icon className="w-4 h-4 text-zinc-600 group-hover:text-[white]" />
                                 <span className="text-[9px] font-black uppercase text-zinc-500 tracking-wider text-center">{tpl.title}</span>
                             </button>
                         ))}
                     </div>
-                    {!isAdmin && (
-                        <p className="text-center text-[10px] text-zinc-600">
-                            Shared objective templates are available to hosts and admins.
-                        </p>
-                    )}
                 </div>
             )}
 
@@ -540,7 +531,7 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
             >
                 {incompleteTasks.map((task: any, i: number) => {
                     const isEditing = editingTaskId === task.id;
-                    const canEdit = isAdmin || task.assignedTo === currentUserId || task.assignedTo === "all";
+                    const canEdit = isAdmin || task.assignedTo === "all" || task.assignedTo === currentUserId;
                     const statusConfig = TASK_STATUS_CONFIG[task.status] || TASK_STATUS_CONFIG.todo;
                     const StatusIcon = statusConfig.icon;
 
@@ -640,35 +631,39 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                     )}
                                 </div>
 
-                                {isAdmin && (
+                                {canEdit && (
                                     <div className="flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-all shrink-0">
                                         <button 
                                             onClick={() => startEditing(task)} 
-                                            className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 rounded-md transition-all" 
+                                            className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 rounded-md transition-all cursor-pointer" 
                                             title="Edit objective"
                                         >
                                             <Edit2 className="w-4 h-4" />
                                         </button>
-                                        <button 
-                                            disabled={i === 0}
-                                            onClick={() => handleMoveIncomplete(task, 'up')}
-                                            className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all"
-                                            title="Move Up"
-                                        >
-                                            <ChevronUp className="w-4 h-4" />
-                                        </button>
-                                        <button 
-                                            disabled={i === incompleteTasks.length - 1}
-                                            onClick={() => handleMoveIncomplete(task, 'down')}
-                                            className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all"
-                                            title="Move Down"
-                                        >
-                                            <ChevronDown className="w-4 h-4" />
-                                        </button>
+                                        {isAdmin && (
+                                            <>
+                                                <button 
+                                                    disabled={i === 0}
+                                                    onClick={() => handleMoveIncomplete(task, 'up')}
+                                                    className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all cursor-pointer"
+                                                    title="Move Up"
+                                                >
+                                                    <ChevronUp className="w-4 h-4" />
+                                                </button>
+                                                <button 
+                                                    disabled={i === incompleteTasks.length - 1}
+                                                    onClick={() => handleMoveIncomplete(task, 'down')}
+                                                    className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all cursor-pointer"
+                                                    title="Move Down"
+                                                >
+                                                    <ChevronDown className="w-4 h-4" />
+                                                </button>
+                                            </>
+                                        )}
                                         <button
                                             onClick={() => onDelete(task.id)}
                                             title="Delete objective"
-                                            className="p-1 text-zinc-700 hover:bg-red-500/10 hover:text-red-500 rounded-md transition-all"
+                                            className="p-1 text-zinc-700 hover:bg-red-500/10 hover:text-red-500 rounded-md transition-all cursor-pointer"
                                         >
                                             <X className="w-4 h-4" />
                                         </button>
@@ -738,7 +733,7 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
             >
                 {completedTasks.map((task: any, i: number) => {
                     const isEditing = editingTaskId === task.id;
-                    const canEdit = isAdmin || task.assignedTo === currentUserId || task.assignedTo === "all";
+                    const canEdit = isAdmin || task.assignedTo === "all" || task.assignedTo === currentUserId;
                     const statusConfig = TASK_STATUS_CONFIG[task.status] || TASK_STATUS_CONFIG.todo;
                     const StatusIcon = statusConfig.icon;
 
@@ -838,35 +833,39 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                     )}
                                 </div>
 
-                                {isAdmin && (
+                                {canEdit && (
                                     <div className="flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-all shrink-0">
                                         <button 
                                             onClick={() => startEditing(task)} 
-                                            className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 rounded-md transition-all" 
+                                            className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 rounded-md transition-all cursor-pointer" 
                                             title="Edit objective"
                                         >
                                             <Edit2 className="w-4 h-4" />
                                         </button>
-                                        <button 
-                                            disabled={i === 0}
-                                            onClick={() => handleMoveCompleted(task, 'up')}
-                                            className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all"
-                                            title="Move Up"
-                                        >
-                                            <ChevronUp className="w-4 h-4" />
-                                        </button>
-                                        <button 
-                                            disabled={i === completedTasks.length - 1}
-                                            onClick={() => handleMoveCompleted(task, 'down')}
-                                            className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all"
-                                            title="Move Down"
-                                        >
-                                            <ChevronDown className="w-4 h-4" />
-                                        </button>
+                                        {isAdmin && (
+                                            <>
+                                                <button 
+                                                    disabled={i === 0}
+                                                    onClick={() => handleMoveCompleted(task, 'up')}
+                                                    className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all cursor-pointer"
+                                                    title="Move Up"
+                                                >
+                                                    <ChevronUp className="w-4 h-4" />
+                                                </button>
+                                                <button 
+                                                    disabled={i === completedTasks.length - 1}
+                                                    onClick={() => handleMoveCompleted(task, 'down')}
+                                                    className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all cursor-pointer"
+                                                    title="Move Down"
+                                                >
+                                                    <ChevronDown className="w-4 h-4" />
+                                                </button>
+                                            </>
+                                        )}
                                         <button
                                             onClick={() => onDelete(task.id)}
                                             title="Delete objective"
-                                            className="p-1 text-zinc-700 hover:bg-red-500/10 hover:text-red-500 rounded-md transition-all"
+                                            className="p-1 text-zinc-700 hover:bg-red-500/10 hover:text-red-500 rounded-md transition-all cursor-pointer"
                                         >
                                             <X className="w-4 h-4" />
                                         </button>

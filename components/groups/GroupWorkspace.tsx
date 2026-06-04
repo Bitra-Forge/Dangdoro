@@ -265,7 +265,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
 
     // Handlers
     const handleAddTask = async (title: string, priority: string = "medium", assignedTo: string = "all", silent: boolean = false, description: string = "") => {
-        if (!isAdmin || !user) return;
+        if (!isMember || !user) return;
         const maxPos = tasks.length > 0 ? Math.max(...tasks.map(t => t.position ?? 0)) : 0;
         await addDoc(collection(db, `focusGroups/${groupId}/tasks`), {
             title, priority, assignedTo, description, status: "todo",
@@ -288,6 +288,9 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     };
 
     const handleUpdateTask = async (taskId: string, updates: any) => {
+        const task = tasks.find(t => t.id === taskId);
+        const canUpdate = isAdmin || (task && (task.assignedTo === user?.uid || task.assignedTo === "all"));
+        if (!canUpdate || !user) return;
         await updateDoc(doc(db, `focusGroups/${groupId}/tasks`, taskId), { ...updates, updatedAt: serverTimestamp() });
     };
 
@@ -318,7 +321,9 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     };
 
     const handleDeleteTask = async (taskId: string) => {
-        if (!isAdmin) return;
+        const task = tasks.find(t => t.id === taskId);
+        const canDelete = isAdmin || (task && (task.assignedTo === user?.uid || task.assignedTo === "all"));
+        if (!canDelete || !user) return;
         await deleteDoc(doc(db, `focusGroups/${groupId}/tasks`, taskId));
         toast.success("Objective deleted.");
     };
@@ -767,7 +772,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                                 prefillTemplate={objectiveTemplateDraft}
                                                 onPrefillHandled={() => setObjectiveTemplateDraft(null)}
                                                 onTemplateSelect={(templateId: "deep-work" | "review-respond" | "learning-sprint") => {
-                                                    if (!isAdmin) return;
+                                                    if (!isMember) return;
                                                     const dateLabel = new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" });
                                                     if (templateId === "deep-work") {
                                                         setObjectiveTemplateDraft({
