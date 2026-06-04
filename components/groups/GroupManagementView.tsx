@@ -17,29 +17,59 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
     const isAdmin = userRole === "admin";
     const isHostOrAdmin = isHost || isAdmin;
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
-    const [goalType, setGoalType] = useState<GoalType>(group.settings?.goalType || "weekly");
-    const [customDays, setCustomDays] = useState<string>("");
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
-    const [name, setName] = useState(group.name || "");
 
+    // Draft states for Unit Configuration
+    const [draftName, setDraftName] = useState(group.name || "");
+    const [draftGoalHours, setDraftGoalHours] = useState(String(group.settings?.goalHours ?? ""));
+    const [draftMaxMembers, setDraftMaxMembers] = useState(String(group.settings?.maxMembers ?? ""));
+    const [draftGoalType, setDraftGoalType] = useState<GoalType>(group.settings?.goalType || "weekly");
+    const [draftCustomDays, setDraftCustomDays] = useState(group.settings?.customDays ? String(group.settings.customDays) : "");
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Sync draft states when group updates from Firestore
     useEffect(() => {
-        setName(group.name || "");
-    }, [group.name]);
+        setDraftName(group.name || "");
+        setDraftGoalHours(String(group.settings?.goalHours ?? ""));
+        setDraftMaxMembers(String(group.settings?.maxMembers ?? ""));
+        setDraftGoalType(group.settings?.goalType || "weekly");
+        setDraftCustomDays(group.settings?.customDays ? String(group.settings.customDays) : "");
+    }, [group.name, group.settings?.goalHours, group.settings?.maxMembers, group.settings?.goalType, group.settings?.customDays]);
 
-    const handleNameBlur = async () => {
-        if (!name.trim() || name.trim() === group.name) return;
+    const hasChanges = 
+        draftName.trim() !== (group.name || "").trim() ||
+        draftGoalHours !== String(group.settings?.goalHours ?? "") ||
+        draftMaxMembers !== String(group.settings?.maxMembers ?? "") ||
+        draftGoalType !== (group.settings?.goalType || "weekly") ||
+        (draftGoalType === "custom" && draftCustomDays !== (group.settings?.customDays ? String(group.settings.customDays) : ""));
+
+    const handleSave = async () => {
+        if (!hasChanges || isSaving) return;
+        setIsSaving(true);
         try {
-            await updateDoc(doc(db, "focusGroups", group.id), { name: name.trim() });
-            toast.success("Group name updated!");
+            const updates: any = {
+                name: draftName.trim(),
+                "settings.goalHours": parseInt(draftGoalHours) || 0,
+                "settings.maxMembers": parseInt(draftMaxMembers) || 0,
+                "settings.goalType": draftGoalType,
+            };
+            if (draftGoalType === "custom") {
+                updates["settings.customDays"] = parseInt(draftCustomDays) || 7;
+            } else {
+                updates["settings.customDays"] = null;
+            }
+            await updateDoc(doc(db, "focusGroups", group.id), updates);
+            toast.success("Group configuration saved!");
         } catch (error) {
-            console.error("Failed to update group name:", error);
-            toast.error("Failed to update group name.");
-            setName(group.name || "");
+            console.error("Failed to save configuration:", error);
+            toast.error("Failed to save configuration.");
+        } finally {
+            setIsSaving(false);
         }
     };
 
-    const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === "Enter") {
             e.currentTarget.blur();
         }
@@ -69,35 +99,6 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
         }
     };
 
-    useEffect(() => {
-        setGoalType(group.settings?.goalType || "weekly");
-        if (group.settings?.goalType === "custom" && group.settings?.customDays) {
-            setCustomDays(String(group.settings.customDays));
-        }
-    }, [group.settings?.goalType, group.settings?.customDays]);
-
-    const handleGoalTypeChange = async (newType: GoalType) => {
-        setGoalType(newType);
-        const updates: any = { "settings.goalType": newType };
-        if (newType !== "custom") {
-            updates["settings.customDays"] = null;
-        }
-        await updateDoc(doc(db, "focusGroups", group.id), updates);
-        toast.success(`Goal set to ${getGoalTypeLabel(newType).toLowerCase()}`);
-    };
-
-
-    const handleCustomDaysChange = async (daysStr: string) => {
-        setCustomDays(daysStr);
-        const days = parseInt(daysStr);
-        if (days > 0) {
-            await updateDoc(doc(db, "focusGroups", group.id), {
-                "settings.goalType": "custom",
-                "settings.customDays": days,
-            });
-        }
-    };
-
     const hostMembers    = group.memberDetails?.filter((m: any) => m.role === "host") ?? [];
     const adminMembers   = group.memberDetails?.filter((m: any) => m.role === "admin") ?? [];
     const regularMembers = group.memberDetails?.filter((m: any) => m.role === "member") ?? [];
@@ -106,9 +107,22 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
         <div className="space-y-12 animate-in fade-in slide-in-from-right-4 duration-150">
             {isHostOrAdmin && (
                 <div className="space-y-6">
-                    <div>
-                        <h3 className="text-lg font-bold text-white mb-1">Unit Configuration</h3>
-                        <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Manage core parameters.</p>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h3 className="text-lg font-bold text-white mb-1">Unit Configuration</h3>
+                            <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Manage core parameters.</p>
+                        </div>
+                        <button
+                            onClick={handleSave}
+                            disabled={!hasChanges || isSaving}
+                            className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                                hasChanges
+                                    ? "bg-white text-black hover:bg-zinc-200"
+                                    : "bg-zinc-900 text-zinc-600 cursor-not-allowed"
+                            }`}
+                        >
+                            {isSaving ? "Saving..." : hasChanges ? "Save" : "Saved"}
+                        </button>
                     </div>
 
                     <div className="p-5 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4">
@@ -118,10 +132,9 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                         </div>
                         <input 
                             type="text" 
-                            value={name} 
-                            onChange={(e) => setName(e.target.value)}
-                            onBlur={handleNameBlur}
-                            onKeyDown={handleNameKeyDown}
+                            value={draftName} 
+                            onChange={(e) => setDraftName(e.target.value)}
+                            onKeyDown={handleKeyDown}
                             placeholder="Unit Name" 
                             className="w-full bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-[white]/40 outline-none" 
                         />
@@ -137,16 +150,23 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                                 <div className="flex items-center gap-2 flex-1">
                                     <input 
                                         type="number" 
-                                        value={group.settings?.goalHours || ""} 
-                                        onChange={(e) => updateDoc(doc(db, "focusGroups", group.id), { "settings.goalHours": parseInt(e.target.value) || 0 })}
+                                        value={draftGoalHours} 
+                                        onChange={(e) => setDraftGoalHours(e.target.value)}
+                                        onKeyDown={handleKeyDown}
                                         placeholder="e.g. 100" 
                                         className="w-full bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-[white]/40 outline-none appearance-none" 
                                     />
                                     <div className="flex flex-col gap-1">
-                                        <button onClick={() => updateDoc(doc(db, "focusGroups", group.id), { "settings.goalHours": (group.settings?.goalHours || 0) + 1 })} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all">
+                                        <button 
+                                            onClick={() => setDraftGoalHours(prev => String(Math.max(0, (parseInt(prev) || 0) + 1)))} 
+                                            className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all"
+                                        >
                                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
                                         </button>
-                                        <button onClick={() => updateDoc(doc(db, "focusGroups", group.id), { "settings.goalHours": Math.max(0, (group.settings?.goalHours || 0) - 1) })} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all">
+                                        <button 
+                                            onClick={() => setDraftGoalHours(prev => String(Math.max(0, (parseInt(prev) || 0) - 1)))} 
+                                            className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all"
+                                        >
                                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                                         </button>
                                     </div>
@@ -164,16 +184,23 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                                 <div className="flex items-center gap-2 flex-1">
                                     <input 
                                         type="number" 
-                                        value={group.settings?.maxMembers || ""} 
-                                        onChange={(e) => updateDoc(doc(db, "focusGroups", group.id), { "settings.maxMembers": parseInt(e.target.value) || 0 })}
+                                        value={draftMaxMembers} 
+                                        onChange={(e) => setDraftMaxMembers(e.target.value)}
+                                        onKeyDown={handleKeyDown}
                                         placeholder="No Limit" 
                                         className="w-full bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-[white]/40 outline-none appearance-none" 
                                     />
                                     <div className="flex flex-col gap-1">
-                                        <button onClick={() => updateDoc(doc(db, "focusGroups", group.id), { "settings.maxMembers": (group.settings?.maxMembers || 0) + 1 })} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all">
+                                        <button 
+                                            onClick={() => setDraftMaxMembers(prev => String(Math.max(0, (parseInt(prev) || 0) + 1)))} 
+                                            className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all"
+                                        >
                                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
                                         </button>
-                                        <button onClick={() => updateDoc(doc(db, "focusGroups", group.id), { "settings.maxMembers": Math.max(0, (group.settings?.maxMembers || 0) - 1) })} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all">
+                                        <button 
+                                            onClick={() => setDraftMaxMembers(prev => String(Math.max(0, (parseInt(prev) || 0) - 1)))} 
+                                            className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all"
+                                        >
                                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                                         </button>
                                     </div>
@@ -193,10 +220,10 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                                 {([ "daily", "weekly", "monthly", "custom" ] as GoalType[]).map((type) => (
                                     <button
                                         key={type}
-                                        onClick={() => handleGoalTypeChange(type)}
+                                        onClick={() => setDraftGoalType(type)}
                                         className={cn(
                                             "py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all",
-                                            goalType === type
+                                            draftGoalType === type
                                                 ? "bg-white text-black"
                                                 : "bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800"
                                         )}
@@ -205,22 +232,29 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                                     </button>
                                 ))}
                             </div>
-                            {goalType === "custom" && (
+                            {draftGoalType === "custom" && (
                                 <div className="flex items-center gap-3">
                                     <div className="flex items-center gap-2 flex-1">
                                         <input
                                             type="number"
                                             min={1}
-                                            value={customDays}
-                                            onChange={(e) => handleCustomDaysChange(e.target.value)}
+                                            value={draftCustomDays}
+                                            onChange={(e) => setDraftCustomDays(e.target.value)}
+                                            onKeyDown={handleKeyDown}
                                             placeholder="e.g. 14"
                                             className="w-full bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-[white]/40 outline-none appearance-none"
                                         />
                                         <div className="flex flex-col gap-1">
-                                            <button onClick={() => handleCustomDaysChange(String(parseInt(customDays || "0") + 1))} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all">
+                                            <button 
+                                                onClick={() => setDraftCustomDays(prev => String(Math.max(1, (parseInt(prev) || 1) + 1)))} 
+                                                className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all"
+                                            >
                                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
                                             </button>
-                                            <button onClick={() => handleCustomDaysChange(String(Math.max(1, parseInt(customDays || "1") - 1)))} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all">
+                                            <button 
+                                                onClick={() => setDraftCustomDays(prev => String(Math.max(1, (parseInt(prev) || 1) - 1)))} 
+                                                className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all"
+                                            >
                                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                                             </button>
                                         </div>
@@ -228,9 +262,9 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                                     <span className="text-zinc-600 font-bold text-xs uppercase whitespace-nowrap">Days</span>
                                 </div>
                             )}
-                            {goalType !== "custom" && (
+                            {draftGoalType !== "custom" && (
                                 <p className="text-[10px] text-zinc-600">
-                                    Resets every {goalType === "daily" ? "day" : goalType === "weekly" ? "week (Sunday)" : "month (1st)"}
+                                    Resets every {draftGoalType === "daily" ? "day" : draftGoalType === "weekly" ? "week (Sunday)" : "month (1st)"}
                                 </p>
                             )}
                         </div>
