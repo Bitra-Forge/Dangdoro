@@ -167,14 +167,19 @@ export function NotesPanel() {
   const charCount = plainText.length;
 
   return (
-    <AnimatePresence initial={false} mode="wait">
+    <AnimatePresence initial={false}>
       {isOpen && (
         <motion.div
           key="quick-notes-panel"
           ref={panelRef}
-          initial={{ scale: 0.96, y: 10 }}
-          animate={{ scale: 1, y: 0 }}
-          exit={{ scale: 0.96, y: 10 }}
+          initial={{ opacity: 1, scale: 0.96, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ 
+            opacity: 0, 
+            scale: 0.96, 
+            y: 10,
+            transition: { duration: 0.15, ease: "easeIn" }
+          }}
           transition={{ type: "spring", stiffness: 360, damping: 34, mass: 0.7 }}
           className="fixed left-1/2 -translate-x-1/2 bottom-40 sm:bottom-28 w-[92vw] sm:w-full max-w-[420px] transform origin-bottom z-[60]"
         >

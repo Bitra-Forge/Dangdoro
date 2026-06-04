@@ -68,6 +68,7 @@ export function FloatingNotesTrigger() {
           <button
             key={tool.id}
             onClick={tool.onClick}
+            data-quick-action-trigger="true"
             className={cn(
               "w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-300 group relative border backdrop-blur-xl shadow-[0_10px_24px_rgba(0,0,0,0.45)]",
               tool.active
@@ -86,6 +87,7 @@ export function FloatingNotesTrigger() {
           if (isAnyPanelOpen) return;
           setIsExpanded((value) => !value);
         }}
+        data-quick-action-trigger="true"
         className={cn(
           "w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-300 group relative border backdrop-blur-xl shadow-[0_10px_24px_rgba(0,0,0,0.45)]",
           isDockActive
