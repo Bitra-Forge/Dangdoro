@@ -48,25 +48,51 @@ export const ParticipantsTab = memo(function ParticipantsTab({ group, sortedMemb
                 </div>
             </div>
 
-            {activeOrPausedMembers.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {activeOrPausedMembers.map((m: any, i: number) => (
-                        <motion.div 
-                            key={m.uid}
-                            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            transition={{ duration: 0.3, delay: i * 0.05 }}
-                        >
-                            <UserCard m={m} isMe={m.uid === user.uid} memberNowMs={memberNowMs} />
-                        </motion.div>
-                    ))}
-                </div>
-            ) : (
-                <div className="p-12 text-center bg-zinc-900/20 border border-white/5 border-dashed rounded-[2rem] space-y-4">
-                    <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center mx-auto text-zinc-600"><Users className="w-8 h-8" /></div>
-                    <p className="text-sm text-zinc-500 font-medium">No one is currently focusing in this unit.</p>
-                </div>
-            )}
+            <div className="space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-widest text-zinc-500">Active Now</h4>
+                {activeOrPausedMembers.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {activeOrPausedMembers.map((m: any, i: number) => (
+                            <motion.div 
+                                key={`active-${m.uid}`}
+                                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                transition={{ duration: 0.3, delay: i * 0.05 }}
+                            >
+                                <UserCard m={m} isMe={m.uid === user.uid} memberNowMs={memberNowMs} />
+                            </motion.div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="p-12 text-center bg-zinc-900/20 border border-white/5 border-dashed rounded-[2rem] space-y-4">
+                        <div className="w-16 h-16 rounded-full bg-zinc-800/40 flex items-center justify-center mx-auto text-zinc-600"><Users className="w-8 h-8" /></div>
+                        <p className="text-sm text-zinc-500 font-medium">No one is currently focusing in this unit.</p>
+                    </div>
+                )}
+            </div>
+
+            <div className="space-y-4 pt-4 border-t border-white/5">
+                <h4 className="text-xs font-black uppercase tracking-widest text-zinc-500">All Members</h4>
+                {sortedMembers.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {sortedMembers.map((m: any, i: number) => (
+                            <motion.div 
+                                key={`all-${m.uid}`}
+                                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                transition={{ duration: 0.3, delay: i * 0.05 }}
+                            >
+                                <UserCard m={m} isMe={m.uid === user.uid} memberNowMs={memberNowMs} />
+                            </motion.div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="p-12 text-center bg-zinc-900/20 border border-white/5 border-dashed rounded-[2rem] space-y-4">
+                        <div className="w-16 h-16 rounded-full bg-zinc-800/40 flex items-center justify-center mx-auto text-zinc-600"><Users className="w-8 h-8" /></div>
+                        <p className="text-sm text-zinc-500 font-medium">There are no members in this unit.</p>
+                    </div>
+                )}
+            </div>
         </div>
     );
 });
