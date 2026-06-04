@@ -47,7 +47,7 @@ export function Header() {
 
             <div className="flex items-center gap-6">
                 <div className="hidden md:flex flex-col items-end mr-2 text-right">
-                    <span className="text-[10px] font-black text-white uppercase italic tracking-tighter leading-none">
+                    <span className="text-[10px] font-black text-white italic tracking-tighter leading-none">
                         {loading ? "Detecting..." : (user?.displayName || "Initializng...")}
                     </span>
                     <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-widest mt-1">

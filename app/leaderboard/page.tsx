@@ -446,7 +446,7 @@ function LeaderboardContent() {
                                                     </Avatar>
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-bold text-zinc-300 group-hover:text-white transition-colors uppercase tracking-wider">{player.displayName}</p>
+                                                    <p className="text-sm font-bold text-zinc-300 group-hover:text-white transition-colors tracking-wider">{player.displayName}</p>
                                                 </div>
                                                 <div className="flex items-center pr-4 text-right">
                                                     <div className="flex items-center gap-1.5 justify-end">

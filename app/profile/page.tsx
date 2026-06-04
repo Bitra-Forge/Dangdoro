@@ -985,7 +985,7 @@ function ProfileContent() {
                                             value={editName}
                                             onChange={e => setEditName(e.target.value)}
                                             placeholder="Identity Name"
-                                            className="bg-transparent border-b border-white/10 text-4xl md:text-5xl font-black text-white tracking-tighter focus:outline-none focus:border-white/30 transition-all w-full py-1 h-16 uppercase"
+                                            className="bg-transparent border-b border-white/10 text-4xl md:text-5xl font-black text-white tracking-tighter focus:outline-none focus:border-white/30 transition-all w-full py-1 h-16"
                                         />
 
                                         <textarea
@@ -1019,7 +1019,7 @@ function ProfileContent() {
                                         animate={{ opacity: 1 }}
                                         className="flex flex-col items-center md:items-start w-full max-w-2xl"
                                     >
-                                        <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter mb-4 uppercase drop-shadow-[0_0_40px_rgba(255,255,255,0.1)] mt-2">
+                                        <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter mb-4 drop-shadow-[0_0_40px_rgba(255,255,255,0.1)] mt-2">
                                             {userData?.displayName || "New Pilot"}
                                         </h1>
 
