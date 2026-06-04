@@ -298,7 +298,11 @@ export default function GroupsPage() {
     const handleJoinByCode = async (code: string) => {
         if (!user || !code.trim()) return;
         try {
-            const q = query(collection(db, "focusGroups"), where("accessCode", "==", code.trim().toUpperCase()));
+            const q = query(
+                collection(db, "focusGroups"), 
+                where("privacy", "==", "private-code"),
+                where("accessCode", "==", code.trim().toUpperCase())
+            );
             const snap = await getDocs(q);
             if (snap.empty) {
                 toast.error("Invalid or expired access code");
@@ -324,6 +328,7 @@ export default function GroupsPage() {
             toast.success(`Joined "${groupData.name}"!`);
             setShowJoinCodeModal(false);
         } catch (error) {
+            console.error("Error joining group by code:", error);
             toast.error("Error joining group");
         }
     };
