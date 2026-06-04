@@ -127,10 +127,12 @@ const MAX_AVATARS = 10;
 function OrbitalAvatarComponent({
   session,
   latestPhoto,
+  latestName,
   overrideElapsedSecs,
 }: {
   session: LiveSession;
   latestPhoto?: string;
+  latestName?: string;
   /** When set, bypasses the startedAt calculation and uses this value directly.
    *  Used for the local user so the tooltip stays in perfect sync with the timer. */
   overrideElapsedSecs?: number;
@@ -198,6 +200,7 @@ function OrbitalAvatarComponent({
     ? overrideElapsedSecs
     : startedAtMs ? Math.max(0, Math.floor((now - startedAtMs) / 1000)) : 0;
 
+  const displayName = latestName || session.userName;
 
   const getInitials = useCallback((name: string) => {
     const parts = name.split(/[\s_]+/).filter(Boolean);
@@ -269,13 +272,13 @@ function OrbitalAvatarComponent({
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={photoUrl!}
-                  alt={session.userName}
+                  alt={displayName}
                   className="w-full h-full object-cover"
                 />
               ) : (
                 <div className={cn("w-full h-full bg-gradient-to-br flex items-center justify-center bg-zinc-900", accent.gradient)}>
                   <span className="text-[11px] font-black text-white/90 drop-shadow-md tracking-wide">
-                    {getInitials(session.userName)}
+                    {getInitials(displayName)}
                   </span>
                 </div>
               )}
@@ -302,7 +305,7 @@ function OrbitalAvatarComponent({
               >
                 <div className="relative px-3.5 py-2.5 bg-zinc-900/95 backdrop-blur-2xl border border-white/[0.08] rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.7)] whitespace-nowrap">
                   <div className={cn("absolute top-0 left-2.5 right-2.5 h-[1.5px] rounded-full opacity-50", accent.glow)} />
-                  <p className="text-[11px] font-bold text-zinc-100 tracking-tight">{session.userName}</p>
+                  <p className="text-[11px] font-bold text-zinc-100 tracking-tight">{displayName}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", accent.dot)} />
                     <p className={cn("text-[10px] font-bold tabular-nums", accent.text)}>
@@ -332,6 +335,7 @@ const OrbitalAvatar = React.memo(OrbitalAvatarComponent, (prev, next) => {
     toMillis(prev.session.startedAt) === toMillis(next.session.startedAt) &&
     toMillis(prev.session.pausedAt) === toMillis(next.session.pausedAt) &&
     prev.latestPhoto === next.latestPhoto &&
+    prev.latestName === next.latestName &&
     prev.overrideElapsedSecs === next.overrideElapsedSecs
   );
 });
@@ -340,23 +344,25 @@ const OrbitalAvatar = React.memo(OrbitalAvatarComponent, (prev, next) => {
 
 function PausedAvatarItem({
   s,
-  userPhotos,
+  userProfiles,
   hoveredId,
   setHoveredId,
   onNavigate,
 }: {
   s: LiveSession;
-  userPhotos: Record<string, string>;
+  userProfiles: Record<string, { photoURL?: string; displayName?: string }>;
   hoveredId: string | null;
   setHoveredId: (id: string | null) => void;
   onNavigate: (userId: string) => void;
 }) {
   const accent = ACCENT_COLORS[stableColorIndex(s.userId)];
+  const profile = userProfiles[s.userId];
   const isValidPhoto = (url: any) => url && typeof url === 'string' && url.trim() !== '' && url !== 'null' && url !== 'undefined';
-  const photoUrl = isValidPhoto(userPhotos[s.userId]) ? userPhotos[s.userId] : (isValidPhoto(s.userPhoto) ? s.userPhoto : null);
+  const photoUrl = isValidPhoto(profile?.photoURL) ? profile.photoURL : (isValidPhoto(s.userPhoto) ? s.userPhoto : null);
   const hasPhoto = !!photoUrl;
-  const parts = s.userName.split(/[\s_]+/).filter(Boolean);
-  const initials = parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : s.userName.slice(0, 2).toUpperCase();
+  const displayName = profile?.displayName || s.userName;
+  const parts = displayName.split(/[\s_]+/).filter(Boolean);
+  const initials = parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : displayName.slice(0, 2).toUpperCase();
   const startedAtMs = toMillis(s.startedAt);
   const endMs = toMillis(s.pausedAt) || toMillis(s.lastHeartbeat) || Date.now();
   const elapsed = startedAtMs ? Math.max(0, Math.floor((endMs - startedAtMs) / 1000)) : 0;
@@ -385,7 +391,7 @@ function PausedAvatarItem({
         )}>
           {hasPhoto ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={photoUrl!} alt={s.userName} className="w-full h-full object-cover" />
+            <img src={photoUrl!} alt={displayName} className="w-full h-full object-cover" />
           ) : (
             <div className={cn("w-full h-full bg-gradient-to-br flex items-center justify-center bg-zinc-800", accent.gradient)}>
               <span className="text-[9px] font-black text-white/90">{initials}</span>
@@ -404,7 +410,7 @@ function PausedAvatarItem({
             className="absolute top-full left-1/2 -translate-x-1/2 mt-2.5 pointer-events-none z-50 whitespace-nowrap"
           >
             <div className="px-3 py-2 bg-zinc-900/95 backdrop-blur-xl border border-white/[0.08] rounded-xl shadow-xl">
-              <p className="text-[11px] font-bold text-zinc-100">{s.userName}</p>
+              <p className="text-[11px] font-bold text-zinc-100">{displayName}</p>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                 <p className="text-[10px] font-bold text-amber-400 tabular-nums">{fmtElapsed(elapsed)} • paused</p>
@@ -420,10 +426,10 @@ function PausedAvatarItem({
 
 function PausedDock({
   sessions,
-  userPhotos,
+  userProfiles,
 }: {
   sessions: LiveSession[];
-  userPhotos: Record<string, string>;
+  userProfiles: Record<string, { photoURL?: string; displayName?: string }>;
 }) {
   const router = useRouter();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -460,7 +466,7 @@ function PausedDock({
               <PausedAvatarItem
                 key={s.userId}
                 s={s}
-                userPhotos={userPhotos}
+                userProfiles={userProfiles}
                 hoveredId={hoveredId}
                 setHoveredId={setHoveredId}
                 onNavigate={handleNavigate}
@@ -516,7 +522,7 @@ export function InlinePausedDock() {
   const { user } = useAuth();
   const activeGroupId = useTimerStore((s) => s.activeGroupId);
   const [pausedSessions, setPausedSessions] = useState<LiveSession[]>([]);
-  const [userPhotos, setUserPhotos] = useState<Record<string, string>>({});
+  const [userProfiles, setUserProfiles] = useState<Record<string, { photoURL?: string; displayName?: string }>>({});
 
   useEffect(() => {
     if (!activeGroupId || !user || user.isAnonymous) {
@@ -540,28 +546,43 @@ export function InlinePausedDock() {
   }, [activeGroupId, user]);
 
   useEffect(() => {
-    const missing = pausedSessions.map((s) => s.userId).filter((id) => !userPhotos[id]);
+    const missing = pausedSessions.map((s) => s.userId).filter((id) => !userProfiles[id]);
     if (missing.length === 0) return;
     let cancelled = false;
-    async function fetchPhotos() {
-      const photos: Record<string, string> = {};
-      for (let i = 0; i < missing.length; i += 30) {
-        const batch = missing.slice(i, i + 30);
-        const qP = query(collection(db, "users"), where("__name__", "in", batch));
-        const snap = await getDocs(qP);
-        snap.docs.forEach((d) => { if (d.data().photoURL) photos[d.id] = d.data().photoURL; });
+    async function fetchProfiles() {
+      const profiles: Record<string, { photoURL?: string; displayName?: string }> = {};
+      try {
+        for (let i = 0; i < missing.length; i += 30) {
+          const batch = missing.slice(i, i + 30);
+          const qP = query(collection(db, "users"), where("__name__", "in", batch));
+          const snap = await getDocs(qP);
+          snap.docs.forEach((d) => {
+            const data = d.data();
+            profiles[d.id] = {
+              photoURL: data.photoURL || undefined,
+              displayName: data.displayName || undefined,
+            };
+          });
+          batch.forEach((id) => {
+            if (!profiles[id]) {
+              profiles[id] = {};
+            }
+          });
+        }
+      } catch (err) {
+        console.error("Failed to fetch user profiles in InlinePausedDock:", err);
       }
-      if (!cancelled && Object.keys(photos).length > 0)
-        setUserPhotos((prev) => ({ ...prev, ...photos }));
+      if (!cancelled && Object.keys(profiles).length > 0)
+        setUserProfiles((prev) => ({ ...prev, ...profiles }));
     }
-    fetchPhotos();
+    fetchProfiles();
     return () => { cancelled = true; };
-  }, [pausedSessions, userPhotos]);
+  }, [pausedSessions, userProfiles]);
 
   return (
     <AnimatePresence>
       {pausedSessions.length > 0 && (
-        <PausedDock key="inline-paused-dock" sessions={pausedSessions} userPhotos={userPhotos} />
+        <PausedDock key="inline-paused-dock" sessions={pausedSessions} userProfiles={userProfiles} />
       )}
     </AnimatePresence>
   );
@@ -582,7 +603,7 @@ export function FloatingFocusAvatars() {
     : 0;
   const [rawSessions, setRawSessions] = useState<LiveSession[]>([]);
   const [now, setNow] = useState(() => Date.now());
-  const [userPhotos, setUserPhotos] = useState<Record<string, string>>({});
+  const [userProfiles, setUserProfiles] = useState<Record<string, { photoURL?: string; displayName?: string }>>({});
 
   // Local maps to record when each session was last received and its heartbeat to prevent clock drift issues
   const lastReceivedRef = useRef<Record<string, number>>({});
@@ -674,19 +695,19 @@ export function FloatingFocusAvatars() {
   // Track which user IDs are currently visible to fetch their photos
   const sessionUserIdsKey = useMemo(() => sessions.map((s) => s.userId).join(","), [sessions]);
 
-  // Fetch latest user photos whenever the set of visible users changes
+  // Fetch latest user profiles whenever the set of visible users changes
   useEffect(() => {
     if (!sessionUserIdsKey) return;
     const ids = sessionUserIdsKey.split(",");
 
     let cancelled = false;
 
-    async function fetchPhotos() {
+    async function fetchProfiles() {
       // Filter out user IDs we already have in cache
-      const missingIds = ids.filter(uid => !userPhotos[uid]);
+      const missingIds = ids.filter(uid => !userProfiles[uid]);
       if (missingIds.length === 0) return;
 
-      const photos: Record<string, string> = {};
+      const profiles: Record<string, { photoURL?: string; displayName?: string }> = {};
       try {
         // Fetch missing user profiles in batches of 30
         for (let i = 0; i < missingIds.length; i += 30) {
@@ -695,25 +716,31 @@ export function FloatingFocusAvatars() {
           const querySnap = await getDocs(qProfiles);
           querySnap.docs.forEach(docSnap => {
             const data = docSnap.data();
-            if (data.photoURL) {
-              photos[docSnap.id] = data.photoURL;
+            profiles[docSnap.id] = {
+              photoURL: data.photoURL || undefined,
+              displayName: data.displayName || undefined,
+            };
+          });
+          batchIds.forEach((id) => {
+            if (!profiles[id]) {
+              profiles[id] = {};
             }
           });
         }
       } catch (err) {
-        console.error("Failed to batch fetch user photos:", err);
+        console.error("Failed to batch fetch user profiles in FloatingFocusAvatars:", err);
       }
 
-      if (!cancelled && Object.keys(photos).length > 0) {
-        setUserPhotos((prev) => ({ ...prev, ...photos }));
+      if (!cancelled && Object.keys(profiles).length > 0) {
+        setUserProfiles((prev) => ({ ...prev, ...profiles }));
       }
     }
 
-    fetchPhotos();
+    fetchProfiles();
     return () => {
       cancelled = true;
     };
-  }, [sessionUserIdsKey, userPhotos]);
+  }, [sessionUserIdsKey, userProfiles]);
 
   if (sessions.length === 0) return null;
 
@@ -736,7 +763,8 @@ export function FloatingFocusAvatars() {
           <OrbitalAvatar
             key={session.userId}
             session={session}
-            latestPhoto={userPhotos[session.userId]}
+            latestPhoto={userProfiles[session.userId]?.photoURL}
+            latestName={userProfiles[session.userId]?.displayName}
             overrideElapsedSecs={session.userId === user?.uid ? localElapsedSecs : undefined}
           />
         ))}
