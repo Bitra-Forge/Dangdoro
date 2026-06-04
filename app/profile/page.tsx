@@ -806,7 +806,7 @@ function ProfileContent() {
                                             className="w-40 h-40 md:w-48 md:h-48 rounded-[2.2rem] border border-white/10 relative z-10 overflow-hidden transition-all duration-500 group-hover:border-white/30"
                                         >
                                             <AvatarImage
-                                                src={getHighQualityAvatarUrl(userData?.photoURL || (isOwnProfile ? user.photoURL : undefined))}
+                                                src={getHighQualityAvatarUrl(userData?.photoURL || (isOwnProfile ? user.photoURL : undefined), 256)}
                                                 className="object-cover w-full h-full scale-100 group-hover:scale-105 transition-transform duration-[2s] ease-out rounded-[2.2rem]"
                                             />
                                             <AvatarFallback className="bg-zinc-900 font-black text-6xl text-white rounded-[2.2rem] transition-all group-hover:bg-zinc-800">

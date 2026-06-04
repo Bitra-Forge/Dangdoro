@@ -37,7 +37,7 @@ function ProfileStatsCardComponent({ user, rank }: ProfileStatsCardProps) {
           <div className="w-20 h-20 rounded-full border-2 border-[#C9B037]/40 overflow-hidden transition-all duration-500 group-hover:border-[#C9B037]/80 group-hover:shadow-[0_0_30px_rgba(201,176,55,0.3)]">
             <Avatar className="w-full h-full rounded-none bg-transparent">
               <AvatarImage
-                src={getHighQualityAvatarUrl(user.photoURL)}
+                src={getHighQualityAvatarUrl(user.photoURL, 128)}
                 className="object-cover w-full h-full"
               />
               <AvatarFallback className="bg-zinc-800 font-bold text-xl text-[#C9B037] rounded-none">{user.displayName?.slice(0, 1) || "U"}</AvatarFallback>

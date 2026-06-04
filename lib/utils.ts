@@ -31,21 +31,21 @@ export function isWhitelistedUrl(url: string): boolean {
   }
 }
 
-export function getHighQualityAvatarUrl(url: string | null | undefined): string | undefined {
+export function getHighQualityAvatarUrl(url: string | null | undefined, size: number = 96): string | undefined {
   if (!url) return undefined;
   
   // Google avatar URLs usually have size suffix like =s96-c or =s96.
-  // We request a larger size (e.g., 384px) for better quality.
+  // We request custom size for better quality vs performance balance.
   if (url.includes("googleusercontent.com")) {
-    return url.replace(/=s\d+(-c)?$/, "=s384-c");
+    return url.replace(/=s\d+(-c)?$/, `=s${size}-c`);
   }
 
   // GitHub avatar URLs can be sized using the `s` query parameter.
   if (url.includes("githubusercontent.com")) {
     if (url.includes("s=")) {
-      return url.replace(/s=\d+/, "s=384");
+      return url.replace(/s=\d+/, `s=${size}`);
     }
-    return url.includes("?") ? `${url}&s=384` : `${url}?s=384`;
+    return url.includes("?") ? `${url}&s=${size}` : `${url}?s=${size}`;
   }
 
   return url;

@@ -522,14 +522,49 @@ export const declineGroupInvite = async (groupId: string, userId: string) => {
 };
 
 // --- CACHING LAYER TO REDUCE FIREBASE READS ---
-const userProfileCache = new Map<string, { data: UserProfileData; timestamp: number }>();
+const getSessionStorageItem = (key: string) => {
+    if (typeof window === "undefined") return null;
+    try {
+        const item = sessionStorage.getItem(key);
+        return item ? JSON.parse(item) : null;
+    } catch {
+        return null;
+    }
+};
+
+const setSessionStorageItem = (key: string, value: any) => {
+    if (typeof window === "undefined") return;
+    try {
+        sessionStorage.setItem(key, JSON.stringify(value));
+    } catch {}
+};
+
+const loadMapFromSession = <V>(key: string): Map<string, V> => {
+    const map = new Map<string, V>();
+    const data = getSessionStorageItem(key);
+    if (Array.isArray(data)) {
+        for (const [k, v] of data) {
+            map.set(k, v);
+        }
+    }
+    return map;
+};
+
+const saveMapToSession = <V>(key: string, map: Map<string, V>) => {
+    setSessionStorageItem(key, Array.from(map.entries()));
+};
+
+const userProfileCache = loadMapFromSession<{ data: UserProfileData; timestamp: number }>("dangdoro_profile_cache");
 const USER_PROFILE_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 
-let cachedLeaderboard: { data: any[]; timestamp: number } | null = null;
+let cachedLeaderboard: { data: any[]; timestamp: number; queriedLimit: number } | null = getSessionStorageItem("dangdoro_leaderboard_cache");
 const LEADERBOARD_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-const groupLeaderboardCache = new Map<string, { data: FocusGroup[]; timestamp: number }>();
+const groupLeaderboardCache = loadMapFromSession<{ data: FocusGroup[]; timestamp: number }>("dangdoro_group_leaderboard_cache");
 const GROUP_LEADERBOARD_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+let activeLeaderboardPromise: Promise<any[]> | null = null;
+const activeGroupLeaderboardPromises = new Map<string, Promise<FocusGroup[]>>();
 
 /**
  * Fetches the top focusers for the leaderboard.
@@ -537,27 +572,47 @@ const GROUP_LEADERBOARD_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 export const getLeaderboard = async (limitCount: number = 10) => {
     const now = Date.now();
     if (cachedLeaderboard && now - cachedLeaderboard.timestamp < LEADERBOARD_CACHE_TTL) {
-        if (cachedLeaderboard.data.length >= limitCount) {
+        if (cachedLeaderboard.data.length >= limitCount || cachedLeaderboard.queriedLimit >= limitCount) {
+            console.log("⚡ [Leaderboard Cache] Hit! Returning cached leaderboards.");
             return cachedLeaderboard.data.slice(0, limitCount);
         }
     }
 
-    const usersRef = collection(db, "users");
-    const q = query(
-        usersRef,
-        orderBy("totalMinutes", "desc"),
-        orderBy("totalPomodoros", "desc"),
-        limit(limitCount)
-    );
+    if (activeLeaderboardPromise) {
+        console.log("⚡ [Leaderboard Cache] Coalescing concurrent request.");
+        const data = await activeLeaderboardPromise;
+        return data.slice(0, limitCount);
+    }
 
-    const querySnapshot = await getDocs(q);
-    const data = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-    }));
+    console.log("⏳ [Leaderboard Cache] Miss! Querying Firestore for leaders.");
+    activeLeaderboardPromise = (async () => {
+        const usersRef = collection(db, "users");
+        // Always query up to a reasonable buffer size (e.g. 150) to satisfy subsequent calls and slice them
+        const queryLimit = Math.max(150, limitCount);
+        const q = query(
+            usersRef,
+            orderBy("totalMinutes", "desc"),
+            orderBy("totalPomodoros", "desc"),
+            limit(queryLimit)
+        );
 
-    cachedLeaderboard = { data, timestamp: now };
-    return data;
+        const querySnapshot = await getDocs(q);
+        const data = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+
+        cachedLeaderboard = { data, timestamp: Date.now(), queriedLimit: queryLimit };
+        setSessionStorageItem("dangdoro_leaderboard_cache", cachedLeaderboard);
+        return data;
+    })();
+
+    try {
+        const data = await activeLeaderboardPromise;
+        return data.slice(0, limitCount);
+    } finally {
+        activeLeaderboardPromise = null;
+    }
 };
 
 
@@ -575,54 +630,76 @@ export const getGroupLeaderboard = async (options: {
     const cacheKey = JSON.stringify(options);
     const cached = groupLeaderboardCache.get(cacheKey);
     if (cached && now - cached.timestamp < GROUP_LEADERBOARD_CACHE_TTL) {
+        console.log("⚡ [Group Leaderboard Cache] Hit! Returning cached groups.");
         return cached.data;
     }
 
+    const activePromise = activeGroupLeaderboardPromises.get(cacheKey);
+    if (activePromise) {
+        console.log("⚡ [Group Leaderboard Cache] Coalescing concurrent request.");
+        return activePromise;
+    }
+
+    console.log("⏳ [Group Leaderboard Cache] Miss! Querying Firestore for groups.");
     const { userId, filter = "all", sortBy = "minutes", limitCount = 20 } = options;
-    const groupsRef = collection(db, "focusGroups");
     
-    let q;
-    
-    if (filter === "joined" && userId) {
-        // Simple filter — no orderBy needed, sort client-side
-        q = query(
-            groupsRef,
-            where("members", "array-contains", userId),
-            limit(100)
-        );
-    } else {
-        // Discover or all: fetch public groups only
-        // Supports both legacy "public" value and new privacy model "public"
-        q = query(
-            groupsRef,
-            where("privacy", "==", "public"),
-            limit(100)
-        );
-    }
-
-    const querySnapshot = await getDocs(q);
-    let groups = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-    } as unknown as FocusGroup));
-
-    // Filter out already-joined groups for the "discover" tab
-    if (filter === "discover" && userId) {
-        groups = groups.filter(g => !Array.isArray(g.members) || !g.members.includes(userId));
-    }
-
-    // Sort client-side (no composite index needed)
-    groups.sort((a, b) => {
-        if (sortBy === "minutes") {
-            return (b.totalMinutes || 0) - (a.totalMinutes || 0);
+    const fetchPromise = (async () => {
+        const groupsRef = collection(db, "focusGroups");
+        
+        let q;
+        
+        if (filter === "joined" && userId) {
+            // Simple filter — no orderBy needed, sort client-side
+            q = query(
+                groupsRef,
+                where("members", "array-contains", userId),
+                limit(100)
+            );
+        } else {
+            // Discover or all: fetch public groups only
+            // Supports both legacy "public" value and new privacy model "public"
+            q = query(
+                groupsRef,
+                where("privacy", "==", "public"),
+                limit(100)
+            );
         }
-        return (b.memberCount || b.members?.length || 0) - (a.memberCount || a.members?.length || 0);
-    });
 
-    const result = groups.slice(0, limitCount);
-    groupLeaderboardCache.set(cacheKey, { data: result, timestamp: now });
-    return result;
+        const querySnapshot = await getDocs(q);
+        let groups = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as unknown as FocusGroup));
+
+        // Filter out already-joined groups for the "discover" tab
+        if (filter === "discover" && userId) {
+            groups = groups.filter(g => !Array.isArray(g.members) || !g.members.includes(userId));
+        }
+
+        // Sort client-side (no composite index needed)
+        groups.sort((a, b) => {
+            if (sortBy === "minutes") {
+                return (b.totalMinutes || 0) - (a.totalMinutes || 0);
+            }
+            return (b.memberCount || b.members?.length || 0) - (a.memberCount || a.members?.length || 0);
+        });
+
+        const result = groups.slice(0, limitCount);
+        groupLeaderboardCache.set(cacheKey, { data: result, timestamp: Date.now() });
+        saveMapToSession("dangdoro_group_leaderboard_cache", groupLeaderboardCache);
+        return result;
+    })();
+
+    activeGroupLeaderboardPromises.set(cacheKey, fetchPromise);
+
+    try {
+        return await fetchPromise;
+    } finally {
+        activeGroupLeaderboardPromises.delete(cacheKey);
+    }
 };
+
+const activeUserProfilePromises = new Map<string, Promise<UserProfileData | null>>();
 
 /**
  * Utility to fetch multiple user profiles by their IDs.
@@ -633,38 +710,86 @@ export const fetchUserProfiles = async (uids: string[]) => {
 
     const now = Date.now();
     const result: UserProfileData[] = [];
-    const missingUids: string[] = [];
+    
+    const uidsToFetch: string[] = [];
+    const inFlightPromises: { uid: string; promise: Promise<UserProfileData | null> }[] = [];
 
-    // Check what we have in cache
+    // Check what we have in cache or currently in-flight
     for (const uid of uids) {
         const cached = userProfileCache.get(uid);
         if (cached && now - cached.timestamp < USER_PROFILE_CACHE_TTL) {
             result.push(cached.data);
         } else {
-            missingUids.push(uid);
+            const activePromise = activeUserProfilePromises.get(uid);
+            if (activePromise) {
+                inFlightPromises.push({ uid, promise: activePromise });
+            } else {
+                uidsToFetch.push(uid);
+            }
         }
     }
 
-    if (missingUids.length > 0) {
+    if (uidsToFetch.length > 0) {
+        console.log(`⏳ [Profile Cache] Miss/Stale for UIDs: ${uidsToFetch.join(", ")}. Querying Firestore.`);
         const CHUNK_SIZE = 30;
         const usersRef = collection(db, "users");
 
-        for (let i = 0; i < missingUids.length; i += CHUNK_SIZE) {
-            const chunk = missingUids.slice(i, i + CHUNK_SIZE);
-            const q = query(usersRef, where("uid", "in", chunk));
-            const querySnapshot = await getDocs(q);
+        for (let i = 0; i < uidsToFetch.length; i += CHUNK_SIZE) {
+            const chunk = uidsToFetch.slice(i, i + CHUNK_SIZE);
+            
+            // Create a single shared promise for this chunk's Firestore query
+            const chunkFetchPromise = (async () => {
+                try {
+                    const q = query(usersRef, where("uid", "in", chunk));
+                    const querySnapshot = await getDocs(q);
+                    const fetchedMap = new Map<string, UserProfileData>();
+                    
+                    querySnapshot.docs.forEach(doc => {
+                        const profileData = {
+                            uid: doc.id,
+                            ...doc.data()
+                        } as unknown as UserProfileData;
+                        
+                        userProfileCache.set(doc.id, { data: profileData, timestamp: Date.now() });
+                        fetchedMap.set(doc.id, profileData);
+                    });
+                    
+                    saveMapToSession("dangdoro_profile_cache", userProfileCache);
+                    return fetchedMap;
+                } catch (error) {
+                    console.error("Error fetching user profile chunk:", error);
+                    return new Map<string, UserProfileData>();
+                }
+            })();
 
-            querySnapshot.docs.forEach(doc => {
-                const profileData = {
-                    uid: doc.id,
-                    ...doc.data()
-                } as unknown as UserProfileData;
+            // Map each UID in this chunk to its own promise resolved from the chunk query
+            chunk.forEach(uid => {
+                const uidPromise = chunkFetchPromise.then(fetchedMap => fetchedMap.get(uid) || null);
+                activeUserProfilePromises.set(uid, uidPromise);
                 
-                // Save to cache
-                userProfileCache.set(doc.id, { data: profileData, timestamp: now });
-                result.push(profileData);
+                // Cleanup active promise on resolution
+                uidPromise.finally(() => {
+                    activeUserProfilePromises.delete(uid);
+                });
+
+                inFlightPromises.push({ uid, promise: uidPromise });
             });
         }
+    }
+
+    // Await all active fetches
+    if (inFlightPromises.length > 0) {
+        const resolvedProfiles = await Promise.all(
+            inFlightPromises.map(item => item.promise)
+        );
+        resolvedProfiles.forEach(p => {
+            if (p) result.push(p);
+        });
+    }
+
+    const hitCount = uids.length - uidsToFetch.length;
+    if (hitCount > 0) {
+        console.log(`⚡ [Profile Cache] Hit/Coalesced! Resolved ${hitCount}/${uids.length} profiles from memory/in-flight.`);
     }
 
     // Preserve the original order of requested UIDs
