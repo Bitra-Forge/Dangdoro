@@ -85,4 +85,22 @@ describe("resolveUserDisplayName", () => {
     const resolved = resolveUserDisplayName(providerData, authDisplayName, existingDisplayName);
     expect(resolved).toBe("Saved Name");
   });
+
+  it("prioritizes custom existing database name over provider name", () => {
+    const providerData = [{ displayName: "Google Name" }];
+    const authDisplayName = "Google Name";
+    const existingDisplayName = "My Custom Name";
+
+    const resolved = resolveUserDisplayName(providerData, authDisplayName, existingDisplayName);
+    expect(resolved).toBe("My Custom Name");
+  });
+
+  it("prioritizes custom auth display name over provider name if database has default name", () => {
+    const providerData = [{ displayName: "Google Name" }];
+    const authDisplayName = "My Custom Name";
+    const existingDisplayName = "Focus Hero";
+
+    const resolved = resolveUserDisplayName(providerData, authDisplayName, existingDisplayName);
+    expect(resolved).toBe("My Custom Name");
+  });
 });

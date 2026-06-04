@@ -75,15 +75,50 @@ const toMillis = (ts: FirebaseTimestampLike | Date | number | null | undefined):
 /**
  * Pure helper to resolve a user's display name based on provider, auth, and database records.
  */
+export function isCustomName(name: string | null | undefined): boolean {
+    if (!name) return false;
+    const trimmed = name.trim();
+    if (trimmed === "") return false;
+    if (trimmed.startsWith("Guest #")) return false;
+    if (trimmed === "Focus Hero") return false;
+    if (trimmed === "Guest Master") return false;
+    return true;
+}
+
 export function resolveUserDisplayName(
     providerData: { displayName: string | null }[],
     authDisplayName: string | null | undefined,
     existingDisplayName: string | null | undefined
 ): string {
+    // 1. Prefer custom name from the database (the user's saved choice)
+    if (isCustomName(existingDisplayName)) {
+        return existingDisplayName!;
+    }
+    
+    // 2. Prefer custom name from Auth profile
+    if (isCustomName(authDisplayName)) {
+        return authDisplayName!;
+    }
+
+    // 3. Fallback to provider name (e.g. Google name) if it's not a guest name
     const provider = providerData.find(p => p.displayName && !p.displayName.startsWith("Guest #"));
     const nameFromProvider = provider?.displayName || null;
-    const nameFromAuth = authDisplayName && !authDisplayName.startsWith("Guest #") ? authDisplayName : null;
-    return nameFromProvider || nameFromAuth || existingDisplayName || "Focus Hero";
+    if (nameFromProvider) {
+        return nameFromProvider;
+    }
+
+    // 4. Fallback to any non-custom auth display name (e.g. "Guest #XXXX")
+    if (authDisplayName && authDisplayName.trim() !== "") {
+        return authDisplayName;
+    }
+
+    // 5. Fallback to any non-custom database name
+    if (existingDisplayName && existingDisplayName.trim() !== "") {
+        return existingDisplayName;
+    }
+
+    // 6. Final fallback
+    return "Focus Hero";
 }
 
 export const syncUserProfile = async (user: User) => {
