@@ -4,7 +4,7 @@ import { TimerCard } from "@/components/timer-card";
 import { Clock, CheckCircle2 as CheckIcon, X as CloseIcon, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { useTimerStore } from "@/lib/store";
-import { toggleTask } from "@/lib/db";
+import { toggleTask, toggleGroupTask } from "@/lib/db";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 import { BackgroundTheme } from "@/components/background-theme";
@@ -19,6 +19,8 @@ export default function Home() {
   const activeTaskLabel = useTimerStore((state) => state.activeTaskLabel);
   const activeTaskNotes = useTimerStore((state) => state.activeTaskNotes);
   const activeTaskPriority = useTimerStore((state) => state.activeTaskPriority);
+  const activeTaskIsGroupTask = useTimerStore((state) => state.activeTaskIsGroupTask);
+  const activeTaskSourceGroupId = useTimerStore((state) => state.activeTaskSourceGroupId);
   const clearTask = useTimerStore((state) => state.clearTask);
   const initialFocusTime = useTimerStore((state) => state.initialFocusTime);
   const mode = useTimerStore((state) => state.mode);
@@ -97,7 +99,11 @@ export default function Home() {
 
   const handleComplete = async () => {
     if (activeTaskId) {
-      await toggleTask(activeTaskId, true);
+      if (activeTaskIsGroupTask && activeTaskSourceGroupId) {
+        await toggleGroupTask(activeTaskId, activeTaskSourceGroupId, true);
+      } else {
+        await toggleTask(activeTaskId, true);
+      }
       toast.success("Task completed!");
       clearTask();
     }

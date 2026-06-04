@@ -1023,6 +1023,20 @@ export const toggleTask = async (taskId: string, completed: boolean) => {
     }
 };
 
+export const toggleGroupTask = async (taskId: string, groupId: string, completed: boolean) => {
+    try {
+        const taskRef = doc(db, `focusGroups/${groupId}/tasks`, taskId);
+        await updateDoc(taskRef, {
+            status: completed ? "done" : "todo",
+            updatedAt: serverTimestamp()
+        });
+        return true;
+    } catch (error) {
+        console.error("Error toggling group task:", error);
+        return false;
+    }
+};
+
 export const deleteTask = async (taskId: string) => {
     try {
         await deleteDoc(doc(db, "tasks", taskId));

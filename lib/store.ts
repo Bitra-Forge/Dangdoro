@@ -34,7 +34,9 @@ interface TimerState {
   activeTaskLabel: string | null;
   activeTaskNotes: string | null;
   activeTaskPriority: string | null; // using string to avoid circular dependency
-  loadTask: (id: string, label: string, durationSeconds: number, priority: string, notes: string) => void;
+  activeTaskIsGroupTask: boolean | null;
+  activeTaskSourceGroupId: string | null;
+  loadTask: (id: string, label: string, durationSeconds: number, priority: string, notes: string, isGroupTask?: boolean, sourceGroupId?: string | null) => void;
   clearTask: () => void;
   activeGroupId: string | null;
   setActiveGroupId: (id: string | null) => void;
@@ -146,6 +148,8 @@ export const useTimerStore = create<TimerState>()(
       activeTaskLabel: null,
       activeTaskNotes: null,
       activeTaskPriority: null,
+      activeTaskIsGroupTask: null,
+      activeTaskSourceGroupId: null,
       activeGroupId: null,
       setActiveGroupId: (id) => set({ activeGroupId: id }),
       activeLiveSessionId: null,
@@ -153,7 +157,7 @@ export const useTimerStore = create<TimerState>()(
       isPaused: false,
       setSettingsGlassmorphism: (enabled) => set({ settingsGlassmorphism: enabled }),
 
-      loadTask: (id, label, durationSeconds, priority, notes) => {
+      loadTask: (id, label, durationSeconds, priority, notes, isGroupTask = false, sourceGroupId = null) => {
         set({
           mode: "focus",
           timeLeft: durationSeconds,
@@ -166,10 +170,19 @@ export const useTimerStore = create<TimerState>()(
           activeTaskLabel: label,
           activeTaskNotes: notes,
           activeTaskPriority: priority,
+          activeTaskIsGroupTask: isGroupTask,
+          activeTaskSourceGroupId: sourceGroupId,
           sessionStartTime: null,
         });
       },
-      clearTask: () => set({ activeTaskId: null, activeTaskLabel: null, activeTaskNotes: null, activeTaskPriority: null }),
+      clearTask: () => set({
+        activeTaskId: null,
+        activeTaskLabel: null,
+        activeTaskNotes: null,
+        activeTaskPriority: null,
+        activeTaskIsGroupTask: null,
+        activeTaskSourceGroupId: null,
+      }),
 
       start: () => {
         const { mode, settingsBreakTime } = get();
@@ -439,6 +452,8 @@ export const useTimerStore = create<TimerState>()(
           sessionEndSound: "universfield-new-notification-027-383749.mp3",
           sessionStartTime: null,
           completedFocusSessions: 0,
+          activeTaskIsGroupTask: null,
+          activeTaskSourceGroupId: null,
         });
       },
       setBackgroundImage: (image: string) => set({ backgroundImage: image }),

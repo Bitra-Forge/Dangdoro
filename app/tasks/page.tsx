@@ -1098,7 +1098,7 @@ function AssignedTaskRow({
 
     const handleStart = () => {
         const duration = task.durationMinutes ? task.durationMinutes * 60 : 25 * 60;
-        loadTask(task.id, task.title, duration, task.priority ?? "natural", task.description ?? "");
+        loadTask(task.id, task.title, duration, task.priority ?? "natural", task.description ?? "", true, task.sourceGroupId);
         router.push("/");
     };
 
