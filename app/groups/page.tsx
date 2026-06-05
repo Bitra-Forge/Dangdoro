@@ -501,7 +501,6 @@ function CreateGroupForm({ user, onClose, privacy, setPrivacy }: any) {
     const [desc, setDesc] = useState("");
     const [goalType, setGoalType] = useState<GoalType>("weekly");
     const [goalHours, setGoalHours] = useState("");
-    const [autoRenew, setAutoRenew] = useState(true);
     const [customDays, setCustomDays] = useState("");
 
     useEffect(() => {
@@ -521,7 +520,6 @@ function CreateGroupForm({ user, onClose, privacy, setPrivacy }: any) {
             settings: {
                 goalHours: parseInt(goalHours) || 0,
                 goalType,
-                autoRenew,
                 customDays: goalType === "custom" ? parseInt(customDays) || 7 : null,
                 maxMembers: 0,
             }

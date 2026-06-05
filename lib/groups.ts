@@ -81,7 +81,6 @@ export interface FocusGroup {
         goalHours: number;
         goalType?: GoalType;
         customDays?: number;
-        autoRenew?: boolean;
         maxMembers: number;
     };
 }
@@ -227,82 +226,4 @@ export function getGoalTypeLabel(goalType?: GoalType): string {
     }
 }
 
-export function getGoalPeriodBounds(goalType?: GoalType, customDays?: number, referenceDate?: Date): { start: Date; end: Date } {
-    const now = referenceDate || new Date();
-    switch (goalType) {
-        case "daily": {
-            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-            return { start, end };
-        }
-        case "weekly": {
-            const dayOfWeek = now.getDay();
-            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
-            start.setHours(0, 0, 0, 0);
-            const end = new Date(start);
-            end.setDate(end.getDate() + 7);
-            return { start, end };
-        }
-        case "monthly": {
-            const start = new Date(now.getFullYear(), now.getMonth(), 1);
-            const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-            return { start, end };
-        }
-        case "custom": {
-            const days = customDays || 7;
-            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            start.setHours(0, 0, 0, 0);
-            const end = new Date(start);
-            end.setDate(end.getDate() + days);
-            return { start, end };
-        }
-        default: {
-            const dayOfWeek = now.getDay();
-            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
-            start.setHours(0, 0, 0, 0);
-            const end = new Date(start);
-            end.setDate(end.getDate() + 7);
-            return { start, end };
-        }
-    }
-}
 
-export function computeNextPeriodStart(goalType?: GoalType, customDays?: number): Date {
-    const now = new Date();
-    switch (goalType) {
-        case "daily": {
-            const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-            return tomorrow;
-        }
-        case "weekly": {
-            const dayOfWeek = now.getDay();
-            const nextWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + 7);
-            return nextWeek;
-        }
-        case "monthly": {
-            const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-            return nextMonth;
-        }
-        case "custom": {
-            const days = customDays || 7;
-            return new Date(now.getFullYear(), now.getMonth(), now.getDate() + days);
-        }
-        default: {
-            const dayOfWeek = now.getDay();
-            const nextWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + 7);
-            return nextWeek;
-        }
-    }
-}
-
-export function isPeriodExpired(goalType?: GoalType, customDays?: number, referenceDate?: Date): boolean {
-    if (!goalType || goalType === "daily" || goalType === "weekly" || goalType === "monthly") {
-        const { end } = getGoalPeriodBounds(goalType, undefined, referenceDate);
-        return new Date() >= end;
-    }
-    if (goalType === "custom" && customDays) {
-        const { end } = getGoalPeriodBounds(goalType, customDays, referenceDate);
-        return new Date() >= end;
-    }
-    return false;
-}

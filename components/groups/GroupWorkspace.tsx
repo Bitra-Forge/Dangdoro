@@ -16,7 +16,7 @@ import { useRouter } from "next/navigation";
 import { 
     Users, Briefcase, ChevronRight, Play, Pause, 
     StopCircle, MoreVertical, UserPlus, LogOut, X, 
-    LayoutGrid, Target, Crown, Zap, User, Trash2, RefreshCw
+    LayoutGrid, Target, Crown, Zap, User, Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -26,8 +26,7 @@ import {
     FocusGroup, SharedTask, ObjectiveTemplateDraft, 
     fmtMinutes, resolveLiveSessionsForGroup, toMillis, 
     getEarliestActiveStart, normalizeLiveSessions,
-    getGoalTypeLabel, getGoalPeriodBounds, isPeriodExpired,
-    computeNextPeriodStart, GoalType, LiveSession
+    getGoalTypeLabel, GoalType, LiveSession
 } from "@/lib/groups";
 import { fetchUserProfiles, savePartialPomodoroSession } from "@/lib/db";
 import { applyGroupSessionAction } from "@/lib/group-session";
@@ -195,59 +194,6 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         });
         return { ...group, memberDetails };
     }, [group, user, hydratedProfiles, liveSessions]);
-
-  // 6.5. Notification for admin and host when period expires (manual reset mode)
-  useEffect(() => {
-    async function maybeNotifyAdmins() {
-            if (!enrichedGroup || !enrichedGroup.settings || !enrichedGroup.id || !enrichedGroup.name) return;
-            if (!user || enrichedGroup.hostId !== user.uid) return;
-      const { goalType, customDays } = enrichedGroup.settings;
-      if (!goalType) return;
-
-      const referenceDate = enrichedGroup.lastResetAt || enrichedGroup.createdAt;
-      const refDate = referenceDate ? new Date(toMillis(referenceDate) || Date.now()) : undefined;
-
-      if (!isPeriodExpired(goalType, customDays, refDate)) return;
-
-      const bounds = getGoalPeriodBounds(goalType, customDays, refDate);
-      const periodEndIso = bounds.end.toISOString();
-
-      // Find all admin & host users in memberDetails
-      const admins = enrichedGroup.memberDetails ? enrichedGroup.memberDetails.filter(
-        (m: any) => m.role === "host" || m.role === "admin"
-      ) : [];
-
-            try {
-                for (const admin of admins) {
-                    // Check for existing notification for this user, group, and periodEnd
-                    const q = query(
-                        collection(db, "notifications"),
-                        where("type", "==", "goal_period_expired"),
-                        where("toUserId", "==", admin.uid),
-                        where("groupId", "==", enrichedGroup.id),
-                        where("periodEnd", "==", periodEndIso)
-                    );
-                    const existing = await getDocs(q);
-                    if (existing.empty) {
-                        await addDoc(collection(db, "notifications"), {
-                            type: "goal_period_expired",
-                            toUserId: admin.uid,
-                            groupId: enrichedGroup.id,
-                            groupName: enrichedGroup.name,
-                            periodEnd: periodEndIso,
-                            read: false,
-                            createdAt: serverTimestamp()
-                        });
-                    }
-                }
-            } catch (error: any) {
-                if (error?.code !== "permission-denied") {
-                    console.error("Failed to send goal period notifications:", error);
-                }
-            }
-    }
-    maybeNotifyAdmins();
-    }, [enrichedGroup?.lastResetAt, enrichedGroup?.createdAt, enrichedGroup?.settings, enrichedGroup?.id, enrichedGroup?.hostId, user?.uid]);
 
     const isMember = enrichedGroup?.members.includes(user?.uid || "");
     const isInGroupSession = activeGroupId === groupId;
@@ -851,11 +797,6 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                                         style={{ width: `${Math.min(100, ((totalGroupMinutes / 60) / enrichedGroup.settings.goalHours) * 100)}%` }}
                                                     />
                                                 </div>
-                                                {enrichedGroup.settings?.autoRenew && (
-                                                    <p className="text-[9px] text-zinc-600 flex items-center gap-1">
-                                                        <RefreshCw className="w-2.5 h-2.5" /> Auto-renews {getGoalTypeLabel(enrichedGroup.settings.goalType).toLowerCase()}
-                                                    </p>
-                                                )}
                                             </>
                                         ) : (
                                             <p className="text-[11px] text-zinc-500">No {getGoalTypeLabel(enrichedGroup.settings?.goalType).toLowerCase()} goal set yet.</p>

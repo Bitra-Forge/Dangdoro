@@ -4,7 +4,6 @@ import {
   fmtElapsed,
   generateInviteToken,
   getGoalTypeLabel,
-  getGoalPeriodBounds,
   toMillis,
 } from "@/lib/groups";
 
@@ -72,34 +71,6 @@ describe("getGoalTypeLabel", () => {
 
   it("defaults to Weekly for undefined", () => {
     expect(getGoalTypeLabel(undefined)).toBe("Weekly");
-  });
-});
-
-describe("getGoalPeriodBounds", () => {
-  const referenceDate = new Date(2026, 4, 20, 12, 0, 0); // Wed May 20, 2026
-
-  it("daily bounds are start and end of day", () => {
-    const { start, end } = getGoalPeriodBounds("daily", undefined, referenceDate);
-    expect(start.getDate()).toBe(20);
-    expect(end.getDate()).toBe(21);
-  });
-
-  it("weekly bounds span 7 days", () => {
-    const { start, end } = getGoalPeriodBounds("weekly", undefined, referenceDate);
-    const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
-    expect(diffDays).toBe(7);
-  });
-
-  it("monthly bounds span the full month", () => {
-    const { start, end } = getGoalPeriodBounds("monthly", undefined, referenceDate);
-    expect(start.getDate()).toBe(1);
-    expect(end.getMonth()).toBe(5); // June (0-indexed)
-  });
-
-  it("custom bounds use provided days", () => {
-    const { start, end } = getGoalPeriodBounds("custom", 14, referenceDate);
-    const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
-    expect(diffDays).toBe(14);
   });
 });
 
