@@ -129,7 +129,7 @@ export const syncUserProfile = async (user: User) => {
         const isValidPhoto = (url: any) => url && typeof url === 'string' && url.trim() !== '' && url !== 'null' && url !== 'undefined';
 
         if (!userSnap.exists()) {
-            console.log(`syncUserProfile: Creating new Firestore profile for: ${user.uid}`);
+            if (process.env.NODE_ENV !== "production") console.log(`syncUserProfile: Creating new Firestore profile for: ${user.uid}`);
             // Generate a unique signature for guests (e.g., Guest #8F2A)
             const signature = user.uid.slice(0, 4).toUpperCase();
             const finalName = user.isAnonymous ? `Guest #${signature}` : "Focus Hero";
@@ -165,11 +165,11 @@ export const syncUserProfile = async (user: User) => {
             // Sync the name BACK to the Auth user so the Header sees it immediately
             const nameToSync = user.displayName || finalName;
             if (user.displayName !== nameToSync) {
-                console.log(`syncUserProfile: Syncing name "${nameToSync}" back to Auth user profile.`);
+                if (process.env.NODE_ENV !== "production") console.log(`syncUserProfile: Syncing name "${nameToSync}" back to Auth user profile.`);
                 await updateProfile(user, { displayName: nameToSync });
             }
         } else {
-            console.log(`syncUserProfile: Updating existing profile for: ${user.uid}`);
+            if (process.env.NODE_ENV !== "production") console.log(`syncUserProfile: Updating existing profile for: ${user.uid}`);
             const existingData = userSnap.data();
 
             const updateData: Record<string, unknown> = {
@@ -190,16 +190,18 @@ export const syncUserProfile = async (user: User) => {
                     existingData.displayName
                 );
 
-                console.log("🔍 syncUserProfile [Debug]: providerData =", user.providerData);
-                console.log("🔍 syncUserProfile [Debug]: user.displayName =", user.displayName);
-                console.log("🔍 syncUserProfile [Debug]: existingData.displayName =", existingData?.displayName);
-                console.log("🔍 syncUserProfile [Debug]: resolvedName =", resolvedName);
+                if (process.env.NODE_ENV !== "production") {
+                    console.log("🔍 syncUserProfile [Debug]: providerData =", user.providerData);
+                    console.log("🔍 syncUserProfile [Debug]: user.displayName =", user.displayName);
+                    console.log("🔍 syncUserProfile [Debug]: existingData.displayName =", existingData?.displayName);
+                    console.log("🔍 syncUserProfile [Debug]: resolvedName =", resolvedName);
+                }
 
                 updateData.displayName = resolvedName;
 
                 // Sync the name BACK to the Auth user so the UI/Header updates immediately
                 if (user.displayName !== resolvedName) {
-                    console.log(`syncUserProfile: Syncing name "${resolvedName}" back to Auth user profile.`);
+                    if (process.env.NODE_ENV !== "production") console.log(`syncUserProfile: Syncing name "${resolvedName}" back to Auth user profile.`);
                     await updateProfile(user, { displayName: resolvedName });
                     await user.reload();
                 }
@@ -676,27 +678,27 @@ export const getLeaderboard = async (limitCount: number = 10) => {
     const now = Date.now();
     if (cachedLeaderboard && now - cachedLeaderboard.timestamp < LEADERBOARD_CACHE_TTL) {
         if (cachedLeaderboard.data.length >= limitCount || cachedLeaderboard.queriedLimit >= limitCount) {
-            if (process.env.NODE_ENV === "development") {
+            if (process.env.NODE_ENV !== "production") {
                 console.log("CACHE HIT: getLeaderboard");
+                console.log("⚡ [Leaderboard Cache] Hit! Returning cached leaderboards.");
             }
-            console.log("⚡ [Leaderboard Cache] Hit! Returning cached leaderboards.");
             return cachedLeaderboard.data.slice(0, limitCount);
         }
     }
 
     if (activeLeaderboardPromise) {
-        if (process.env.NODE_ENV === "development") {
+        if (process.env.NODE_ENV !== "production") {
             console.log("CACHE HIT: getLeaderboard (coalesced)");
+            console.log("⚡ [Leaderboard Cache] Coalescing concurrent request.");
         }
-        console.log("⚡ [Leaderboard Cache] Coalescing concurrent request.");
         const data = await activeLeaderboardPromise;
         return data.slice(0, limitCount);
     }
 
-    if (process.env.NODE_ENV === "development") {
+    if (process.env.NODE_ENV !== "production") {
         console.log("FIRESTORE READ: getLeaderboard");
+        console.log("⏳ [Leaderboard Cache] Miss! Querying Firestore cache/leaderboard.");
     }
-    console.log("⏳ [Leaderboard Cache] Miss! Querying Firestore cache/leaderboard.");
     activeLeaderboardPromise = (async () => {
         const cacheDocRef = doc(db, "cache", "leaderboard");
         const cacheDocSnap = await getDoc(cacheDocRef);
@@ -761,26 +763,26 @@ export const getGroupLeaderboard = async (options: {
     const cacheKey = JSON.stringify(options);
     const cached = groupLeaderboardCache.get(cacheKey);
     if (cached && now - cached.timestamp < GROUP_LEADERBOARD_CACHE_TTL) {
-        if (process.env.NODE_ENV === "development") {
+        if (process.env.NODE_ENV !== "production") {
             console.log("CACHE HIT: getGroupLeaderboard");
+            console.log("⚡ [Group Leaderboard Cache] Hit! Returning cached groups.");
         }
-        console.log("⚡ [Group Leaderboard Cache] Hit! Returning cached groups.");
         return cached.data;
     }
 
     const activePromise = activeGroupLeaderboardPromises.get(cacheKey);
     if (activePromise) {
-        if (process.env.NODE_ENV === "development") {
+        if (process.env.NODE_ENV !== "production") {
             console.log("CACHE HIT: getGroupLeaderboard (coalesced)");
+            console.log("⚡ [Group Leaderboard Cache] Coalescing concurrent request.");
         }
-        console.log("⚡ [Group Leaderboard Cache] Coalescing concurrent request.");
         return activePromise;
     }
 
-    if (process.env.NODE_ENV === "development") {
+    if (process.env.NODE_ENV !== "production") {
         console.log("FIRESTORE READ: getGroupLeaderboard");
+        console.log("⏳ [Group Leaderboard Cache] Miss! Querying Firestore for groups.");
     }
-    console.log("⏳ [Group Leaderboard Cache] Miss! Querying Firestore for groups.");
     const { userId, filter = "all", sortBy = "minutes", limitCount = 20 } = options;
     
     const fetchPromise = (async () => {
@@ -870,10 +872,10 @@ export const fetchUserProfiles = async (uids: string[]) => {
     }
 
     if (uidsToFetch.length > 0) {
-        if (process.env.NODE_ENV === "development") {
+        if (process.env.NODE_ENV !== "production") {
             console.log(`FIRESTORE READ: fetchUserProfiles (${uidsToFetch.length}/${uids.length} profiles)`);
+            console.log(`⏳ [Profile Cache] Miss/Stale for UIDs: ${uidsToFetch.join(", ")}. Querying Firestore.`);
         }
-        console.log(`⏳ [Profile Cache] Miss/Stale for UIDs: ${uidsToFetch.join(", ")}. Querying Firestore.`);
         const CHUNK_SIZE = 30;
         const usersRef = collection(db, "users");
 
@@ -931,10 +933,8 @@ export const fetchUserProfiles = async (uids: string[]) => {
     }
 
     const hitCount = uids.length - uidsToFetch.length;
-    if (hitCount > 0) {
-        if (process.env.NODE_ENV === "development") {
-            console.log(`CACHE HIT: fetchUserProfiles (${hitCount}/${uids.length} profiles)`);
-        }
+    if (hitCount > 0 && process.env.NODE_ENV !== "production") {
+        console.log(`CACHE HIT: fetchUserProfiles (${hitCount}/${uids.length} profiles)`);
         console.log(`⚡ [Profile Cache] Hit/Coalesced! Resolved ${hitCount}/${uids.length} profiles from memory/in-flight.`);
     }
 
@@ -1301,7 +1301,7 @@ export const getSessionHistory = async (userId: string, limitCount: number = 365
     const cacheKey = `${userId}_${limitCount}`;
     const cached = sessionHistoryCache.get(cacheKey);
     if (cached && now - cached.timestamp < SESSION_HISTORY_CACHE_TTL) {
-        if (process.env.NODE_ENV === "development") {
+        if (process.env.NODE_ENV !== "production") {
             console.log("CACHE HIT: getSessionHistory");
         }
         return cached.data;
@@ -1309,13 +1309,13 @@ export const getSessionHistory = async (userId: string, limitCount: number = 365
 
     const activePromise = activeSessionHistoryPromises.get(cacheKey);
     if (activePromise) {
-        if (process.env.NODE_ENV === "development") {
+        if (process.env.NODE_ENV !== "production") {
             console.log("CACHE HIT: getSessionHistory (coalesced)");
         }
         return activePromise;
     }
 
-    if (process.env.NODE_ENV === "development") {
+    if (process.env.NODE_ENV !== "production") {
         console.log("FIRESTORE READ: getSessionHistory");
     }
 
@@ -1350,12 +1350,16 @@ export const uploadProfilePicture = async (userId: string, file: File | Blob) =>
         const storageRef = ref(storage, `profiles/${userId}`);
 
         // Use metadata to ensure correct content type and avoid some pre-check issues
-        console.log("Starting upload to Firebase Storage...");
+        if (process.env.NODE_ENV !== "production") {
+            console.log("Starting upload to Firebase Storage...");
+        }
         const snapshot = await uploadBytes(storageRef, file, {
             contentType: "image/jpeg"
         });
 
-        console.log("Upload finished. Fetching download URL...");
+        if (process.env.NODE_ENV !== "production") {
+            console.log("Upload finished. Fetching download URL...");
+        }
         const photoURL = await getDownloadURL(snapshot.ref);
 
         const userRef = doc(db, "users", userId);
