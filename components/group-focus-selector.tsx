@@ -249,7 +249,7 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                 </div>
 
                 {/* Options List */}
-                <div className="p-3 max-h-[360px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/5 scrollbar-track-transparent flex flex-col gap-2">
+                <div className="p-3 max-h-[400px] overflow-y-auto group-list-scroll flex flex-col gap-2">
                   {/* Solo Option */}
                   <div
                     onClick={() => handleSelect("")}
@@ -310,7 +310,7 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
                           key={group.id}
                           onClick={() => handleSelect(group.id)}
                           className={cn(
-                            "w-full flex flex-col gap-1 px-4 py-3 rounded-2xl border text-left cursor-pointer relative overflow-hidden select-none",
+                            "w-full flex flex-col gap-1 px-4 py-3 rounded-2xl border text-left cursor-pointer relative overflow-hidden select-none min-h-[76px]",
                             "transition-[background-color,border-color,color,transform] duration-150 hover:scale-[1.005] active:scale-[0.995] group/item",
                             isSelected
                               ? "bg-gradient-to-br from-sky-950/40 to-indigo-950/20 border-sky-500/30 text-sky-100 shadow-[0_8px_30px_rgba(56,189,248,0.08),inset_0_1px_1px_rgba(255,255,255,0.05)]"
