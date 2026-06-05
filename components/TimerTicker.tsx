@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useTimerStore } from "@/lib/store";
 import { useAuth } from "@/components/AuthProvider";
-import { savePomodoroSession } from "@/lib/db";
+import { flushFocusTime } from "@/lib/focus-accumulator";
 import { toast } from "sonner";
 
 // ============================================================================
@@ -80,6 +80,22 @@ export function TimerTicker() {
       : "Dangdoro";
   }, [timeLeft, isActive, mode]);
 
+  // Tab visibility change listener to flush pending focus time
+  useEffect(() => {
+    if (typeof window === "undefined" || !user) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        flushFocusTime(user.uid, activeGroupId, false);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [user, activeGroupId]);
+
   // Timer completion effect
   useEffect(() => {
     if (timeLeft !== 0 || !isActive) return;
@@ -91,7 +107,7 @@ export function TimerTicker() {
       // Save focus session for authenticated users
       if (mode === "focus" && user) {
         const durationMinutes = Math.floor(initialFocusTime / 60);
-        savePomodoroSession(user.uid, durationMinutes, activeGroupId)
+        flushFocusTime(user.uid, activeGroupId, true, durationMinutes)
           .then(() => toast.success(`Group focus session completed! Contribution recorded.`))
           .catch(() => toast.error("Failed to save session."));
       }
@@ -110,7 +126,7 @@ export function TimerTicker() {
     // Save focus session for authenticated users
     if (mode === "focus" && user) {
       const durationMinutes = Math.floor(initialFocusTime / 60);
-      savePomodoroSession(user.uid, durationMinutes, activeGroupId)
+      flushFocusTime(user.uid, activeGroupId, true, durationMinutes)
         .then(() => toast.success(`Session saved! ${activeGroupId ? "Group contribution recorded." : "Keep it up!"}`))
         .catch(() => toast.error("Failed to save session."));
     }

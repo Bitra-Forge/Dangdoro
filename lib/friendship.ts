@@ -82,6 +82,70 @@ const getRequestTimeValue = (request: FriendRequest): number => {
     return toMillis(request.updatedAt) || toMillis(request.createdAt) || 0;
 };
 
+// --- FRIENDSHIP CACHING LAYER ---
+const getSessionStorageItem = (key: string) => {
+    if (typeof window === "undefined") return null;
+    try {
+        const item = sessionStorage.getItem(key);
+        return item ? JSON.parse(item) : null;
+    } catch {
+        return null;
+    }
+};
+
+const setSessionStorageItem = (key: string, value: any) => {
+    if (typeof window === "undefined") return;
+    try {
+        sessionStorage.setItem(key, JSON.stringify(value));
+    } catch {}
+};
+
+const loadMapFromSession = <V>(key: string): Map<string, V> => {
+    const map = new Map<string, V>();
+    const data = getSessionStorageItem(key);
+    if (Array.isArray(data)) {
+        for (const [k, v] of data) {
+            map.set(k, v);
+        }
+    }
+    return map;
+};
+
+const saveMapToSession = <V>(key: string, map: Map<string, V>) => {
+    setSessionStorageItem(key, Array.from(map.entries()));
+};
+
+const friendsListCache = loadMapFromSession<{ data: Friend[]; timestamp: number }>("dangdoro_friends_list_cache");
+const friendsListSimpleCache = loadMapFromSession<{ data: Friend[]; timestamp: number }>("dangdoro_friends_list_simple_cache");
+const friendsLeaderboardCache = loadMapFromSession<{ data: UserProfileData[]; timestamp: number }>("dangdoro_friends_leaderboard_cache");
+const friendsActivityCache = loadMapFromSession<{ data: CompletedSession[]; timestamp: number }>("dangdoro_friends_activity_cache");
+
+const FRIENDS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+const activeFriendsListPromises = new Map<string, Promise<Friend[]>>();
+const activeFriendsListSimplePromises = new Map<string, Promise<Friend[]>>();
+const activeFriendsLeaderboardPromises = new Map<string, Promise<UserProfileData[]>>();
+const activeFriendsActivityPromises = new Map<string, Promise<CompletedSession[]>>();
+
+export const invalidateFriendshipCaches = (userId: string) => {
+    for (const key of Array.from(friendsListCache.keys())) {
+        if (key.startsWith(userId)) friendsListCache.delete(key);
+    }
+    for (const key of Array.from(friendsListSimpleCache.keys())) {
+        if (key.startsWith(userId)) friendsListSimpleCache.delete(key);
+    }
+    for (const key of Array.from(friendsLeaderboardCache.keys())) {
+        if (key.startsWith(userId)) friendsLeaderboardCache.delete(key);
+    }
+    for (const key of Array.from(friendsActivityCache.keys())) {
+        if (key.startsWith(userId)) friendsActivityCache.delete(key);
+    }
+    saveMapToSession("dangdoro_friends_list_cache", friendsListCache);
+    saveMapToSession("dangdoro_friends_list_simple_cache", friendsListSimpleCache);
+    saveMapToSession("dangdoro_friends_leaderboard_cache", friendsLeaderboardCache);
+    saveMapToSession("dangdoro_friends_activity_cache", friendsActivityCache);
+};
+
 const getRequestsBetweenUsers = async (userId1: string, userId2: string): Promise<FriendRequest[]> => {
     // Query both directions with full pair constraints so Firestore security
     // rules can verify the current user is always a participant.
@@ -230,6 +294,8 @@ export const acceptFriendRequest = async (requestId: string, fromUserId: string,
             console.error("Failed to create acceptance notification:", notifError);
         }
 
+        invalidateFriendshipCaches(fromUserId);
+        invalidateFriendshipCaches(toUserId);
         return true;
     } catch (error) {
         console.error("Error accepting friend request:", error);
@@ -278,6 +344,8 @@ export const removeFriend = async (userId1: string, userId2: string): Promise<bo
         batch.delete(friendRef2);
 
         await batch.commit();
+        invalidateFriendshipCaches(userId1);
+        invalidateFriendshipCaches(userId2);
         return true;
     } catch (error) {
         console.error("Error removing friend:", error);
@@ -399,35 +467,75 @@ export const getSentFriendRequests = async (userId: string): Promise<FriendReque
  * Get user's friends list with their profile data.
   */
 export const getFriendsList = async (userId: string): Promise<Friend[]> => {
+    const now = Date.now();
+    const cacheKey = userId;
+    const cached = friendsListCache.get(cacheKey);
+    if (cached && now - cached.timestamp < FRIENDS_CACHE_TTL) {
+        if (process.env.NODE_ENV === "development") {
+            console.log("CACHE HIT: getFriendsList");
+        }
+        return cached.data;
+    }
+
+    const activePromise = activeFriendsListPromises.get(cacheKey);
+    if (activePromise) {
+        if (process.env.NODE_ENV === "development") {
+            console.log("CACHE HIT: getFriendsList (coalesced)");
+        }
+        return activePromise;
+    }
+
+    if (process.env.NODE_ENV === "development") {
+        console.log("FIRESTORE READ: getFriendsList");
+    }
+
+    const fetchPromise = (async () => {
+        try {
+            const friendsRef = collection(db, "users", userId, "friends");
+            const snapshot = await getDocs(friendsRef);
+
+            const friends = snapshot.docs.map(docSnap => {
+                const data = docSnap.data();
+                return {
+                    id: docSnap.id,
+                    friendId: data.friendId || docSnap.id,
+                    since: data.since
+                };
+            }) as Friend[];
+
+            const friendIds = friends.map(f => f.friendId);
+            if (friendIds.length === 0) {
+                friendsListCache.set(cacheKey, { data: [], timestamp: now });
+                saveMapToSession("dangdoro_friends_list_cache", friendsListCache);
+                return [];
+            }
+
+            const profiles = await fetchUserProfiles(friendIds);
+            const userProfilesMap = new Map<string, UserProfileData>();
+            profiles.forEach(p => {
+                userProfilesMap.set(p.uid, { id: p.uid, ...p });
+            });
+
+            const data = friends.map(friend => ({
+                ...friend,
+                userData: userProfilesMap.get(friend.friendId) || null
+            }));
+
+            friendsListCache.set(cacheKey, { data, timestamp: Date.now() });
+            saveMapToSession("dangdoro_friends_list_cache", friendsListCache);
+            return data;
+        } catch (error) {
+            console.error("Error getting friends list:", error);
+            return [];
+        }
+    })();
+
+    activeFriendsListPromises.set(cacheKey, fetchPromise);
+
     try {
-        const friendsRef = collection(db, "users", userId, "friends");
-        const snapshot = await getDocs(friendsRef);
-
-        const friends = snapshot.docs.map(docSnap => {
-            const data = docSnap.data();
-            return {
-                id: docSnap.id,
-                friendId: data.friendId || docSnap.id,
-                since: data.since
-            };
-        }) as Friend[];
-
-        const friendIds = friends.map(f => f.friendId);
-        if (friendIds.length === 0) return [];
-
-        const profiles = await fetchUserProfiles(friendIds);
-        const userProfilesMap = new Map<string, UserProfileData>();
-        profiles.forEach(p => {
-            userProfilesMap.set(p.uid, { id: p.uid, ...p });
-        });
-
-        return friends.map(friend => ({
-            ...friend,
-            userData: userProfilesMap.get(friend.friendId) || null
-        }));
-    } catch (error) {
-        console.error("Error getting friends list:", error);
-        return [];
+        return await fetchPromise;
+    } finally {
+        activeFriendsListPromises.delete(cacheKey);
     }
 };
 
@@ -436,22 +544,58 @@ export const getFriendsList = async (userId: string): Promise<Friend[]> => {
  * Useful for counts and quick lookups to avoid heavy Firestore reads.
  */
 export const getFriendsListSimple = async (userId: string): Promise<Friend[]> => {
-    try {
-        const friendsRef = collection(db, "users", userId, "friends");
-        const snapshot = await getDocs(friendsRef);
+    const now = Date.now();
+    const cacheKey = userId;
+    const cached = friendsListSimpleCache.get(cacheKey);
+    if (cached && now - cached.timestamp < FRIENDS_CACHE_TTL) {
+        if (process.env.NODE_ENV === "development") {
+            console.log("CACHE HIT: getFriendsListSimple");
+        }
+        return cached.data;
+    }
 
-        return snapshot.docs.map(docSnap => {
-            const data = docSnap.data();
-            return {
-                id: docSnap.id,
-                friendId: data.friendId || docSnap.id,
-                since: data.since,
-                userData: null
-            };
-        }) as Friend[];
-    } catch (error) {
-        console.error("Error getting simple friends list:", error);
-        return [];
+    const activePromise = activeFriendsListSimplePromises.get(cacheKey);
+    if (activePromise) {
+        if (process.env.NODE_ENV === "development") {
+            console.log("CACHE HIT: getFriendsListSimple (coalesced)");
+        }
+        return activePromise;
+    }
+
+    if (process.env.NODE_ENV === "development") {
+        console.log("FIRESTORE READ: getFriendsListSimple");
+    }
+
+    const fetchPromise = (async () => {
+        try {
+            const friendsRef = collection(db, "users", userId, "friends");
+            const snapshot = await getDocs(friendsRef);
+
+            const data = snapshot.docs.map(docSnap => {
+                const data = docSnap.data();
+                return {
+                    id: docSnap.id,
+                    friendId: data.friendId || docSnap.id,
+                    since: data.since,
+                    userData: null
+                };
+            }) as Friend[];
+
+            friendsListSimpleCache.set(cacheKey, { data, timestamp: Date.now() });
+            saveMapToSession("dangdoro_friends_list_simple_cache", friendsListSimpleCache);
+            return data;
+        } catch (error) {
+            console.error("Error getting simple friends list:", error);
+            return [];
+        }
+    })();
+
+    activeFriendsListSimplePromises.set(cacheKey, fetchPromise);
+
+    try {
+        return await fetchPromise;
+    } finally {
+        activeFriendsListSimplePromises.delete(cacheKey);
     }
 };
 
@@ -645,43 +789,65 @@ export const areFriends = async (userId1: string, userId2: string): Promise<bool
  * Get friends leaderboard - rankings among friends only.
  */
 export const getFriendsLeaderboard = async (userId: string, limitCount: number = 20): Promise<UserProfileData[]> => {
-    try {
-        // First get friends list
-        const friendsList = await getFriendsListSimple(userId);
-        const friendIds = friendsList.map(f => f.friendId);
-        
-        // Include current user in the leaderboard
-        friendIds.push(userId);
-
-        if (friendIds.length <= 1) {
-            return []; // Only the user themselves
+    const now = Date.now();
+    const cacheKey = `${userId}_${limitCount}`;
+    const cached = friendsLeaderboardCache.get(cacheKey);
+    if (cached && now - cached.timestamp < FRIENDS_CACHE_TTL) {
+        if (process.env.NODE_ENV === "development") {
+            console.log("CACHE HIT: getFriendsLeaderboard");
         }
+        return cached.data;
+    }
 
-        // Fetch user data for all friends
-        const usersRef = collection(db, "users");
-        const results: UserProfileData[] = [];
+    const activePromise = activeFriendsLeaderboardPromises.get(cacheKey);
+    if (activePromise) {
+        if (process.env.NODE_ENV === "development") {
+            console.log("CACHE HIT: getFriendsLeaderboard (coalesced)");
+        }
+        return activePromise;
+    }
 
-        // Firestore doesn't support "IN" queries with more than 30 items, so batch if needed
-        for (let i = 0; i < friendIds.length; i += 30) {
-            const batchIds = friendIds.slice(i, i + 30);
-            const q = query(
-                usersRef,
-                where("__name__", "in", batchIds)
-            );
+    if (process.env.NODE_ENV === "development") {
+        console.log("FIRESTORE READ: getFriendsLeaderboard");
+    }
+
+    const fetchPromise = (async () => {
+        try {
+            // First get friends list
+            const friendsList = await getFriendsListSimple(userId);
+            const friendIds = friendsList.map(f => f.friendId);
             
-            const snapshot = await getDocs(q);
-            snapshot.docs.forEach(docSnap => {
-                results.push({ id: docSnap.id, ...docSnap.data() } as UserProfileData);
-            });
-        }
+            // Include current user in the leaderboard
+            friendIds.push(userId);
 
-        // Sort by totalMinutes descending
-        return results
-            .sort((a, b) => (b.totalMinutes || 0) - (a.totalMinutes || 0))
-            .slice(0, limitCount);
-    } catch (error) {
-        console.error("Error getting friends leaderboard:", error);
-        return [];
+            if (friendIds.length <= 1) {
+                return []; // Only the user themselves
+            }
+
+            // Fetch user data for all friends using cached fetchUserProfiles
+            const results = await fetchUserProfiles(friendIds);
+
+            // Sort by totalMinutes descending and map to UserProfileData with id
+            const sorted: UserProfileData[] = results
+                .map(p => ({ id: p.uid, ...p }))
+                .sort((a, b) => (b.totalMinutes || 0) - (a.totalMinutes || 0))
+                .slice(0, limitCount);
+
+            friendsLeaderboardCache.set(cacheKey, { data: sorted, timestamp: Date.now() });
+            saveMapToSession("dangdoro_friends_leaderboard_cache", friendsLeaderboardCache);
+            return sorted;
+        } catch (error) {
+            console.error("Error getting friends leaderboard:", error);
+            return [];
+        }
+    })();
+
+    activeFriendsLeaderboardPromises.set(cacheKey, fetchPromise);
+
+    try {
+        return await fetchPromise;
+    } finally {
+        activeFriendsLeaderboardPromises.delete(cacheKey);
     }
 };
 
@@ -689,45 +855,81 @@ export const getFriendsLeaderboard = async (userId: string, limitCount: number =
  * Get recent activity from friends (completed sessions).
  */
 export const getFriendsActivity = async (userId: string, limitCount: number = 20): Promise<CompletedSession[]> => {
-    try {
-        // Get friends list
-        const friendsList = await getFriendsListSimple(userId);
-        const friendIds = friendsList.map(f => f.friendId);
+    const now = Date.now();
+    const cacheKey = `${userId}_${limitCount}`;
+    const cached = friendsActivityCache.get(cacheKey);
+    if (cached && now - cached.timestamp < FRIENDS_CACHE_TTL) {
+        if (process.env.NODE_ENV === "development") {
+            console.log("CACHE HIT: getFriendsActivity");
+        }
+        return cached.data;
+    }
 
-        if (friendIds.length === 0) {
+    const activePromise = activeFriendsActivityPromises.get(cacheKey);
+    if (activePromise) {
+        if (process.env.NODE_ENV === "development") {
+            console.log("CACHE HIT: getFriendsActivity (coalesced)");
+        }
+        return activePromise;
+    }
+
+    if (process.env.NODE_ENV === "development") {
+        console.log("FIRESTORE READ: getFriendsActivity");
+    }
+
+    const fetchPromise = (async () => {
+        try {
+            // Get friends list
+            const friendsList = await getFriendsListSimple(userId);
+            const friendIds = friendsList.map(f => f.friendId);
+
+            if (friendIds.length === 0) {
+                return [];
+            }
+
+            // Get recent sessions from friends
+            const sessionsRef = collection(db, "sessions");
+            const results: CompletedSession[] = [];
+
+            // Batch query (Firestore "IN" limit is 30)
+            for (let i = 0; i < friendIds.length; i += 30) {
+                const batchIds = friendIds.slice(i, i + 30);
+                const q = query(
+                    sessionsRef,
+                    where("userId", "in", batchIds),
+                    orderBy("completedAt", "desc"),
+                    limit(Math.ceil(limitCount / friendIds.length) + 1)
+                );
+
+                const snapshot = await getDocs(q);
+                snapshot.docs.forEach(docSnap => {
+                    results.push({ id: docSnap.id, ...docSnap.data() } as CompletedSession);
+                });
+            }
+
+            // Sort by completedAt descending and limit
+            const sorted = results
+                .sort((a, b) => {
+                    const timeA = toMillis(a.completedAt) || 0;
+                    const timeB = toMillis(b.completedAt) || 0;
+                    return timeB - timeA;
+                })
+                .slice(0, limitCount);
+
+            friendsActivityCache.set(cacheKey, { data: sorted, timestamp: Date.now() });
+            saveMapToSession("dangdoro_friends_activity_cache", friendsActivityCache);
+            return sorted;
+        } catch (error) {
+            console.error("Error getting friends activity:", error);
             return [];
         }
+    })();
 
-        // Get recent sessions from friends
-        const sessionsRef = collection(db, "sessions");
-        const results: CompletedSession[] = [];
+    activeFriendsActivityPromises.set(cacheKey, fetchPromise);
 
-        // Batch query (Firestore "IN" limit is 30)
-        for (let i = 0; i < friendIds.length; i += 30) {
-            const batchIds = friendIds.slice(i, i + 30);
-            const q = query(
-                sessionsRef,
-                where("userId", "in", batchIds),
-                orderBy("completedAt", "desc"),
-                limit(Math.ceil(limitCount / friendIds.length) + 1)
-            );
-
-            const snapshot = await getDocs(q);
-            snapshot.docs.forEach(docSnap => {
-                results.push({ id: docSnap.id, ...docSnap.data() } as CompletedSession);
-            });
-        }
-
-        // Sort by completedAt descending and limit
-        return results
-            .sort((a, b) => {
-                const timeA = toMillis(a.completedAt) || 0;
-                const timeB = toMillis(b.completedAt) || 0;
-                return timeB - timeA;
-            })
-            .slice(0, limitCount);
-    } catch (error) {
-        console.error("Error getting friends activity:", error);
-        return [];
+    try {
+        return await fetchPromise;
+    } finally {
+        activeFriendsActivityPromises.delete(cacheKey);
     }
 };

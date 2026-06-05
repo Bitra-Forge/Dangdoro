@@ -9,6 +9,7 @@ import { db } from "@/lib/firebase";
 import { motion, AnimatePresence, useMotionValue, useAnimationFrame } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { FirebaseTimestampLike } from "@/lib/groups";
+import { fetchUserProfiles } from "@/lib/db";
 
 interface LiveSession {
   id: string;
@@ -550,30 +551,25 @@ export function InlinePausedDock() {
     if (missing.length === 0) return;
     let cancelled = false;
     async function fetchProfiles() {
-      const profiles: Record<string, { photoURL?: string; displayName?: string }> = {};
       try {
-        for (let i = 0; i < missing.length; i += 30) {
-          const batch = missing.slice(i, i + 30);
-          const qP = query(collection(db, "users"), where("__name__", "in", batch));
-          const snap = await getDocs(qP);
-          snap.docs.forEach((d) => {
-            const data = d.data();
-            profiles[d.id] = {
-              photoURL: data.photoURL || undefined,
-              displayName: data.displayName || undefined,
-            };
-          });
-          batch.forEach((id) => {
-            if (!profiles[id]) {
-              profiles[id] = {};
-            }
-          });
-        }
+        const fetched = await fetchUserProfiles(missing);
+        if (cancelled) return;
+        const profiles: Record<string, { photoURL?: string; displayName?: string }> = {};
+        fetched.forEach((p) => {
+          profiles[p.uid] = {
+            photoURL: p.photoURL || undefined,
+            displayName: p.displayName || undefined,
+          };
+        });
+        missing.forEach((id) => {
+          if (!profiles[id]) {
+            profiles[id] = {};
+          }
+        });
+        setUserProfiles((prev) => ({ ...prev, ...profiles }));
       } catch (err) {
         console.error("Failed to fetch user profiles in InlinePausedDock:", err);
       }
-      if (!cancelled && Object.keys(profiles).length > 0)
-        setUserProfiles((prev) => ({ ...prev, ...profiles }));
     }
     fetchProfiles();
     return () => { cancelled = true; };
@@ -707,32 +703,24 @@ export function FloatingFocusAvatars() {
       const missingIds = ids.filter(uid => !userProfiles[uid]);
       if (missingIds.length === 0) return;
 
-      const profiles: Record<string, { photoURL?: string; displayName?: string }> = {};
       try {
-        // Fetch missing user profiles in batches of 30
-        for (let i = 0; i < missingIds.length; i += 30) {
-          const batchIds = missingIds.slice(i, i + 30);
-          const qProfiles = query(collection(db, "users"), where("__name__", "in", batchIds));
-          const querySnap = await getDocs(qProfiles);
-          querySnap.docs.forEach(docSnap => {
-            const data = docSnap.data();
-            profiles[docSnap.id] = {
-              photoURL: data.photoURL || undefined,
-              displayName: data.displayName || undefined,
-            };
-          });
-          batchIds.forEach((id) => {
-            if (!profiles[id]) {
-              profiles[id] = {};
-            }
-          });
-        }
+        const fetched = await fetchUserProfiles(missingIds);
+        if (cancelled) return;
+        const profiles: Record<string, { photoURL?: string; displayName?: string }> = {};
+        fetched.forEach((p) => {
+          profiles[p.uid] = {
+            photoURL: p.photoURL || undefined,
+            displayName: p.displayName || undefined,
+          };
+        });
+        missingIds.forEach((id) => {
+          if (!profiles[id]) {
+            profiles[id] = {};
+          }
+        });
+        setUserProfiles((prev) => ({ ...prev, ...profiles }));
       } catch (err) {
         console.error("Failed to batch fetch user profiles in FloatingFocusAvatars:", err);
-      }
-
-      if (!cancelled && Object.keys(profiles).length > 0) {
-        setUserProfiles((prev) => ({ ...prev, ...profiles }));
       }
     }
 

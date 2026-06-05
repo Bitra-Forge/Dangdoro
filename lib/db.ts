@@ -136,18 +136,31 @@ export const syncUserProfile = async (user: User) => {
 
             const photoURLCandidate = user.photoURL;
 
-            // Initial profile creation
+            // Initial profile creation.
+            // IMPORTANT: Do NOT include totalMinutes or totalPomodoros here — if the doc
+            // already exists due to a race/offline-cache-miss, merge:true would still
+            // overwrite numeric fields with 0. Instead, we set identity fields only and
+            // use a separate conditional write for the counters.
             await setDoc(userRef, {
                 uid: user.uid,
                 displayName: user.displayName || finalName,
                 photoURL: isValidPhoto(photoURLCandidate) ? photoURLCandidate : null,
                 email: user.email || null,
-                totalPomodoros: 0,
-                totalMinutes: 0,
                 lastActive: serverTimestamp(),
                 createdAt: serverTimestamp(),
                 isAnonymous: user.isAnonymous
-            });
+            }, { merge: true });
+
+            // Only write the zero-value counters if they are genuinely absent from the doc.
+            // Re-read the doc to be certain (it should be server-fresh at this point).
+            const freshSnap = await getDoc(userRef);
+            const freshData = freshSnap.data() || {};
+            const counterUpdates: Record<string, unknown> = {};
+            if (typeof freshData.totalMinutes !== "number") counterUpdates.totalMinutes = 0;
+            if (typeof freshData.totalPomodoros !== "number") counterUpdates.totalPomodoros = 0;
+            if (Object.keys(counterUpdates).length > 0) {
+                await updateDoc(userRef, counterUpdates);
+            }
 
             // Sync the name BACK to the Auth user so the Header sees it immediately
             const nameToSync = user.displayName || finalName;
@@ -237,37 +250,60 @@ export const syncUserProfile = async (user: User) => {
  */
 export const savePomodoroSession = async (userId: string, durationMinutes: number = 25, groupId: string | null = null) => {
     try {
-        if (auth.currentUser && auth.currentUser.uid === userId) {
-            await syncUserProfile(auth.currentUser);
-        }
-
-        await addDoc(collection(db, "sessions"), {
-            userId,
-            groupId, // Track if session happened in a group
-            duration: durationMinutes,
-            type: "work",
-            startedAt: null,
-            endedAt: serverTimestamp(),
-            status: "completed",
-            completedAt: serverTimestamp(),
-        });
-
-        const userRef = doc(db, "users", userId);
-        await updateDoc(userRef, {
-            totalPomodoros: increment(1),
-            totalMinutes: increment(durationMinutes),
-            lastActive: serverTimestamp()
-        });
-
-        if (groupId) {
-            const groupRef = doc(db, "focusGroups", groupId);
-            await updateDoc(groupRef, {
-                [`memberStats.${userId}.totalMinutes`]: increment(durationMinutes),
-                [`memberStats.${userId}.lastActive`]: serverTimestamp(),
-                totalMinutes: increment(durationMinutes)
+        if (process.env.NODE_ENV !== "production") {
+            console.log("Writing focus time:", {
+                userId,
+                amount: durationMinutes,
+                type: groupId ? "group" : "solo"
             });
         }
 
+        try {
+            await addDoc(collection(db, "sessions"), {
+                userId,
+                groupId,
+                duration: durationMinutes,
+                type: "work",
+                startedAt: null,
+                endedAt: serverTimestamp(),
+                status: "completed",
+                completedAt: serverTimestamp(),
+            });
+        } catch (error) {
+            console.error("Failed to save session document:", error);
+            return false;
+        }
+
+        invalidateSessionHistoryCache(userId);
+        import("./friendship").then(m => m.invalidateFriendshipCaches(userId)).catch(() => {});
+
+        const userRef = doc(db, "users", userId);
+        try {
+            await updateDoc(userRef, {
+                totalPomodoros: increment(1),
+                totalMinutes: increment(durationMinutes),
+                lastActive: serverTimestamp()
+            });
+        } catch (error) {
+            console.error("Failed to update user focus stats:", error);
+            return false;
+        }
+
+        if (groupId) {
+            const groupRef = doc(db, "focusGroups", groupId);
+            try {
+                await updateDoc(groupRef, {
+                    [`memberStats.${userId}.totalMinutes`]: increment(durationMinutes),
+                    [`memberStats.${userId}.lastActive`]: serverTimestamp(),
+                    totalMinutes: increment(durationMinutes)
+                });
+            } catch (error) {
+                console.error("Failed to update group focus stats:", error);
+                return false;
+            }
+        }
+
+        triggerLeaderboardRebuildIfStale();
         return true;
     } catch (error) {
         console.error("Error saving session:", error);
@@ -412,37 +448,60 @@ export const savePartialPomodoroSession = async (userId: string, durationMinutes
     if (durationMinutes < 1) return false;
 
     try {
-        if (auth.currentUser && auth.currentUser.uid === userId) {
-            await syncUserProfile(auth.currentUser);
-        }
-
-        await addDoc(collection(db, "sessions"), {
-            userId,
-            groupId,
-            duration: durationMinutes,
-            type: "work",
-            startedAt: null,
-            endedAt: serverTimestamp(),
-            status: "completed",
-            completedAt: serverTimestamp(),
-        });
-
-        const userRef = doc(db, "users", userId);
-        await updateDoc(userRef, {
-            totalPomodoros: increment(1),
-            totalMinutes: increment(durationMinutes),
-            lastActive: serverTimestamp()
-        });
-
-        if (groupId) {
-            const groupRef = doc(db, "focusGroups", groupId);
-            await updateDoc(groupRef, {
-                [`memberStats.${userId}.totalMinutes`]: increment(durationMinutes),
-                [`memberStats.${userId}.lastActive`]: serverTimestamp(),
-                totalMinutes: increment(durationMinutes)
+        if (process.env.NODE_ENV !== "production") {
+            console.log("Writing focus time:", {
+                userId,
+                amount: durationMinutes,
+                type: groupId ? "group" : "solo"
             });
         }
 
+        try {
+            await addDoc(collection(db, "sessions"), {
+                userId,
+                groupId,
+                duration: durationMinutes,
+                type: "work",
+                startedAt: null,
+                endedAt: serverTimestamp(),
+                status: "completed",
+                completedAt: serverTimestamp(),
+            });
+        } catch (error) {
+            console.error("Failed to save partial session document:", error);
+            return false;
+        }
+
+        invalidateSessionHistoryCache(userId);
+        import("./friendship").then(m => m.invalidateFriendshipCaches(userId)).catch(() => {});
+
+        const userRef = doc(db, "users", userId);
+        try {
+            await updateDoc(userRef, {
+                totalPomodoros: increment(1),
+                totalMinutes: increment(durationMinutes),
+                lastActive: serverTimestamp()
+            });
+        } catch (error) {
+            console.error("Failed to update user focus stats (partial):", error);
+            return false;
+        }
+
+        if (groupId) {
+            const groupRef = doc(db, "focusGroups", groupId);
+            try {
+                await updateDoc(groupRef, {
+                    [`memberStats.${userId}.totalMinutes`]: increment(durationMinutes),
+                    [`memberStats.${userId}.lastActive`]: serverTimestamp(),
+                    totalMinutes: increment(durationMinutes)
+                });
+            } catch (error) {
+                console.error("Failed to update group focus stats (partial):", error);
+                return false;
+            }
+        }
+
+        triggerLeaderboardRebuildIfStale();
         return true;
     } catch (error) {
         console.error("Error saving partial session:", error);
@@ -572,11 +631,43 @@ const USER_PROFILE_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 let cachedLeaderboard: { data: any[]; timestamp: number; queriedLimit: number } | null = getSessionStorageItem("dangdoro_leaderboard_cache");
 const LEADERBOARD_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+/**
+ * After a successful focusTime write, check if the cached leaderboard is stale (>5 min).
+ * If stale, invalidate the local cache and fire a rebuild request.
+ * The cron handles the actual /cache/leaderboard rebuild regardless.
+ */
+function triggerLeaderboardRebuildIfStale() {
+  const now = Date.now();
+  if (cachedLeaderboard && now - cachedLeaderboard.timestamp < LEADERBOARD_CACHE_TTL) {
+    return;
+  }
+  cachedLeaderboard = null;
+  if (typeof window !== "undefined") {
+    try {
+      sessionStorage.removeItem("dangdoro_leaderboard_cache");
+    } catch {}
+  }
+  fetch("/api/update-leaderboard", { method: "POST" }).catch(() => {});
+}
+
 const groupLeaderboardCache = loadMapFromSession<{ data: FocusGroup[]; timestamp: number }>("dangdoro_group_leaderboard_cache");
 const GROUP_LEADERBOARD_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+const sessionHistoryCache = loadMapFromSession<{ data: any[]; timestamp: number }>("dangdoro_session_history_cache");
+const SESSION_HISTORY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 let activeLeaderboardPromise: Promise<any[]> | null = null;
 const activeGroupLeaderboardPromises = new Map<string, Promise<FocusGroup[]>>();
+const activeSessionHistoryPromises = new Map<string, Promise<any[]>>();
+
+export const invalidateSessionHistoryCache = (userId: string) => {
+    for (const key of Array.from(sessionHistoryCache.keys())) {
+        if (key.startsWith(`${userId}_`)) {
+            sessionHistoryCache.delete(key);
+        }
+    }
+    saveMapToSession("dangdoro_session_history_cache", sessionHistoryCache);
+};
 
 /**
  * Fetches the top focusers for the leaderboard.
@@ -585,35 +676,63 @@ export const getLeaderboard = async (limitCount: number = 10) => {
     const now = Date.now();
     if (cachedLeaderboard && now - cachedLeaderboard.timestamp < LEADERBOARD_CACHE_TTL) {
         if (cachedLeaderboard.data.length >= limitCount || cachedLeaderboard.queriedLimit >= limitCount) {
+            if (process.env.NODE_ENV === "development") {
+                console.log("CACHE HIT: getLeaderboard");
+            }
             console.log("⚡ [Leaderboard Cache] Hit! Returning cached leaderboards.");
             return cachedLeaderboard.data.slice(0, limitCount);
         }
     }
 
     if (activeLeaderboardPromise) {
+        if (process.env.NODE_ENV === "development") {
+            console.log("CACHE HIT: getLeaderboard (coalesced)");
+        }
         console.log("⚡ [Leaderboard Cache] Coalescing concurrent request.");
         const data = await activeLeaderboardPromise;
         return data.slice(0, limitCount);
     }
 
-    console.log("⏳ [Leaderboard Cache] Miss! Querying Firestore for leaders.");
+    if (process.env.NODE_ENV === "development") {
+        console.log("FIRESTORE READ: getLeaderboard");
+    }
+    console.log("⏳ [Leaderboard Cache] Miss! Querying Firestore cache/leaderboard.");
     activeLeaderboardPromise = (async () => {
-        const usersRef = collection(db, "users");
-        // Always query up to a reasonable buffer size (e.g. 150) to satisfy subsequent calls and slice them
+        const cacheDocRef = doc(db, "cache", "leaderboard");
+        const cacheDocSnap = await getDoc(cacheDocRef);
+
+        let data: any[] = [];
+        if (cacheDocSnap.exists()) {
+            const docData = cacheDocSnap.data();
+            data = docData.players || docData.data || [];
+        } else {
+            // Cache doc doesn't exist yet (cron hasn't run). Fall back to a direct
+            // users query so the leaderboard is never empty.
+            console.warn("⚠️ [Leaderboard Cache] /cache/leaderboard not found. Falling back to users collection query.");
+            try {
+                const usersSnap = await getDocs(
+                    query(collection(db, "users"), orderBy("totalMinutes", "desc"), limit(500))
+                );
+                data = usersSnap.docs
+                    .map(d => {
+                        const u = d.data();
+                        if (u.isAnonymous) return null;
+                        return {
+                            id: d.id,
+                            uid: d.id,
+                            displayName: u.displayName || "Focus Hero",
+                            photoURL: u.photoURL ? (u.photoURL as string).slice(0, 512) : null,
+                            totalMinutes: u.totalMinutes || 0,
+                            totalPomodoros: u.totalPomodoros || 0,
+                        };
+                    })
+                    .filter(Boolean) as any[];
+            } catch (e) {
+                console.error("[Leaderboard Cache] Fallback users query failed:", e);
+            }
+        }
+
         const queryLimit = Math.max(150, limitCount);
-        const q = query(
-            usersRef,
-            orderBy("totalMinutes", "desc"),
-            orderBy("totalPomodoros", "desc"),
-            limit(queryLimit)
-        );
-
-        const querySnapshot = await getDocs(q);
-        const data = querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
-
         cachedLeaderboard = { data, timestamp: Date.now(), queriedLimit: queryLimit };
         setSessionStorageItem("dangdoro_leaderboard_cache", cachedLeaderboard);
         return data;
@@ -642,16 +761,25 @@ export const getGroupLeaderboard = async (options: {
     const cacheKey = JSON.stringify(options);
     const cached = groupLeaderboardCache.get(cacheKey);
     if (cached && now - cached.timestamp < GROUP_LEADERBOARD_CACHE_TTL) {
+        if (process.env.NODE_ENV === "development") {
+            console.log("CACHE HIT: getGroupLeaderboard");
+        }
         console.log("⚡ [Group Leaderboard Cache] Hit! Returning cached groups.");
         return cached.data;
     }
 
     const activePromise = activeGroupLeaderboardPromises.get(cacheKey);
     if (activePromise) {
+        if (process.env.NODE_ENV === "development") {
+            console.log("CACHE HIT: getGroupLeaderboard (coalesced)");
+        }
         console.log("⚡ [Group Leaderboard Cache] Coalescing concurrent request.");
         return activePromise;
     }
 
+    if (process.env.NODE_ENV === "development") {
+        console.log("FIRESTORE READ: getGroupLeaderboard");
+    }
     console.log("⏳ [Group Leaderboard Cache] Miss! Querying Firestore for groups.");
     const { userId, filter = "all", sortBy = "minutes", limitCount = 20 } = options;
     
@@ -742,6 +870,9 @@ export const fetchUserProfiles = async (uids: string[]) => {
     }
 
     if (uidsToFetch.length > 0) {
+        if (process.env.NODE_ENV === "development") {
+            console.log(`FIRESTORE READ: fetchUserProfiles (${uidsToFetch.length}/${uids.length} profiles)`);
+        }
         console.log(`⏳ [Profile Cache] Miss/Stale for UIDs: ${uidsToFetch.join(", ")}. Querying Firestore.`);
         const CHUNK_SIZE = 30;
         const usersRef = collection(db, "users");
@@ -801,6 +932,9 @@ export const fetchUserProfiles = async (uids: string[]) => {
 
     const hitCount = uids.length - uidsToFetch.length;
     if (hitCount > 0) {
+        if (process.env.NODE_ENV === "development") {
+            console.log(`CACHE HIT: fetchUserProfiles (${hitCount}/${uids.length} profiles)`);
+        }
         console.log(`⚡ [Profile Cache] Hit/Coalesced! Resolved ${hitCount}/${uids.length} profiles from memory/in-flight.`);
     }
 
@@ -1163,14 +1297,49 @@ export const subscribeToTasks = (userId: string, callback: (tasks: TaskItem[]) =
  */
 
 export const getSessionHistory = async (userId: string, limitCount: number = 365) => {
-    const q = query(
-        collection(db, "sessions"),
-        where("userId", "==", userId),
-        orderBy("completedAt", "desc"),
-        limit(limitCount)
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const now = Date.now();
+    const cacheKey = `${userId}_${limitCount}`;
+    const cached = sessionHistoryCache.get(cacheKey);
+    if (cached && now - cached.timestamp < SESSION_HISTORY_CACHE_TTL) {
+        if (process.env.NODE_ENV === "development") {
+            console.log("CACHE HIT: getSessionHistory");
+        }
+        return cached.data;
+    }
+
+    const activePromise = activeSessionHistoryPromises.get(cacheKey);
+    if (activePromise) {
+        if (process.env.NODE_ENV === "development") {
+            console.log("CACHE HIT: getSessionHistory (coalesced)");
+        }
+        return activePromise;
+    }
+
+    if (process.env.NODE_ENV === "development") {
+        console.log("FIRESTORE READ: getSessionHistory");
+    }
+
+    const fetchPromise = (async () => {
+        const q = query(
+            collection(db, "sessions"),
+            where("userId", "==", userId),
+            orderBy("completedAt", "desc"),
+            limit(limitCount)
+        );
+        const snapshot = await getDocs(q);
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        sessionHistoryCache.set(cacheKey, { data, timestamp: Date.now() });
+        saveMapToSession("dangdoro_session_history_cache", sessionHistoryCache);
+        return data;
+    })();
+
+    activeSessionHistoryPromises.set(cacheKey, fetchPromise);
+
+    try {
+        return await fetchPromise;
+    } finally {
+        activeSessionHistoryPromises.delete(cacheKey);
+    }
 };
 
 /**

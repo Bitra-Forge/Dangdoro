@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { syncUserProfile } from "@/lib/db";
+import { retryPendingFocusTime } from "@/lib/focus-accumulator";
 import { useTimerStore } from "@/lib/store";
 
 interface AuthContextType {
@@ -44,6 +45,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 if (!currentUser.isAnonymous) {
                     await syncUserProfile(currentUser);
                 }
+
+                // Retry any pending focus time writes that failed in a previous session
+                retryPendingFocusTime(currentUser.uid);
 
                 setUser(currentUser);
                 setLoading(false);

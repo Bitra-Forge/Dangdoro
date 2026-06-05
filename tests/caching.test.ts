@@ -30,15 +30,16 @@ vi.mock("@/lib/session-telemetry", () => ({
 
 // Setup Firestore mocks
 const mockGetDocs = vi.fn();
+const mockGetDoc = vi.fn();
 
 vi.mock("firebase/firestore", () => ({
   getFirestore: vi.fn(),
-  doc: vi.fn(),
-  getDoc: vi.fn(),
+  doc: vi.fn((db, ...paths) => ({ paths })),
+  getDoc: (ref: any) => mockGetDoc(ref),
   setDoc: vi.fn(),
   updateDoc: vi.fn(),
   serverTimestamp: vi.fn(),
-  collection: vi.fn((db, path) => ({ path })),
+  collection: vi.fn((db, ...paths) => ({ path: paths.join("/") })),
   addDoc: vi.fn(),
   query: vi.fn((ref, ...constraints) => ({ ref, constraints })),
   orderBy: vi.fn((field, dir) => ({ type: "orderBy", field, dir })),
@@ -59,7 +60,8 @@ vi.mock("firebase/firestore", () => ({
 }));
 
 // Now import the functions we want to test
-import { getLeaderboard, getGroupLeaderboard, fetchUserProfiles } from "@/lib/db";
+import { getLeaderboard, getGroupLeaderboard, fetchUserProfiles, getSessionHistory } from "@/lib/db";
+import { getFriendsList, getFriendsListSimple, getFriendsLeaderboard, getFriendsActivity } from "@/lib/friendship";
 
 describe("Caching Layer", () => {
   let testTime = new Date("2026-06-04T12:00:00Z");
@@ -70,6 +72,7 @@ describe("Caching Layer", () => {
     testTime = new Date(testTime.getTime() + 1 * 60 * 60 * 1000);
     vi.setSystemTime(testTime);
     mockGetDocs.mockReset();
+    mockGetDoc.mockReset();
   });
 
   afterEach(() => {
@@ -83,33 +86,35 @@ describe("Caching Layer", () => {
         { id: "user-2", totalMinutes: 90, totalPomodoros: 3, displayName: "Bob" },
       ];
 
-      // Setup Firestore mock return value
-      mockGetDocs.mockResolvedValue({
-        docs: mockUsers.map((u) => ({
-          id: u.id,
-          data: () => ({
+      // Setup Firestore mock return value for single doc read
+      mockGetDoc.mockResolvedValue({
+        exists: () => true,
+        data: () => ({
+          players: mockUsers.map((u) => ({
+            id: u.id,
+            uid: u.id,
             displayName: u.displayName,
             totalMinutes: u.totalMinutes,
             totalPomodoros: u.totalPomodoros,
-          }),
-        })),
+          })),
+        }),
       });
 
       // 1. First Call: Should fetch from database
       const result1 = await getLeaderboard(2);
-      expect(mockGetDocs).toHaveBeenCalledTimes(1);
+      expect(mockGetDoc).toHaveBeenCalledTimes(1);
       expect(result1).toHaveLength(2);
       expect(result1[0].displayName).toBe("Alice");
 
       // 2. Second Call (Immediate): Should use cache and NOT query Firestore
       const result2 = await getLeaderboard(2);
-      expect(mockGetDocs).toHaveBeenCalledTimes(1); // Still 1
+      expect(mockGetDoc).toHaveBeenCalledTimes(1); // Still 1
       expect(result2).toEqual(result1);
 
       // 3. Third Call (Within TTL - e.g., 4 minutes later): Should still use cache
       vi.advanceTimersByTime(4 * 60 * 1000);
       const result3 = await getLeaderboard(2);
-      expect(mockGetDocs).toHaveBeenCalledTimes(1); // Still 1
+      expect(mockGetDoc).toHaveBeenCalledTimes(1); // Still 1
       expect(result3).toEqual(result1);
 
       // 4. Fourth Call (After TTL - 6 minutes total passed): Should query Firestore again
@@ -120,19 +125,21 @@ describe("Caching Layer", () => {
         ...mockUsers,
         { id: "user-3", totalMinutes: 200, totalPomodoros: 8, displayName: "Charlie" },
       ];
-      mockGetDocs.mockResolvedValue({
-        docs: updatedMockUsers.map((u) => ({
-          id: u.id,
-          data: () => ({
+      mockGetDoc.mockResolvedValue({
+        exists: () => true,
+        data: () => ({
+          players: updatedMockUsers.map((u) => ({
+            id: u.id,
+            uid: u.id,
             displayName: u.displayName,
             totalMinutes: u.totalMinutes,
             totalPomodoros: u.totalPomodoros,
-          }),
-        })),
+          })),
+        }),
       });
 
       const result4 = await getLeaderboard(3);
-      expect(mockGetDocs).toHaveBeenCalledTimes(2); // Incremented to 2
+      expect(mockGetDoc).toHaveBeenCalledTimes(2); // Incremented to 2
       expect(result4).toHaveLength(3);
     });
 
@@ -141,28 +148,31 @@ describe("Caching Layer", () => {
       const dbPromise = new Promise<any>((resolve) => {
         resolvePromise = resolve;
       });
-      mockGetDocs.mockReturnValue(dbPromise);
+      mockGetDoc.mockReturnValue(dbPromise);
 
       // Trigger two concurrent requests
       const p1 = getLeaderboard(2);
       const p2 = getLeaderboard(2);
 
-      // Verify getDocs was called only once so far
-      expect(mockGetDocs).toHaveBeenCalledTimes(1);
+      // Verify getDoc was called only once so far
+      expect(mockGetDoc).toHaveBeenCalledTimes(1);
 
       // Resolve the Firestore query
       resolvePromise({
-        docs: [
-          { id: "user-1", data: () => ({ displayName: "Alice", totalMinutes: 100 }) },
-          { id: "user-2", data: () => ({ displayName: "Bob", totalMinutes: 80 }) },
-        ],
+        exists: () => true,
+        data: () => ({
+          players: [
+            { id: "user-1", uid: "user-1", displayName: "Alice", totalMinutes: 100 },
+            { id: "user-2", uid: "user-2", displayName: "Bob", totalMinutes: 80 },
+          ],
+        }),
       });
 
       const [res1, res2] = await Promise.all([p1, p2]);
       expect(res1).toHaveLength(2);
       expect(res2).toHaveLength(2);
       expect(res1).toEqual(res2);
-      expect(mockGetDocs).toHaveBeenCalledTimes(1);
+      expect(mockGetDoc).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -304,6 +314,133 @@ describe("Caching Layer", () => {
       expect(res1[1].displayName).toBe("Bob");
       expect(res2[0].displayName).toBe("Bob");
       expect(res2[1].displayName).toBe("Charlie");
+    });
+  });
+
+  describe("getSessionHistory Cache", () => {
+    it("should cache session history, reuse it, and invalidate on session completion", async () => {
+      const mockSessions = [
+        { id: "s1", duration: 25, status: "completed" },
+      ];
+
+      mockGetDocs.mockResolvedValue({
+        docs: mockSessions.map(s => ({
+          id: s.id,
+          data: () => s
+        }))
+      });
+
+      // 1. Initial Call: Query Firestore
+      const res1 = await getSessionHistory("user-1");
+      expect(mockGetDocs).toHaveBeenCalledTimes(1);
+      expect(res1).toHaveLength(1);
+
+      // 2. Immediate Call: Cache hit
+      const res2 = await getSessionHistory("user-1");
+      expect(mockGetDocs).toHaveBeenCalledTimes(1);
+      expect(res2).toEqual(res1);
+
+      // 3. Complete a session: Invalidation happens
+      const { invalidateSessionHistoryCache } = await import("@/lib/db");
+      invalidateSessionHistoryCache("user-1");
+
+      // 4. Call again after invalidation: Query Firestore again
+      mockGetDocs.mockResolvedValue({
+        docs: [
+          ...mockSessions.map(s => ({ id: s.id, data: () => s })),
+          { id: "s2", data: () => ({ duration: 25, status: "completed" }) }
+        ]
+      });
+      const res3 = await getSessionHistory("user-1");
+      expect(mockGetDocs).toHaveBeenCalledTimes(2);
+      expect(res3).toHaveLength(2);
+    });
+  });
+
+  describe("Friendship Caching", () => {
+    it("should cache getFriendsList, getFriendsListSimple, getFriendsLeaderboard, and getFriendsActivity and invalidate them", async () => {
+      // Setup mock database behavior for friends lists and profile resolutions
+      mockGetDocs.mockImplementation(async (q: any) => {
+        const path = q.path || (q.ref && q.ref.path) || "";
+        if (path.includes("friends")) {
+          return {
+            docs: [
+              { id: "friend-1", data: () => ({ friendId: "friend-1", since: null }) }
+            ]
+          };
+        }
+        return {
+          docs: [
+            { id: "friend-1", data: () => ({ uid: "friend-1", displayName: "Alice", totalMinutes: 100 }) },
+            { id: "user-1", data: () => ({ uid: "user-1", displayName: "Self", totalMinutes: 50 }) }
+          ]
+        };
+      });
+
+      // 1. Test getFriendsList
+      const list1 = await getFriendsList("user-1");
+      expect(list1).toHaveLength(1);
+      expect(list1[0].userData?.displayName).toBe("Alice");
+
+      // Verify cache hit
+      const list2 = await getFriendsList("user-1");
+      expect(list2).toEqual(list1);
+
+      // 2. Test getFriendsListSimple
+      const simple1 = await getFriendsListSimple("user-1");
+      expect(simple1).toHaveLength(1);
+      expect(simple1[0].friendId).toBe("friend-1");
+
+      // Verify cache hit
+      const simple2 = await getFriendsListSimple("user-1");
+      expect(simple2).toEqual(simple1);
+
+      // 3. Test getFriendsLeaderboard
+      const leaderboard1 = await getFriendsLeaderboard("user-1");
+      expect(leaderboard1).toHaveLength(2); // Friend + Self
+      expect(leaderboard1[0].displayName).toBe("Alice");
+
+      // Verify cache hit
+      const leaderboard2 = await getFriendsLeaderboard("user-1");
+      expect(leaderboard2).toEqual(leaderboard1);
+
+      // 4. Test getFriendsActivity
+      mockGetDocs.mockImplementation(async (q: any) => {
+        const path = q.path || (q.ref && q.ref.path) || "";
+        if (path.includes("friends")) {
+          return {
+            docs: [
+              { id: "friend-1", data: () => ({ friendId: "friend-1", since: null }) }
+            ]
+          };
+        }
+        if (path.includes("sessions")) {
+          return {
+            docs: [
+              { id: "sess-1", data: () => ({ userId: "friend-1", duration: 25, completedAt: null }) }
+            ]
+          };
+        }
+        return { docs: [] };
+      });
+
+      const act1 = await getFriendsActivity("user-1");
+      expect(act1).toHaveLength(1);
+      expect(act1[0].id).toBe("sess-1");
+
+      // Verify cache hit
+      const act2 = await getFriendsActivity("user-1");
+      expect(act2).toEqual(act1);
+
+      // 5. Test Cache Invalidation
+      const { invalidateFriendshipCaches } = await import("@/lib/friendship");
+      invalidateFriendshipCaches("user-1");
+
+      // Reset mock tracking and verify cache miss after invalidation
+      mockGetDocs.mockClear();
+      const act3 = await getFriendsActivity("user-1");
+      expect(mockGetDocs).toHaveBeenCalled();
+      expect(act3).toHaveLength(1);
     });
   });
 });

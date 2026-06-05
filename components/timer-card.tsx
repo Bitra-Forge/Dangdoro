@@ -14,6 +14,7 @@ import { useBackgroundTheme } from "@/lib/use-background-theme";
 import { Tooltip } from "@/components/ui/tooltip";
 
 let isGlobalHydrated = false;
+const hostIdCache = new Map<string, string>();
 
 export function TimerCard() {
   const BACKGROUND_COLORS = [
@@ -149,8 +150,31 @@ export function TimerCard() {
       }
 
       if (currentUser) {
-        const { savePartialPomodoroSession } = await import("@/lib/db");
-        await savePartialPomodoroSession(currentUser.uid, elapsedMinutes, activeGroupId);
+        let shouldSave = true;
+        if (activeGroupId) {
+          const cachedHostId = hostIdCache.get(activeGroupId);
+          if (cachedHostId) {
+            if (cachedHostId !== currentUser.uid) shouldSave = false;
+          } else {
+            try {
+              const { doc, getDoc } = await import("firebase/firestore");
+              const { db } = await import("@/lib/firebase");
+              const groupSnap = await getDoc(doc(db, "focusGroups", activeGroupId));
+              if (groupSnap.exists()) {
+                const groupData = groupSnap.data();
+                hostIdCache.set(activeGroupId, groupData.hostId);
+                if (groupData.hostId !== currentUser.uid) shouldSave = false;
+              }
+            } catch (err) {
+              console.error("Error checking host status in timer-card:", err);
+            }
+          }
+        }
+
+        if (shouldSave) {
+          const { accumulateFocusTime } = await import("@/lib/focus-accumulator");
+          await accumulateFocusTime(currentUser.uid, elapsedMinutes, activeGroupId);
+        }
       }
     }
 

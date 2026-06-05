@@ -30,6 +30,7 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { fetchUserProfiles } from "@/lib/db";
 
 type Tab = "friends" | "requests" | "search";
 
@@ -140,8 +141,8 @@ export default function FriendsPage() {
             }
 
             try {
-                const userDoc = await getDoc(doc(db, "users", user.uid));
-                const photoFromDoc = userDoc.exists() ? userDoc.data()?.photoURL : undefined;
+                const profiles = await fetchUserProfiles([user.uid]);
+                const photoFromDoc = profiles[0]?.photoURL;
                 setProfileImageUrl(getHighQualityAvatarUrl(photoFromDoc || user.photoURL) || "");
             } catch {
                 setProfileImageUrl(user.photoURL || "");

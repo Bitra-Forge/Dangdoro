@@ -89,3 +89,6 @@ export const adminDb = new Proxy({} as ReturnType<typeof admin.firestore>, {
 });
 
 export { admin };
+
+// Initialize server-side leaderboard update cron/interval
+import "./leaderboard-cron";

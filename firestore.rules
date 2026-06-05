@@ -43,7 +43,7 @@ service cloud.firestore {
       // ─── Friends subcollection (symmetric friendship model) ──
       match /friends/{friendId} {
         // Users can read their own friends list
-        allow read: if isSignedIn() && isOwner(userId);
+        allow read: if isSignedIn();
 
         // Friendship docs are created/deleted via batch writes by
         // either party (the accepting user writes to both subcollections)
@@ -220,6 +220,12 @@ service cloud.firestore {
       allow create: if isSignedIn(); // Other users/hosts create notifications for recipients
       allow update: if isSignedIn() && resource.data.toUserId == request.auth.uid;
       allow delete: if isSignedIn() && resource.data.toUserId == request.auth.uid;
+    }
+
+    // ─── Leaderboard Cache ───────────────────────────────────────
+    match /cache/leaderboard {
+      allow read: if isSignedIn();
+      allow write: if false;
     }
 
     // ─── Deny everything else ────────────────────────────────────

@@ -28,7 +28,8 @@ import {
     getEarliestActiveStart, normalizeLiveSessions,
     getGoalTypeLabel, GoalType, LiveSession
 } from "@/lib/groups";
-import { fetchUserProfiles, savePartialPomodoroSession } from "@/lib/db";
+import { fetchUserProfiles } from "@/lib/db";
+import { accumulateFocusTime } from "@/lib/focus-accumulator";
 import { applyGroupSessionAction } from "@/lib/group-session";
 import { getFriendsList } from "@/lib/friendship";
 
@@ -198,7 +199,8 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const isMember = enrichedGroup?.members.includes(user?.uid || "");
     const isInGroupSession = activeGroupId === groupId;
     const effectiveIsFocusing = isInGroupSession || isPaused;
-    const userRole = enrichedGroup?.memberStats?.[user?.uid || ""]?.role || (enrichedGroup?.hostId === user?.uid ? "host" : "member");
+    const isHost = enrichedGroup?.hostId === user?.uid;
+    const userRole = enrichedGroup?.memberStats?.[user?.uid || ""]?.role || (isHost ? "host" : "member");
     const isAdmin = userRole === "host" || userRole === "admin";
     const isOrg = enrichedGroup?.type === "organization";
     const activeFocuserCount = enrichedGroup?.memberDetails?.filter((m: any) => m.isFocusing).length || 0;
@@ -304,8 +306,8 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                 if (timerSnapshot.mode === "focus" && timerSnapshot.timeLeft > 0) {
                     const elapsedSeconds = Math.max(0, timerSnapshot.initialFocusTime - timerSnapshot.timeLeft);
                     const elapsedMinutes = Math.floor(elapsedSeconds / 60);
-                    if (elapsedMinutes >= 1) {
-                        await savePartialPomodoroSession(user.uid, elapsedMinutes, enrichedGroup.id);
+                    if (elapsedMinutes >= 1 && isHost) {
+                        await accumulateFocusTime(user.uid, elapsedMinutes, enrichedGroup.id);
                     }
                 }
                 timerStop();
