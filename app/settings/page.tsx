@@ -480,54 +480,55 @@ export default function SettingsPage() {
                                                     {NONE_SOLID_COLORS.map((color) => {
                                                         const selected = backgroundSolidColor.toLowerCase() === color.value;
                                                         return (
+                                                            <Tooltip key={color.value} content={color.name}>
+                                                                <button
+                                                                    onClick={() => setBackgroundSolidColor(color.value)}
+                                                                    className={cn(
+                                                                        "relative h-16 rounded-xl transition-all flex items-center justify-center cursor-pointer",
+                                                                        selected ? "" : "hover:scale-[1.02]"
+                                                                    )}
+                                                                    style={{ backgroundColor: color.value }}
+                                                                >
+                                                                    <div
+                                                                        className={cn(
+                                                                            "absolute bottom-1.5 right-1.5 h-4 w-4 rounded-full border border-white/20 bg-black/60 text-white flex items-center justify-center shadow-md shadow-black/60 backdrop-blur-[1px] transition-all duration-200",
+                                                                            selected ? "opacity-100 scale-100" : "opacity-0 scale-75"
+                                                                        )}
+                                                                    >
+                                                                        <Check className="h-2.5 w-2.5" />
+                                                                    </div>
+                                                                </button>
+                                                            </Tooltip>
+                                                        );
+                                                    })}
+
+                                                    <div className="relative" ref={customColorPanelRef}>
+                                                        <Tooltip content="Custom color">
                                                             <button
-                                                                key={color.value}
-                                                                onClick={() => setBackgroundSolidColor(color.value)}
-                                                                title={color.name}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setNoneBackgroundMode("solid");
+                                                                    setShowCustomColorPanel((prev) => !prev);
+                                                                }}
                                                                 className={cn(
-                                                                    "relative h-16 rounded-xl transition-all flex items-center justify-center cursor-pointer",
-                                                                    selected ? "" : "hover:scale-[1.02]"
+                                                                    "group relative h-16 w-full rounded-xl transition-all flex items-center justify-center overflow-hidden cursor-pointer",
+                                                                    customSolidColor ? "" : "hover:scale-[1.02]"
                                                                 )}
-                                                                style={{ backgroundColor: color.value }}
+                                                                style={{ backgroundColor: backgroundSolidColor }}
                                                             >
+                                                                <span className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.16)_0%,rgba(255,255,255,0.05)_45%,rgba(0,0,0,0.08)_100%)]" />
+                                                                <WandSparkles className="relative z-10 h-5 w-5 text-white" />
+
                                                                 <div
                                                                     className={cn(
                                                                         "absolute bottom-1.5 right-1.5 h-4 w-4 rounded-full border border-white/20 bg-black/60 text-white flex items-center justify-center shadow-md shadow-black/60 backdrop-blur-[1px] transition-all duration-200",
-                                                                        selected ? "opacity-100 scale-100" : "opacity-0 scale-75"
+                                                                        customSolidColor ? "opacity-100 scale-100" : "opacity-0 scale-75"
                                                                     )}
                                                                 >
                                                                     <Check className="h-2.5 w-2.5" />
                                                                 </div>
                                                             </button>
-                                                        );
-                                                    })}
-
-                                                    <div className="relative" ref={customColorPanelRef}>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setNoneBackgroundMode("solid");
-                                                                setShowCustomColorPanel((prev) => !prev);
-                                                            }}
-                                                            className={cn(
-                                                                "group relative h-16 w-full rounded-xl transition-all flex items-center justify-center overflow-hidden cursor-pointer",
-                                                                customSolidColor ? "" : "hover:scale-[1.02]"
-                                                            )}
-                                                            style={{ backgroundColor: backgroundSolidColor }}
-                                                            title="Custom color"
-                                                        >
-                                                            <span className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.16)_0%,rgba(255,255,255,0.05)_45%,rgba(0,0,0,0.08)_100%)]" />
-                                                            <WandSparkles className="relative z-10 h-5 w-5 text-white" />
-
-                                                            <div
-                                                                className={cn(
-                                                                    "absolute bottom-1.5 right-1.5 h-4 w-4 rounded-full border border-white/20 bg-black/60 text-white flex items-center justify-center shadow-md shadow-black/60 backdrop-blur-[1px] transition-all duration-200",
-                                                                    customSolidColor ? "opacity-100 scale-100" : "opacity-0 scale-75"
-                                                                )}
-                                                            >
-                                                                <Check className="h-2.5 w-2.5" />
-                                                            </div>
-                                                        </button>
+                                                        </Tooltip>
 
                                                         {showCustomColorPanel && (
                                                             <div className="absolute top-[calc(100%+8px)] left-0 z-30 w-72 rounded-xl border border-white/15 bg-[#0a0d16]/95 backdrop-blur-xl p-3 shadow-2xl shadow-black/70">
@@ -573,29 +574,29 @@ export default function SettingsPage() {
                                                     {NONE_GRADIENT_COLORS.map((gradient) => {
                                                         const selected = noneBackgroundGradient === gradient.value;
                                                         return (
-                                                            <button
-                                                                key={gradient.name}
-                                                                onClick={() => setNoneBackgroundGradient(gradient.value)}
-                                                                className={cn(
-                                                                    "group relative h-16 rounded-xl overflow-hidden transition-all flex items-center justify-center cursor-pointer",
-                                                                    selected ? "text-white" : "text-zinc-300 hover:scale-[1.02]"
-                                                                )}
-                                                                style={{ backgroundImage: gradient.value }}
-                                                                title={gradient.name}
-                                                            >
-                                                                <span className="pointer-events-none absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                                                                <span className="relative z-10 text-white/0 group-hover:text-white/40 text-base font-bold text-center transition-all duration-300">
-                                                                    {gradient.name}
-                                                                </span>
-                                                                <div
+                                                            <Tooltip key={gradient.name} content={gradient.name}>
+                                                                <button
+                                                                    onClick={() => setNoneBackgroundGradient(gradient.value)}
                                                                     className={cn(
-                                                                        "absolute bottom-1.5 right-1.5 h-4 w-4 rounded-full border border-white/20 bg-black/60 text-white flex items-center justify-center shadow-md shadow-black/60 backdrop-blur-[1px] z-20 transition-all duration-200",
-                                                                        selected ? "opacity-100 scale-100" : "opacity-0 scale-75"
+                                                                        "group relative h-16 rounded-xl overflow-hidden transition-all flex items-center justify-center cursor-pointer",
+                                                                        selected ? "text-white" : "text-zinc-300 hover:scale-[1.02]"
                                                                     )}
+                                                                    style={{ backgroundImage: gradient.value }}
                                                                 >
-                                                                    <Check className="h-2.5 w-2.5" />
-                                                                </div>
-                                                            </button>
+                                                                    <span className="pointer-events-none absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                                                                    <span className="relative z-10 text-white/0 group-hover:text-white/40 text-base font-bold text-center transition-all duration-300">
+                                                                        {gradient.name}
+                                                                    </span>
+                                                                    <div
+                                                                        className={cn(
+                                                                            "absolute bottom-1.5 right-1.5 h-4 w-4 rounded-full border border-white/20 bg-black/60 text-white flex items-center justify-center shadow-md shadow-black/60 backdrop-blur-[1px] z-20 transition-all duration-200",
+                                                                            selected ? "opacity-100 scale-100" : "opacity-0 scale-75"
+                                                                        )}
+                                                                    >
+                                                                        <Check className="h-2.5 w-2.5" />
+                                                                    </div>
+                                                                </button>
+                                                            </Tooltip>
                                                         );
                                                     })}
                                                 </div>
