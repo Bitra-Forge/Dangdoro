@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
 import { useTimerStore } from "@/lib/store";
@@ -17,8 +17,13 @@ export function GroupSessionSync() {
   const setLiveSessionId = useTimerStore((s) => s.setLiveSessionId);
   const activeLiveSessionId = useTimerStore((s) => s.activeLiveSessionId);
 
+  const prevGroupIdRef = useRef<string | null>(activeGroupId);
+
   useEffect(() => {
     const syncLiveSession = async () => {
+      const prevGroupId = prevGroupIdRef.current;
+      prevGroupIdRef.current = activeGroupId;
+
       try {
         if (!user || user.isAnonymous) {
           if (activeLiveSessionId) {
@@ -32,7 +37,14 @@ export function GroupSessionSync() {
           return;
         }
 
-        if (timerIsActive && activeGroupId && !activeLiveSessionId) {
+        // Handle group switching: if we have an active session but the active group ID changed
+        if (activeLiveSessionId && activeGroupId && prevGroupId && prevGroupId !== activeGroupId) {
+          await endLiveSession(activeLiveSessionId);
+          setLiveSessionId(null);
+          return;
+        }
+
+        if ((timerIsActive || isPaused) && activeGroupId && !activeLiveSessionId) {
           const sid = await startLiveSession(
             user.uid,
             activeGroupId,
