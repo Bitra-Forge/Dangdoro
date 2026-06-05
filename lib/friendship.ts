@@ -214,6 +214,22 @@ export const acceptFriendRequest = async (requestId: string, fromUserId: string,
         });
 
         await batch.commit();
+
+        // Best-effort: notify the original requester that their friend request was accepted.
+        // Matches the existing "objective_assignment" notification pattern in GroupWorkspace.
+        try {
+            await addDoc(collection(db, "notifications"), {
+                type: "friend_request_accepted",
+                toUserId: fromUserId,
+                fromUserId: toUserId,
+                friendRequestId: requestId,
+                read: false,
+                createdAt: serverTimestamp(),
+            });
+        } catch (notifError) {
+            console.error("Failed to create acceptance notification:", notifError);
+        }
+
         return true;
     } catch (error) {
         console.error("Error accepting friend request:", error);

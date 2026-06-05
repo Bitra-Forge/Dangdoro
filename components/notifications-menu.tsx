@@ -35,10 +35,11 @@ export function NotificationsMenu() {
     const [groupInvites, setGroupInvites] = useState<GroupInviteItem[]>([]);
     const [profiles, setProfiles] = useState<Record<string, UserProfile>>({});
     const [objectiveAssignments, setObjectiveAssignments] = useState<ObjectiveAssignmentItem[]>([]);
+    const [friendRequestAccepted, setFriendRequestAccepted] = useState<FriendRequestAcceptedItem[]>([]);
     const menuRef = useRef<HTMLDivElement>(null);
     const popoverRef = useRef<HTMLDivElement>(null);
     const [mounted, setMounted] = useState(false);
-    const totalUnread = requests.length + groupInvites.length + objectiveAssignments.length;
+    const totalUnread = requests.length + groupInvites.length + objectiveAssignments.length + friendRequestAccepted.length;
     const hasUnread = totalUnread > 0;
 
     useEffect(() => {
@@ -69,6 +70,15 @@ export function NotificationsMenu() {
         groupId?: string;
         groupName?: string;
         taskTitle?: string;
+        read?: boolean;
+    };
+
+    type FriendRequestAcceptedItem = {
+        id: string;
+        type: "friend_request_accepted";
+        toUserId: string;
+        fromUserId?: string;
+        friendRequestId?: string;
         read?: boolean;
     };
 
@@ -131,7 +141,12 @@ export function NotificationsMenu() {
                 .filter((n) => n.type === "objective_assignment");
             setObjectiveAssignments(assignmentNotifs);
 
-            const senderIds = assignmentNotifs
+            const acceptedNotifs = snapshot.docs
+                .map((d) => ({ id: d.id, ...d.data() } as FriendRequestAcceptedItem))
+                .filter((n) => n.type === "friend_request_accepted");
+            setFriendRequestAccepted(acceptedNotifs);
+
+            const senderIds = [...assignmentNotifs, ...acceptedNotifs]
                 .map((n) => n.fromUserId)
                 .filter((id): id is string => !!id && !profiles[id]);
 
@@ -258,7 +273,7 @@ export function NotificationsMenu() {
             {isOpen && mounted ? createPortal(
                 <div ref={popoverRef} className="fixed top-22 right-2 w-[480px] max-w-[calc(100vw-16px)] z-[100] bg-zinc-950 border border-white/10 rounded-[2rem] shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300 sm:fixed sm:top-22 sm:right-8 sm:w-80 sm:max-w-none sm:rounded-[15px] sm:bg-zinc-900/95 sm:backdrop-blur-xl">
                     <div className="max-h-[400px] overflow-y-auto">
-                        {requests.length === 0 && groupInvites.length === 0 && objectiveAssignments.length === 0 ? (
+                        {requests.length === 0 && groupInvites.length === 0 && objectiveAssignments.length === 0 && friendRequestAccepted.length === 0 ? (
                             <div className="p-8 flex flex-col items-center justify-center text-center opacity-40">
                                 <Bell className="w-8 h-8 mb-3 opacity-20" />
                                 <p className="text-[10px] font-bold uppercase tracking-widest">No new notifications</p>
@@ -298,6 +313,51 @@ export function NotificationsMenu() {
                                                     }}
                                                 >
                                                     Open Groups
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="secondary"
+                                                    className="flex-1 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-[10px] font-black uppercase tracking-wider border border-white/5 cursor-pointer"
+                                                    onClick={() => handleMarkAssignmentRead(notif.id)}
+                                                >
+                                                    Dismiss
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+
+                                {friendRequestAccepted.map((notif) => {
+                                    const accepterProfile = notif.fromUserId ? profiles[notif.fromUserId] : null;
+                                    return (
+                                        <div key={`friend-accepted-${notif.id}`} className="p-4 border-b border-white/5">
+                                            <div className="flex items-center gap-3 mb-3">
+                                                <Avatar className="w-8 h-8 rounded-full border border-white/10 overflow-hidden shrink-0">
+                                                    <AvatarImage src={accepterProfile?.photoURL || undefined} className="rounded-full" />
+                                                    <AvatarFallback className="rounded-full"><User className="w-4 h-4" /></AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex flex-col min-w-0">
+                                                    <span className="text-[11px] font-space-grotesk font-bold text-white truncate">
+                                                        {accepterProfile?.displayName || "Someone"} accepted your friend request
+                                                    </span>
+                                                    <span className="text-[9px] font-bold text-muted-foreground uppercase">
+                                                        Friend Request Accepted
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    className="flex-1 h-8 rounded-lg bg-white hover:bg-zinc-200 text-black text-[10px] font-black uppercase tracking-wider cursor-pointer"
+                                                    onClick={() => {
+                                                        closeMenu("notifications");
+                                                        handleMarkAssignmentRead(notif.id);
+                                                        if (notif.fromUserId) {
+                                                            router.push(`/profile?user=${notif.fromUserId}`);
+                                                        }
+                                                    }}
+                                                >
+                                                    View Profile
                                                 </Button>
                                                 <Button
                                                     size="sm"
