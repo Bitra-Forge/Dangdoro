@@ -28,12 +28,6 @@ export function GroupSessionSync() {
   const hostIdRef = useRef<string | null>(null);
   const prevGroupIdRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    if (activeGroupId) {
-      prevGroupIdRef.current = activeGroupId;
-    }
-  }, [activeGroupId]);
-
   // Track host ID of the active group
   const cachedHostGroupRef = useRef<string | null>(null);
 
