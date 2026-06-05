@@ -704,9 +704,14 @@ export const getLeaderboard = async (limitCount: number = 10) => {
         const cacheDocSnap = await getDoc(cacheDocRef);
 
         let data: any[] = [];
+        let cacheStale = true;
         if (cacheDocSnap.exists()) {
             const docData = cacheDocSnap.data();
             data = docData.players || docData.data || [];
+            const updatedAt = docData.updatedAt
+                ? new Date(docData.updatedAt).getTime()
+                : 0;
+            cacheStale = Date.now() - updatedAt > LEADERBOARD_CACHE_TTL;
         } else {
             // Cache doc doesn't exist yet (cron hasn't run). Fall back to a direct
             // users query so the leaderboard is never empty.
@@ -723,7 +728,7 @@ export const getLeaderboard = async (limitCount: number = 10) => {
                             id: d.id,
                             uid: d.id,
                             displayName: u.displayName || "Focus Hero",
-                            photoURL: u.photoURL ? (u.photoURL as string).slice(0, 512) : null,
+                            photoURL: u.photoURL && !(u.photoURL as string).startsWith("data:") ? (u.photoURL as string).slice(0, 512) : null,
                             totalMinutes: u.totalMinutes || 0,
                             totalPomodoros: u.totalPomodoros || 0,
                         };
@@ -735,6 +740,23 @@ export const getLeaderboard = async (limitCount: number = 10) => {
         }
 
         const queryLimit = Math.max(150, limitCount);
+
+        // Overlay fresh photoURLs only if the cache is stale.
+        // If the cron recently rebuilt it, trust the cached values.
+        if (cacheStale) {
+            const uids = data.map((p: any) => p.uid).filter(Boolean);
+            if (uids.length > 0) {
+                try {
+                    const freshProfiles = await fetchUserProfiles(uids);
+                    const photoMap = new Map(freshProfiles.map(p => [p.uid, p.photoURL]));
+                    data.forEach((p: any) => {
+                        const fresh = photoMap.get(p.uid);
+                        if (fresh) p.photoURL = fresh;
+                    });
+                } catch {}
+            }
+        }
+
         cachedLeaderboard = { data, timestamp: Date.now(), queriedLimit: queryLimit };
         setSessionStorageItem("dangdoro_leaderboard_cache", cachedLeaderboard);
         return data;

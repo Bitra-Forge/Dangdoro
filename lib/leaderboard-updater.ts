@@ -10,13 +10,17 @@ export async function runLeaderboardUpdate() {
       const data = doc.data();
       // Skip anonymous users — they don't appear on the public leaderboard
       if (data.isAnonymous) return null;
-      // Truncate photoURL to avoid blowing past the 1 MB Firestore doc limit
+      // Truncate photoURL to avoid blowing past the 1 MB Firestore doc limit.
+      // Data URLs (base64) are far too large and can't be safely truncated — skip them.
       const rawPhoto: string | null = data.photoURL || null;
+      const photoURL = rawPhoto && !rawPhoto.startsWith("data:")
+        ? rawPhoto.slice(0, 512)
+        : null;
       return {
         id: doc.id,
         uid: doc.id,
         displayName: data.displayName || "Focus Hero",
-        photoURL: rawPhoto ? rawPhoto.slice(0, 512) : null,
+        photoURL,
         totalMinutes: data.totalMinutes || 0,
         totalPomodoros: data.totalPomodoros || 0,
       };
