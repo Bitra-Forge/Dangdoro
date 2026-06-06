@@ -28,6 +28,11 @@ export function GroupSessionSync() {
   const hostIdRef = useRef<string | null>(null);
   const prevGroupIdRef = useRef<string | null>(null);
 
+  // Track whether the timer reached zero naturally.
+  // When true, TimerTicker already called flushFocusTime(isSessionEnd=true),
+  // so GroupSessionSync must NOT call saveFocusTime() — that would double-write.
+  const completedNaturallyRef = useRef(false);
+
   // Track host ID of the active group
   const cachedHostGroupRef = useRef<string | null>(null);
 
@@ -46,19 +51,43 @@ export function GroupSessionSync() {
     }).catch((err) => console.error("Failed to get group hostId:", err));
   }, [activeGroupId]);
 
-  // Keep track of accumulated focus time in minutes
+  // Keep track of accumulated focus time and detect natural completion
   useEffect(() => {
-    if (timeLeft === 0) {
-      pendingMinutesRef.current = 0;
+    if (timeLeft === 0 && mode === "focus") {
+      // Timer hit zero in a focus session.
+      // IMPORTANT: React 18 batches stop() + setActiveGroupId(null) together, so
+      // activeGroupId may already be null here even though we were in a group session.
+      // Use prevGroupIdRef as a fallback to detect we were in a group.
+      const wasInGroup = activeGroupId || prevGroupIdRef.current;
+      if (wasInGroup) {
+        // TimerTicker already called flushFocusTime(isSessionEnd=true) — don't write again.
+        completedNaturallyRef.current = true;
+        pendingMinutesRef.current = 0;
+      }
       return;
     }
-    if (mode === "focus" && activeGroupId && timeLeft < initialFocusTime) {
+    if (timeLeft > 0) {
+      // Timer is actively running — reset the natural-completion flag for next session end
+      completedNaturallyRef.current = false;
+    }
+    if (mode === "focus" && activeGroupId && timeLeft < initialFocusTime && timeLeft > 0) {
       const elapsedSeconds = Math.max(0, initialFocusTime - timeLeft);
       pendingMinutesRef.current = Math.floor(elapsedSeconds / 60);
     }
   }, [timeLeft, initialFocusTime, mode, activeGroupId]);
 
+  /**
+   * Save focus time for NON-HOST members only.
+   * Hosts are handled by timer-card.tsx (stop-early) and TimerTicker (natural completion).
+   * Should only be called on MANUAL stop (not natural completion — TimerTicker handles that).
+   */
   const saveFocusTime = useCallback(async () => {
+    // Never save here if the timer completed naturally — TimerTicker already wrote it
+    if (completedNaturallyRef.current) {
+      completedNaturallyRef.current = false;
+      return;
+    }
+
     const duration = pendingMinutesRef.current;
     const targetGroupId = activeGroupId || prevGroupIdRef.current;
     const isNonHost = hostIdRef.current && user && hostIdRef.current !== user.uid;
@@ -113,7 +142,8 @@ export function GroupSessionSync() {
             pauseTimer();
           }
         } else if (activeLiveSessionId && !timerIsActive && !isPaused) {
-          // Stopped or completed - end live session
+          // Timer stopped (either manually or naturally) — end live session
+          // saveFocusTime() will skip if completedNaturallyRef is set
           await saveFocusTime();
           await endLiveSession(activeLiveSessionId);
           setLiveSessionId(null);
@@ -172,9 +202,12 @@ export function GroupSessionSync() {
 
     // Clean up presence immediately on tab close or page hide
     const handleCleanup = () => {
-      saveFocusTime();
-      if (user) {
-        flushFocusTime(user.uid, activeGroupId || prevGroupIdRef.current, false);
+      // Only flush if the session did NOT complete naturally (TimerTicker handled that)
+      if (!completedNaturallyRef.current) {
+        saveFocusTime();
+        if (user) {
+          flushFocusTime(user.uid, activeGroupId || prevGroupIdRef.current, false);
+        }
       }
       endLiveSession(activeLiveSessionId);
     };
