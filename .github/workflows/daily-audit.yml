@@ -1,0 +1,57 @@
+name: Daily Focus Time Integrity Audit
+
+on:
+  schedule:
+    # Runs at 00:00 UTC every day
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    # Allows manual triggering from the GitHub Actions tab
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Audit and Check for Duplicates
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }} # e.g. https://dangdoro.com
+        run: |
+          if [ -z "$PRODUCTION_URL" ]; then
+            echo "❌ Error: secrets.PRODUCTION_URL is not set."
+            exit 1
+          fi
+          if [ -z "$CRON_SECRET" ]; then
+            echo "❌ Error: secrets.CRON_SECRET is not set."
+            exit 1
+          fi
+
+          echo "⏳ Querying audit endpoint..."
+          RESPONSE=$(curl -s -X GET "$PRODUCTION_URL/api/admin/audit-all-duplicates?dryRun=true" \
+            -H "Authorization: Bearer $CRON_SECRET")
+
+          # Check if the HTTP call was successful or returned JSON error
+          SUCCESS=$(echo "$RESPONSE" | jq -r '.success // empty')
+          if [ "$SUCCESS" != "true" ]; then
+            echo "❌ Error: Audit request failed or unauthorized."
+            echo "Response: $RESPONSE"
+            exit 1
+          fi
+
+          DUPLICATES=$(echo "$RESPONSE" | jq -r '.totalDuplicatesDetected')
+          AFFECTED_USERS=$(echo "$RESPONSE" | jq -r '.affectedUsersCount')
+
+          echo "=========================================="
+          echo "Audit Scan Results:"
+          echo "  - Total Users Scanned: $(echo "$RESPONSE" | jq -r '.totalUsersScanned')"
+          echo "  - Duplicate Sessions Detected: $DUPLICATES"
+          echo "  - Affected Users: $AFFECTED_USERS"
+          echo "=========================================="
+
+          if [ "$DUPLICATES" -gt 0 ]; then
+            echo "⚠️ Alert: Duplicates detected in the database!"
+            echo "$RESPONSE" | jq -c '.affectedUsers[]'
+            # Fail the action to trigger an email notification
+            exit 1
+          else
+            echo "✅ Success: Database has clean data integrity. No duplicates found."
+          fi
