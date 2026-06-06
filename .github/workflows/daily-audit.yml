@@ -26,13 +26,14 @@ jobs:
           fi
 
           echo "⏳ Querying audit endpoint..."
-          RESPONSE=$(curl -s -X GET "$PRODUCTION_URL/api/admin/audit-all-duplicates?dryRun=true" \
+          RESPONSE_FILE=$(mktemp)
+          HTTP_CODE=$(curl -s -o "$RESPONSE_FILE" -w "%{http_code}" -X GET "$PRODUCTION_URL/api/admin/audit-all-duplicates?dryRun=true" \
             -H "Authorization: Bearer $CRON_SECRET")
 
-          # Check if the HTTP call was successful or returned JSON error
-          SUCCESS=$(echo "$RESPONSE" | jq -r '.success // empty')
-          if [ "$SUCCESS" != "true" ]; then
-            echo "❌ Error: Audit request failed or unauthorized."
+          RESPONSE=$(cat "$RESPONSE_FILE")
+
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "❌ Error: Audit request failed with HTTP status code $HTTP_CODE"
             echo "Response: $RESPONSE"
             exit 1
           fi
