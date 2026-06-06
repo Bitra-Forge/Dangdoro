@@ -27,7 +27,7 @@ jobs:
 
           echo "⏳ Querying audit endpoint..."
           RESPONSE_FILE=$(mktemp)
-          HTTP_CODE=$(curl -s -o "$RESPONSE_FILE" -w "%{http_code}" -X GET "$PRODUCTION_URL/api/admin/audit-all-duplicates?dryRun=true" \
+          HTTP_CODE=$(curl -s -L -o "$RESPONSE_FILE" -w "%{http_code}" -X GET "$PRODUCTION_URL/api/admin/audit-all-duplicates?dryRun=true" \
             -H "Authorization: Bearer $CRON_SECRET")
 
           RESPONSE=$(cat "$RESPONSE_FILE")
