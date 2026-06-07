@@ -5,7 +5,8 @@ import { NotificationsMenu } from "@/components/notifications-menu";
 import { useTimerStore } from "@/lib/store";
 import { useDockPopoverStore } from "@/lib/dock-popover-store";
 import { cn } from "@/lib/utils";
-import { Heart, Send, X } from "lucide-react";
+import { Heart, Send, X, ScrollText } from "lucide-react";
+import { PatchNotesModal } from "@/components/patch-notes-modal";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/components/AuthProvider";
@@ -29,6 +30,7 @@ export function NotificationsDock() {
   const isFeedbackOpen = useDockPopoverStore((s) => s.active === "feedback");
   const toggleFeedback = useDockPopoverStore((s) => s.toggle);
   const closeFeedback = useDockPopoverStore((s) => s.close);
+  const [isPatchNotesOpen, setIsPatchNotesOpen] = useState(false);
   const [feedbackCategory, setFeedbackCategory] = useState("General");
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [sendingFeedback, setSendingFeedback] = useState(false);
@@ -183,6 +185,20 @@ export function NotificationsDock() {
         )}
 
         {!isGroupPage && (
+          /* Patch notes button */
+          <Tooltip content="What's New" side="bottom">
+            <button
+              onClick={() => setIsPatchNotesOpen(true)}
+              className="p-2.5 rounded-full bg-zinc-900/80 backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-visible group text-zinc-400 hover:text-white hover:bg-zinc-800/50"
+            >
+              <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/20 pointer-events-none group-hover:border-white/30 transition-colors duration-300" />
+              <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/10 pointer-events-none" />
+              <ScrollText className="w-4 h-4 transition-transform group-hover:scale-110 duration-300 relative z-10" />
+            </button>
+          </Tooltip>
+        )}
+
+        {!isGroupPage && (
           /* Floating Feedback Trigger Button */
           <Tooltip content="Send Feedback" side="bottom">
             <button
@@ -316,6 +332,15 @@ export function NotificationsDock() {
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isPatchNotesOpen && (
+          <PatchNotesModal
+            isOpen={isPatchNotesOpen}
+            onClose={() => setIsPatchNotesOpen(false)}
+          />
         )}
       </AnimatePresence>
     </>
