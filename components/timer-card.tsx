@@ -14,18 +14,6 @@ import { useBackgroundTheme } from "@/lib/use-background-theme";
 import { Tooltip } from "@/components/ui/tooltip";
 
 let isGlobalHydrated = false;
-// Persist across page reloads within the same session
-const hostIdCache = new Map<string, string>(
-  (() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const saved = sessionStorage.getItem("dangdoro_host_cache");
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  })()
-);
 
 export function TimerCard() {
   const BACKGROUND_COLORS = [
@@ -149,7 +137,6 @@ export function TimerCard() {
 
   const handleStop = async () => {
     const { activeGroupId, mode, initialFocusTime, timeLeft, sessionStartTime } = useTimerStore.getState();
-    stop();
     const elapsedSeconds = mode === "focus" ? Math.max(0, initialFocusTime - timeLeft) : 0;
     const elapsedMinutes = Math.floor(elapsedSeconds / 60);
 
@@ -163,25 +150,16 @@ export function TimerCard() {
       if (currentUser) {
         let shouldSave = true;
         if (activeGroupId) {
-          const cachedHostId = hostIdCache.get(activeGroupId);
-          if (cachedHostId) {
-            if (cachedHostId !== currentUser.uid) shouldSave = false;
-          } else {
-            try {
-              const { doc, getDoc } = await import("firebase/firestore");
-              const { db } = await import("@/lib/firebase");
-              const groupSnap = await getDoc(doc(db, "focusGroups", activeGroupId));
-              if (groupSnap.exists()) {
-                const groupData = groupSnap.data();
-                hostIdCache.set(activeGroupId, groupData.hostId);
-                try {
-                  sessionStorage.setItem("dangdoro_host_cache", JSON.stringify([...hostIdCache]));
-                } catch {}
-                if (groupData.hostId !== currentUser.uid) shouldSave = false;
-              }
-            } catch (err) {
-              console.error("Error checking host status in timer-card:", err);
+          try {
+            const { doc, getDoc } = await import("firebase/firestore");
+            const { db } = await import("@/lib/firebase");
+            const groupSnap = await getDoc(doc(db, "focusGroups", activeGroupId));
+            if (groupSnap.exists()) {
+              const groupData = groupSnap.data();
+              if (groupData.hostId !== currentUser.uid) shouldSave = false;
             }
+          } catch (err) {
+            console.error("Error checking host status in timer-card:", err);
           }
         }
 
