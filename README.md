@@ -60,41 +60,67 @@ Dangdoro implements a highly secured Firestore database structure with the follo
 
 ## ⚙️ Environment Variables Setup
 
-Create a `.env.local` file in the root directory and populate it with your credentials as defined in `.env.example`:
+Create a `.env.local` file in the root directory of the project and populate it with your credentials:
 
-```env
-# Firebase Client SDK Configuration (Public)
-NEXT_PUBLIC_FIREBASE_API_KEY="your-firebase-api-key"
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="your-project.firebaseapp.com"
-NEXT_PUBLIC_FIREBASE_PROJECT_ID="your-project-id"
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="your-project.firebasestorage.app"
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="your-sender-id"
-NEXT_PUBLIC_FIREBASE_APP_ID="your-app-id"
-
-# Firebase Admin SDK Configuration (Server-Side)
-# In local development, you can place 'service-account.json' in the root directory instead.
-FIREBASE_PROJECT_ID="your-project-id"
-FIREBASE_CLIENT_EMAIL="firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com"
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYOUR_KEY_HERE\n-----END PRIVATE KEY-----\n"
-
-# AI Task Generation Keys
-GEMINI_API_KEY="your-gemini-api-key"
-OPENROUTER_API_KEY="your-openrouter-api-key"
+```bash
+cp .env.example .env.local
 ```
+
+Refer directly to `.env.example` for the list of required variables, default values, and setup instructions.
 
 ---
 
 ## 🏃 Getting Started
 
-### 1. Install Dependencies
-```bash
-npm install
-```
+### Prerequisites
+To run the project locally using the recommended emulator setup, make sure you have:
+1. **Java Development Kit (JDK 11+)** installed (required to run the Firebase Emulators).
+2. **Firebase CLI** installed globally:
+   ```bash
+   npm install -g firebase-tools
+   ```
 
-### 2. Run the Development Server
-```bash
-npm run dev
-```
+### 1. Initial Setup
+1. Clone the repository and navigate into it.
+2. Copy the example environment file:
+   ```bash
+   cp .env.example .env.local
+   ```
+   *(Note: The Firebase client credentials in `.env.local` can remain as their placeholder values when using the emulator).*
+3. Install the project dependencies:
+   ```bash
+   npm install
+   ```
+
+### 2. Run with Local Firebase Emulators (Recommended)
+This runs the application locally using the Firebase Local Emulator Suite. You do not need real Firebase credentials to run the app in this mode.
+
+1. Set `NEXT_PUBLIC_USE_FIREBASE_EMULATOR="true"` in your `.env.local` file.
+2. Run the emulator dev server:
+   ```bash
+   npm run dev:emulator
+   ```
+* **App URL:** [http://localhost:3000](http://localhost:3000)
+* **Firebase Emulator UI:** [http://localhost:4000](http://localhost:4000) (allows inspecting local Firestore, mock Auth users, and Storage).
+
+*Note: The emulator automatically saves your local database state to `./.firebase-emulator-data/` on shutdown (Ctrl+C) and restores it when starting again.*
+
+### 3. Seed Mock Data in Emulator (Optional)
+To instantly populate the local database with 4 mock users, weekly focus sessions, tasks, and a focus group (useful for testing leaderboards and pages with content):
+1. Ensure the emulator dev server is running (`npm run dev:emulator`).
+2. Run the seeding script in a new terminal window:
+   ```bash
+   npm run seed:emulator
+   ```
+
+### 4. Run against Live Cloud Database
+This connects the app to the live Cloud Firebase project defined in your `.env.local` credentials.
+
+1. Set `NEXT_PUBLIC_USE_FIREBASE_EMULATOR="false"` (or leave it unset/empty) in `.env.local`.
+2. Run the standard Next.js dev server:
+   ```bash
+   npm run dev
+   ```
 Open [http://localhost:3000](http://localhost:3000) to view the application.
 
 ### 3. Build for Production
