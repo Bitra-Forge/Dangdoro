@@ -16,6 +16,7 @@ const QuickTasksPanel = dynamic(() => import("@/components/quick-tasks-panel").t
 export function NavigationHub() {
   const pathname = usePathname();
   const isHomePage = pathname === "/";
+  const isAdminPage = pathname?.startsWith("/admin");
   const isFocusMode = useTimerStore((state) => state.isNavFocusMode);
   const setIsNavFocusMode = useTimerStore((state) => state.setIsNavFocusMode);
   const [isNavVisible, setIsNavVisible] = useState(true);
@@ -90,6 +91,8 @@ export function NavigationHub() {
       clearHideNavTimeout();
     };
   }, [isFocusMode, clearHideNavTimeout, scheduleHideNav]);
+
+  if (isAdminPage) return null;
 
   return (
     <>

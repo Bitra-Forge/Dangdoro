@@ -20,6 +20,7 @@ export function NotificationsDock() {
   const isNavFocusMode = useTimerStore((state) => state.isNavFocusMode);
   const pathname = usePathname();
   const isGroupPage = pathname?.startsWith("/groups");
+  const isAdminPage = pathname?.startsWith("/admin");
   const [isVisible, setIsVisible] = useState(false);
   const dockRef = useRef<HTMLDivElement | null>(null);
   const feedbackRef = useRef<HTMLDivElement | null>(null);
@@ -155,6 +156,8 @@ export function NotificationsDock() {
       clearHideTimeout();
     };
   }, [isNavFocusMode]);
+
+  if (isAdminPage) return null;
 
   return (
     <>

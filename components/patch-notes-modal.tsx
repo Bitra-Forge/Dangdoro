@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Sparkles, Wrench, Clock, ScrollText } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -48,11 +48,56 @@ const patchNotes = {
   ],
 };
 
+interface ChangelogEntry {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string | null;
+}
+
 export function PatchNotesModal({ isOpen, onClose }: PatchNotesModalProps) {
   const settingsGlassmorphism = useTimerStore((s) => s.settingsGlassmorphism);
   const [activeTab, setActiveTab] = useState(patchNotes.sections[0].id);
+  const [latestEntry, setLatestEntry] = useState<ChangelogEntry | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    let active = true;
+    
+    // Set loading asynchronously to avoid React state-in-effect warning
+    const timer = setTimeout(() => {
+      if (active) setLoading(true);
+    }, 0);
+
+    fetch("/api/changelog")
+      .then((res) => res.json())
+      .then((data) => {
+        if (active && data.entries && data.entries.length > 0) {
+          setLatestEntry(data.entries[0]);
+        }
+      })
+      .catch((err) => console.error("Error loading patch notes:", err))
+      .finally(() => {
+        if (active) {
+          clearTimeout(timer);
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [isOpen]);
 
   const activeSection = patchNotes.sections.find((s) => s.id === activeTab)!;
+
+  const parsed = latestEntry ? parseChangelogContent(latestEntry.content) : null;
+  const hasParsedItems = parsed && (parsed.features.length > 0 || parsed.fixes.length > 0 || parsed.upcoming.length > 0);
+  const items = parsed ? parsed[activeTab as keyof typeof parsed] : [];
+
 
   if (!isOpen) return null;
 
@@ -85,9 +130,17 @@ export function PatchNotesModal({ isOpen, onClose }: PatchNotesModalProps) {
               <ScrollText className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="text-lg font-black text-white">Patch Notes</h3>
+              <h3 className="text-lg font-black text-white">
+                {latestEntry ? latestEntry.title : "Patch Notes"}
+              </h3>
               <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-0.5">
-                {patchNotes.date}
+                {latestEntry?.createdAt
+                  ? new Date(latestEntry.createdAt).toLocaleDateString("en-US", {
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    })
+                  : patchNotes.date}
               </p>
             </div>
           </div>
@@ -123,35 +176,53 @@ export function PatchNotesModal({ isOpen, onClose }: PatchNotesModalProps) {
         </div>
 
         {/* Content */}
-        <div className="px-6 pb-5 min-h-[320px]">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeSection.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              {activeSection.items.length > 0 ? (
-                <ul className="space-y-2.5">
-                  {activeSection.items.map((item) => (
-                    <li
-                      key={item}
-                      className="flex items-start gap-3 text-sm text-zinc-300 leading-relaxed"
-                    >
-                      <span className={cn("w-1.5 h-1.5 rounded-full mt-2 shrink-0", activeSection.dotColor)} />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <p className="text-sm text-zinc-500 font-medium">Nothing here yet</p>
-                  <p className="text-[11px] text-zinc-700 mt-1">Check back later for updates</p>
-                </div>
-              )}
-            </motion.div>
-          </AnimatePresence>
+        <div className="px-6 pb-5 min-h-[320px] max-h-[420px] overflow-y-auto custom-scrollbar">
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            </div>
+          ) : latestEntry ? (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.15 }}
+              >
+                {hasParsedItems ? (
+                  items.length > 0 ? (
+                    <ul className="space-y-2.5">
+                      {items.map((item, idx) => (
+                        <li
+                          key={idx}
+                          className="flex items-start gap-3 text-sm text-zinc-300 leading-relaxed select-text"
+                        >
+                          <span className={cn("w-1.5 h-1.5 rounded-full mt-2 shrink-0", activeSection.dotColor)} />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      <p className="text-sm text-zinc-500 font-medium">Nothing in this category</p>
+                      <p className="text-[11px] text-zinc-600 mt-1">Select another tab to see updates</p>
+                    </div>
+                  )
+                ) : (
+                  /* Plain Text fallback */
+                  <div className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap select-text px-1 bg-black/10 rounded-2xl p-4 border border-white/[0.02]">
+                    {latestEntry.content}
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <p className="text-sm text-zinc-500 font-medium">Nothing here yet</p>
+              <p className="text-[11px] text-zinc-700 mt-1">Check back later for updates</p>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -164,3 +235,49 @@ export function PatchNotesModal({ isOpen, onClose }: PatchNotesModalProps) {
     </motion.div>
   );
 }
+
+function parseChangelogContent(content: string) {
+  const sections = {
+    features: [] as string[],
+    fixes: [] as string[],
+    upcoming: [] as string[],
+  };
+
+  const lines = content.split("\n");
+  let currentSection: "features" | "fixes" | "upcoming" | null = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    if (trimmed.match(/^#+\s*(features|new features|feature|added)/i)) {
+      currentSection = "features";
+      continue;
+    } else if (trimmed.match(/^#+\s*(fixes|improvements|fix|fixed|improved)/i)) {
+      currentSection = "fixes";
+      continue;
+    } else if (trimmed.match(/^#+\s*(upcoming|next|future)/i)) {
+      currentSection = "upcoming";
+      continue;
+    }
+
+    if (trimmed.startsWith("-") || trimmed.startsWith("*")) {
+      const itemContent = trimmed.substring(1).trim();
+      if (currentSection) {
+        sections[currentSection].push(itemContent);
+      } else {
+        sections.features.push(itemContent);
+      }
+    } else if (trimmed.match(/^\d+\.\s/)) {
+      const itemContent = trimmed.replace(/^\d+\.\s/, "").trim();
+      if (currentSection) {
+        sections[currentSection].push(itemContent);
+      } else {
+        sections.features.push(itemContent);
+      }
+    }
+  }
+
+  return sections;
+}
+
