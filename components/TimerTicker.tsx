@@ -56,12 +56,7 @@ export function TimerTicker() {
   const advanceSession = useTimerStore((s) => s.advanceSession);
   const initialFocusTime = useTimerStore((s) => s.initialFocusTime);
   const sessionEndSound = useTimerStore((s) => s.sessionEndSound);
-  const settingsAutoStartBreak = useTimerStore((s) => s.settingsAutoStartBreak);
-  const settingsAutoStartFocus = useTimerStore((s) => s.settingsAutoStartFocus);
-
   const activeGroupId = useTimerStore((s) => s.activeGroupId);
-  const stop = useTimerStore((s) => s.stop);
-  const setActiveGroupId = useTimerStore((s) => s.setActiveGroupId);
 
   const { user } = useAuth();
 
@@ -102,44 +97,27 @@ export function TimerTicker() {
 
     if (typeof window === "undefined") return;
 
-    // If in a group session, stop the session entirely instead of advancing
-    if (activeGroupId) {
-      // Save focus session for authenticated users
-      if (mode === "focus" && user) {
-        const durationMinutes = Math.floor(initialFocusTime / 60);
-        flushFocusTime(user.uid, activeGroupId, true, durationMinutes)
-          .then(() => toast.success(`Group focus session completed! Contribution recorded.`))
-          .catch(() => toast.error("Failed to save session."));
-      }
-
-      // Play completion sound
-      const audioUrl = `/SessionEndSounds/${sessionEndSound || "universfield-new-notification-027-383749.mp3"}`;
-      const audio = new Audio(audioUrl);
-      audio.volume = COMPLETION_AUDIO_VOLUME;
-      audio.play().catch((err) => console.log("Audio blocked:", err));
-
-      stop();
-      setActiveGroupId(null);
-      return;
-    }
-
-    // Save focus session for authenticated users
+    // Save focus session for authenticated users (both solo and group)
     if (mode === "focus" && user) {
       const durationMinutes = Math.floor(initialFocusTime / 60);
       flushFocusTime(user.uid, activeGroupId, true, durationMinutes)
-        .then(() => toast.success(`Session saved! ${activeGroupId ? "Group contribution recorded." : "Keep it up!"}`))
+        .then(() => toast.success(activeGroupId ? `Group focus session completed! Contribution recorded.` : `Session saved! Keep it up!`))
         .catch(() => toast.error("Failed to save session."));
     }
 
     // Play completion sound
-    const audioUrl = `/SessionEndSounds/${sessionEndSound}`;
+    const audioUrl = `/SessionEndSounds/${sessionEndSound || "universfield-new-notification-027-383749.mp3"}`;
     const audio = new Audio(audioUrl);
     audio.volume = COMPLETION_AUDIO_VOLUME;
     audio.play().catch((err) => console.log("Audio blocked:", err));
 
-    // Move to the next pomodoro phase
+    // Move to the next pomodoro phase (advanceSession handles auto-start logic for both solo and group)
     advanceSession();
-  }, [timeLeft, isActive, mode, user, initialFocusTime, sessionEndSound, advanceSession, settingsAutoStartBreak, settingsAutoStartFocus, activeGroupId, stop, setActiveGroupId]);
+
+    // If advanceSession didn't auto-start the next phase (user needs to manually resume), clear group context
+    // This is handled by checking if timer is still active after advanceSession
+    // The GroupSessionSync will handle ending the live session when timer becomes inactive
+  }, [timeLeft, isActive, mode, user, initialFocusTime, sessionEndSound, advanceSession, activeGroupId]);
 
   return null;
 }

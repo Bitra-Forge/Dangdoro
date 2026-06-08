@@ -296,7 +296,9 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                 action
             });
 
-            setActiveGroupId(result.shouldSetActiveGroupId);
+            if (action !== "stop") {
+                setActiveGroupId(result.shouldSetActiveGroupId);
+            }
 
             if (result.shouldStartTimer && !timerIsActive) timerStart();
             if (result.shouldPauseTimer && willBePaused) timerPause();
@@ -311,7 +313,6 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                     }
                 }
                 timerStop();
-                setActiveGroupId(null);
             }
 
             toast.info(action === "pause" ? (willBePaused ? `Focus paused.` : `Focus resumed.`) : `Focus ${action}ed.`);

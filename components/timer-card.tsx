@@ -14,7 +14,18 @@ import { useBackgroundTheme } from "@/lib/use-background-theme";
 import { Tooltip } from "@/components/ui/tooltip";
 
 let isGlobalHydrated = false;
-const hostIdCache = new Map<string, string>();
+// Persist across page reloads within the same session
+const hostIdCache = new Map<string, string>(
+  (() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const saved = sessionStorage.getItem("dangdoro_host_cache");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  })()
+);
 
 export function TimerCard() {
   const BACKGROUND_COLORS = [
@@ -163,6 +174,9 @@ export function TimerCard() {
               if (groupSnap.exists()) {
                 const groupData = groupSnap.data();
                 hostIdCache.set(activeGroupId, groupData.hostId);
+                try {
+                  sessionStorage.setItem("dangdoro_host_cache", JSON.stringify([...hostIdCache]));
+                } catch {}
                 if (groupData.hostId !== currentUser.uid) shouldSave = false;
               }
             } catch (err) {
