@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Play, Pause, RotateCcw, Check, X, ChevronUp, ChevronDown, Settings, Minus, Plus, Eye, EyeOff, Square, Volume2, Palette, ChevronRight, Grid3X3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTimerStore } from "@/lib/store";
-import { cn } from "@/lib/utils";
+import { cn, formatTime } from "@/lib/utils";
 import { useAuth } from "@/components/AuthProvider";
 import { onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -148,7 +148,7 @@ export function TimerCard() {
   };
 
   const handleStop = async () => {
-    const { activeGroupId, mode, initialFocusTime, timeLeft } = useTimerStore.getState();
+    const { activeGroupId, mode, initialFocusTime, timeLeft, sessionStartTime } = useTimerStore.getState();
     stop();
     const elapsedSeconds = mode === "focus" ? Math.max(0, initialFocusTime - timeLeft) : 0;
     const elapsedMinutes = Math.floor(elapsedSeconds / 60);
@@ -187,7 +187,7 @@ export function TimerCard() {
 
         if (shouldSave) {
           const { accumulateFocusTime } = await import("@/lib/focus-accumulator");
-          await accumulateFocusTime(currentUser.uid, elapsedMinutes, activeGroupId);
+          await accumulateFocusTime(currentUser.uid, elapsedMinutes, activeGroupId, sessionStartTime);
         }
       }
     }
@@ -327,17 +327,6 @@ export function TimerCard() {
   };
 
   const shouldRevealHoverControls = isTimerHovered || showHoverControls;
-
-  const formatTime = (seconds: number) => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-
-    if (hrs > 0) {
-      return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-    }
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
 
   const startEditing = () => {
     pause();

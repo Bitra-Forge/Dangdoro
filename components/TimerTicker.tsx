@@ -5,6 +5,7 @@ import { useTimerStore } from "@/lib/store";
 import { useAuth } from "@/components/AuthProvider";
 import { flushFocusTime } from "@/lib/focus-accumulator";
 import { toast } from "sonner";
+import { formatTime } from "@/lib/utils";
 
 // ============================================================================
 // Constants
@@ -17,22 +18,6 @@ const MODE_LABELS: Record<string, string> = {
 };
 
 const COMPLETION_AUDIO_VOLUME = 0.4;
-
-// ============================================================================
-// Utilities
-// ============================================================================
-
-const formatTime = (seconds: number): string => {
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-
-  const pad = (n: number) => n.toString().padStart(2, "0");
-
-  return hrs > 0
-    ? `${pad(hrs)}:${pad(mins)}:${pad(secs)}`
-    : `${pad(mins)}:${pad(secs)}`;
-};
 
 // ============================================================================
 // Component
@@ -57,6 +42,7 @@ export function TimerTicker() {
   const initialFocusTime = useTimerStore((s) => s.initialFocusTime);
   const sessionEndSound = useTimerStore((s) => s.sessionEndSound);
   const activeGroupId = useTimerStore((s) => s.activeGroupId);
+  const sessionStartTime = useTimerStore((s) => s.sessionStartTime);
 
   const { user } = useAuth();
 
@@ -100,7 +86,7 @@ export function TimerTicker() {
     // Save focus session for authenticated users (both solo and group)
     if (mode === "focus" && user) {
       const durationMinutes = Math.floor(initialFocusTime / 60);
-      flushFocusTime(user.uid, activeGroupId, true, durationMinutes)
+      flushFocusTime(user.uid, activeGroupId, true, durationMinutes, sessionStartTime)
         .then(() => toast.success(activeGroupId ? `Group focus session completed! Contribution recorded.` : `Session saved! Keep it up!`))
         .catch(() => toast.error("Failed to save session."));
     }
@@ -117,7 +103,7 @@ export function TimerTicker() {
     // If advanceSession didn't auto-start the next phase (user needs to manually resume), clear group context
     // This is handled by checking if timer is still active after advanceSession
     // The GroupSessionSync will handle ending the live session when timer becomes inactive
-  }, [timeLeft, isActive, mode, user, initialFocusTime, sessionEndSound, advanceSession, activeGroupId]);
+  }, [timeLeft, isActive, mode, user, initialFocusTime, sessionEndSound, advanceSession, activeGroupId, sessionStartTime]);
 
   return null;
 }

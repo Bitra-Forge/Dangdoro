@@ -80,7 +80,7 @@ export function FocusZoneCeremony({ isOpen, onComplete, groupName }: FocusZoneCe
                         >
                             {[
                                 { icon: Shield, label: "Deep Work" },
-                                { icon: target === "target" ? Target : Zap, label: "Zero Distraction" },
+                                { icon: Target, label: "Zero Distraction" },
                                 { icon: Flame, label: "High Synergy" }
                             ].map((item, i) => (
                                 <div key={i} className="flex flex-col items-center gap-2">
@@ -100,5 +100,3 @@ export function FocusZoneCeremony({ isOpen, onComplete, groupName }: FocusZoneCe
         </AnimatePresence>
     );
 }
-
-const target = "target"; // Fix for target is not defined

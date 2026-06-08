@@ -250,7 +250,12 @@ export const syncUserProfile = async (user: User) => {
 /**
  * Saves a completed Pomodoro session and increments the user's focus stats.
  */
-export const savePomodoroSession = async (userId: string, durationMinutes: number = 25, groupId: string | null = null) => {
+export const savePomodoroSession = async (
+    userId: string,
+    durationMinutes: number = 25,
+    groupId: string | null = null,
+    startedAt?: Date | number | null
+) => {
     try {
         if (process.env.NODE_ENV !== "production") {
             console.log("Writing focus time:", {
@@ -260,13 +265,17 @@ export const savePomodoroSession = async (userId: string, durationMinutes: numbe
             });
         }
 
+        const startedAtTimestamp = startedAt 
+            ? (startedAt instanceof Date ? Timestamp.fromDate(startedAt) : Timestamp.fromMillis(startedAt))
+            : null;
+
         try {
             await addDoc(collection(db, "sessions"), {
                 userId,
                 groupId,
                 duration: durationMinutes,
                 type: "work",
-                startedAt: null,
+                startedAt: startedAtTimestamp,
                 endedAt: serverTimestamp(),
                 status: "completed",
                 completedAt: serverTimestamp(),
@@ -446,7 +455,12 @@ export const updateLiveSessionStatus = async (
  * Saves a partially completed Pomodoro session (user stopped early).
  * The duration reflects actual time spent, not the full configured duration.
  */
-export const savePartialPomodoroSession = async (userId: string, durationMinutes: number, groupId: string | null = null) => {
+export const savePartialPomodoroSession = async (
+    userId: string,
+    durationMinutes: number,
+    groupId: string | null = null,
+    startedAt?: Date | number | null
+) => {
     if (durationMinutes < 1) return false;
 
     try {
@@ -458,13 +472,17 @@ export const savePartialPomodoroSession = async (userId: string, durationMinutes
             });
         }
 
+        const startedAtTimestamp = startedAt 
+            ? (startedAt instanceof Date ? Timestamp.fromDate(startedAt) : Timestamp.fromMillis(startedAt))
+            : null;
+
         try {
             await addDoc(collection(db, "sessions"), {
                 userId,
                 groupId,
                 duration: durationMinutes,
                 type: "work",
-                startedAt: null,
+                startedAt: startedAtTimestamp,
                 endedAt: serverTimestamp(),
                 status: "completed",
                 completedAt: serverTimestamp(),
@@ -480,7 +498,6 @@ export const savePartialPomodoroSession = async (userId: string, durationMinutes
         const userRef = doc(db, "users", userId);
         try {
             await updateDoc(userRef, {
-                totalPomodoros: increment(1),
                 totalMinutes: increment(durationMinutes),
                 lastActive: serverTimestamp()
             });

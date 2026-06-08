@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useTimerStore } from "@/lib/store";
 import Image from "next/image";
-import { cn } from "@/lib/utils";
+import { cn, formatTime } from "@/lib/utils";
 import { onSnapshot, doc, collection, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Play, Pause, GripHorizontal, X, Flame, Users as UsersIcon } from "lucide-react";
@@ -41,18 +41,6 @@ const MODE_COLORS: Record<string, { gradient: string; bg: string; text: string }
 // ============================================================================
 // Utilities
 // ============================================================================
-
-const formatTime = (seconds: number): string => {
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-
-  const pad = (n: number) => n.toString().padStart(2, "0");
-
-  return hrs > 0 
-    ? `${pad(hrs)}:${pad(mins)}:${pad(secs)}` 
-    : `${pad(mins)}:${pad(secs)}`;
-};
 
 const isDocumentPiPSupported = (): boolean => {
   return typeof window !== "undefined" && "documentPictureInPicture" in window;

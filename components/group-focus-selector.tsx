@@ -8,6 +8,7 @@ import { db } from "@/lib/firebase";
 import { Users, ChevronDown, Zap, Globe, Key, Mail, Sparkles, Crown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn, getHighQualityAvatarUrl } from "@/lib/utils";
+import { fmtMinutes } from "@/lib/groups";
 
 interface FocusGroup {
   id: string;
@@ -37,15 +38,6 @@ const PRIVACY_ICONS: Record<string, { icon: typeof Globe; color: string; label: 
   "private-code": { icon: Key, color: "text-zinc-300", label: "Code" },
   "private-invite": { icon: Mail, color: "text-violet-400", label: "Invite Only" },
 };
-
-function fmtMinutes(mins: number): string {
-  if (!mins) return "0m";
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  if (h === 0) return `${m}m`;
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m}m`;
-}
 
 type GroupFocusSelectorProps = {
   onOpenChange?: (open: boolean) => void;
