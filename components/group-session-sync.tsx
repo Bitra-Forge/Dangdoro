@@ -88,9 +88,15 @@ export function GroupSessionSync() {
       return;
     }
 
+    const currentMode = useTimerStore.getState().mode;
+    if (currentMode === "break" || currentMode === "long-break") {
+      pendingMinutesRef.current = 0; // Clear pending minutes since it was a natural completion
+      return;
+    }
+
     const duration = pendingMinutesRef.current;
     const targetGroupId = activeGroupId || prevGroupIdRef.current;
-    const isNonHost = hostIdRef.current && user && hostIdRef.current !== user.uid;
+    const isNonHost = hostIdRef.current !== null && user && hostIdRef.current !== user.uid;
 
     if (duration >= 1 && user && targetGroupId && isNonHost) {
       pendingMinutesRef.current = 0; // Clear immediately to prevent double-saving
@@ -101,6 +107,7 @@ export function GroupSessionSync() {
       }
     }
   }, [activeGroupId, user]);
+
 
   useEffect(() => {
     const syncLiveSession = async () => {

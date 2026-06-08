@@ -6,6 +6,7 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { useTimerStore } from "@/lib/store";
+import { useAuth } from "@/components/AuthProvider";
 
 interface FocusGroupNameDoc {
   name?: string;
@@ -22,6 +23,7 @@ function fmtElapsedFromMs(ms: number) {
 }
 
 export function GroupSessionMiniBar() {
+  const { user } = useAuth();
   const activeGroupId = useTimerStore((s) => s.activeGroupId);
   const isActive = useTimerStore((s) => s.isActive);
   const isPaused = useTimerStore((s) => s.isPaused);
@@ -34,11 +36,15 @@ export function GroupSessionMiniBar() {
   const setActiveGroupId = useTimerStore((s) => s.setActiveGroupId);
 
   const [groupName, setGroupName] = useState("Group session");
+  const [hostId, setHostId] = useState<string | null>(null);
   useEffect(() => {
     if (!activeGroupId) return;
     return onSnapshot(doc(db, "focusGroups", activeGroupId), (snap) => {
-      const data = snap.data() as FocusGroupNameDoc | undefined;
-      setGroupName(data?.name || "Group session");
+      if (snap.exists()) {
+        const data = snap.data();
+        setGroupName(data.name || "Group session");
+        setHostId(data.hostId || null);
+      }
     });
   }, [activeGroupId]);
 
@@ -90,8 +96,20 @@ export function GroupSessionMiniBar() {
           </button>
           
           <button
-            onClick={() => {
+            onClick={async () => {
+              const { mode, initialFocusTime, timeLeft, sessionStartTime } = useTimerStore.getState();
               stopTimer();
+              const elapsedSeconds = mode === "focus" ? Math.max(0, initialFocusTime - timeLeft) : 0;
+              const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+
+              if (mode === "focus" && elapsedMinutes >= 1 && user && hostId === user.uid) {
+                try {
+                  const { accumulateFocusTime } = await import("@/lib/focus-accumulator");
+                  await accumulateFocusTime(user.uid, elapsedMinutes, activeGroupId, sessionStartTime);
+                } catch (err) {
+                  console.error("Failed to save host focus time from mini bar:", err);
+                }
+              }
               setActiveGroupId(null);
             }}
             className={cn(

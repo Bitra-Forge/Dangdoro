@@ -55,11 +55,13 @@ export function TimerTicker() {
   }, [isActive, tick]);
 
   // Browser tab title effect
+  const displaySeconds = Math.floor(timeLeft);
   useEffect(() => {
     document.title = isActive
-      ? `${formatTime(timeLeft)} - ${MODE_LABELS[mode]} | Dangdoro`
+      ? `${formatTime(displaySeconds)} - ${MODE_LABELS[mode]} | Dangdoro`
       : "Dangdoro";
-  }, [timeLeft, isActive, mode]);
+  }, [displaySeconds, isActive, mode]);
+
 
   // Tab visibility change listener to flush pending focus time
   useEffect(() => {
