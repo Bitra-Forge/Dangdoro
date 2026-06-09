@@ -531,7 +531,7 @@ export default function SettingsPage() {
                                                         </Tooltip>
 
                                                         {showCustomColorPanel && (
-                                                            <div className="absolute top-[calc(100%+8px)] left-0 z-30 w-72 rounded-xl border border-white/15 bg-[#0a0d16]/95 backdrop-blur-xl p-3 shadow-2xl shadow-black/70">
+                                                            <div className="absolute top-[calc(100%+8px)] right-0 md:right-auto md:left-0 z-30 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-white/15 bg-[#0a0d16]/95 backdrop-blur-xl p-3 shadow-2xl shadow-black/70">
                                                                 <div className="flex items-center justify-between mb-2">
                                                                     <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Custom Color</div>
                                                                     <div className="h-2.5 w-2.5 rounded-full border border-white/20" style={{ backgroundColor: backgroundSolidColor }} />

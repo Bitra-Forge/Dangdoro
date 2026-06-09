@@ -149,12 +149,12 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
         whileTap={{ scale: 0.99 }}
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "relative flex items-center gap-3 px-5 py-3 rounded-2xl border transition-[background-color,border-color,color,box-shadow] duration-200 backdrop-blur-none sm:backdrop-blur-2xl overflow-hidden",
+          "relative flex items-center gap-3 px-5 py-3 rounded-2xl border transition-[background-color,border-color,color,box-shadow] duration-200 backdrop-blur-2xl overflow-hidden",
           "shadow-[0_8px_32px_rgba(0,0,0,0.4)]",
           isOpen ? "z-50" : "z-10",
           activeGroupId
-            ? "bg-zinc-950/90 sm:bg-zinc-950/60 border-sky-500/35 text-sky-100 shadow-[0_8px_32px_rgba(56,189,248,0.15),inset_0_1px_0_rgba(255,255,255,0.05)]"
-            : "bg-zinc-950/90 sm:bg-zinc-950/30 border-white/[0.06] text-zinc-300 hover:bg-zinc-950/60 hover:border-white/15"
+            ? "bg-zinc-900/60 sm:bg-zinc-900/60 border-sky-500/35 text-sky-100 shadow-[0_8px_32px_rgba(56,189,248,0.15),inset_0_1px_0_rgba(255,255,255,0.05)]"
+            : "bg-zinc-900/40 sm:bg-zinc-900/40 border-white/[0.06] text-zinc-300 hover:bg-zinc-900/60 hover:border-white/15"
         )}
       >
         {/* Shiny Hover Animation Effect */}
@@ -220,7 +220,7 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
               className="absolute top-full left-0 mt-3 w-[280px] xs:w-[320px] sm:w-[360px] max-w-[calc(100vw-32px)] z-50 overflow-visible"
             >
               {/* Glassmorphic container */}
-              <div className="relative bg-zinc-950 sm:bg-zinc-950/80 backdrop-blur-none sm:backdrop-blur-3xl border border-white/[0.08] rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.08)] overflow-hidden">
+              <div className="relative bg-zinc-900/80 sm:bg-zinc-900/80 backdrop-blur-2xl border border-white/[0.08] rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.08)] overflow-hidden">
                 {/* Accent gradient line at top */}
                 <div className={cn(
                   "absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-sky-400/40 to-transparent transition-all duration-500",

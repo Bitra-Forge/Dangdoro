@@ -60,7 +60,7 @@ export function GroupSessionMiniBar() {
   if (!activeGroupId) return null;
 
   return (
-    <div className="fixed right-5 bottom-24 z-[95] w-[260px] pointer-events-none">
+    <div className="fixed right-5 bottom-24 z-[95] w-[calc(100vw-2.5rem)] max-w-[260px] pointer-events-none">
       <div className="pointer-events-auto rounded-2xl border border-white/10 bg-zinc-950/90 backdrop-blur-xl shadow-2xl px-4 py-4">
         {/* Top Section: Centered */}
         <div className="flex flex-col items-center justify-center mb-4">

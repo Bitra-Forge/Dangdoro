@@ -4,6 +4,7 @@ import { CheckSquare, ChevronUp, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNotesStore } from "@/lib/notes-store";
 import { useQuickTasksStore } from "@/lib/quick-tasks-store";
+import { useTimerStore } from "@/lib/store";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -11,6 +12,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 export function FloatingNotesTrigger() {
   const pathname = usePathname();
   const isHomePage = pathname === "/";
+  const activeGroupId = useTimerStore((state) => state.activeGroupId);
   const isNotesOpen = useNotesStore((state) => state.isNotesOpen);
   const setIsNotesOpen = useNotesStore((state) => state.setIsNotesOpen);
   const isTasksOpen = useQuickTasksStore((state) => state.isTasksOpen);
@@ -58,7 +60,10 @@ export function FloatingNotesTrigger() {
   ];
 
   return (
-    <div ref={dockRef} className="fixed left-5 bottom-24 z-[60] flex flex-col items-center">
+    <div ref={dockRef} className={cn(
+      "fixed left-5 z-[60] flex flex-col items-center transition-all duration-300",
+      activeGroupId ? "bottom-44 sm:bottom-24" : "bottom-24"
+    )}>
       <div
         className={cn(
           "absolute bottom-[calc(100%+12px)] left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 transition-all duration-300",

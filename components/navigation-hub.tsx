@@ -72,6 +72,16 @@ export function NavigationHub() {
     };
   }, [pathname, isFocusMode, clearHideNavTimeout]);
 
+  const handleNavTouchStart = useCallback(() => {
+    clearHideNavTimeout();
+    setIsNavVisible(true);
+    // Set 4-second auto-hide timeout on touch
+    hideNavTimeoutRef.current = setTimeout(() => {
+      setIsNavVisible(false);
+      hideNavTimeoutRef.current = null;
+    }, 4000);
+  }, [clearHideNavTimeout]);
+
   useEffect(() => {
     if (isFocusMode) {
       clearHideNavTimeout();
@@ -84,10 +94,12 @@ export function NavigationHub() {
     };
 
     window.addEventListener("mousemove", handleMouseMove, { passive: true });
+    window.addEventListener("touchstart", handleMouseMove, { passive: true });
     scheduleHideNav();
 
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("touchstart", handleMouseMove);
       clearHideNavTimeout();
     };
   }, [isFocusMode, clearHideNavTimeout, scheduleHideNav]);
@@ -107,12 +119,14 @@ export function NavigationHub() {
           <div
             className="absolute bottom-0 left-1/2 -translate-x-1/2 h-16 w-[720px] max-w-[96vw] pointer-events-auto"
             onMouseEnter={handleNavMouseEnter}
+            onTouchStart={handleNavTouchStart}
           />
         )}
 
         <div
           onMouseEnter={handleNavMouseEnter}
           onMouseLeave={handleNavMouseLeave}
+          onTouchStart={handleNavTouchStart}
           className={cn(
             "flex flex-col sm:flex-row items-center gap-2.5 sm:gap-4 relative px-1 transition-all duration-500",
             isNavVisible

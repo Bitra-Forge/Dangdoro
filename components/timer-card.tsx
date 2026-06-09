@@ -351,7 +351,7 @@ export function TimerCard() {
   }
 
   const focusToggle = (
-    <div className="fixed bottom-8 right-4 sm:right-6 z-40">
+    <div className="fixed bottom-8 right-2 sm:right-6 z-[55]">
       <Tooltip content={isNavFocusMode ? "Disable Focus Mode (show nav)" : "Enable Focus Mode (hide nav)"} side="left">
         <Button
           variant="ghost"
@@ -623,8 +623,8 @@ export function TimerCard() {
 
                     {/* Settings popup - appears upper-right with connector */}
                     {isSettingsOpen && (
-                      <div className="absolute right-0 bottom-full mb-4 lg:left-full lg:right-auto lg:ml-32 lg:mb-0 lg:bottom-0 z-20 animate-in fade-in slide-in-from-left-4 duration-300">
-                        <div className="w-[280px] bg-zinc-900/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden">
+                      <div className="absolute right-0 bottom-full mb-4 lg:left-full lg:right-auto lg:ml-32 lg:mb-0 lg:bottom-0 z-20 animate-in fade-in slide-in-from-left-4 duration-300 max-h-[min(480px,75dvh)] flex flex-col">
+                        <div className="w-[280px] bg-zinc-900/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-y-auto scrollbar-none flex-1">
 
                           {/* Step Size */}
                           <div className="px-5 pt-5 pb-4 border-b border-white/[0.06]">

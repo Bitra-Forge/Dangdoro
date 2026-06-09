@@ -360,9 +360,9 @@ function LeaderboardContent() {
                             </a>
                         </div>
                     ) : (
-                        <div className="w-full flex flex-col items-center gap-16">
+                        <div className="w-full flex flex-col items-center gap-10 sm:gap-16">
                             {/* THE PODIUM (Top 3 Cards) - 100% VISUAL RESTORATION */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl items-end relative">
+                            <div className="flex flex-row items-end justify-center gap-1 sm:gap-3 md:grid md:grid-cols-3 md:gap-6 w-full max-w-5xl relative">
                                 {podiumOrder.map((player, idx) => {
                                     const rank = player === topThree[0] ? 1 : player === topThree[1] ? 2 : 3;
                                     const totalMinutes = player.totalMinutes || 0;
@@ -374,14 +374,22 @@ function LeaderboardContent() {
                                     const isBronze = rank === 3;
 
                                     return (
-                                        <div id={`player-${player.uid}`} key={player.uid || player.id || `podium-${idx}`} className={cn("relative group transition-all duration-700 animate-in fade-in slide-in-from-bottom-12", isGold ? "order-1 md:order-2 z-20" : isSilver ? "order-2 md:order-1" : "order-3 md:order-3")} style={{ animationDelay: `${rank * 150}ms` }}>
+                                        <div 
+                                            id={`player-${player.uid}`} 
+                                            key={player.uid || player.id || `podium-${idx}`} 
+                                            className={cn(
+                                                "relative group transition-all duration-700 animate-in fade-in slide-in-from-bottom-12 flex-1 min-w-0 max-w-[125px] sm:max-w-[145px] md:max-w-none", 
+                                                isGold ? "order-2 md:order-2 z-20" : isSilver ? "order-1 md:order-1" : "order-3 md:order-3"
+                                            )} 
+                                            style={{ animationDelay: `${rank * 150}ms` }}
+                                        >
                                             <div className={cn(
-                                                "relative group flex flex-col items-center rounded-[1rem] border transition-all duration-500 overflow-hidden w-full max-w-[320px] sm:max-w-[360px] md:max-w-none mx-auto",
+                                                "relative group flex flex-col items-center rounded-[1rem] border transition-all duration-500 overflow-hidden w-full mx-auto justify-between",
                                                 isGold
-                                                    ? "bg-gradient-to-br from-zinc-800 via-zinc-800/80 to-yellow-900/40 border-yellow-500/60 shadow-[0_0_70px_rgba(255,215,0,0.25)] z-10 py-8 sm:py-12 scale-95 sm:scale-105"
+                                                    ? "bg-gradient-to-br from-zinc-800 via-zinc-800/80 to-yellow-900/40 border-yellow-500/60 shadow-[0_0_70px_rgba(255,215,0,0.25)] z-10 h-[175px] sm:h-[240px] md:h-auto py-2.5 sm:py-6 md:py-8 lg:py-12 scale-95 sm:scale-105"
                                                     : isSilver
-                                                        ? "bg-gradient-to-b from-slate-700/30 to-zinc-800/60 border-slate-400/40 hover:border-slate-400/60 shadow-[0_0_60px_rgba(148,163,184,0.15)] py-7 sm:py-10 scale-[0.92] sm:scale-98"
-                                                        : "bg-gradient-to-b from-orange-900/20 via-zinc-800/40 to-zinc-900/60 border-orange-800/30 hover:border-orange-800/50 shadow-[0_0_40px_rgba(154,52,18,0.1)] py-7 sm:py-10 scale-[0.9] sm:scale-95"
+                                                        ? "bg-gradient-to-b from-slate-700/30 to-zinc-800/60 border-slate-400/40 hover:border-slate-400/60 shadow-[0_0_60px_rgba(148,163,184,0.15)] h-[155px] sm:h-[210px] md:h-auto py-2 sm:py-5 md:py-7 lg:py-10 scale-[0.92] sm:scale-98"
+                                                        : "bg-gradient-to-b from-orange-900/20 via-zinc-800/40 to-zinc-900/60 border-orange-800/30 hover:border-orange-800/50 shadow-[0_0_40px_rgba(154,52,18,0.1)] h-[140px] sm:h-[180px] md:h-auto py-2 sm:py-4 md:py-7 lg:py-10 scale-[0.9] sm:scale-95"
                                             )}>
                                                 
                                                 {/* Visual Polish Restoration */}
@@ -391,32 +399,32 @@ function LeaderboardContent() {
                                                 
                                                 <div className={cn("absolute inset-0 transition-all duration-700 pointer-events-none skew-x-[-20deg] scale-150", isGold ? "opacity-15 group-hover:opacity-30 bg-gradient-to-tr from-transparent via-yellow-400/40 to-transparent" : isSilver ? "opacity-20 group-hover:opacity-40 bg-gradient-to-tr from-transparent via-slate-300/30 to-transparent" : "opacity-20 group-hover:opacity-30 bg-gradient-to-tr from-transparent via-orange-400/20 to-transparent")} />
 
-                                                <div className="relative mb-6">
-                                                    <div onClick={() => router.push(`/profile?user=${player.uid}`)} className={cn("rounded-full border transition-all duration-300 group-hover:border-opacity-100 overflow-hidden cursor-pointer", isGold ? "border-[#C9B037]/40 w-20 h-20 sm:w-24 sm:h-24" : isSilver ? "border-zinc-400/30 w-16 h-16 sm:w-20 sm:h-20" : "border-orange-700/20 w-16 h-16 sm:w-20 sm:h-20")}>
+                                                <div className="relative mb-2 sm:mb-4 md:mb-6">
+                                                    <div onClick={() => router.push(`/profile?user=${player.uid}`)} className={cn("rounded-full border transition-all duration-300 group-hover:border-opacity-100 overflow-hidden cursor-pointer", isGold ? "border-[#C9B037]/40 w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-24 lg:h-24" : isSilver ? "border-zinc-400/30 w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 lg:w-20 lg:h-20" : "border-orange-700/20 w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 lg:w-20 lg:h-20")}>
                                                         <Avatar className="w-full h-full border-0 rounded-full">
                                                             <AvatarImage src={getHighQualityAvatarUrl(player.photoURL)} className="object-cover" />
-                                                            <AvatarFallback className="rounded-full">{player.displayName?.slice(0, 1) || "U"}</AvatarFallback>
+                                                            <AvatarFallback className="rounded-full text-[10px] sm:text-xs md:text-sm">{player.displayName?.slice(0, 1) || "U"}</AvatarFallback>
                                                         </Avatar>
                                                     </div>
-                                                    <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full border border-zinc-800 flex items-center justify-center bg-zinc-950 shadow-xl overflow-hidden pt-0.5">
-                                                        <Image src={`/Icons/medal (${rank === 1 ? 3 : rank === 3 ? 1 : 2}).png`} alt={`Rank ${rank}`} width={20} height={20} className="w-5 h-5 object-contain" />
+                                                    <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 sm:w-6 sm:h-6 md:w-8 md:h-8 rounded-full border border-zinc-800 flex items-center justify-center bg-zinc-950 shadow-xl overflow-hidden pt-0.5">
+                                                        <Image src={`/Icons/medal (${rank === 1 ? 3 : rank === 3 ? 1 : 2}).png`} alt={`Rank ${rank}`} width={20} height={20} className="w-2 h-2 sm:w-4 sm:h-4 md:w-5 md:h-5 object-contain" />
                                                     </div>
                                                 </div>
 
-                                                <h2 className={cn("font-sans text-2xl tracking-tight text-white mb-2", isGold && "text-3xl text-[#C9B037]", isSilver && "text-slate-200", isBronze && "text-orange-200")}>
+                                                <h2 className={cn("font-sans text-sm sm:text-lg md:text-2xl tracking-tight text-white mb-2 text-center truncate max-w-full px-1", isGold && "text-base sm:text-xl md:text-3xl text-[#C9B037]", isSilver && "text-slate-200", isBronze && "text-orange-200")}>
                                                     {player.displayName}
                                                 </h2>
 
-                                                <div className={cn("px-4 py-1 rounded-[0.75rem] text-[10px] font-black uppercase tracking-[0.2em] mb-8 border", isGold ? "bg-yellow-400/10 text-yellow-500 border-yellow-500/30" : "bg-white/5 text-zinc-600 border-white/5")}>
+                                                <div className={cn("hidden sm:inline-block px-2 sm:px-4 py-0.5 sm:py-1 rounded-[0.75rem] text-[8px] sm:text-[10px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] mb-2 sm:mb-4 md:mb-8 border text-center truncate max-w-[90%]", isGold ? "bg-yellow-400/10 text-yellow-500 border-yellow-500/30" : "bg-white/5 text-zinc-500 sm:text-zinc-600 border-white/5")}>
                                                     {isGold ? "Legacy Tiller" : isSilver ? "Consistent Grower" : "Budding Focus"}
                                                 </div>
 
-                                                <div className="flex justify-center w-full px-8">
+                                                <div className="flex justify-center w-full px-2 sm:px-4 md:px-8">
                                                     <div className="flex flex-col items-center">
-                                                        <span className="text-[8px] uppercase font-black tracking-[0.2em] text-zinc-500 mb-2">FOCUS TIME</span>
-                                                        <div className="flex items-baseline gap-1">
-                                                            {hours > 0 && <span className="text-xl font-sans font-bold text-white">{hours}h</span>}
-                                                            <span className={cn("text-xl font-sans font-bold", isGold ? "text-[#C9B037]" : isSilver ? "text-slate-300" : isBronze ? "text-orange-400" : "text-white")}>{minutes}m</span>
+                                                        <span className="hidden xs:block text-[6px] sm:text-[8px] uppercase font-black tracking-[0.15em] sm:tracking-[0.2em] text-zinc-500 mb-0.5 sm:mb-2">FOCUS TIME</span>
+                                                        <div className="flex items-baseline gap-0.5 sm:gap-1">
+                                                            {hours > 0 && <span className="text-[10px] sm:text-sm md:text-xl font-sans font-bold text-white">{hours}h</span>}
+                                                            <span className={cn("text-[10px] sm:text-sm md:text-xl font-sans font-bold", isGold ? "text-[#C9B037]" : isSilver ? "text-slate-300" : isBronze ? "text-orange-400" : "text-white")}>{minutes}m</span>
                                                         </div>
                                                     </div>
                                                 </div>

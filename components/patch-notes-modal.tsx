@@ -107,17 +107,20 @@ export function PatchNotesModal({ isOpen, onClose }: PatchNotesModalProps) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
-      className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
+      className="fixed inset-0 z-[130] flex items-end md:items-center md:justify-center bg-black/60 backdrop-blur-md"
       onClick={onClose}
     >
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        initial={{ y: "100%", opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: "100%", opacity: 0 }}
         transition={{ type: "spring", stiffness: 400, damping: 30 }}
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          "relative w-full max-w-4xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden",
+          "relative w-full md:max-w-4xl border border-white/10 shadow-2xl overflow-hidden flex flex-col",
+          "rounded-t-3xl md:rounded-3xl",
+          "max-h-[85vh]",
+          "pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:pb-6",
           settingsGlassmorphism
             ? "bg-zinc-900/80 backdrop-blur-md"
             : "bg-zinc-900"
@@ -176,7 +179,7 @@ export function PatchNotesModal({ isOpen, onClose }: PatchNotesModalProps) {
         </div>
 
         {/* Content */}
-        <div className="px-6 pb-5 min-h-[320px] max-h-[420px] overflow-y-auto custom-scrollbar">
+        <div className="px-6 pb-5 min-h-[200px] flex-1 md:min-h-[320px] md:flex-none md:max-h-[420px] overflow-y-auto custom-scrollbar">
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

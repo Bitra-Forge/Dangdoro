@@ -19,7 +19,16 @@ import {
   InlinePausedDock,
 } from "@/components/floating-focus-avatars";
 
+function useTouchDevice() {
+  const [isTouch, setIsTouch] = useState(false);
+  useEffect(() => {
+    setIsTouch('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  }, []);
+  return isTouch;
+}
+
 export default function Home() {
+  const isTouch = useTouchDevice();
   const backgroundSolidColor = useTimerStore(
     (state) => state.backgroundSolidColor,
   );
@@ -50,7 +59,7 @@ export default function Home() {
     null,
   );
   const shouldShowTopLeft =
-    !isNavFocusMode || isTopLeftVisible || isTopLeftExpanded;
+    !isNavFocusMode || isTopLeftVisible || isTopLeftExpanded || isTouch;
 
   const handleTopLeftOpenChange = (open: boolean) => {
     setIsTopLeftExpanded(open);
@@ -196,7 +205,7 @@ export default function Home() {
           <div
             ref={topLeftRef}
             className={cn(
-              "fixed top-8 left-8 z-40 flex items-center gap-3 animate-in slide-in-from-left-4 fade-in duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)] transition-all",
+              "fixed top-4 sm:top-8 left-4 sm:left-8 z-40 flex items-center gap-3 animate-in slide-in-from-left-4 fade-in duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)] transition-all",
               shouldShowTopLeft
                 ? "opacity-100 translate-y-0 pointer-events-auto"
                 : "opacity-0 -translate-y-1 pointer-events-none",

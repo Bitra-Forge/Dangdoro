@@ -1,11 +1,9 @@
 "use client";
 
-import { Timer, ClipboardList, Settings, Trophy, User, Users, UserPlus } from "lucide-react";
+import { Timer, ClipboardList, Settings, Trophy, User, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-import { useEffect, useState } from "react";
 
 const navLinks = [
     { label: "Timer", href: "/", icon: Timer },
@@ -18,26 +16,12 @@ const navLinks = [
 
 export function Navigation() {
     const pathname = usePathname();
-    const [isMobileOrTablet, setIsMobileOrTablet] = useState(false);
-    const [isMobileView, setIsMobileView] = useState(false);
-
-    useEffect(() => {
-        const checkSizes = () => {
-            setIsMobileOrTablet(window.innerWidth < 1024);
-            setIsMobileView(window.innerWidth < 768);
-        };
-        checkSizes();
-        window.addEventListener("resize", checkSizes);
-        return () => window.removeEventListener("resize", checkSizes);
-    }, []);
-
-    const activeLinks = isMobileOrTablet ? navLinks.filter(l => l.href !== "/tasks") : navLinks;
 
     return (
         <div>
-            <nav className="flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 bg-zinc-950 lg:bg-zinc-900/40 backdrop-blur-none lg:backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl">
+            <nav className="flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl">
 
-                {activeLinks.map((link) => {
+                {navLinks.map((link) => {
                     const Icon = link.icon;
                     const isActive = pathname === link.href;
 
@@ -46,8 +30,8 @@ export function Navigation() {
                             key={link.label}
                             href={link.href}
                             className={cn(
-                                "relative flex items-center py-1.5 sm:py-2 rounded-xl transition-all duration-300 group",
-                                isMobileView ? "px-3 gap-0" : "gap-1.5 sm:gap-2 px-2.5 sm:px-4",
+                                "relative flex items-center py-1.5 sm:py-2 rounded-xl transition-all duration-300 group px-3 md:px-4 gap-0 md:gap-2",
+                                "flex",
                                 isActive
                                     ? "bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)]"
                                     : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
@@ -59,7 +43,7 @@ export function Navigation() {
                             )} />
                             <span className={cn(
                                 "text-xs font-bold tracking-wide transition-all duration-300 overflow-hidden",
-                                isActive && !isMobileView ? "max-w-20 opacity-100 ml-1" : "max-w-0 opacity-0"
+                                isActive ? "hidden md:inline-block max-w-20 opacity-100 ml-1" : "hidden opacity-0"
                             )}>
                                 {link.label}
                             </span>

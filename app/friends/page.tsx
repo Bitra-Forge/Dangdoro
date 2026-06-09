@@ -556,7 +556,7 @@ const FriendCard = memo(({ friend, online, onRemoveFriend }: FriendCardProps) =>
 
             <button
                 onClick={() => onRemoveFriend(friend.friendId)}
-                className="absolute top-3 right-3 p-2 opacity-0 translate-y-1 scale-95 group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 text-red-500 hover:text-red-400 cursor-pointer transition-all duration-200 ease-out z-20"
+                className="absolute top-3 right-3 p-2 opacity-0 translate-y-1 scale-95 group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 [@media(hover:none)]:opacity-100 [@media(hover:none)]:translate-y-0 [@media(hover:none)]:scale-100 text-red-500 hover:text-red-400 cursor-pointer transition-all duration-200 ease-out z-20"
                 aria-label="Remove friend"
             >
                 <motion.span

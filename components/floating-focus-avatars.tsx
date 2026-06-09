@@ -130,6 +130,8 @@ function OrbitalAvatarComponent({
   latestPhoto,
   latestName,
   overrideElapsedSecs,
+  rx,
+  ry,
 }: {
   session: LiveSession;
   latestPhoto?: string;
@@ -137,6 +139,8 @@ function OrbitalAvatarComponent({
   /** When set, bypasses the startedAt calculation and uses this value directly.
    *  Used for the local user so the tooltip stays in perfect sync with the timer. */
   overrideElapsedSecs?: number;
+  rx: number;
+  ry: number;
 }) {
   const router = useRouter();
   const [hovered, setHovered] = useState(false);
@@ -164,8 +168,8 @@ function OrbitalAvatarComponent({
   useAnimationFrame((_, delta) => {
     elapsedRef.current += delta / 1000;
     const angle = startAngleVal + (elapsedRef.current / speed) * Math.PI * 2;
-    x.set(Math.cos(angle) * ORBIT_RX);
-    y.set(Math.sin(angle) * ORBIT_RY);
+    x.set(Math.cos(angle) * rx);
+    y.set(Math.sin(angle) * ry);
   });
 
   // Glow animation motion values
@@ -337,7 +341,9 @@ const OrbitalAvatar = React.memo(OrbitalAvatarComponent, (prev, next) => {
     toMillis(prev.session.pausedAt) === toMillis(next.session.pausedAt) &&
     prev.latestPhoto === next.latestPhoto &&
     prev.latestName === next.latestName &&
-    prev.overrideElapsedSecs === next.overrideElapsedSecs
+    prev.overrideElapsedSecs === next.overrideElapsedSecs &&
+    prev.rx === next.rx &&
+    prev.ry === next.ry
   );
 });
 
@@ -456,7 +462,7 @@ function PausedDock({
       <div className="relative flex items-center gap-2 px-3 py-2 rounded-2xl bg-zinc-900/80 backdrop-blur-2xl border border-white/[0.07] shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
         <div className="absolute top-0 left-4 right-4 h-px bg-amber-400/30 rounded-full" />
         {/* label */}
-        <div className="flex items-center gap-1.5 pr-2 border-r border-white/[0.07]">
+        <div className="hidden sm:flex items-center gap-1.5 pr-2 border-r border-white/[0.07]">
           <div className="w-1.5 h-1.5 rounded-full bg-amber-400/60" />
           <span className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-400/70">On Break</span>
         </div>
@@ -600,6 +606,19 @@ export function FloatingFocusAvatars() {
   const [rawSessions, setRawSessions] = useState<LiveSession[]>([]);
   const [now, setNow] = useState(() => Date.now());
   const [userProfiles, setUserProfiles] = useState<Record<string, { photoURL?: string; displayName?: string }>>({});
+  const [orbitRadius, setOrbitRadius] = useState({ rx: 340, ry: 180 });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setOrbitRadius({
+        rx: Math.min(340, window.innerWidth * 0.44),
+        ry: Math.min(180, window.innerHeight * 0.22)
+      });
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Local maps to record when each session was last received and its heartbeat to prevent clock drift issues
   const lastReceivedRef = useRef<Record<string, number>>({});
@@ -754,6 +773,8 @@ export function FloatingFocusAvatars() {
             latestPhoto={userProfiles[session.userId]?.photoURL}
             latestName={userProfiles[session.userId]?.displayName}
             overrideElapsedSecs={session.userId === user?.uid ? localElapsedSecs : undefined}
+            rx={orbitRadius.rx}
+            ry={orbitRadius.ry}
           />
         ))}
       </AnimatePresence>

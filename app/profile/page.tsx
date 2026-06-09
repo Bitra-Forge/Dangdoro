@@ -763,7 +763,7 @@ function ProfileContent() {
                                                 initial={{ opacity: 0, x: 20 }}
                                                 animate={{ opacity: 1, x: 0 }}
                                                 exit={{ opacity: 0, x: 20 }}
-                                                className="flex flex-col gap-4 items-center lg:absolute lg:right-full lg:mr-8"
+                                                className="flex flex-col gap-4 items-center md:absolute md:right-full md:mr-4 lg:mr-8"
                                             >
                                                 <div className="flex flex-col gap-3">
                                                     {Object.entries(THEMES).map(([id, t]) => (
@@ -814,7 +814,7 @@ function ProfileContent() {
                                             </AvatarFallback>
 
                                             {isEditing && (
-                                                <label className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center opacity-0 hover:opacity-100 transition-all cursor-pointer z-30">
+                                                <label className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all cursor-pointer z-30">
                                                     <Camera className="w-10 h-10 text-white mb-3" />
                                                     <span className="text-[10px] ubuntu-bold font-black tracking-widest uppercase">Update Scan</span>
                                                     <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
@@ -834,7 +834,7 @@ function ProfileContent() {
 
                                 {/* Action Buttons Container */}
                                 {!isOwnProfile ? (
-                                    <div className="flex flex-col gap-2.5 w-32 md:w-40 items-center z-30">
+                                    <div className="flex flex-col gap-2.5 min-w-[8rem] w-auto md:w-40 items-center z-30">
                                         {friendStatus?.isFriend ? (
                                             <Button 
                                                 onClick={() => setUnfriendConfirmOpen(true)}
@@ -930,7 +930,7 @@ function ProfileContent() {
                                         )}
                                     </div>
                                 ) : !isEditing && (
-                                    <div className="flex flex-col gap-2.5 w-32 md:w-40 items-center z-30">
+                                    <div className="flex flex-col gap-2.5 min-w-[8rem] w-auto md:w-40 items-center z-30">
                                         <motion.div
                                             whileTap={{ scale: 0.98 }}
                                             className="w-full"
@@ -1244,81 +1244,83 @@ function ProfileContent() {
                                 </div>
                             </div>
 
-                            <div className="relative w-full h-full flex flex-col justify-end mt-4">
-                                {/* Months row */}
-                                <div className="text-[10px] font-bold text-zinc-600 mb-3 whitespace-nowrap absolute -top-8 w-full flex">
-                                    {heatmapMonths.map((m, idx) => (
-                                        <div key={idx} className="absolute" style={{ left: `calc(${m.colIndex} * (100% / 20))` }}>
-                                            {m.label}
-                                        </div>
-                                    ))}
-                                </div>
+                            <div className="w-full overflow-x-auto scrollbar-none [ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-2 select-none -webkit-overflow-scrolling-touch">
+                                <div className="relative min-w-[560px] h-[130px] sm:h-[180px] mt-8">
+                                    {/* Months row */}
+                                    <div className="text-[10px] font-bold text-zinc-600 mb-3 whitespace-nowrap absolute top-0 w-full flex">
+                                        {heatmapMonths.map((m, idx) => (
+                                            <div key={idx} className="absolute" style={{ left: `calc(${m.colIndex} * (100% / 20))` }}>
+                                                {m.label}
+                                            </div>
+                                        ))}
+                                    </div>
 
-                                 {/* Grid */}
-                                 <div className="grid grid-rows-7 grid-flow-col gap-1.5 w-full h-[90px] sm:h-[140px]">
-                                     {productivityData.map((day, i) => {
-                                         const colIndex = Math.floor(i / 7);
-                                         const isFarLeft = colIndex < 2;
-                                         const isFarRight = colIndex > 17;
-                                         return (
-                                             <div key={i} className="w-full h-full flex items-center justify-center relative group/day">
-                                                 <div
-                                                     className="w-[8px] h-[8px] sm:w-full sm:h-full md:w-auto md:aspect-square lg:w-full lg:aspect-auto rounded-[1.5px] sm:rounded-[3px] transition-all duration-300 pointer-events-none relative z-10"
-                                                     style={{
-                                                         backgroundColor: day.level > 0 ? currentTheme.accent : "rgba(255,255,255,0.06)",
-                                                         opacity: day.level === 0 ? 1 : day.level === 1 ? 0.35 : day.level === 2 ? 0.65 : 1,
-                                                         boxShadow: day.level > 1 ? `0 0 -8px ${currentTheme.accent}33` : 'none',
-                                                     }}
-                                                 />
-                                                 {day.level > 0 && (
+                                     {/* Grid */}
+                                     <div className="grid grid-rows-7 grid-flow-col gap-1.5 w-full h-[90px] sm:h-[140px] absolute bottom-0">
+                                         {productivityData.map((day, i) => {
+                                             const colIndex = Math.floor(i / 7);
+                                             const isFarLeft = colIndex < 2;
+                                             const isFarRight = colIndex > 17;
+                                             return (
+                                                 <div key={i} className="w-full h-full flex items-center justify-center relative group/day">
                                                      <div
-                                                         className="absolute w-[8px] h-[8px] sm:w-full sm:h-full md:w-auto md:h-full md:aspect-square lg:w-full lg:aspect-auto blur-[6px] opacity-[0.15] pointer-events-none hidden sm:block"
-                                                         style={{ backgroundColor: currentTheme.accent }}
+                                                         className="w-[8px] h-[8px] sm:w-full sm:h-full md:w-auto md:aspect-square lg:w-full lg:aspect-auto rounded-[1.5px] sm:rounded-[3px] transition-all duration-300 pointer-events-none relative z-10"
+                                                         style={{
+                                                             backgroundColor: day.level > 0 ? currentTheme.accent : "rgba(255,255,255,0.06)",
+                                                             opacity: day.level === 0 ? 1 : day.level === 1 ? 0.35 : day.level === 2 ? 0.65 : 1,
+                                                             boxShadow: day.level > 1 ? `0 0 -8px ${currentTheme.accent}33` : 'none',
+                                                         }}
                                                      />
-                                                 )}
-
-                                                 {/* Custom Styled Tooltip */}
-                                                 <div 
-                                                     className={cn(
-                                                         "pointer-events-none absolute bottom-full pb-2 z-50 opacity-0 scale-95 translate-y-1 group-hover/day:opacity-100 group-hover/day:scale-100 group-hover/day:translate-y-0 transition-all duration-200 ease-out flex flex-col",
-                                                         isFarLeft ? "left-0 translate-x-0" : isFarRight ? "right-0 translate-x-0" : "left-1/2 -translate-x-1/2 items-center"
+                                                     {day.level > 0 && (
+                                                         <div
+                                                             className="absolute w-[8px] h-[8px] sm:w-full sm:h-full md:w-auto md:h-full md:aspect-square lg:w-full lg:aspect-auto blur-[6px] opacity-[0.15] pointer-events-none hidden sm:block"
+                                                             style={{ backgroundColor: currentTheme.accent }}
+                                                         />
                                                      )}
-                                                 >
-                                                     <div 
-                                                         className="bg-zinc-950/95 border text-white rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.8)] backdrop-blur-md p-3 min-w-[130px] flex flex-col gap-1 transition-colors duration-300 relative z-10"
-                                                         style={{ borderColor: `${currentTheme.accent}33` }}
-                                                     >
-                                                         <span className="text-[9px] font-black text-zinc-500 uppercase tracking-wider leading-none">
-                                                             {format(day.date, 'eee, MMM d')}
-                                                         </span>
-                                                         <div className="flex items-center gap-2 mt-0.5">
-                                                             <div 
-                                                                 className="w-1.5 h-1.5 rounded-full shrink-0" 
-                                                                 style={{ 
-                                                                     backgroundColor: day.level > 0 ? currentTheme.accent : "rgba(255,255,255,0.15)",
-                                                                     boxShadow: day.level > 0 ? `0 0 8px ${currentTheme.accent}` : "none"
-                                                                 }} 
-                                                             />
-                                                             <span className="text-[11px] font-extrabold text-white leading-none">
-                                                                 {day.minutes > 0 ? formatFocusedTime(day.minutes) : "0m"}
-                                                             </span>
-                                                             <span className="text-[9px] font-medium text-zinc-400 leading-none">
-                                                                 focused
-                                                             </span>
-                                                         </div>
-                                                     </div>
+
+                                                     {/* Custom Styled Tooltip */}
                                                      <div 
                                                          className={cn(
-                                                             "w-1.5 h-1.5 rotate-45 border-r border-b bg-zinc-950/95 absolute bottom-[5px] z-0 transition-colors duration-300",
-                                                             isFarLeft ? "left-3" : isFarRight ? "right-3" : "left-1/2 -translate-x-1/2"
+                                                             "pointer-events-none absolute bottom-full pb-2 z-50 opacity-0 scale-95 translate-y-1 group-hover/day:opacity-100 group-hover/day:scale-100 group-hover/day:translate-y-0 transition-all duration-200 ease-out flex flex-col",
+                                                             isFarLeft ? "left-0 translate-x-0" : isFarRight ? "right-0 translate-x-0" : "left-1/2 -translate-x-1/2 items-center"
                                                          )}
-                                                         style={{ borderColor: `${currentTheme.accent}33` }}
-                                                     />
+                                                     >
+                                                         <div 
+                                                             className="bg-zinc-950/95 border text-white rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.8)] backdrop-blur-md p-3 min-w-[130px] flex flex-col gap-1 transition-colors duration-300 relative z-10"
+                                                             style={{ borderColor: `${currentTheme.accent}33` }}
+                                                         >
+                                                             <span className="text-[9px] font-black text-zinc-500 uppercase tracking-wider leading-none">
+                                                                 {format(day.date, 'eee, MMM d')}
+                                                             </span>
+                                                             <div className="flex items-center gap-2 mt-0.5">
+                                                                 <div 
+                                                                     className="w-1.5 h-1.5 rounded-full shrink-0" 
+                                                                     style={{ 
+                                                                         backgroundColor: day.level > 0 ? currentTheme.accent : "rgba(255,255,255,0.15)",
+                                                                         boxShadow: day.level > 0 ? `0 0 8px ${currentTheme.accent}` : "none"
+                                                                     }} 
+                                                                 />
+                                                                 <span className="text-[11px] font-extrabold text-white leading-none">
+                                                                     {day.minutes > 0 ? formatFocusedTime(day.minutes) : "0m"}
+                                                                 </span>
+                                                                 <span className="text-[9px] font-medium text-zinc-400 leading-none">
+                                                                     focused
+                                                                 </span>
+                                                             </div>
+                                                         </div>
+                                                         <div 
+                                                             className={cn(
+                                                                 "w-1.5 h-1.5 rotate-45 border-r border-b bg-zinc-950/95 absolute bottom-[5px] z-0 transition-colors duration-300",
+                                                                 isFarLeft ? "left-3" : isFarRight ? "right-3" : "left-1/2 -translate-x-1/2"
+                                                             )}
+                                                             style={{ borderColor: `${currentTheme.accent}33` }}
+                                                         />
+                                                     </div>
                                                  </div>
-                                             </div>
-                                         );
-                                     })}
-                                 </div>
+                                             );
+                                         })}
+                                     </div>
+                                </div>
                             </div>
                         </motion.div>
 
@@ -1483,7 +1485,7 @@ function ProfileContent() {
                                     </h3>
                                 </div>
 
-                                <div className="flex items-center gap-1.5 bg-[#040405] p-1.5 rounded-full border border-white/5 backdrop-blur-2xl shadow-xl relative overflow-hidden">
+                                <div className="w-full md:w-auto flex items-center justify-between md:justify-start gap-1 bg-[#040405] p-1.5 rounded-full border border-white/5 backdrop-blur-2xl shadow-xl relative overflow-hidden">
                                     {/* Subtle Ambient Glow inside tabs */}
                                     <motion.div
                                         className="absolute inset-0 opacity-[0.02]"
@@ -1500,7 +1502,7 @@ function ProfileContent() {
                                             key={tab.id}
                                             onClick={() => setTimeRange(tab.id as TimeRange)}
                                             className={cn(
-                                                "flex items-center justify-center px-6 py-2.5 text-[10px] font-bold uppercase tracking-widest rounded-full transition-all duration-300 relative group/tab",
+                                                "flex-1 md:flex-none flex items-center justify-center px-4 sm:px-6 py-2.5 text-[10px] font-bold uppercase tracking-widest rounded-full transition-all duration-300 relative group/tab",
                                                 timeRange === tab.id
                                                     ? ""
                                                     : "text-zinc-500 hover:text-white/70"
