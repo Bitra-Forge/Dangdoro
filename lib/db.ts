@@ -375,6 +375,9 @@ export const savePomodoroSession = async (
             }
         }
 
+        groupLeaderboardCache.clear();
+        saveMapToSession("dangdoro_group_leaderboard_cache", groupLeaderboardCache);
+
         try {
             triggerLeaderboardRebuild();
         } catch (err) {

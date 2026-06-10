@@ -336,9 +336,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                 action
             });
 
-            if (action !== "stop") {
-                setActiveGroupId(result.shouldSetActiveGroupId);
-            }
+            setActiveGroupId(result.shouldSetActiveGroupId);
 
             if (result.shouldStartTimer && !timerIsActive) timerStart();
             if (result.shouldPauseTimer && willBePaused) timerPause();
@@ -885,7 +883,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                             </div>
                                         </div>
                                         <div className="space-y-2 mb-4">
-                                            {sortedMembers.slice(0, 5).map((m: any) => {
+                                            {sortedMembers.slice(0, 5).map((m: any, index: number) => {
                                                 const goalHours = enrichedGroup.settings?.goalHours || 0;
                                                 const goalPct = goalHours > 0 ? Math.round((((m.totalMinutes || 0) / 60) / goalHours) * 100) : null;
                                                 const isMe = m.uid === user.uid;
@@ -893,6 +891,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                                 return (
                                                     <div key={m.uid} className={cn("rounded-lg p-2.5 border border-white/10 bg-zinc-950/40", isMe && "bg-[white]/8 border-[white]/20")}>
                                                         <div className="flex items-center gap-3">
+                                                            <span className="w-5 text-[10px] font-black text-zinc-600 text-center shrink-0">{index + 1}</span>
                                                             <Avatar className="w-6 h-6 border border-white/10">
                                                                 <AvatarImage src={m.photoURL} />
                                                                 <AvatarFallback className="text-[8px] bg-zinc-900">{m.displayName?.[0]}</AvatarFallback>
@@ -919,10 +918,10 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                                 );
                                             })}
                                         </div>
-                                        <Link href={`/leaderboard?tab=groups&groupId=${groupId}`} className="flex items-center justify-between w-full p-3 bg-zinc-950/40 rounded-lg border border-white/10 text-[10px] font-black uppercase text-zinc-500 hover:text-white transition-all">
+                                        <button onClick={() => setActiveTab("members")} className="flex items-center justify-between w-full p-3 bg-zinc-950/40 rounded-lg border border-white/10 text-[10px] font-black uppercase text-zinc-500 hover:text-white transition-all cursor-pointer">
                                             <span>Full Ranking</span>
                                             <ChevronRight className="w-3 h-3" />
-                                        </Link>
+                                        </button>
                                     </div>
                                 </div>
                             </div>

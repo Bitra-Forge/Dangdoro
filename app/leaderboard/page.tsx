@@ -5,7 +5,7 @@ import {
     Trophy, Zap, Clock, Medal, Sprout, Leaf, Flower2, ChevronRight, 
     TrendingUp, Search, Info, Users, Briefcase, ChevronLeft, Calendar 
 } from "lucide-react";
-import { getLeaderboard, getGroupLeaderboard, fetchUserProfiles } from "@/lib/db";
+import { getLeaderboard, fetchUserProfiles } from "@/lib/db";
 import { getFriendsLeaderboard } from "@/lib/friendship";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn, getHighQualityAvatarUrl, getTimeUntilReset } from "@/lib/utils";
@@ -36,9 +36,6 @@ function LeaderboardContent() {
         (searchParams.get("tab") as LeaderboardTab) || "weekly"
     );
     
-    // Group drill-down state (unused but preserved for compatibility/URL params if referenced elsewhere)
-    const [selectedGroup, setSelectedGroup] = useState<any | null>(null);
-
     // Past weeks history state
     const [pastWeeksList, setPastWeeksList] = useState<any[]>([]);
     const [selectedPastWeekId, setSelectedPastWeekId] = useState<string | null>(null);
@@ -48,7 +45,6 @@ function LeaderboardContent() {
 
     // Reset drill-downs and loading states when tab changes
     useEffect(() => {
-        setSelectedGroup(null);
         setSelectedPastWeekId(null);
         setPastWeekPlayers([]);
         if (activeTab === "weekly") {
@@ -77,9 +73,6 @@ function LeaderboardContent() {
         const intervalId = setInterval(updateTimer, 60000);
         return () => clearInterval(intervalId);
     }, [activeTab]);
-
-    const tabParam = searchParams.get("tab");
-    const groupIdParam = searchParams.get("groupId");
 
     // Fetch past weeks list helper
     const fetchPastWeeks = async () => {
@@ -209,36 +202,7 @@ function LeaderboardContent() {
                 await syncUserProfile(user);
             }
 
-            const groupIdFromUrl = searchParams.get("groupId");
-
-            if (selectedGroup || (groupIdFromUrl && activeTab as any === "groups")) {
-                let groupToLoad = selectedGroup;
-                
-                if (!groupToLoad && groupIdFromUrl) {
-                    const allGroups = await getGroupLeaderboard({ limitCount: 100 });
-                    groupToLoad = allGroups.find(g => g.id === groupIdFromUrl);
-                    if (groupToLoad && isMounted) setSelectedGroup(groupToLoad);
-                }
-
-                if (groupToLoad && isMounted) {
-                    const memberUids = groupToLoad.members || [];
-                    const profiles: any = await fetchUserProfiles(memberUids);
-                    
-                    const rankedMembers = memberUids.map((uid: string) => {
-                        const profile = profiles.find((p: any) => p.uid === uid) || {};
-                        const stats = groupToLoad.memberStats?.[uid] || { totalMinutes: 0 };
-                        return {
-                            ...profile,
-                            ...stats,
-                            displayName: profile.displayName || stats.displayName || "Member",
-                            photoURL: profile.photoURL || stats.photoURL || null,
-                            uid
-                        };
-                    }).sort((a: any, b: any) => (b.totalMinutes || 0) - (a.totalMinutes || 0));
-
-                    setPlayers(rankedMembers);
-                }
-            } else if (activeTab === "weekly") {
+            if (activeTab === "weekly") {
                 const tops = await getLeaderboard(150, "weekly");
                 if (isMounted) {
                     const nonGuests = tops.filter(
@@ -274,7 +238,7 @@ function LeaderboardContent() {
         return () => {
             isMounted = false;
         };
-    }, [user, authLoading, activeTab, selectedGroup, tabParam, groupIdParam]);
+    }, [user, authLoading, activeTab]);
 
     const handleSeeMore = () => {
         setVisibleCount(prev => prev + 20);
@@ -314,7 +278,7 @@ function LeaderboardContent() {
 
                 <main className="relative z-10 flex flex-col items-center pb-48 px-4 w-full flex-1 max-w-6xl mx-auto">
                     {/* Fixed Personal Stat Card (Most Left) */}
-                    {currentUserData && activeTab !== "pastweeks" && activeTab !== "groups" as any && !selectedGroup && (
+                    {currentUserData && activeTab !== "pastweeks" && (
                         <button 
                             onClick={() => {
                                 if (userRank + 1 > visibleCount) {
@@ -345,55 +309,44 @@ function LeaderboardContent() {
                         <div className="flex items-center gap-8 w-full justify-center">
                             <div className="h-[1px] flex-1 max-w-[100px] bg-gradient-to-r from-transparent via-zinc-800 to-transparent shadow-[0_0_15px_rgba(255,255,255,0.1)]" />
                             <h1 className="text-3xl md:text-5xl font-bold text-white text-center font-sans drop-shadow-[0_0_25px_rgba(255,255,255,0.15)]">
-                                {selectedGroup ? selectedGroup.name : "Hall of the Dangos"}
+                                Hall of the Dangos
                             </h1>
                             <div className="h-[1px] flex-1 max-w-[100px] bg-gradient-to-l from-transparent via-zinc-800 to-transparent shadow-[0_0_15px_rgba(255,255,255,0.1)]" />
                         </div>
-
-                        {selectedGroup && (
-                            <button onClick={() => {
-                                setSelectedGroup(null);
-                                router.replace("/leaderboard?tab=weekly");
-                            }} className="mt-8 flex items-center gap-2 text-[#C9B037] font-bold text-xs hover:opacity-80 transition-all group">
-                                <ChevronLeft className="w-4 h-4 group-hover:-translate-x-1 transition-all" /> Back
-                            </button>
-                        )}
                     </header>
 
                     {/* Tab Toggle */}
-                    {!selectedGroup && (
-                        <div className="flex flex-col items-center gap-6 mb-12 w-full max-w-2xl">
-                            <div className="flex items-center gap-2 p-1.5 bg-zinc-950/90 sm:bg-zinc-900/40 backdrop-blur-none sm:backdrop-blur-2xl border border-white/10 rounded-full w-full">
-                                {[
-                                    { id: "weekly", icon: Trophy, label: "Weekly" },
-                                    { id: "alltime", icon: TrendingUp, label: "All-Time" },
-                                    { id: "friends", icon: Users, label: "Friends" },
-                                    { id: "pastweeks", icon: Calendar, label: "Past Weeks" }
-                                ].map(tab => (
-                                    <button 
-                                        key={tab.id} 
-                                        onClick={() => setActiveTab(tab.id as LeaderboardTab)} 
-                                        className={cn(
-                                            "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full transition-all duration-300 relative overflow-hidden cursor-pointer", 
-                                            activeTab === tab.id 
-                                                ? "bg-white/10 text-white" 
-                                                : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
-                                        )}
-                                    >
-                                        {/* Glass highlights */}
-                                        <div className={cn(
-                                            "absolute inset-0 rounded-full border-t-[0.5px] pointer-events-none transition-colors duration-300",
-                                            activeTab === tab.id ? "border-white/30" : "border-white/10"
-                                        )} />
-                                        <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/5 pointer-events-none" />
-                                        
-                                        <tab.icon className={cn("w-4 h-4 transition-transform duration-300", activeTab === tab.id && "scale-110")} />
-                                        <span className="text-xs font-bold">{tab.label}</span>
-                                    </button>
-                                ))}
-                            </div>
+                    <div className="flex flex-col items-center gap-6 mb-12 w-full max-w-2xl">
+                        <div className="flex items-center gap-2 p-1.5 bg-zinc-950/90 sm:bg-zinc-900/40 backdrop-blur-none sm:backdrop-blur-2xl border border-white/10 rounded-full w-full">
+                            {[
+                                { id: "weekly", icon: Trophy, label: "Weekly" },
+                                { id: "alltime", icon: TrendingUp, label: "All-Time" },
+                                { id: "friends", icon: Users, label: "Friends" },
+                                { id: "pastweeks", icon: Calendar, label: "Past Weeks" }
+                            ].map(tab => (
+                                <button 
+                                    key={tab.id} 
+                                    onClick={() => setActiveTab(tab.id as LeaderboardTab)} 
+                                    className={cn(
+                                        "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full transition-all duration-300 relative overflow-hidden cursor-pointer", 
+                                        activeTab === tab.id 
+                                            ? "bg-white/10 text-white" 
+                                            : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
+                                    )}
+                                >
+                                    {/* Glass highlights */}
+                                    <div className={cn(
+                                        "absolute inset-0 rounded-full border-t-[0.5px] pointer-events-none transition-colors duration-300",
+                                        activeTab === tab.id ? "border-white/30" : "border-white/10"
+                                    )} />
+                                    <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/5 pointer-events-none" />
+                                    
+                                    <tab.icon className={cn("w-4 h-4 transition-transform duration-300", activeTab === tab.id && "scale-110")} />
+                                    <span className="text-xs font-bold">{tab.label}</span>
+                                </button>
+                            ))}
                         </div>
-                    )}
+                    </div>
 
                     <AnimatePresence mode="wait">
                         <motion.div
