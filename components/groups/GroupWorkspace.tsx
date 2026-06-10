@@ -218,6 +218,40 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         return [...(enrichedGroup.memberDetails || [])].sort((a, b) => (b.totalMinutes || 0) - (a.totalMinutes || 0));
     }, [enrichedGroup]);
 
+    // Keep track of host presence to stop timer when host ends the session
+    const hostId = enrichedGroup?.hostId;
+    const wasHostActiveRef = useRef(false);
+
+    useEffect(() => {
+        if (!hostId || isHost || !isInGroupSession || !timerIsActive || !user) {
+            wasHostActiveRef.current = false;
+            return;
+        }
+
+        const hostSession = liveSessions.find(s => s.userId === hostId);
+        const hostIsActive = !!hostSession;
+
+        if (hostIsActive) {
+            wasHostActiveRef.current = true;
+        } else if (wasHostActiveRef.current) {
+            wasHostActiveRef.current = false;
+            
+            const stopSession = async () => {
+                const timerSnapshot = useTimerStore.getState();
+                if (timerSnapshot.mode === "focus" && timerSnapshot.timeLeft > 0) {
+                    const elapsedSeconds = Math.max(0, timerSnapshot.initialFocusTime - timerSnapshot.timeLeft);
+                    const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+                    if (elapsedMinutes >= 1) {
+                        await accumulateFocusTime(user.uid, elapsedMinutes, enrichedGroup.id, timerSnapshot.sessionStartTime);
+                    }
+                }
+                timerStop();
+                toast.info("The host has ended the focus session.");
+            };
+            stopSession();
+        }
+    }, [liveSessions, hostId, isHost, isInGroupSession, timerIsActive, user, enrichedGroup?.id, timerStop]);
+
     // Handlers
     const handleAddTask = async (title: string, priority: string = "medium", assignedTo: string = "all", silent: boolean = false, description: string = "") => {
         if (!isMember || !user) return;
@@ -309,13 +343,18 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
             if (result.shouldStartTimer && !timerIsActive) timerStart();
             if (result.shouldPauseTimer && willBePaused) timerPause();
             if (action === "pause" && !willBePaused && !timerIsActive) timerStart();
-            if (result.shouldStopTimer) {
+             if (result.shouldStopTimer) {
                 const timerSnapshot = useTimerStore.getState();
                 if (timerSnapshot.mode === "focus" && timerSnapshot.timeLeft > 0) {
                     const elapsedSeconds = Math.max(0, timerSnapshot.initialFocusTime - timerSnapshot.timeLeft);
                     const elapsedMinutes = Math.floor(elapsedSeconds / 60);
-                    if (elapsedMinutes >= 1 && isHost) {
-                        await accumulateFocusTime(user.uid, elapsedMinutes, enrichedGroup.id);
+                    if (elapsedMinutes >= 1) {
+                        if (isHost) {
+                            await accumulateFocusTime(user.uid, elapsedMinutes, enrichedGroup.id);
+                        } else {
+                            // Accumulate focus time for non-hosts on manual stop
+                            await accumulateFocusTime(user.uid, elapsedMinutes, enrichedGroup.id, timerSnapshot.sessionStartTime);
+                        }
                     }
                 }
                 timerStop();

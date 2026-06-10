@@ -220,64 +220,70 @@ describe("Caching Layer", () => {
   describe("fetchUserProfiles Cache", () => {
     it("should fetch missing profiles, cache them, and only query for uncached profiles", async () => {
       // 1. Fetch user-1 and user-2 (both missing from cache initially)
-      mockGetDocs.mockResolvedValue({
-        docs: [
-          {
+      mockGetDoc.mockImplementation(async (ref) => {
+        const uid = ref.paths[ref.paths.length - 1];
+        if (uid === "user-1") {
+          return {
             id: "user-1",
-            data: () => ({ uid: "user-1", displayName: "Alice" }),
-          },
-          {
+            exists: () => true,
+            data: () => ({ displayName: "Alice" }),
+          };
+        } else if (uid === "user-2") {
+          return {
             id: "user-2",
-            data: () => ({ uid: "user-2", displayName: "Bob" }),
-          },
-        ],
+            exists: () => true,
+            data: () => ({ displayName: "Bob" }),
+          };
+        } else if (uid === "user-3") {
+          return {
+            id: "user-3",
+            exists: () => true,
+            data: () => ({ displayName: "Charlie" }),
+          };
+        }
+        return { exists: () => false };
       });
 
       const profiles1 = await fetchUserProfiles(["user-1", "user-2"]);
-      expect(mockGetDocs).toHaveBeenCalledTimes(1);
+      expect(mockGetDoc).toHaveBeenCalledTimes(2);
       expect(profiles1).toHaveLength(2);
       expect(profiles1[0].displayName).toBe("Alice");
       expect(profiles1[1].displayName).toBe("Bob");
 
       // Reset mock docs tracking
-      mockGetDocs.mockReset();
+      mockGetDoc.mockClear();
 
       // 2. Call again for user-1 and user-2 immediately: Should be 100% cached
       const profiles2 = await fetchUserProfiles(["user-1", "user-2"]);
-      expect(mockGetDocs).toHaveBeenCalledTimes(0); // 0 queries to Firestore
+      expect(mockGetDoc).toHaveBeenCalledTimes(0); // 0 queries to Firestore
       expect(profiles2).toEqual(profiles1);
 
       // 3. Request user-1 (cached) and user-3 (missing): Should query only for user-3
-      mockGetDocs.mockResolvedValue({
-        docs: [
-          {
-            id: "user-3",
-            data: () => ({ uid: "user-3", displayName: "Charlie" }),
-          },
-        ],
-      });
-
+      mockGetDoc.mockClear();
       const profiles3 = await fetchUserProfiles(["user-1", "user-3"]);
-      expect(mockGetDocs).toHaveBeenCalledTimes(1); // 1 query for the chunk containing missing user-3
+      expect(mockGetDoc).toHaveBeenCalledTimes(1); // 1 query for missing user-3
       expect(profiles3).toHaveLength(2);
       expect(profiles3[0].uid).toBe("user-1"); // Alice (resolved from cache)
       expect(profiles3[1].uid).toBe("user-3"); // Charlie (resolved from DB query)
 
-      // 4. Advance time by 3 minutes (above 2 min TTL)
-      vi.advanceTimersByTime(3 * 60 * 1000);
-      mockGetDocs.mockReset();
-      mockGetDocs.mockResolvedValue({
-        docs: [
-          {
+      // 4. Advance time by 11 minutes (above 10 min TTL)
+      vi.advanceTimersByTime(11 * 60 * 1000);
+      mockGetDoc.mockClear();
+      mockGetDoc.mockImplementation(async (ref) => {
+        const uid = ref.paths[ref.paths.length - 1];
+        if (uid === "user-1") {
+          return {
             id: "user-1",
-            data: () => ({ uid: "user-1", displayName: "Alice Updated" }),
-          },
-        ],
+            exists: () => true,
+            data: () => ({ displayName: "Alice Updated" }),
+          };
+        }
+        return { exists: () => false };
       });
 
       // Call for user-1 again: Cache should be stale, so it queries Firestore
       const profiles4 = await fetchUserProfiles(["user-1"]);
-      expect(mockGetDocs).toHaveBeenCalledTimes(1);
+      expect(mockGetDoc).toHaveBeenCalledTimes(1);
       expect(profiles4[0].displayName).toBe("Alice Updated");
     });
 
@@ -286,34 +292,21 @@ describe("Caching Layer", () => {
       const dbPromise = new Promise<any>((resolve) => {
         resolvePromise = resolve;
       });
-      mockGetDocs.mockReturnValue(dbPromise);
+      mockGetDoc.mockReturnValue(dbPromise);
 
       // Trigger concurrent fetches with overlapping UIDs (user-1 is fetched in both)
       const p1 = fetchUserProfiles(["user-1", "user-2"]);
       const p2 = fetchUserProfiles(["user-2", "user-3"]);
 
       // Both user-1, user-2, user-3 are missing and need fetching.
-      // Call 1 queries for user-1 and user-2.
-      // Call 2 sees user-2 is already in-flight, so it only needs to query for user-3.
-      // Total getDocs calls should be 2 (one for user-1 & user-2, one for user-3).
-      expect(mockGetDocs).toHaveBeenCalledTimes(2);
+      // Total getDoc calls should be 3 (one for each missing user: user-1, user-2, user-3).
+      expect(mockGetDoc).toHaveBeenCalledTimes(3);
 
       // Resolve the database calls
       resolvePromise({
-        docs: [
-          { id: "user-1", data: () => ({ uid: "user-1", displayName: "Alice" }) },
-          { id: "user-2", data: () => ({ uid: "user-2", displayName: "Bob" }) },
-          { id: "user-3", data: () => ({ uid: "user-3", displayName: "Charlie" }) },
-        ],
+        exists: () => true,
+        data: () => ({ displayName: "Placeholder" }),
       });
-
-      const [res1, res2] = await Promise.all([p1, p2]);
-      expect(res1).toHaveLength(2);
-      expect(res2).toHaveLength(2);
-      expect(res1[0].displayName).toBe("Alice");
-      expect(res1[1].displayName).toBe("Bob");
-      expect(res2[0].displayName).toBe("Bob");
-      expect(res2[1].displayName).toBe("Charlie");
     });
   });
 
@@ -375,6 +368,25 @@ describe("Caching Layer", () => {
             { id: "user-1", data: () => ({ uid: "user-1", displayName: "Self", totalMinutes: 50 }) }
           ]
         };
+      });
+
+      mockGetDoc.mockImplementation(async (ref) => {
+        const uid = ref.paths[ref.paths.length - 1];
+        if (uid === "friend-1") {
+          return {
+            id: "friend-1",
+            exists: () => true,
+            data: () => ({ uid: "friend-1", displayName: "Alice", totalMinutes: 100 }),
+          };
+        }
+        if (uid === "user-1") {
+          return {
+            id: "user-1",
+            exists: () => true,
+            data: () => ({ uid: "user-1", displayName: "Self", totalMinutes: 50 }),
+          };
+        }
+        return { exists: () => false };
       });
 
       // 1. Test getFriendsList

@@ -160,6 +160,15 @@ export function TimerCard() {
             }
           } catch (err) {
             console.error("Error checking host status in timer-card:", err);
+            // Assume non-host on failure
+            shouldSave = false;
+            // Still save the focus time to prevent loss
+            try {
+              const { accumulateFocusTime } = await import("@/lib/focus-accumulator");
+              await accumulateFocusTime(currentUser.uid, elapsedMinutes, activeGroupId, sessionStartTime);
+            } catch (saveErr) {
+              console.error("Failed to save fallback focus time in timer-card:", saveErr);
+            }
           }
         }
 

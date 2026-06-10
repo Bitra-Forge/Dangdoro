@@ -337,6 +337,16 @@ const formatFocusedTime = (totalMinutes: number) => {
     return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
 };
 
+const parseCompletedAt = (completedAt: any): Date | null => {
+    if (!completedAt) return null;
+    if (completedAt instanceof Date) return completedAt;
+    if (typeof completedAt.toDate === "function") return completedAt.toDate();
+    if (typeof completedAt.seconds === "number") return new Date(completedAt.seconds * 1000);
+    if (typeof completedAt._seconds === "number") return new Date(completedAt._seconds * 1000);
+    if (typeof completedAt === "string" || typeof completedAt === "number") return new Date(completedAt);
+    return null;
+};
+
 // --- Page ---
 
 function ProfileContent() {
@@ -526,9 +536,8 @@ function ProfileContent() {
             });
 
             history.forEach((session: SessionData) => {
-                if (session.completedAt) {
-                    const sessionDate = new Date(session.completedAt.seconds * 1000);
-
+                const sessionDate = parseCompletedAt(session.completedAt);
+                if (sessionDate) {
                     // Days
                     const dayMatch = last7Days.find(d => isSameDay(d.fullDate, startOfDay(sessionDate)));
                     if (dayMatch) {
@@ -566,19 +575,22 @@ function ProfileContent() {
 
     const streakCount = useMemo(() => {
         if (!sessions.length) return 0;
-        const sortedDates = [...new Set(sessions.map(s => startOfDay(s.completedAt.toDate()).getTime()))]
-            .sort((a, b) => b - a);
+        const sortedDates = sessions
+            .map(s => parseCompletedAt(s.completedAt))
+            .filter((d): d is Date => d !== null)
+            .map(d => startOfDay(d).getTime());
+        const uniqueDates = [...new Set(sortedDates)].sort((a, b) => b - a);
 
         let streak = 0;
         const today = startOfDay(new Date());
         let currentRef = today;
 
         // Check if user has focused today or yesterday to continue the streak
-        const lastSessionDate = new Date(sortedDates[0]);
+        const lastSessionDate = new Date(uniqueDates[0]);
         if (differenceInDays(today, lastSessionDate) > 1) return 0;
 
-        for (let i = 0; i < sortedDates.length; i++) {
-            const date = new Date(sortedDates[i]);
+        for (let i = 0; i < uniqueDates.length; i++) {
+            const date = new Date(uniqueDates[i]);
             const diff = differenceInDays(currentRef, date);
 
             if (diff <= 1) {
@@ -599,8 +611,8 @@ function ProfileContent() {
         for (let i = days - 1; i >= 0; i--) {
             const date = subDays(now, i);
             const daySessions = sessions.filter(s => {
-                if (!s.completedAt || typeof s.completedAt.toDate !== 'function') return false;
-                return isSameDay(s.completedAt.toDate(), date);
+                const sDate = parseCompletedAt(s.completedAt);
+                return sDate ? isSameDay(sDate, date) : false;
             });
             const totalMins = daySessions.reduce((acc, curr) => acc + curr.duration, 0);
             let level = 0;
@@ -647,12 +659,18 @@ function ProfileContent() {
 
         return [
             ...padding,
-            ...days.map(date => ({
-                date,
-                isToday: isSameDay(date, now),
-                hasActivity: sessions.some(s => isSameDay(s.completedAt.toDate(), date)),
-                day: format(date, 'd')
-            }))
+            ...days.map(date => {
+                const hasActivity = sessions.some(s => {
+                    const sDate = parseCompletedAt(s.completedAt);
+                    return sDate ? isSameDay(sDate, date) : false;
+                });
+                return {
+                    date,
+                    isToday: isSameDay(date, now),
+                    hasActivity,
+                    day: format(date, 'd')
+                };
+            })
         ];
     }, [sessions]);
 

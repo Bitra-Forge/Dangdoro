@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/AuthProvider";
 import { useTimerStore } from "@/lib/store";
@@ -36,8 +36,62 @@ export function GroupSessionSync() {
   // Track host ID of the active group
   const cachedHostGroupRef = useRef<string | null>(null);
 
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [isValidated, setIsValidated] = useState(false);
+
+  // 1. Wait for Zustand store to finish hydration from localStorage
   useEffect(() => {
-    if (!activeGroupId) {
+    const unsub = useTimerStore.persist.onFinishHydration(() => {
+      setIsHydrated(true);
+    });
+
+    if (useTimerStore.persist.hasHydrated()) {
+      setIsHydrated(true);
+    }
+
+    return () => unsub();
+  }, []);
+
+  // 2. Validate the persisted activeLiveSessionId on app load
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    const validatePersistedSession = async () => {
+      const store = useTimerStore.getState();
+      const sessionId = store.activeLiveSessionId;
+      if (sessionId) {
+        try {
+          const docRef = doc(db, "liveSessions", sessionId);
+          const docSnap = await getDoc(docRef);
+          if (!docSnap.exists() || docSnap.data()?.status === "completed") {
+            useTimerStore.setState({
+              activeLiveSessionId: null,
+              activeGroupId: null,
+              isActive: false,
+              isPaused: false,
+              sessionStartTime: null,
+            });
+          }
+        } catch (error) {
+          // Fail-safe: clear the session state on Firestore query failure
+          useTimerStore.setState({
+            activeLiveSessionId: null,
+            activeGroupId: null,
+            isActive: false,
+            isPaused: false,
+            sessionStartTime: null,
+          });
+        }
+      }
+      setIsValidated(true);
+    };
+
+    validatePersistedSession();
+  }, [isHydrated]);
+
+  // Track host ID of the active group
+  useEffect(() => {
+    if (!isValidated || !activeGroupId) {
       hostIdRef.current = null;
       cachedHostGroupRef.current = null;
       return;
@@ -49,10 +103,11 @@ export function GroupSessionSync() {
         hostIdRef.current = snap.data().hostId || null;
       }
     }).catch((err) => console.error("Failed to get group hostId:", err));
-  }, [activeGroupId]);
+  }, [activeGroupId, isValidated]);
 
   // Keep track of accumulated focus time and detect natural completion
   useEffect(() => {
+    if (!isValidated) return;
     if (timeLeft === 0 && mode === "focus") {
       // Timer hit zero in a focus session.
       // IMPORTANT: React 18 batches stop() + setActiveGroupId(null) together, so
@@ -74,7 +129,7 @@ export function GroupSessionSync() {
       const elapsedSeconds = Math.max(0, initialFocusTime - timeLeft);
       pendingMinutesRef.current = Math.floor(elapsedSeconds / 60);
     }
-  }, [timeLeft, initialFocusTime, mode, activeGroupId]);
+  }, [timeLeft, initialFocusTime, mode, activeGroupId, isValidated]);
 
   /**
    * Save focus time for NON-HOST members only.
@@ -108,8 +163,8 @@ export function GroupSessionSync() {
     }
   }, [activeGroupId, user]);
 
-
   useEffect(() => {
+    if (!isValidated) return;
     const syncLiveSession = async () => {
       const prevGroupId = prevGroupIdRef.current;
       prevGroupIdRef.current = activeGroupId;
@@ -194,10 +249,11 @@ export function GroupSessionSync() {
     timerIsActive,
     user,
     saveFocusTime,
+    isValidated,
   ]);
 
   useEffect(() => {
-    if (!activeLiveSessionId) {
+    if (!isValidated || !activeLiveSessionId) {
       return;
     }
 
@@ -239,7 +295,7 @@ export function GroupSessionSync() {
       window.removeEventListener("beforeunload", handleCleanup);
       window.removeEventListener("pagehide", handleCleanup);
     };
-  }, [activeLiveSessionId, saveFocusTime]);
+  }, [activeLiveSessionId, saveFocusTime, isValidated]);
 
   return null;
 }

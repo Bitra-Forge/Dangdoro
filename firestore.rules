@@ -223,7 +223,13 @@ service cloud.firestore {
     }
 
     // ─── Leaderboard Cache ───────────────────────────────────────
-    match /cache/leaderboard {
+    match /cache/{document} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // ─── Leaderboard History ─────────────────────────────────────
+    match /leaderboard_history/{weekId} {
       allow read: if isSignedIn();
       allow write: if false;
     }

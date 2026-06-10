@@ -90,7 +90,18 @@ export async function accumulateFocusTime(
 ) {
   if (durationMinutes <= 0) return;
 
-  const current = getPendingFocus(userId);
+  let current = getPendingFocus(userId);
+
+  // Check if a pending focus already exists and was started more than 2 hours ago (ghost session)
+  if (current.minutes > 0 && current.startedAt) {
+    const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+    if (current.startedAt < twoHoursAgo) {
+      await flushFocusTime(userId, current.groupId, false);
+      setPendingFocus(userId, null);
+      current = { minutes: 0, groupId: null, startedAt: null };
+    }
+  }
+
   let newMinutes = durationMinutes;
   let newStartedAt = startedAt || current.startedAt || Date.now() - (durationMinutes * 60 * 1000);
 

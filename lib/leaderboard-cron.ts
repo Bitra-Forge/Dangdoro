@@ -1,7 +1,7 @@
 if (typeof window === "undefined" && process.env.NODE_ENV !== "test") {
   const globalAny = global as any;
   if (!globalAny.leaderboardInterval) {
-    console.log("⏰ [Leaderboard Cron] Initializing interval (every 5 minutes)...");
+    console.log("⏰ [Leaderboard Cron] Initializing interval (every 30 minutes)...");
     globalAny.leaderboardInterval = setInterval(async () => {
       const port = process.env.PORT || 3000;
       const origin = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${port}`;
@@ -25,6 +25,6 @@ if (typeof window === "undefined" && process.env.NODE_ENV !== "test") {
           console.error("⏰ [Leaderboard Cron] Fallback update failed:", updateErr);
         }
       }
-    }, 5 * 60 * 1000);
+    }, 30 * 60 * 1000);
   }
 }

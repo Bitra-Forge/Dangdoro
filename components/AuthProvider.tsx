@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { syncUserProfile } from "@/lib/db";
+import { syncUserProfile, retryPendingFocusTimeLocal } from "@/lib/db";
 import { retryPendingFocusTime } from "@/lib/focus-accumulator";
 import { useTimerStore } from "@/lib/store";
 
@@ -48,6 +48,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
                 // Retry any pending focus time writes that failed in a previous session
                 retryPendingFocusTime(currentUser.uid);
+                retryPendingFocusTimeLocal(currentUser.uid);
 
                 setUser(currentUser);
                 setLoading(false);
