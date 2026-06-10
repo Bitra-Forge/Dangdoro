@@ -85,11 +85,14 @@ function LeaderboardContent() {
             const snap = await getDocs(q);
             const weeks = snap.docs.map(d => {
                 const data = d.data();
-                const date = data.weekStart?.toDate ? data.weekStart.toDate() : new Date();
+                const start = data.weekStart?.toDate ? data.weekStart.toDate() : new Date();
+                const end = new Date(start);
+                end.setDate(end.getDate() + 6);
+                const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
                 return {
                     id: d.id,
-                    label: data.label || `Week of ${date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`,
-                    weekStart: date
+                    label: data.label || `${fmt(start)} – ${fmt(end)}`,
+                    weekStart: start
                 };
             });
             setPastWeeksList(weeks);
@@ -108,8 +111,19 @@ function LeaderboardContent() {
             if (snap.exists()) {
                 const data = snap.data();
                 const weekPlayers = data.players || data.data || [];
-                // Shows top 10 for that week
-                setPastWeekPlayers(weekPlayers.slice(0, 10));
+                const sliced = weekPlayers.slice(0, 10);
+                setPastWeekPlayers(sliced);
+
+                const uids = sliced.map((p: any) => p.uid).filter(Boolean);
+                if (uids.length > 0) {
+                    fetchUserProfiles(uids).then((profiles) => {
+                        const photoMap = new Map(profiles.map(p => [p.uid, p.photoURL]));
+                        setPastWeekPlayers(prev => prev.map(p => {
+                            const fresh = photoMap.get(p.uid);
+                            return fresh ? { ...p, photoURL: fresh } : p;
+                        }));
+                    }).catch(() => {});
+                }
             } else {
                 setPastWeekPlayers([]);
             }
@@ -542,7 +556,6 @@ function LeaderboardContent() {
                                                             </div>
                                                             <div>
                                                                 <h4 className="text-sm font-bold text-white group-hover:text-[#C9B037] transition-colors">{week.label}</h4>
-                                                                <p className="text-[10px] text-zinc-500 mt-0.5">ID: {week.id}</p>
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-2 text-zinc-500 group-hover:text-white transition-colors">
