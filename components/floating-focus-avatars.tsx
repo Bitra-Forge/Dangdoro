@@ -530,6 +530,14 @@ export function InlinePausedDock() {
   const activeGroupId = useTimerStore((s) => s.activeGroupId);
   const [pausedSessions, setPausedSessions] = useState<LiveSession[]>([]);
   const [userProfiles, setUserProfiles] = useState<Record<string, { photoURL?: string; displayName?: string }>>({});
+  const [now, setNow] = useState(Date.now());
+
+  // 10-second ticker to filter out stale paused sessions reactively
+  useEffect(() => {
+    if (pausedSessions.length === 0) return;
+    const interval = setInterval(() => setNow(Date.now()), 10000);
+    return () => clearInterval(interval);
+  }, [pausedSessions.length]);
 
   useEffect(() => {
     if (!activeGroupId || !user || user.isAnonymous) {
@@ -552,8 +560,17 @@ export function InlinePausedDock() {
     return unsub;
   }, [activeGroupId, user]);
 
+  const visibleSessions = useMemo(() => {
+    const STALE_MS = 3 * 60 * 1000;
+    return pausedSessions.filter((s) => {
+      const hb = toMillis(s.lastHeartbeat) || toMillis(s.pausedAt) || toMillis(s.startedAt);
+      if (!hb) return true;
+      return now - hb <= STALE_MS;
+    });
+  }, [pausedSessions, now]);
+
   useEffect(() => {
-    const missing = pausedSessions.map((s) => s.userId).filter((id) => !userProfiles[id]);
+    const missing = visibleSessions.map((s) => s.userId).filter((id) => !userProfiles[id]);
     if (missing.length === 0) return;
     let cancelled = false;
     async function fetchProfiles() {
@@ -579,12 +596,12 @@ export function InlinePausedDock() {
     }
     fetchProfiles();
     return () => { cancelled = true; };
-  }, [pausedSessions, userProfiles]);
+  }, [visibleSessions, userProfiles]);
 
   return (
     <AnimatePresence>
-      {pausedSessions.length > 0 && (
-        <PausedDock key="inline-paused-dock" sessions={pausedSessions} userProfiles={userProfiles} />
+      {visibleSessions.length > 0 && (
+        <PausedDock key="inline-paused-dock" sessions={visibleSessions} userProfiles={userProfiles} />
       )}
     </AnimatePresence>
   );
@@ -659,7 +676,12 @@ export function FloatingFocusAvatars() {
         }
       });
 
-      const clockOffset = maxServerTime > 0 ? nowClient - maxServerTime : 0;
+      // Cap the estimated clock offset to 2 minutes to prevent stale heartbeats from skewing the calculation.
+      // If the difference is larger, it means all active sessions in the snapshot are stale.
+      let clockOffset = maxServerTime > 0 ? nowClient - maxServerTime : 0;
+      if (Math.abs(clockOffset) > 2 * 60 * 1000) {
+        clockOffset = 0;
+      }
 
       const fetched = snap.docs
         .map((d) => {

@@ -216,6 +216,18 @@ export function GroupSessionSync() {
           flushFocusTime(user.uid, activeGroupId || prevGroupIdRef.current, false);
         }
       }
+
+      // Use fetch with keepalive: true to guarantee the session end request reaches the server
+      // even if the tab/browser is closed immediately.
+      fetch("/api/session/end", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ sessionId: activeLiveSessionId }),
+        keepalive: true,
+      }).catch((err) => console.error("Keepalive session end failed:", err));
+
       endLiveSession(activeLiveSessionId);
     };
 

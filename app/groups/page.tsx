@@ -66,6 +66,14 @@ export default function GroupsPage() {
         });
     }, [focusGroups, user?.uid]);
 
+    const [now, setNow] = useState(Date.now());
+
+    // 10-second ticker to reactively filter out stale sessions
+    useEffect(() => {
+        const interval = setInterval(() => setNow(Date.now()), 10000);
+        return () => clearInterval(interval);
+    }, []);
+
     const enrichedGroups = useMemo(() => {
         return focusGroups.map(group => {
             const groupLiveSessions = resolveLiveSessionsForGroup(group.id, liveSessions);
@@ -128,7 +136,7 @@ export default function GroupsPage() {
             }
             return { ...group, memberDetails } as FocusGroup;
         });
-    }, [focusGroups, friends, user, hydratedProfiles, liveSessions]);
+    }, [focusGroups, friends, user, hydratedProfiles, liveSessions, now]);
 
     const userGroups = useMemo(() => {
         if (!user) return [];

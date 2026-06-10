@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useTimerStore } from "@/lib/store";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
@@ -51,7 +51,8 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
 
   const [groups, setGroups] = useState<FocusGroup[]>([]);
   const [isOpen, setIsOpen] = useState(false);
-  const [activeFocusingCount, setActiveFocusingCount] = useState(0);
+  const [activeSessions, setActiveSessions] = useState<any[]>([]);
+  const [now, setNow] = useState(Date.now());
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -92,8 +93,14 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
   }, [user]);
 
   useEffect(() => {
+    if (activeSessions.length === 0) return;
+    const interval = setInterval(() => setNow(Date.now()), 10000);
+    return () => clearInterval(interval);
+  }, [activeSessions.length]);
+
+  useEffect(() => {
     if (!activeGroupId || !user || user.isAnonymous) {
-      setActiveFocusingCount(0);
+      setActiveSessions([]);
       return;
     }
 
@@ -103,18 +110,25 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      const now = Date.now();
-      const liveCount = snap.docs.filter((d) => {
-        const data = d.data();
-        const hb = data.lastHeartbeat;
-        const heartbeat = hb?.toMillis?.() ?? (hb?.seconds ?? 0) * 1000;
-        return now - heartbeat <= 3 * 60 * 1000;
-      }).length;
-      setActiveFocusingCount(liveCount);
+      setActiveSessions(snap.docs.map((d) => d.data()));
     });
 
     return unsub;
-  }, [activeGroupId]);
+  }, [activeGroupId, user]);
+
+  const activeFocusingCount = useMemo(() => {
+    const toMillis = (ts: any): number => {
+      if (!ts) return 0;
+      if (typeof ts.toMillis === "function") return ts.toMillis();
+      if (typeof ts.seconds === "number") return ts.seconds * 1000;
+      return 0;
+    };
+    return activeSessions.filter((s) => {
+      const hb = toMillis(s.lastHeartbeat) || toMillis(s.startedAt);
+      if (!hb) return true;
+      return now - hb <= 3 * 60 * 1000;
+    }).length;
+  }, [activeSessions, now]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

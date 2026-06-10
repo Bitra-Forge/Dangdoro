@@ -167,6 +167,12 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         getFriendsList(user.uid).then(setFriends);
     }, [user]);
 
+    const [now, setNow] = useState(Date.now());
+    useEffect(() => {
+        const interval = setInterval(() => setNow(Date.now()), 10000);
+        return () => clearInterval(interval);
+    }, []);
+
     // Derived State
     const enrichedGroup = useMemo(() => {
         if (!group || !user) return null;
@@ -194,7 +200,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
             };
         });
         return { ...group, memberDetails };
-    }, [group, user, hydratedProfiles, liveSessions]);
+    }, [group, user, hydratedProfiles, liveSessions, now]);
 
     const isMember = enrichedGroup?.members.includes(user?.uid || "");
     const isInGroupSession = activeGroupId === groupId;
