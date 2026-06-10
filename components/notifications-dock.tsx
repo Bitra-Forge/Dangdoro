@@ -234,6 +234,7 @@ export function NotificationsDock() {
                 alt="Feedback"
                 width={16}
                 height={16}
+                priority
                 className={cn(
                   "w-4 h-4 object-contain transition-all duration-300 filter group-hover:scale-110 relative z-10",
                   isFeedbackOpen ? "invert" : "invert opacity-60 group-hover:opacity-100"

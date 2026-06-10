@@ -18,6 +18,20 @@ interface HistoricalDay {
   sessions: number;
 }
 
+interface SafeChartWrapperProps {
+  width?: number;
+  height?: number;
+  children: React.ReactElement<any>;
+  [key: string]: any;
+}
+
+function SafeChartWrapper({ width, height, children, ...props }: SafeChartWrapperProps) {
+  if (!width || width <= 0 || !height || height <= 0) {
+    return null;
+  }
+  return React.cloneElement(children, { width, height, ...props });
+}
+
 interface StatsChartProps {
   data: HistoricalDay[];
 }
@@ -59,7 +73,8 @@ export function StatsChart({ data }: StatsChartProps) {
 
       <div className="w-full h-[220px] min-w-0">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart
+          <SafeChartWrapper>
+            <ComposedChart
             data={data}
             margin={{ top: 10, right: 5, left: -25, bottom: 0 }}
           >
@@ -174,6 +189,7 @@ export function StatsChart({ data }: StatsChartProps) {
               }}
             />
           </ComposedChart>
+          </SafeChartWrapper>
         </ResponsiveContainer>
       </div>
     </motion.div>

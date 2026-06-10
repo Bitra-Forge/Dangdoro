@@ -356,6 +356,10 @@ export const savePomodoroSession = async (
             return false;
         }
 
+        // Clear profile cache so leaderboards/friends re-fetch fresh totalMinutes
+        userProfileCache.delete(userId);
+        saveMapToSession("dangdoro_profile_cache", userProfileCache);
+
         if (groupId) {
             const groupRef = doc(db, "focusGroups", groupId);
             try {

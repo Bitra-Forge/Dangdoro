@@ -647,6 +647,32 @@ export const subscribeToReceivedFriendRequests = (
 };
 
 /**
+ * Subscribe to real-time presence (lastActive) updates for a list of friends.
+ * Calls `callback` whenever any friend's lastActive changes in Firestore.
+ * Returns an unsubscribe function to remove all listeners.
+ */
+export const subscribeToFriendsPresence = (
+    friendIds: string[],
+    callback: (uid: string, lastActive: Timestamp | null) => void
+) => {
+    if (friendIds.length === 0) return () => {};
+
+    const unsubscribes = friendIds.map(uid => {
+        const userRef = doc(db, "users", uid);
+        return onSnapshot(userRef, (snapshot) => {
+            if (snapshot.exists()) {
+                const lastActive = snapshot.data()?.lastActive ?? null;
+                callback(uid, lastActive);
+            }
+        });
+    });
+
+    return () => {
+        unsubscribes.forEach(unsub => unsub());
+    };
+};
+
+/**
  * Subscribe to real-time friends list updates.
  */
 export const subscribeToFriendsList = (

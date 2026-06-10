@@ -66,7 +66,7 @@ export default function RootLayout({
       className={`${figtree.variable} ${geistMono.variable} ${notoSerif.variable} ${ubuntu.variable} ${spaceGrotesk.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-zinc-950 text-white">
+      <body className="min-h-full flex flex-col bg-zinc-950 text-white" suppressHydrationWarning>
         <AuthProvider>
           <NotificationsDock />
 
