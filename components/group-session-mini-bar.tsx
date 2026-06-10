@@ -104,7 +104,7 @@ export function GroupSessionMiniBar() {
 
   const isPausedState = !isActive && isPaused;
 
-  if (!activeGroupId) return null;
+  if (!activeGroupId || (!isActive && !isPaused)) return null;
 
   return (
     <div className="fixed right-5 bottom-24 z-[95] w-[calc(100vw-2.5rem)] max-w-[260px] pointer-events-none">

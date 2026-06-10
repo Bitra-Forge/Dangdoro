@@ -203,8 +203,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     }, [group, user, hydratedProfiles, liveSessions, now]);
 
     const isMember = enrichedGroup?.members.includes(user?.uid || "");
-    const isInGroupSession = activeGroupId === groupId;
-    const effectiveIsFocusing = isInGroupSession || isPaused;
+    const isInGroupSession = activeGroupId === groupId && (timerIsActive || isPaused);
     const isHost = enrichedGroup?.hostId === user?.uid;
     const userRole = enrichedGroup?.memberStats?.[user?.uid || ""]?.role || (isHost ? "host" : "member");
     const isAdmin = userRole === "host" || userRole === "admin";
@@ -528,7 +527,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                         {isMember ? (
                             <>
                                 <div className="flex items-center gap-2">
-                                    {!effectiveIsFocusing ? (
+                                    {!isInGroupSession ? (
                                         <button
                                             disabled={!!sessionActionPending}
                                             onClick={() => handleSessionAction("start")}
@@ -696,7 +695,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                         <div className="hidden lg:flex items-center gap-4">
                             <div className="h-4 w-[1px] bg-white/10 mr-2" />
                             <div className="flex -space-x-2">
-                                {enrichedGroup.memberDetails?.filter((m: any) => m.isFocusing || (m.uid === user?.uid && (optimisticFocusing || isPaused || effectiveIsFocusing))).slice(0, 8).map((m: any, i: number) => {
+                                {enrichedGroup.memberDetails?.filter((m: any) => m.isFocusing || (m.uid === user?.uid && (optimisticFocusing || isInGroupSession))).slice(0, 8).map((m: any, i: number) => {
                                     const isCurrentUser = m.uid === user?.uid;
                                     const isActuallyFocusing = m.isFocusing && m.sessionStatus !== "paused" && !(isCurrentUser && isPaused);
                                     const isPausedState = (isCurrentUser && isPaused) || (!isCurrentUser && m.sessionStatus === "paused");

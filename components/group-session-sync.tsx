@@ -71,12 +71,9 @@ export function GroupSessionSync() {
               isPaused: false,
               sessionStartTime: null,
             });
-        } else if (!sessionId && store.isPaused) {
-          // Stale pause state without a live session — clear it
-          useTimerStore.setState({ isPaused: false, isActive: false, sessionStartTime: null });
-        }
-      } catch (error) {
-        // Fail-safe: clear the session state on Firestore query failure
+          }
+        } catch (error) {
+          // Fail-safe: clear the session state on Firestore query failure
           useTimerStore.setState({
             activeLiveSessionId: null,
             activeGroupId: null,
@@ -85,6 +82,9 @@ export function GroupSessionSync() {
             sessionStartTime: null,
           });
         }
+      } else if (store.isPaused) {
+        // Stale pause state without a live session — clear it
+        useTimerStore.setState({ isPaused: false, isActive: false, sessionStartTime: null });
       }
       setIsValidated(true);
     };
