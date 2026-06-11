@@ -34,6 +34,37 @@ export function NotificationsDock() {
   const toggleFeedback = useDockPopoverStore((s) => s.toggle);
   const closeFeedback = useDockPopoverStore((s) => s.close);
   const [isPatchNotesOpen, setIsPatchNotesOpen] = useState(false);
+  const [hasNewChangelog, setHasNewChangelog] = useState(false);
+  const [latestChangelogId, setLatestChangelogId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/changelog")
+      .then((res) => res.json())
+      .then((data) => {
+        if (active && data.entries && data.entries.length > 0) {
+          const latestId = data.entries[0].id;
+          setLatestChangelogId(latestId);
+          const lastSeenId = localStorage.getItem("last_seen_changelog_id");
+          if (lastSeenId !== latestId) {
+            setHasNewChangelog(true);
+          }
+        }
+      })
+      .catch((err) => console.error("Error checking changelog:", err));
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleOpenPatchNotes = () => {
+    setIsPatchNotesOpen(true);
+    setHasNewChangelog(false);
+    if (latestChangelogId) {
+      localStorage.setItem("last_seen_changelog_id", latestChangelogId);
+    }
+  };
   const [feedbackCategory, setFeedbackCategory] = useState("General");
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [sendingFeedback, setSendingFeedback] = useState(false);
@@ -196,7 +227,7 @@ export function NotificationsDock() {
           /* Patch notes button */
           <Tooltip content="What's New" side="bottom">
             <button
-              onClick={() => setIsPatchNotesOpen(true)}
+              onClick={handleOpenPatchNotes}
               className={cn(
                 "items-center justify-center p-2.5 rounded-full bg-zinc-900/80 backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-visible group text-zinc-400 hover:text-white hover:bg-zinc-800/50",
                 isGroupActive ? "hidden md:inline-flex" : "inline-flex"
@@ -205,6 +236,9 @@ export function NotificationsDock() {
               <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/20 pointer-events-none group-hover:border-white/30 transition-colors duration-300" />
               <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/10 pointer-events-none" />
               <ScrollText className="w-4 h-4 transition-transform group-hover:scale-110 duration-300 relative z-10" />
+              {hasNewChangelog && (
+                <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-white shadow-[0_0_6px_rgba(255,255,255,0.9)] z-20" />
+              )}
             </button>
           </Tooltip>
         )}
