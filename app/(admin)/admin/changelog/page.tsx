@@ -88,6 +88,34 @@ export default function AdminChangelogPage() {
     }
   };
 
+  const handleUpdate = async (id: string, title: string, content: string): Promise<boolean> => {
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/admin/changelog/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ title, content }),
+      });
+      if (res.ok) {
+        toast.success("Changelog entry updated successfully");
+        loadEntries();
+        return true;
+      } else {
+        const errData = await res.json();
+        toast.error(errData.error || "Failed to update changelog");
+        return false;
+      }
+    } catch {
+      toast.error("Failed to update changelog");
+      return false;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
@@ -122,6 +150,7 @@ export default function AdminChangelogPage() {
         <ChangelogManager
           entries={entries}
           onSubmit={handleSubmit}
+          onUpdate={handleUpdate}
           onDelete={handleDelete}
           submitting={submitting}
           deletingId={deletingId}

@@ -196,15 +196,59 @@ export function PatchNotesModal({ isOpen, onClose }: PatchNotesModalProps) {
                 {hasParsedItems ? (
                   items.length > 0 ? (
                     <ul className="space-y-2.5">
-                      {items.map((item, idx) => (
-                        <li
-                          key={idx}
-                          className="flex items-start gap-3 text-sm text-zinc-300 leading-relaxed select-text"
-                        >
-                          <span className={cn("w-1.5 h-1.5 rounded-full mt-2 shrink-0", activeSection.dotColor)} />
-                          <span>{item}</span>
-                        </li>
-                      ))}
+                      {(() => {
+                        let dividerCount = 0;
+                        return items.map((item, idx) => {
+                          const isSepNew = item.includes("<!-- separator:new -->");
+                          const isSepPrev = item.includes("<!-- separator:previous -->") || (!isSepNew && (item.trim().replace(/[-─*]/g, "").length === 0 || item.includes("<!-- separator:")));
+                          const isSep = isSepNew || isSepPrev;
+
+                          if (isSep) {
+                            dividerCount++;
+                            const label = dividerCount === 1 ? "NEW" : "PREVIOUS";
+                            return (
+                              <li key={idx} className="w-full py-1">
+                                <div className="flex items-center gap-3 w-full select-none">
+                                  <div className="h-px bg-white/10 flex-1" />
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-zinc-600 shrink-0">
+                                    {label}
+                                  </span>
+                                  <div className="h-px bg-white/10 flex-1" />
+                                </div>
+                              </li>
+                            );
+                          }
+
+                          const match = item.match(/(.*)\s*<!--\s*(.*?)\s*-->/);
+                          const text = match ? match[1].trim() : item;
+                          const dateStr = match
+                            ? match[2].trim()
+                            : (latestEntry?.createdAt
+                                ? new Date(latestEntry.createdAt).toLocaleDateString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  })
+                                : null);
+
+                          return (
+                            <li
+                              key={idx}
+                              className="flex items-start justify-between gap-3 text-sm text-zinc-300 leading-relaxed select-text w-full"
+                            >
+                              <div className="flex items-start gap-3 flex-1">
+                                <span className={cn("w-1.5 h-1.5 rounded-full mt-2 shrink-0", activeSection.dotColor)} />
+                                <span>{text}</span>
+                              </div>
+                              {dateStr && (
+                                <span className="text-[10px] text-zinc-500 shrink-0 font-medium tabular-nums mt-0.5 select-none">
+                                  {dateStr}
+                                </span>
+                              )}
+                            </li>
+                          );
+                        });
+                      })()}
                     </ul>
                   ) : (
                     <div className="flex flex-col items-center justify-center py-16 text-center">
