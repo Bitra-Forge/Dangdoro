@@ -127,7 +127,7 @@ export function ChangelogManager({
     }
 
     const prevLinesWithoutDividers = prevLines.filter((l) => {
-      const isSep = l.trim().replace(/[-─*]/g, "").length === 0 || l.includes("<!-- separator:");
+      const isSep = l.includes("<!-- separator:") || (l.trim().length >= 5 && l.trim().replace(/[-─*]/g, "").length === 0);
       return !isSep;
     });
 
@@ -210,7 +210,7 @@ export function ChangelogManager({
         if (!trimmed) return "";
         
         // Don't append date to divider lines
-        const isSep = trimmed.replace(/^[-\*]\s*/, "").trim().replace(/[-─*]/g, "").length === 0 || trimmed.includes("<!-- separator:");
+        const isSep = trimmed.includes("<!-- separator:") || (trimmed.replace(/^[-\*]\s*/, "").trim().length >= 5 && trimmed.replace(/^[-\*]\s*/, "").trim().replace(/[-─*]/g, "").length === 0);
         if (isSep) return trimmed;
 
         // Check if it already has a date comment
@@ -236,7 +236,7 @@ export function ChangelogManager({
         .map((l) => l.trim())
         .filter((l) => l.length > 0)
         .map((l) => {
-          const isSep = l.replace(/[-─*]/g, "").length === 0 || l.includes("<!-- separator:");
+          const isSep = l.includes("<!-- separator:") || (l.trim().length >= 5 && l.replace(/[-─*]/g, "").length === 0);
           if (isSep) {
             dividerCount++;
             const type = dividerCount === 1 ? "new" : "previous";
@@ -284,7 +284,7 @@ export function ChangelogManager({
           // Filter out existing dividers from old lines to ensure we only have a single divider
           const prevLinesWithoutDividers = prevLines.filter((l) => {
             const content = l.replace(/^[-*]\s*/, "").trim();
-            const isSep = content.replace(/[-─*]/g, "").length === 0 || content.includes("<!-- separator:");
+            const isSep = content.includes("<!-- separator:") || (content.length >= 5 && content.replace(/[-─*]/g, "").length === 0);
             return !isSep;
           });
 
@@ -546,9 +546,7 @@ export function ChangelogManager({
                         {(() => {
                           let dividerCount = 0;
                           return parsedDraft[activePreviewSection].map((item, idx) => {
-                            const isSepNew = item.includes("<!-- separator:new -->");
-                            const isSepPrev = item.includes("<!-- separator:previous -->") || (!isSepNew && (item.trim().replace(/[-─*]/g, "").length === 0 || item.includes("<!-- separator:")));
-                            const isSep = isSepNew || isSepPrev;
+                            const isSep = item.includes("<!-- separator:") || (item.trim().length >= 5 && item.trim().replace(/[-─*]/g, "").length === 0);
 
                             if (isSep) {
                               dividerCount++;

@@ -199,9 +199,7 @@ export function PatchNotesModal({ isOpen, onClose }: PatchNotesModalProps) {
                       {(() => {
                         let dividerCount = 0;
                         return items.map((item, idx) => {
-                          const isSepNew = item.includes("<!-- separator:new -->");
-                          const isSepPrev = item.includes("<!-- separator:previous -->") || (!isSepNew && (item.trim().replace(/[-─*]/g, "").length === 0 || item.includes("<!-- separator:")));
-                          const isSep = isSepNew || isSepPrev;
+                          const isSep = item.includes("<!-- separator:") || (item.trim().length >= 5 && item.trim().replace(/[-─*]/g, "").length === 0);
 
                           if (isSep) {
                             dividerCount++;

@@ -13,19 +13,7 @@ import {
     ResponsiveContainer,
 } from "recharts";
 
-interface SafeChartWrapperProps {
-    width?: number;
-    height?: number;
-    children: React.ReactElement<any>;
-    [key: string]: any;
-}
 
-function SafeChartWrapper({ width, height, children, ...props }: SafeChartWrapperProps) {
-    if (!width || width <= 0 || !height || height <= 0) {
-        return null;
-    }
-    return React.cloneElement(children, { width, height, ...props });
-}
 
 interface ProfileChartProps {
     timeRange: "days" | "weeks" | "months";
@@ -55,8 +43,7 @@ export function ProfileChart({
             className="w-full h-full min-w-0 outline-none focus:outline-none"
         >
             <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} debounce={50} className="outline-none focus:outline-none" style={{ outline: 'none' }}>
-                <SafeChartWrapper>
-                    <ComposedChart
+                <ComposedChart
                     data={data}
                     key={`${timeRange}_composed`}
                     margin={{ top: 20, right: 10, left: -20, bottom: 25 }}
@@ -170,7 +157,6 @@ export function ProfileChart({
                         }}
                     />
                 </ComposedChart>
-                </SafeChartWrapper>
             </ResponsiveContainer>
         </motion.div>
     );
