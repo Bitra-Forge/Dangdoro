@@ -397,8 +397,9 @@ export function TimerCard() {
       >
 
       {/* Mode Switcher */}
-      <div className={cn(
-        "-mt-20 flex items-center gap-1.5 sm:gap-2 relative z-10 w-fit p-1 sm:p-1.5 rounded-2xl border border-white/20 bg-black/25 backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all duration-700",
+      <div id="timer-modes-wrapper" className="flex flex-col items-center w-full">
+      <div id="timer-modes" className={cn(
+        "-mt-20 flex items-center gap-1.5 sm:gap-2 relative z-10 w-fit p-1 sm:p-1.5 rounded-2xl border border-white/20 bg-zinc-900/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-all duration-700",
         isActive && !isEditing ? "opacity-0 pointer-events-none" : "opacity-100"
       )}>
         {([
@@ -413,16 +414,17 @@ export function TimerCard() {
               "min-w-[88px] sm:min-w-[120px] md:min-w-[145px] px-3 sm:px-5 py-2 sm:py-3 text-[11px] sm:text-[13px] font-black tracking-[0.02em] text-center transition-all duration-300 rounded-full cursor-pointer border",
               mode === m.id
                 ? m.id === "focus"
-                  ? "bg-sky-300/20 text-sky-50 border-sky-200/30 backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_24px_rgba(125,211,252,0.14)]"
+                  ? "bg-sky-900/50 text-sky-50 border-sky-200/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_24px_rgba(125,211,252,0.14)]"
                   : m.id === "break"
-                    ? "bg-emerald-300/20 text-emerald-50 border-emerald-200/30 backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_24px_rgba(110,231,183,0.14)]"
-                    : "bg-fuchsia-300/20 text-fuchsia-50 border-fuchsia-200/30 backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_24px_rgba(240,171,252,0.14)]"
+                    ? "bg-emerald-900/50 text-emerald-50 border-emerald-200/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_24px_rgba(110,231,183,0.14)]"
+                    : "bg-fuchsia-900/50 text-fuchsia-50 border-fuchsia-200/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_24px_rgba(240,171,252,0.14)]"
                 : "bg-black/20 text-white/75 border-white/10 hover:bg-white/[0.14] hover:text-white hover:border-white/30"
             )}
           >
             {m.label}
           </button>
         ))}
+      </div>
       </div>
 
       {/* Main Timer Display */}
@@ -501,6 +503,7 @@ export function TimerCard() {
                 <div className="w-fit flex justify-center items-center">
                   <Tooltip content="Click to edit">
                     <h1
+                      id="timer-display"
                       onClick={startEditing}
                       className={cn(
                         "text-[5rem] md:text-[8rem] font-black leading-none select-none drop-shadow-2xl cursor-pointer tabular-nums",
@@ -559,6 +562,7 @@ export function TimerCard() {
                 <div className="flex items-center gap-3">
                   <Tooltip content={isActive ? "Pause" : isPaused ? "Resume" : "Start"}>
                     <Button
+                      id="timer-start"
                       onClick={async () => {
                         if (isActive) {
                           pause();
@@ -618,6 +622,7 @@ export function TimerCard() {
                   <div className="relative flex items-center">
                     <Tooltip content="Toggle settings">
                       <Button
+                        id="timer-settings"
                         variant="ghost"
                         size="icon"
                         onClick={() => setIsSettingsOpen(!isSettingsOpen)}

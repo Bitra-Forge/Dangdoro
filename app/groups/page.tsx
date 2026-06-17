@@ -7,7 +7,7 @@ import { BackgroundTheme } from "@/components/background-theme";
 import { AuthRequired } from "@/components/auth-required";
 import { cn } from "@/lib/utils";
 import { 
-    Users, Plus, Key, Globe, Search, Flame
+    Users, Plus, Key, Globe, Search, Flame, HelpCircle
 } from "lucide-react";
 import { useTimerStore } from "@/lib/store";
 import { subscribeToFriendsList } from "@/lib/friendship";
@@ -20,6 +20,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { motion, AnimatePresence } from "framer-motion";
+import { useTour, type TourStep } from "@/lib/use-tour";
 
 import { 
     FocusGroup, GroupPrivacy, normalizeLiveSessions, 
@@ -34,6 +35,48 @@ import { JoinCodeModal } from "@/components/groups/JoinCodeModal";
 
 
 export default function GroupsPage() {
+    const tourSteps: TourStep[] = [
+        {
+            popover: {
+                title: "Welcome to Groups",
+                description: "Create or join real-time focus groups to study and work alongside friends.",
+            },
+        },
+        {
+            element: "#btn-create-group-open",
+            popover: {
+                title: "Create a Group",
+                description: "Click here to set up a new focus group. You can define weekly hours goals and privacy rules.",
+                side: "bottom",
+                align: "center",
+            },
+        },
+        {
+            element: "#btn-join-group-open",
+            popover: {
+                title: "Join with Code",
+                description: "Have a code from a friend? Click here to paste their 6-character access key and instantly enter their focus room.",
+                side: "bottom",
+                align: "center",
+            },
+        },
+        {
+            element: "#groups-list-section",
+            popover: {
+                title: "Manage Focus Units",
+                description: "Your active groups and other exploreable public channels are listed down here. Check live timers and stats of members.",
+                side: "top",
+                align: "center",
+            },
+        },
+    ];
+
+    const { resetTour, startTour } = useTour({ pageName: "groups", steps: tourSteps });
+    const handleRestartTour = () => {
+        resetTour();
+        startTour();
+    };
+
     const { user, loading: authLoading } = useAuth();
     const [friends, setFriends] = useState<any[]>([]);
     const [focusGroups, setFocusGroups] = useState<FocusGroup[]>([]);
@@ -376,7 +419,7 @@ export default function GroupsPage() {
             <div className={cn("relative min-h-screen flex flex-col pt-16 overflow-x-hidden", "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
                 <main className="relative z-10 flex flex-col items-center pb-48 px-4 w-full flex-1 max-w-6xl mx-auto">
 
-                    <header className="flex flex-col items-center text-center mb-12 w-full pt-10 relative">
+                    <header id="groups-header" className="flex flex-col items-center text-center mb-12 w-full pt-10 relative">
                         <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="mb-4">
                             <span className="text-[10px] font-black tracking-[0.25em] text-zinc-500 uppercase">Team Focus</span>
                         </motion.div>
@@ -394,6 +437,7 @@ export default function GroupsPage() {
                         <div className="mx-auto max-w-xl space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <motion.button
+                                id="btn-create-group-open"
                                 whileHover={{ y: -1 }}
                                 whileTap={{ scale: 0.985 }}
                                 onClick={() => setShowCreateGroup(!showCreateGroup)}
@@ -418,6 +462,7 @@ export default function GroupsPage() {
                             </motion.button>
 
                             <motion.button
+                                id="btn-join-group-open"
                                 whileHover={{ y: -1 }}
                                 whileTap={{ scale: 0.985 }}
                                 onClick={() => setShowJoinCodeModal(true)}
@@ -448,7 +493,7 @@ export default function GroupsPage() {
                         {activeFocusers.length > 0 && <ActiveFocusersBanner focusers={activeFocusers} />}
                         </div>
 
-                        <div className="space-y-14">
+                        <div id="groups-list-section" className="space-y-14">
                             {userGroups.length > 0 && (
                                 <section>
                                     <div className="flex items-center gap-3 mb-6">
@@ -499,6 +544,17 @@ export default function GroupsPage() {
                 <AnimatePresence>
                     {showJoinCodeModal && <JoinCodeModal onClose={() => setShowJoinCodeModal(false)} onJoin={handleJoinByCode} />}
                 </AnimatePresence>
+
+                {/* Floating Help/Tour Button */}
+                <div className="fixed bottom-6 left-6 z-50">
+                    <button
+                        onClick={handleRestartTour}
+                        className="p-3 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
+                        title="Restart Page Tour"
+                    >
+                        <HelpCircle className="w-5 h-5" />
+                    </button>
+                </div>
             </div>
         </BackgroundTheme>
     );

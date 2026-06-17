@@ -159,16 +159,17 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
 
       {/* Trigger Button */}
       <motion.button
+        id="group-selector-btn"
         whileHover={{ scale: 1.01 }}
         whileTap={{ scale: 0.99 }}
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "relative flex items-center gap-3 px-5 py-3 rounded-2xl border transition-[background-color,border-color,color,box-shadow] duration-200 backdrop-blur-2xl overflow-hidden",
-          "shadow-[0_8px_32px_rgba(0,0,0,0.4)]",
-          isOpen ? "z-50" : "z-10",
+            "relative flex items-center gap-3 px-5 py-3 rounded-2xl border transition-[background-color,border-color,color,box-shadow] duration-200 overflow-hidden",
+            "shadow-[0_8px_32px_rgba(0,0,0,0.4)]",
+            isOpen ? "z-50" : "z-10",
           activeGroupId
-            ? "bg-zinc-900/60 sm:bg-zinc-900/60 border-sky-500/35 text-sky-100 shadow-[0_8px_32px_rgba(56,189,248,0.15),inset_0_1px_0_rgba(255,255,255,0.05)]"
-            : "bg-zinc-900/40 sm:bg-zinc-900/40 border-white/[0.06] text-zinc-300 hover:bg-zinc-900/60 hover:border-white/15"
+            ? "bg-zinc-900/90 border-sky-500/35 text-sky-100 shadow-[0_8px_32px_rgba(56,189,248,0.15),inset_0_1px_0_rgba(255,255,255,0.05)]"
+            : "bg-zinc-900/80 border-white/[0.06] text-zinc-300 hover:bg-zinc-900/90 hover:border-white/15"
         )}
       >
         {/* Shiny Hover Animation Effect */}

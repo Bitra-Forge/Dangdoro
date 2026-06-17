@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense, useMemo } from "react";
 import { 
     Trophy, Zap, Clock, Medal, Sprout, Leaf, Flower2, ChevronRight, 
-    TrendingUp, Search, Info, Users, Briefcase, ChevronLeft, Calendar 
+    TrendingUp, Search, Info, Users, Briefcase, ChevronLeft, Calendar, HelpCircle
 } from "lucide-react";
 import { getLeaderboard, fetchUserProfiles } from "@/lib/db";
 import { getFriendsLeaderboard } from "@/lib/friendship";
@@ -14,6 +14,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { ProfileStatsCard } from "@/components/profile-stats-card";
 import { AuthRequired } from "@/components/auth-required";
 import { BackgroundTheme } from "@/components/background-theme";
+import { useTour, type TourStep } from "@/lib/use-tour";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
@@ -23,6 +24,39 @@ import { collection, doc, getDoc, getDocs, query, orderBy, limit } from "firebas
 type LeaderboardTab = "weekly" | "alltime" | "friends" | "pastweeks";
 
 function LeaderboardContent() {
+    const tourSteps: TourStep[] = [
+        {
+            popover: {
+                title: "Welcome to the Leaderboard",
+                description: "Climb the ranks with focus minutes. Compare weekly, all-time, and friend standings.",
+            },
+        },
+        {
+            element: "#leaderboard-tabs",
+            popover: {
+                title: "Filter Rankings",
+                description: "Filter focus statistics by current weekly growth, all-time accumulated minutes, friend lists, or historical weeks.",
+                side: "bottom",
+                align: "center",
+            },
+        },
+        {
+            element: "#leaderboard-podium",
+            popover: {
+                title: "Focus Podium",
+                description: "The top 3 focused pilots are displayed on the podium cards. Hover over them to inspect their avatar cards and total active hours.",
+                side: "top",
+                align: "center",
+            },
+        },
+    ];
+
+    const { resetTour, startTour } = useTour({ pageName: "leaderboard", steps: tourSteps });
+    const handleRestartTour = () => {
+        resetTour();
+        startTour();
+    };
+
     const { user, loading: authLoading } = useAuth();
     const router = useRouter();
     const [players, setPlayers] = useState<any[]>([]);
@@ -306,6 +340,7 @@ function LeaderboardContent() {
                                     el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                 }
                             }}
+                            id="leaderboard-user-card"
                             className="fixed left-8 top-8 hidden xl:flex z-50 cursor-pointer transition-transform duration-300 hover:scale-105 active:scale-95"
                         >
                             <ProfileStatsCard user={currentUserData} rank={userRank + 1} />
@@ -313,7 +348,7 @@ function LeaderboardContent() {
                     )}
 
                     {/* Clean Header */}
-                    <header className="flex flex-col items-center text-center mb-12 w-full">
+                    <header id="leaderboard-header" className="flex flex-col items-center text-center mb-12 w-full">
                         <div className="flex items-center gap-3 mb-6">
                             <div className="w-12 h-[1px] bg-zinc-900/50" />
                             <span className="text-[10px] font-black tracking-[0.4em] text-zinc-600 uppercase">Focus Rankings</span>
@@ -330,8 +365,8 @@ function LeaderboardContent() {
                     </header>
 
                     {/* Tab Toggle */}
-                    <div className="flex flex-col items-center gap-6 mb-12 w-full max-w-2xl">
-                        <div className="flex items-center gap-2 p-1.5 bg-zinc-950/90 sm:bg-zinc-900/40 backdrop-blur-none sm:backdrop-blur-2xl border border-white/10 rounded-full w-full">
+                    <div id="leaderboard-tabs" className="flex flex-col items-center gap-6 mb-12 w-full max-w-2xl">
+                        <div className="flex items-center gap-2 p-1.5 bg-zinc-950/95 sm:bg-zinc-900/90 border border-white/10 rounded-full w-full">
                             {[
                                 { id: "weekly", icon: Trophy, label: "Weekly" },
                                 { id: "alltime", icon: TrendingUp, label: "All-Time" },
@@ -582,7 +617,7 @@ function LeaderboardContent() {
                                 <div className="w-full flex flex-col items-center gap-10 sm:gap-16">
                                     {/* THE PODIUM (Top 3 Cards) */}
                                     {topThree.length > 0 ? (
-                                        <div className="flex flex-row items-end justify-center gap-1 sm:gap-3 md:grid md:grid-cols-3 md:gap-6 w-full max-w-5xl relative">
+                                        <div id="leaderboard-podium" className="flex flex-row items-end justify-center gap-1 sm:gap-3 md:grid md:grid-cols-3 md:gap-6 w-full max-w-5xl relative">
                                             {podiumOrder.map((player, idx) => {
                                                 const rank = player === topThree[0] ? 1 : player === topThree[1] ? 2 : 3;
                                                 const totalMinutes = player.totalMinutes || 0;
@@ -724,6 +759,16 @@ function LeaderboardContent() {
                             )}
                         </motion.div>
                     </AnimatePresence>
+                {/* Floating Help/Tour Button */}
+                <div className="fixed bottom-6 left-6 z-50">
+                    <button
+                        onClick={handleRestartTour}
+                        className="p-3 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
+                        title="Restart Page Tour"
+                    >
+                        <HelpCircle className="w-5 h-5" />
+                    </button>
+                </div>
                 </main>
             </div>
         </BackgroundTheme>

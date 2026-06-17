@@ -6,7 +6,7 @@ import {
     ClipboardList, Plus, Trash2, CheckCircle2, Circle,
     ChevronDown, ChevronRight, Pencil, Check, X, GripVertical,
     Play, Clock, Maximize2, Palette, Settings, Sparkles, Users,
-    ArrowUpDown
+    ArrowUpDown, HelpCircle
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
@@ -29,6 +29,7 @@ import { AnimatedDotGrid as AnimatedDotGridComponent } from "@/components/animat
 import { useBackgroundTheme } from "@/lib/use-background-theme";
 import { BackgroundTheme } from "@/components/background-theme";
 import { TaskAgent } from "@/components/task-agent";
+import { useTour, type TourStep } from "@/lib/use-tour";
 
 // ─── Priority config ──────────────────────────────────────────────────────────
 const PRIORITIES: { value: TaskPriority; label: string; border: string; dot: string; text: string }[] = [
@@ -471,7 +472,7 @@ function GroupCard({
                 willChange: "left,top,width,height"
             }}
             className={cn(
-                "bg-zinc-900/70 backdrop-blur-2xl border rounded-2xl shadow-2xl transition-[box-shadow,border-color,transform] duration-200 flex flex-col",
+                "task-group-card bg-zinc-900/95 border rounded-2xl shadow-2xl transition-[box-shadow,border-color,transform] duration-200 flex flex-col",
                 isMobileMode ? "w-full md:w-[320px] md:h-[500px] flex-shrink-0" : "",
                 !isMobileMode && (isDraggingCard || isResizing)
                     ? cn(groupColor.border, groupColor.glow, "scale-[1.01] z-50")
@@ -962,7 +963,7 @@ function AssignedTasksCard({
                 zIndex: isDraggingCard || isResizing ? 50 : 10
             }}
             className={cn(
-                "bg-zinc-900/70 backdrop-blur-2xl border rounded-2xl shadow-2xl flex flex-col transition-[box-shadow,border-color] duration-200",
+                "bg-zinc-900/95 border rounded-2xl shadow-2xl flex flex-col transition-[box-shadow,border-color] duration-200",
                 isMobileMode ? "w-full md:w-[320px] md:h-[500px] flex-shrink-0" : "",
                 !isMobileMode && (isDraggingCard || isResizing)
                     ? cn(assignedGroupColor.border, assignedGroupColor.glow, "scale-[1.01]")
@@ -1269,6 +1270,39 @@ function AssignedTaskRow({
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function TasksPage() {
+    const tourSteps: TourStep[] = [
+        {
+            popover: {
+                title: "Welcome to Tasks",
+                description: "Organize tasks into customizable group boards with drag-and-drop, priorities, and AI planning.",
+            },
+        },
+        {
+            element: "#btn-new-group",
+            popover: {
+                title: "New Custom Group",
+                description: "Create a new board to organize your focus items by project, category, or workflow status.",
+                side: "left",
+                align: "center",
+            },
+        },
+        {
+            element: "#btn-planner",
+            popover: {
+                title: "AI Daily Planner",
+                description: "Stuck on planning? Ask the AI Task Planner Agent to automatically outline, structure, and generate task lists for you.",
+                side: "left",
+                align: "center",
+            },
+        },
+    ];
+
+    const { resetTour, startTour } = useTour({ pageName: "tasks", steps: tourSteps });
+    const handleRestartTour = () => {
+        resetTour();
+        startTour();
+    };
+
     const { user, loading: authLoading } = useAuth();
     const [tasks, setTasks] = useState<any[]>([]);
     const [groups, setGroups] = useState<any[]>([]);
@@ -1589,11 +1623,11 @@ export default function TasksPage() {
                             <button type="button" onClick={() => setIsCreatingGroup(false)} className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-400 hover:text-white transition-colors"><X className="w-4 h-4" /></button>
                         </form>
                     )}
-                    <button onClick={() => setShowAgent(v => !v)}
+                    <button id="btn-planner" onClick={() => setShowAgent(v => !v)}
                         className="flex items-center gap-2 px-5 py-3 bg-white/5 border border-white/10 text-zinc-400 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all backdrop-blur-xl shadow-lg">
                         <Sparkles className="w-4 h-4" /> Planner
                     </button>
-                    <button onClick={() => setIsCreatingGroup(v => !v)}
+                    <button id="btn-new-group" onClick={() => setIsCreatingGroup(v => !v)}
                         className="flex items-center gap-2 px-5 py-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-emerald-500/20 transition-all backdrop-blur-xl shadow-lg">
                         <Plus className="w-4 h-4" /> New Group
                     </button>
@@ -1722,6 +1756,16 @@ export default function TasksPage() {
                         </Button>
                     </div>
                 )}
+                {/* Floating Help/Tour Button */}
+                <div className="fixed bottom-6 left-6 z-50">
+                    <button
+                        onClick={handleRestartTour}
+                        className="p-3 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
+                        title="Restart Page Tour"
+                    >
+                        <HelpCircle className="w-5 h-5" />
+                    </button>
+                </div>
             </div>
         </BackgroundTheme>
     );

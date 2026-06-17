@@ -6,12 +6,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navLinks = [
-    { label: "Timer", href: "/", icon: Timer },
-    { label: "Tasks", href: "/tasks", icon: ClipboardList },
-    { label: "Groups", href: "/groups", icon: Users },
-    { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
-    { label: "Profile", href: "/profile", icon: User },
-    { label: "Settings", href: "/settings", icon: Settings },
+    { id: "nav-timer", label: "Timer", href: "/", icon: Timer },
+    { id: "nav-tasks", label: "Tasks", href: "/tasks", icon: ClipboardList },
+    { id: "nav-groups", label: "Groups", href: "/groups", icon: Users },
+    { id: "nav-leaderboard", label: "Leaderboard", href: "/leaderboard", icon: Trophy },
+    { id: "nav-profile", label: "Profile", href: "/profile", icon: User },
+    { id: "nav-settings", label: "Settings", href: "/settings", icon: Settings },
 ];
 
 export function Navigation() {
@@ -27,6 +27,7 @@ export function Navigation() {
 
                     return (
                         <Link
+                            id={link.id}
                             key={link.label}
                             href={link.href}
                             className={cn(

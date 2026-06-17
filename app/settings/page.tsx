@@ -485,7 +485,9 @@ export default function SettingsPage() {
                                                                     onClick={() => setBackgroundSolidColor(color.value)}
                                                                     className={cn(
                                                                         "relative h-16 rounded-xl transition-all flex items-center justify-center cursor-pointer",
-                                                                        selected ? "" : "hover:scale-[1.02]"
+                                                                        selected
+                                                                            ? "border-2 border-white scale-[1.02] shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+                                                                            : "border border-white/10 hover:scale-[1.02]"
                                                                     )}
                                                                     style={{ backgroundColor: color.value }}
                                                                 >
@@ -501,7 +503,7 @@ export default function SettingsPage() {
                                                             </Tooltip>
                                                         );
                                                     })}
-
+ 
                                                     <div className="relative" ref={customColorPanelRef}>
                                                         <Tooltip content="Custom color">
                                                             <button
@@ -512,13 +514,15 @@ export default function SettingsPage() {
                                                                 }}
                                                                 className={cn(
                                                                     "group relative h-16 w-full rounded-xl transition-all flex items-center justify-center overflow-hidden cursor-pointer",
-                                                                    customSolidColor ? "" : "hover:scale-[1.02]"
+                                                                    customSolidColor
+                                                                        ? "border-2 border-white scale-[1.02] shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+                                                                        : "border border-white/10 hover:scale-[1.02]"
                                                                 )}
                                                                 style={{ backgroundColor: backgroundSolidColor }}
                                                             >
                                                                 <span className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.16)_0%,rgba(255,255,255,0.05)_45%,rgba(0,0,0,0.08)_100%)]" />
                                                                 <WandSparkles className="relative z-10 h-5 w-5 text-white" />
-
+ 
                                                                 <div
                                                                     className={cn(
                                                                         "absolute bottom-1.5 right-1.5 h-4 w-4 rounded-full border border-white/20 bg-black/60 text-white flex items-center justify-center shadow-md shadow-black/60 backdrop-blur-[1px] transition-all duration-200",
@@ -529,14 +533,14 @@ export default function SettingsPage() {
                                                                 </div>
                                                             </button>
                                                         </Tooltip>
-
+ 
                                                         {showCustomColorPanel && (
                                                             <div className="absolute top-[calc(100%+8px)] right-0 md:right-auto md:left-0 z-30 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-white/15 bg-[#0a0d16]/95 backdrop-blur-xl p-3 shadow-2xl shadow-black/70">
                                                                 <div className="flex items-center justify-between mb-2">
                                                                     <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Custom Color</div>
                                                                     <div className="h-2.5 w-2.5 rounded-full border border-white/20" style={{ backgroundColor: backgroundSolidColor }} />
                                                                 </div>
-
+ 
                                                                 <div className="flex items-center gap-2">
                                                                     <input
                                                                         type="color"
@@ -553,7 +557,7 @@ export default function SettingsPage() {
                                                                             setCustomColorDraft(raw);
                                                                             const normalized = normalizeHexColor(raw);
                                                                             if (normalized) {
-                                                                                applyCustomColor(normalized);
+                                                                                 applyCustomColor(normalized);
                                                                             }
                                                                         }}
                                                                         onBlur={() => {
@@ -564,7 +568,7 @@ export default function SettingsPage() {
                                                                         className="h-10 flex-1 rounded-md border border-white/15 bg-black/35 px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-500 focus:border-white/35"
                                                                     />
                                                                 </div>
-
+ 
                                                             </div>
                                                         )}
                                                     </div>
@@ -579,7 +583,9 @@ export default function SettingsPage() {
                                                                     onClick={() => setNoneBackgroundGradient(gradient.value)}
                                                                     className={cn(
                                                                         "group relative h-16 rounded-xl overflow-hidden transition-all flex items-center justify-center cursor-pointer",
-                                                                        selected ? "text-white" : "text-zinc-300 hover:scale-[1.02]"
+                                                                        selected
+                                                                            ? "text-white border-2 border-white scale-[1.02] shadow-[0_0_20px_rgba(255,255,255,0.2)]"
+                                                                            : "text-zinc-300 border border-white/10 hover:scale-[1.02]"
                                                                     )}
                                                                     style={{ backgroundImage: gradient.value }}
                                                                 >
