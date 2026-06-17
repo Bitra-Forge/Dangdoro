@@ -28,7 +28,7 @@ export function Navigation() {
                 {navLinks
                     .filter((link) => {
                         if (showGuestNav) {
-                            return link.id === "nav-timer";
+                            return link.id === "nav-timer" || link.id === "nav-settings";
                         }
                         return true;
                     })

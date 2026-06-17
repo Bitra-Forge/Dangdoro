@@ -20,6 +20,7 @@ import {
   InlinePausedDock,
 } from "@/components/floating-focus-avatars";
 import { useTour, type TourStep } from "@/lib/use-tour";
+import { useAuth } from "@/components/AuthProvider";
 
 function useTouchDevice() {
   const [isTouch, setIsTouch] = useState(false);
@@ -30,6 +31,9 @@ function useTouchDevice() {
 }
 
 export default function Home() {
+  const { user, loading } = useAuth();
+  const isGuest = !loading && (!user || user.isAnonymous);
+
   const tourSteps: TourStep[] = [
     {
       popover: {
@@ -84,7 +88,23 @@ export default function Home() {
     },
   ];
 
-  const { resetTour, startTour } = useTour({ pageName: "timer-v2", steps: tourSteps });
+  if (isGuest) {
+    tourSteps.push({
+      element: "#nav-signin",
+      popover: {
+        title: "Create Account / Sign In",
+        description: "You are currently focusing as a guest. Your focus sessions, settings, and notes will be deleted after 24 hours. Sign in to save your progress!",
+        side: "top",
+        align: "center",
+      },
+    });
+  }
+
+  const { resetTour, startTour } = useTour({
+    pageName: "timer-v3",
+    steps: loading ? [] : tourSteps,
+    isGuest: isGuest,
+  });
   const handleRestartTour = () => {
     resetTour();
     startTour();
