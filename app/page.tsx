@@ -63,7 +63,7 @@ export default function Home() {
       element: "#timer-settings",
       popover: {
         title: "Customization Controls",
-        description: "Open settings to fine-tune your step adjustments, select immersive background ambient colors, or customize audio end-session sounds.",
+        description: "Open settings to edit your step adjustments, select immersive background ambient colors, or customize audio end-session sounds.",
         side: "left",
         align: "center",
       },
@@ -72,7 +72,7 @@ export default function Home() {
       element: "#group-selector-btn",
       popover: {
         title: "Focus Solo or Group",
-        description: "Concentrate alone, or switch to your active group to study and work side-by-side with other community users in real-time.",
+        description: "Focus  alone, or switch to your active group to study and work side by side with other community users in real time.",
         side: "right",
         align: "center",
       },
@@ -93,7 +93,7 @@ export default function Home() {
       element: "#nav-signin",
       popover: {
         title: "Create Account / Sign In",
-        description: "You are currently focusing as a guest. Your focus sessions, settings, and notes will be deleted after 24 hours. Sign in to save your progress!",
+        description: "You are currently focusing as a guest. <span style=\"color: #f87171; font-weight: bold;\">Your focus sessions, settings, and notes will be deleted after 24 hours.</span> Sign in to save your progress!",
         side: "top",
         align: "center",
       },
@@ -101,7 +101,7 @@ export default function Home() {
   }
 
   const { resetTour, startTour } = useTour({
-    pageName: "timer-v3",
+    pageName: "timer-v5",
     steps: loading ? [] : tourSteps,
     isGuest: isGuest,
   });

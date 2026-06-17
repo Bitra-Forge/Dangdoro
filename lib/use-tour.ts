@@ -53,6 +53,7 @@ export function useTour({ pageName, steps, onComplete, onDismiss, isGuest = fals
         if (!isHydrated || hasSeenTour || steps.length === 0) return;
 
         isUnmountingRef.current = false;
+        let countdownInterval: ReturnType<typeof setInterval> | null = null;
 
         const driverObj: Driver = createDriver({
             allowClose: false,
@@ -74,6 +75,12 @@ export function useTour({ pageName, steps, onComplete, onDismiss, isGuest = fals
                     onPopoverRender: (popover) => {
                         console.log("[Tour] Rendering popover step...");
                         
+                        // Clear any existing countdown intervals first
+                        if (countdownInterval) {
+                            clearInterval(countdownInterval);
+                            countdownInterval = null;
+                        }
+
                         // Hide previous button on the first step
                         if (driverObj.isFirstStep()) {
                             popover.previousButton.style.display = "none";
@@ -88,6 +95,30 @@ export function useTour({ pageName, steps, onComplete, onDismiss, isGuest = fals
                             if (existingSkip) {
                                 existingSkip.style.display = "none";
                             }
+
+                            // Start a 3-second countdown on the Done button to prevent fast dismissals
+                            let countdown = 3;
+                            popover.nextButton.disabled = true;
+                            popover.nextButton.innerText = `Done (${countdown}s)`;
+                            popover.nextButton.style.opacity = "0.5";
+                            popover.nextButton.style.pointerEvents = "none";
+
+                            countdownInterval = setInterval(() => {
+                                countdown--;
+                                if (countdown > 0) {
+                                    popover.nextButton.innerText = `Done (${countdown}s)`;
+                                } else {
+                                    if (countdownInterval) {
+                                        clearInterval(countdownInterval);
+                                        countdownInterval = null;
+                                    }
+                                    popover.nextButton.disabled = false;
+                                    popover.nextButton.innerText = "Done";
+                                    popover.nextButton.style.opacity = "1";
+                                    popover.nextButton.style.pointerEvents = "auto";
+                                }
+                            }, 1000);
+
                             return;
                         }
 
@@ -153,6 +184,9 @@ export function useTour({ pageName, steps, onComplete, onDismiss, isGuest = fals
 
         return () => {
             isUnmountingRef.current = true;
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
             driverObj.destroy();
         };
     }, [isHydrated, hasSeenTour, stepsString, storageKey]);
