@@ -59,6 +59,17 @@ export function NavigationHub() {
     }
   }, [isHomePage, setIsNavFocusMode]);
 
+  // Keep navigation bar visible when driver.js tour is active
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.body.classList.contains("driver-active")) {
+        setIsNavVisible(true);
+      }
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     // Re-show nav after route changes and focus-mode toggles.
     clearHideNavTimeout();
