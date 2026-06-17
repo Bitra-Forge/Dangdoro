@@ -10,7 +10,8 @@ import { useTimerStore } from "@/lib/store";
 
 const BackgroundPanel = dynamic(() => import("@/components/background-panel").then((m) => m.BackgroundPanel), { ssr: false });
 const SoundPanel = dynamic(() => import("@/components/sound-panel").then((m) => m.SoundPanel), { ssr: false });
-const NotesPanel = dynamic(() => import("@/components/notes-panel").then((m) => m.NotesPanel), { ssr: false });
+const StickyNotesOverlay = dynamic(() => import("@/components/sticky-notes-overlay").then((m) => m.StickyNotesOverlay), { ssr: false });
+const StickyNotesPanel = dynamic(() => import("@/components/sticky-notes-panel").then((m) => m.StickyNotesPanel), { ssr: false });
 const QuickTasksPanel = dynamic(() => import("@/components/quick-tasks-panel").then((m) => m.QuickTasksPanel), { ssr: false });
 
 export function NavigationHub() {
@@ -110,7 +111,8 @@ export function NavigationHub() {
     <>
       {isHomePage && (
         <>
-          <NotesPanel />
+          <StickyNotesOverlay />
+          <StickyNotesPanel />
           <QuickTasksPanel />
         </>
       )}

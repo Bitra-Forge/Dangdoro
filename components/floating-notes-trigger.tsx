@@ -1,8 +1,8 @@
 "use client";
 
-import { CheckSquare, ChevronUp, Pencil } from "lucide-react";
+import { CheckSquare, ChevronUp, StickyNote } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useNotesStore } from "@/lib/notes-store";
+import { useStickyNotesStore } from "@/lib/sticky-notes-store";
 import { useQuickTasksStore } from "@/lib/quick-tasks-store";
 import { useTimerStore } from "@/lib/store";
 import { usePathname } from "next/navigation";
@@ -13,8 +13,8 @@ export function FloatingNotesTrigger() {
   const pathname = usePathname();
   const isHomePage = pathname === "/";
   const activeGroupId = useTimerStore((state) => state.activeGroupId);
-  const isNotesOpen = useNotesStore((state) => state.isNotesOpen);
-  const setIsNotesOpen = useNotesStore((state) => state.setIsNotesOpen);
+  const isNotesOpen = useStickyNotesStore((state) => state.isNotesOpen);
+  const setIsNotesOpen = useStickyNotesStore((state) => state.setIsNotesOpen);
   const isTasksOpen = useQuickTasksStore((state) => state.isTasksOpen);
   const setIsTasksOpen = useQuickTasksStore((state) => state.setIsTasksOpen);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -54,7 +54,7 @@ export function FloatingNotesTrigger() {
         setIsNotesOpen(!isNotesOpen);
         setIsTasksOpen(false);
       },
-      icon: <Pencil className="w-4 h-4" />,
+      icon: <StickyNote className="w-4 h-4" />,
       active: isNotesOpen,
     },
   ];

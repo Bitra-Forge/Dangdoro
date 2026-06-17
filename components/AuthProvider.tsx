@@ -6,6 +6,8 @@ import { auth } from "@/lib/firebase";
 import { syncUserProfile, retryPendingFocusTimeLocal } from "@/lib/db";
 import { retryPendingFocusTime } from "@/lib/focus-accumulator";
 import { useTimerStore } from "@/lib/store";
+import { useStickyNotesStore } from "@/lib/sticky-notes-store";
+import { useQuickTasksStore } from "@/lib/quick-tasks-store";
 
 interface AuthContextType {
     user: User | null;
@@ -50,11 +52,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 retryPendingFocusTime(currentUser.uid);
                 retryPendingFocusTimeLocal(currentUser.uid);
 
+                // Sync sticky notes and quick tasks from Firestore
+                const { loaded: notesLoaded } = useStickyNotesStore.getState();
+                if (!notesLoaded) {
+                  await useStickyNotesStore.getState().pushLocalToFirestore();
+                  await useStickyNotesStore.getState().loadFromFirestore();
+                }
+
+                const { loaded: tasksLoaded } = useQuickTasksStore.getState();
+                if (!tasksLoaded) {
+                  await useQuickTasksStore.getState().pushLocalToFirestore();
+                  await useQuickTasksStore.getState().loadFromFirestore();
+                }
+
                 setUser(currentUser);
                 setLoading(false);
             } else {
                 // RESET TIMER & SETTINGS: Ensure no session leaks after sign-out
                 useTimerStore.getState().resetToDefaults();
+                useStickyNotesStore.getState().clearNotes();
+                useQuickTasksStore.getState().clearTasks();
                 setUser(null);
                 setLoading(false);
             }

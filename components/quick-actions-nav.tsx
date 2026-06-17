@@ -1,17 +1,17 @@
 "use client";
 
-import { CheckSquare, Pencil, Volume2 } from "lucide-react";
+import { CheckSquare, StickyNote, Volume2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTimerStore } from "@/lib/store";
-import { useNotesStore } from "@/lib/notes-store";
+import { useStickyNotesStore } from "@/lib/sticky-notes-store";
 import { useQuickTasksStore } from "@/lib/quick-tasks-store";
 import { Tooltip } from "@/components/ui/tooltip";
 
 export function QuickActionsNav() {
   const isSoundOpen = useTimerStore((state) => state.isSoundPanelOpen);
   const setIsSoundOpen = useTimerStore((state) => state.setIsSoundPanelOpen);
-  const isNotesOpen = useNotesStore((state) => state.isNotesOpen);
-  const setIsNotesOpen = useNotesStore((state) => state.setIsNotesOpen);
+  const isNotesOpen = useStickyNotesStore((state) => state.isNotesOpen);
+  const setIsNotesOpen = useStickyNotesStore((state) => state.setIsNotesOpen);
   const isTasksOpen = useQuickTasksStore((state) => state.isTasksOpen);
   const setIsTasksOpen = useQuickTasksStore((state) => state.setIsTasksOpen);
 
@@ -61,7 +61,7 @@ export function QuickActionsNav() {
               isNotesOpen ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
             )}
           >
-            <Pencil className={cn(
+            <StickyNote className={cn(
               "w-5 h-5 transition-transform duration-300",
               isNotesOpen ? "scale-110" : "group-hover:scale-110"
             )} />
