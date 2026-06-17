@@ -63,7 +63,7 @@ export function useTour({ pageName, steps, onComplete, onDismiss, isGuest = fals
             doneBtnText: "Done",
             showProgress: true,
             overlayColor: "#0d0c0a",
-            overlayOpacity: 0.45,
+            overlayOpacity: 0.65,
             stageRadius: 12,
             steps: steps.map((step) => ({
                 element: step.element,
@@ -74,7 +74,7 @@ export function useTour({ pageName, steps, onComplete, onDismiss, isGuest = fals
                     align: step.popover.align,
                     onPopoverRender: (popover) => {
                         console.log("[Tour] Rendering popover step...");
-                        
+
                         // Clear any existing countdown intervals first
                         if (countdownInterval) {
                             clearInterval(countdownInterval);
