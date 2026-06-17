@@ -73,9 +73,18 @@ export default function Home() {
         align: "center",
       },
     },
+    {
+      element: "#quick-actions-bar",
+      popover: {
+        title: "Quick Tasks, Notes & Ambient Sounds",
+        description: "Use this bar to quickly manage your checklist, scribble down quicknotes, or toggle ambient sounds like rain or white noise to stay in the zone.",
+        side: "top",
+        align: "center",
+      },
+    },
   ];
 
-  const { resetTour, startTour } = useTour({ pageName: "timer", steps: tourSteps });
+  const { resetTour, startTour } = useTour({ pageName: "timer-v2", steps: tourSteps });
   const handleRestartTour = () => {
     resetTour();
     startTour();

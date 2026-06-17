@@ -24,7 +24,7 @@ export function QuickActionsNav() {
   return (
     <div className="relative">
       {/* Main Nav Bar */}
-      <nav className="flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+      <nav id="quick-actions-bar" className="flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 bg-zinc-900/40 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
         <Tooltip content="Quick Tasks">
           <button
             data-quick-action-trigger="true"
