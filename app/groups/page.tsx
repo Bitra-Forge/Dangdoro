@@ -586,6 +586,10 @@ function CreateGroupForm({ user, onClose, privacy, setPrivacy }: any) {
                 goalType,
                 customDays: goalType === "custom" ? parseInt(customDays) || 7 : null,
                 maxMembers: 0,
+                autoResetEnabled: false,
+                autoResetPeriod: "week",
+                customDaysValue: 7,
+                nextResetAt: null,
             }
         });
         toast.success("Group created!");

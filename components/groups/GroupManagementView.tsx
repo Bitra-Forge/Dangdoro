@@ -1,16 +1,16 @@
 "use client";
 
-import { memo, useState, useEffect } from "react";
+import { memo, useState, useEffect, useMemo } from "react";
 import { useTimerStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { 
-    Target, Copy, Crown, Zap, UserX, RotateCcw, Tag, AlignLeft
+    Target, Copy, Crown, Zap, UserX, RotateCcw, Tag, AlignLeft, Clock
 } from "lucide-react";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { fmtMinutes, getManagementGroupKey } from "@/lib/groups";
+import { fmtMinutes, getManagementGroupKey, computeNextResetAt, toMillis } from "@/lib/groups";
 
 export const GroupManagementView = memo(function GroupManagementView({ group, user, onUpdateRole, onRemove, userRole, roleActionPendingId }: any) {
     const isHost = userRole === "host";
@@ -24,19 +24,61 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
     const [draftName, setDraftName] = useState(group.name || "");
     const [draftDescription, setDraftDescription] = useState(group.description || "");
     const [draftGoalHours, setDraftGoalHours] = useState(String(group.settings?.goalHours ?? ""));
+    const [draftAutoResetEnabled, setDraftAutoResetEnabled] = useState(!!group.settings?.autoResetEnabled);
+    const [draftAutoResetPeriod, setDraftAutoResetPeriod] = useState<string>(group.settings?.autoResetPeriod || "week");
+    const [draftCustomDaysValue, setDraftCustomDaysValue] = useState<number | "">(group.settings?.customDaysValue ?? 7);
     const [isSaving, setIsSaving] = useState(false);
+
+    // Estimate the next reset date dynamically for real-time preview
+    const previewNextResetDate = useMemo(() => {
+        if (!draftAutoResetEnabled) return null;
+        
+        const wasEnabled = group.settings?.autoResetEnabled;
+        const periodChanged = group.settings?.autoResetPeriod !== draftAutoResetPeriod;
+        const customDaysChanged = group.settings?.customDaysValue !== draftCustomDaysValue;
+
+        if (wasEnabled && !periodChanged && !customDaysChanged && group.settings?.nextResetAt) {
+            return new Date(toMillis(group.settings.nextResetAt) || Date.now());
+        }
+
+        return computeNextResetAt(
+            draftAutoResetPeriod,
+            draftCustomDaysValue === "" ? 1 : draftCustomDaysValue
+        );
+    }, [
+        draftAutoResetEnabled,
+        draftAutoResetPeriod,
+        draftCustomDaysValue,
+        group.settings?.autoResetEnabled,
+        group.settings?.autoResetPeriod,
+        group.settings?.customDaysValue,
+        group.settings?.nextResetAt
+    ]);
 
     // Sync draft states when group updates from Firestore
     useEffect(() => {
         setDraftName(group.name || "");
         setDraftDescription(group.description || "");
         setDraftGoalHours(String(group.settings?.goalHours ?? ""));
-    }, [group.name, group.description, group.settings?.goalHours]);
+        setDraftAutoResetEnabled(!!group.settings?.autoResetEnabled);
+        setDraftAutoResetPeriod(group.settings?.autoResetPeriod || "week");
+        setDraftCustomDaysValue(group.settings?.customDaysValue ?? 7);
+    }, [
+        group.name, 
+        group.description, 
+        group.settings?.goalHours,
+        group.settings?.autoResetEnabled,
+        group.settings?.autoResetPeriod,
+        group.settings?.customDaysValue
+    ]);
 
     const hasChanges = 
         draftName.trim() !== (group.name || "").trim() ||
         draftDescription.trim() !== (group.description || "").trim() ||
-        draftGoalHours !== String(group.settings?.goalHours ?? "");
+        draftGoalHours !== String(group.settings?.goalHours ?? "") ||
+        draftAutoResetEnabled !== !!group.settings?.autoResetEnabled ||
+        draftAutoResetPeriod !== (group.settings?.autoResetPeriod || "week") ||
+        draftCustomDaysValue !== (group.settings?.customDaysValue ?? 7);
 
     const handleSave = async () => {
         if (!hasChanges || isSaving) return;
@@ -46,7 +88,27 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                 name: draftName.trim(),
                 description: draftDescription.trim(),
                 "settings.goalHours": parseInt(draftGoalHours) || 0,
+                "settings.autoResetEnabled": draftAutoResetEnabled,
+                "settings.autoResetPeriod": draftAutoResetPeriod,
+                "settings.customDaysValue": draftCustomDaysValue === "" ? 1 : draftCustomDaysValue,
             };
+
+            if (draftAutoResetEnabled) {
+                const wasEnabled = group.settings?.autoResetEnabled;
+                const periodChanged = group.settings?.autoResetPeriod !== draftAutoResetPeriod;
+                const customDaysChanged = group.settings?.customDaysValue !== draftCustomDaysValue;
+
+                if (!wasEnabled || periodChanged || customDaysChanged || !group.settings?.nextResetAt) {
+                    const nextResetDate = computeNextResetAt(
+                        draftAutoResetPeriod,
+                        draftCustomDaysValue === "" ? 1 : draftCustomDaysValue
+                    );
+                    updates["settings.nextResetAt"] = nextResetDate;
+                }
+            } else {
+                updates["settings.nextResetAt"] = null;
+            }
+
             await updateDoc(doc(db, "focusGroups", group.id), updates);
             toast.success("Group configuration saved!");
         } catch (error) {
@@ -195,6 +257,91 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                                 Reset Stats
                             </button>
                         </div>
+                    </div>
+
+                    <div className="p-5 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-6">
+                        <div className="flex items-center justify-between">
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-2 text-zinc-400">
+                                    <Clock className="w-4 h-4" />
+                                    <span className="text-[10px] font-black uppercase tracking-widest">Auto Reset Goal</span>
+                                </div>
+                                <p className="text-[10px] text-zinc-500">
+                                    Automatically archive member stats and restart the focus goal period.
+                                </p>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer group">
+                                <input 
+                                    type="checkbox" 
+                                    checked={draftAutoResetEnabled} 
+                                    onChange={(e) => setDraftAutoResetEnabled(e.target.checked)}
+                                    className="sr-only peer"
+                                />
+                                <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-white/20 peer-checked:after:bg-white border border-white/5" />
+                            </label>
+                        </div>
+
+                        {draftAutoResetEnabled && (
+                            <div className="space-y-4 pt-4 border-t border-white/5 animate-in fade-in duration-200">
+                                <div className="space-y-2">
+                                    <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Reset Period</span>
+                                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                                        {[
+                                            { value: "1day", label: "1 Day" },
+                                            { value: "week", label: "1 Week" },
+                                            { value: "month", label: "1 Month" },
+                                            { value: "custom-days", label: "Custom Days" },
+                                        ].map((period) => (
+                                            <button
+                                                key={period.value}
+                                                type="button"
+                                                onClick={() => setDraftAutoResetPeriod(period.value)}
+                                                className={cn(
+                                                    "py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all cursor-pointer relative overflow-hidden",
+                                                    draftAutoResetPeriod === period.value
+                                                        ? "bg-white text-black border-white"
+                                                        : "bg-zinc-900 text-zinc-400 border-white/5 hover:border-white/10 hover:text-white"
+                                                )}
+                                            >
+                                                {period.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {draftAutoResetPeriod === "custom-days" && (
+                                    <div className="flex items-center gap-4 bg-zinc-900/50 p-3 rounded-2xl border border-white/5 w-fit animate-in slide-in-from-top-2 duration-150">
+                                        <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Days:</span>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            value={draftCustomDaysValue}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                if (val === "") {
+                                                    setDraftCustomDaysValue("");
+                                                } else {
+                                                    setDraftCustomDaysValue(Math.max(1, parseInt(val) || 1));
+                                                }
+                                            }}
+                                            onKeyDown={handleKeyDown}
+                                            className="w-20 bg-zinc-950 border border-white/5 rounded-xl px-3 py-2 text-xs text-white focus:border-[white]/40 outline-none"
+                                        />
+                                    </div>
+                                )}
+
+
+
+                                {previewNextResetDate && (
+                                    <div className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest flex items-center gap-1">
+                                        <span>Next Reset:</span>
+                                        <span className="text-white">
+                                            {previewNextResetDate.toLocaleString()}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                     {(group.privacy === "private-code" || group.privacy === "public") && group.accessCode && (
                         <div className="p-5 rounded-3xl bg-zinc-900/60 border border-white/5 flex items-center justify-between">

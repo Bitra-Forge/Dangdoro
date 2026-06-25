@@ -26,7 +26,7 @@ import {
     FocusGroup, SharedTask, ObjectiveTemplateDraft, 
     fmtMinutes, resolveLiveSessionsForGroup, toMillis, 
     getEarliestActiveStart, normalizeLiveSessions,
-    getGoalTypeLabel, GoalType, LiveSession
+    getGoalTypeLabel, GoalType, LiveSession, computeNextResetAt
 } from "@/lib/groups";
 import { fetchUserProfiles } from "@/lib/db";
 import { accumulateFocusTime } from "@/lib/focus-accumulator";
@@ -49,6 +49,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const { user } = useAuth();
     const router = useRouter();
     const permissionDeniedRef = useRef(false);
+    const isAutoResettingRef = useRef(false);
     const [group, setGroup] = useState<FocusGroup | null>(null);
     const [liveSessions, setLiveSessions] = useState<any[]>([]);
     const [tasks, setTasks] = useState<SharedTask[]>([]);
@@ -173,6 +174,8 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         return () => clearInterval(interval);
     }, []);
 
+
+
     // Derived State
     const enrichedGroup = useMemo(() => {
         if (!group || !user) return null;
@@ -250,6 +253,66 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
             stopSession();
         }
     }, [liveSessions, hostId, isHost, isInGroupSession, timerIsActive, user, enrichedGroup?.id, timerStop]);
+
+    // 8. Auto-reset goal period check (triggered by host/admin)
+    useEffect(() => {
+        if (!group || !user || !isAdmin) return;
+        if (!group.settings?.autoResetEnabled || !group.settings?.nextResetAt) return;
+
+        const nextResetMs = toMillis(group.settings.nextResetAt);
+        if (!nextResetMs) return;
+
+        const checkAndReset = async () => {
+            if (Date.now() < nextResetMs) return;
+            if (isAutoResettingRef.current) return;
+            isAutoResettingRef.current = true;
+
+            try {
+                const resetStats: any = {};
+                if (group.memberStats) {
+                    Object.keys(group.memberStats).forEach(key => {
+                        resetStats[key] = { ...(group.memberStats as any)[key], totalMinutes: 0 };
+                    });
+                }
+
+                const nextResetDate = computeNextResetAt(
+                    group.settings?.autoResetPeriod || "week",
+                    group.settings?.customDaysValue ?? 7,
+                    new Date()
+                );
+
+                await updateDoc(doc(db, "focusGroups", group.id), {
+                    totalMinutes: 0,
+                    memberStats: resetStats,
+                    lastResetAt: serverTimestamp(),
+                    "settings.nextResetAt": nextResetDate
+                });
+
+                toast.success("Goal period expired. Progress stats auto-reset successfully!");
+            } catch (error) {
+                console.error("Auto reset stats failed:", error);
+            } finally {
+                isAutoResettingRef.current = false;
+            }
+        };
+
+        checkAndReset();
+
+        const delay = nextResetMs - Date.now();
+        if (delay > 0) {
+            const timeoutId = setTimeout(checkAndReset, delay + 1000);
+            return () => clearTimeout(timeoutId);
+        }
+    }, [
+        group?.id,
+        group?.memberStats,
+        group?.settings?.autoResetEnabled,
+        group?.settings?.nextResetAt,
+        group?.settings?.autoResetPeriod,
+        group?.settings?.customDaysValue,
+        isAdmin,
+        user?.uid
+    ]);
 
     // Handlers
     const handleAddTask = async (title: string, priority: string = "medium", assignedTo: string = "all", silent: boolean = false, description: string = "") => {
