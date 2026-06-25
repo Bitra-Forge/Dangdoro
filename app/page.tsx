@@ -1,3 +1,7 @@
+import HomeClient from "./page.client";
+
+export default function Home() {
+  return <HomeClient />;
 "use client";
 
 import { TimerCard } from "@/components/timer-card";

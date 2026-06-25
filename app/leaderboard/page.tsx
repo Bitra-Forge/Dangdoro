@@ -1,5 +1,13 @@
-"use client";
+import LeaderboardClient from "./page.client";
+import type { Metadata } from "next";
 
+export const metadata: Metadata = {
+  title: "Leaderboard",
+  description: "View global rankings and track growth progress of productivity units on Dangdoro.",
+};
+
+export default function Page() {
+  return <LeaderboardClient />;
 import { useEffect, useState, Suspense, useMemo } from "react";
 import { 
     Trophy, Zap, Clock, Medal, Sprout, Leaf, Flower2, ChevronRight, 

@@ -156,7 +156,7 @@ export async function POST(req: Request) {
             headers: {
               "Authorization": `Bearer ${openRouterKey}`,
               "Content-Type": "application/json",
-              "HTTP-Referer": "https://dangdoro.app",
+              "HTTP-Referer": "https://www.dangdoro.com",
               "X-Title": "Dangdoro",
             },
             body: JSON.stringify({

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Figtree, Geist_Mono, Noto_Serif, Ubuntu, Space_Grotesk } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/components/AuthProvider";
@@ -45,14 +46,32 @@ const spaceGrotesk = Space_Grotesk({
   weight: ["300", "400", "500", "600", "700"],
 });
 
-export const metadata: Metadata = {
-  title: "Dangdoro",
-  description: "Focus. Compete. Win. — Real-time Pomodoro Leaderboard",
-  icons: {
-    icon: "/favicon.ico?v=2",
-    shortcut: "/favicon.ico?v=2",
-    apple: "/apple-icon.png?v=2",
+export { metadata } from "./metadata";
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  name: "Dangdoro",
+  description:
+    "Focus. Compete. Win. — The ultimate real-time collaborative Pomodoro tracker. Join focus groups, sync timers with friends, listen to ambient sounds, and boost your productivity together.",
+  url: "https://www.dangdoro.com",
+  applicationCategory: "ProductivityApplication",
+  operatingSystem: "Web Browser",
+  offers: {
+    "@type": "Offer",
+    price: "0",
+    priceCurrency: "USD",
   },
+  keywords: "Dangdoro, Pomodoro, pomodoro timer, collaborative focus, group pomodoro, pomodoro with friends, study with me, study with friends, shared study timer, online study room, virtual study space, real-time leaderboard, focus leaderboard, productivity tracker, time management, ADHD focus timer, ambient sounds mixer, lofi study timer, AI task planner, AI study assistant, dango, focus timer online, work with me, team productivity tool",
+  featureList: [
+    "Collaborative Pomodoro sessions",
+    "Real-time synchronized group timer",
+    "Global & Friends Leaderboard",
+    "Ambient sound engine mixer",
+    "AI-powered task planning assistant",
+    "Visual dashboards & session history",
+    "Friend requests & presence updates",
+  ],
 };
 
 export default function RootLayout({
@@ -86,6 +105,11 @@ export default function RootLayout({
         </AuthProvider>
         <Analytics />
         <SpeedInsights />
+        <Script
+          id="structured-data"
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        />
       </body>
     </html>
   );
