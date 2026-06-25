@@ -268,7 +268,7 @@ export const useTimerStore = create<TimerState>()(
 
         const shouldAutoStart = nextMode === "break" || nextMode === "long-break"
           ? settingsAutoStartBreak
-          : settingsAutoStartFocus;
+          : (mode === "long-break" ? false : settingsAutoStartFocus);
 
         const updates: TimerUpdate = {
           mode: nextMode,

@@ -28,6 +28,8 @@ export function proxy(request: NextRequest) {
     "max-age=31536000; includeSubDomains"
   );
 
+  const isDev = process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true";
+
   // Content Security Policy
   // Allows inline styles (needed for Framer Motion / dynamic styles),
   // Google Fonts, Firebase, and the AI API endpoints.
@@ -36,9 +38,9 @@ export function proxy(request: NextRequest) {
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: blob: https://lh3.googleusercontent.com https://api.dicebear.com https://firebasestorage.googleapis.com https://github.com https://avatars.githubusercontent.com",
-    "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com https://openrouter.ai https://generativelanguage.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebasestorage.googleapis.com https://cdn.jsdelivr.net https://unpkg.com https://lottie.host",
-    "frame-src 'self' https://accounts.google.com https://*.firebaseapp.com",
+    `img-src 'self' data: blob: https://lh3.googleusercontent.com https://api.dicebear.com https://firebasestorage.googleapis.com https://github.com https://avatars.githubusercontent.com${isDev ? " http://127.0.0.1:* http://localhost:*" : ""}`,
+    `connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com wss://*.firebaseio.com https://openrouter.ai https://generativelanguage.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebasestorage.googleapis.com https://cdn.jsdelivr.net https://unpkg.com https://lottie.host${isDev ? " http://127.0.0.1:* ws://127.0.0.1:* http://localhost:* ws://localhost:*" : ""}`,
+    `frame-src 'self' https://accounts.google.com https://*.firebaseapp.com${isDev ? " http://127.0.0.1:* http://localhost:*" : ""}`,
     "media-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",

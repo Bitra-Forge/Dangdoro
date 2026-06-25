@@ -13,6 +13,8 @@ import {
     ResponsiveContainer,
 } from "recharts";
 
+
+
 interface ProfileChartProps {
     timeRange: "days" | "weeks" | "months";
     weekData: any[];

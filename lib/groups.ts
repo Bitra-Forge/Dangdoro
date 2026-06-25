@@ -82,6 +82,10 @@ export interface FocusGroup {
         goalType?: GoalType;
         customDays?: number;
         maxMembers: number;
+        autoResetEnabled?: boolean;
+        autoResetPeriod?: "1day" | "week" | "month" | "custom-days";
+        customDaysValue?: number;
+        nextResetAt?: Timestamp | FirebaseTimestampLike | null;
     };
 }
 
@@ -225,5 +229,27 @@ export function getGoalTypeLabel(goalType?: GoalType): string {
         default: return "Weekly";
     }
 }
+
+export function computeNextResetAt(
+    period: string,
+    customDays: number,
+    fromDate: Date = new Date()
+): Date {
+    const next = new Date(fromDate);
+    if (period === "1day") {
+        next.setDate(next.getDate() + 1);
+    } else if (period === "week") {
+        next.setDate(next.getDate() + 7);
+    } else if (period === "month") {
+        next.setMonth(next.getMonth() + 1);
+    } else if (period === "custom-days") {
+        const days = Math.max(1, customDays || 1);
+        next.setDate(next.getDate() + days);
+    } else {
+        next.setDate(next.getDate() + 7);
+    }
+    return next;
+}
+
 
 

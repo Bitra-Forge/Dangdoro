@@ -10,12 +10,14 @@ import { useTimerStore } from "@/lib/store";
 
 const BackgroundPanel = dynamic(() => import("@/components/background-panel").then((m) => m.BackgroundPanel), { ssr: false });
 const SoundPanel = dynamic(() => import("@/components/sound-panel").then((m) => m.SoundPanel), { ssr: false });
-const NotesPanel = dynamic(() => import("@/components/notes-panel").then((m) => m.NotesPanel), { ssr: false });
+const StickyNotesOverlay = dynamic(() => import("@/components/sticky-notes-overlay").then((m) => m.StickyNotesOverlay), { ssr: false });
+const StickyNotesPanel = dynamic(() => import("@/components/sticky-notes-panel").then((m) => m.StickyNotesPanel), { ssr: false });
 const QuickTasksPanel = dynamic(() => import("@/components/quick-tasks-panel").then((m) => m.QuickTasksPanel), { ssr: false });
 
 export function NavigationHub() {
   const pathname = usePathname();
   const isHomePage = pathname === "/";
+  const isAdminPage = pathname?.startsWith("/admin");
   const isFocusMode = useTimerStore((state) => state.isNavFocusMode);
   const setIsNavFocusMode = useTimerStore((state) => state.setIsNavFocusMode);
   const [isNavVisible, setIsNavVisible] = useState(true);
@@ -57,6 +59,17 @@ export function NavigationHub() {
     }
   }, [isHomePage, setIsNavFocusMode]);
 
+  // Keep navigation bar visible when driver.js tour is active
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.body.classList.contains("driver-active")) {
+        setIsNavVisible(true);
+      }
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     // Re-show nav after route changes and focus-mode toggles.
     clearHideNavTimeout();
@@ -71,6 +84,16 @@ export function NavigationHub() {
     };
   }, [pathname, isFocusMode, clearHideNavTimeout]);
 
+  const handleNavTouchStart = useCallback(() => {
+    clearHideNavTimeout();
+    setIsNavVisible(true);
+    // Set 4-second auto-hide timeout on touch
+    hideNavTimeoutRef.current = setTimeout(() => {
+      setIsNavVisible(false);
+      hideNavTimeoutRef.current = null;
+    }, 4000);
+  }, [clearHideNavTimeout]);
+
   useEffect(() => {
     if (isFocusMode) {
       clearHideNavTimeout();
@@ -83,19 +106,24 @@ export function NavigationHub() {
     };
 
     window.addEventListener("mousemove", handleMouseMove, { passive: true });
+    window.addEventListener("touchstart", handleMouseMove, { passive: true });
     scheduleHideNav();
 
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("touchstart", handleMouseMove);
       clearHideNavTimeout();
     };
   }, [isFocusMode, clearHideNavTimeout, scheduleHideNav]);
+
+  if (isAdminPage) return null;
 
   return (
     <>
       {isHomePage && (
         <>
-          <NotesPanel />
+          <StickyNotesOverlay />
+          <StickyNotesPanel />
           <QuickTasksPanel />
         </>
       )}
@@ -104,12 +132,14 @@ export function NavigationHub() {
           <div
             className="absolute bottom-0 left-1/2 -translate-x-1/2 h-16 w-[720px] max-w-[96vw] pointer-events-auto"
             onMouseEnter={handleNavMouseEnter}
+            onTouchStart={handleNavTouchStart}
           />
         )}
 
         <div
           onMouseEnter={handleNavMouseEnter}
           onMouseLeave={handleNavMouseLeave}
+          onTouchStart={handleNavTouchStart}
           className={cn(
             "flex flex-col sm:flex-row items-center gap-2.5 sm:gap-4 relative px-1 transition-all duration-500",
             isNavVisible

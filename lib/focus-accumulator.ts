@@ -10,13 +10,14 @@ const flushLocks = new Map<string, Promise<boolean>>();
 export interface PendingFocus {
   minutes: number;
   groupId: string | null;
+  startedAt?: number | null;
 }
 
 /**
  * Get the pending focus minutes from localStorage
  */
 export function getPendingFocus(userId: string): PendingFocus {
-  if (typeof window === "undefined") return { minutes: 0, groupId: null };
+  if (typeof window === "undefined") return { minutes: 0, groupId: null, startedAt: null };
   try {
     const val = localStorage.getItem(`${STORAGE_KEY_PREFIX}${userId}`);
     if (val) {
@@ -25,13 +26,14 @@ export function getPendingFocus(userId: string): PendingFocus {
         return {
           minutes: parsed.minutes,
           groupId: parsed.groupId || null,
+          startedAt: parsed.startedAt || null,
         };
       }
     }
   } catch (e) {
     console.error("Failed to parse pending focus:", e);
   }
-  return { minutes: 0, groupId: null };
+  return { minutes: 0, groupId: null, startedAt: null };
 }
 
 /**
@@ -83,21 +85,35 @@ export function setLastWriteTime(userId: string, time: number) {
 export async function accumulateFocusTime(
   userId: string,
   durationMinutes: number,
-  groupId: string | null = null
+  groupId: string | null = null,
+  startedAt?: number | null
 ) {
   if (durationMinutes <= 0) return;
 
-  const current = getPendingFocus(userId);
+  let current = getPendingFocus(userId);
+
+  // Check if a pending focus already exists and was started more than 2 hours ago (ghost session)
+  if (current.minutes > 0 && current.startedAt) {
+    const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+    if (current.startedAt < twoHoursAgo) {
+      await flushFocusTime(userId, current.groupId, false);
+      setPendingFocus(userId, null);
+      current = { minutes: 0, groupId: null, startedAt: null };
+    }
+  }
+
   let newMinutes = durationMinutes;
+  let newStartedAt = startedAt || current.startedAt || Date.now() - (durationMinutes * 60 * 1000);
 
   if (current.groupId === groupId) {
     newMinutes += current.minutes;
+    newStartedAt = current.startedAt || newStartedAt;
   } else if (current.minutes > 0) {
     // If group ID changed, flush the old one first before starting a new one
     await flushFocusTime(userId, current.groupId, false);
   }
 
-  setPendingFocus(userId, { minutes: newMinutes, groupId });
+  setPendingFocus(userId, { minutes: newMinutes, groupId, startedAt: newStartedAt });
 
   // Check if 60 seconds have passed since the last write
   const lastWrite = getLastWriteTime(userId);
@@ -137,7 +153,7 @@ export async function retryPendingFocusTime(userId: string): Promise<boolean> {
     console.log(`Retrying pending focus time for ${userId}: ${pending.minutes}min`);
   }
   try {
-    const success = await savePartialPomodoroSession(userId, pending.minutes, pending.groupId);
+    const success = await savePartialPomodoroSession(userId, pending.minutes, pending.groupId, pending.startedAt);
     if (success) {
       setPendingFocus(userId, null);
       setLastWriteTime(userId, Date.now());
@@ -167,7 +183,8 @@ export async function flushFocusTime(
   userId: string,
   groupId: string | null,
   isSessionEnd: boolean = false,
-  sessionEndMinutes: number = 0
+  sessionEndMinutes: number = 0,
+  startedAt?: Date | number | null
 ): Promise<boolean> {
   // If there's already a flush in-flight for this user, wait for it
   const existing = flushLocks.get(userId);
@@ -185,21 +202,24 @@ export async function flushFocusTime(
     const current = getPendingFocus(userId);
 
     let totalMinutes: number;
+    let finalStartedAt: Date | number | null = null;
     if (isSessionEnd) {
       // FIX: Don't ADD pending + full duration — that double-counts.
       // The pending represents elapsed time tracked so far. The sessionEndMinutes
       // is the full configured duration. Use MAX to get the actual time spent,
       // then clear pending so the periodic flush can't re-write it.
       totalMinutes = Math.max(current.minutes, sessionEndMinutes);
+      finalStartedAt = startedAt || current.startedAt || (Date.now() - (totalMinutes * 60 * 1000));
     } else {
       totalMinutes = current.minutes;
+      finalStartedAt = current.startedAt || (Date.now() - (totalMinutes * 60 * 1000));
     }
 
     if (totalMinutes <= 0) {
       // Even if accumulator is empty, if the session ended normally, record it
       if (isSessionEnd && sessionEndMinutes > 0) {
         try {
-          const success = await savePomodoroSession(userId, sessionEndMinutes, groupId);
+          const success = await savePomodoroSession(userId, sessionEndMinutes, groupId, finalStartedAt);
           if (success) {
             setPendingFocus(userId, null);
             setLastWriteTime(userId, Date.now());
@@ -215,9 +235,9 @@ export async function flushFocusTime(
     try {
       let success = false;
       if (isSessionEnd) {
-        success = await savePomodoroSession(userId, totalMinutes, groupId);
+        success = await savePomodoroSession(userId, totalMinutes, groupId, finalStartedAt);
       } else {
-        success = await savePartialPomodoroSession(userId, totalMinutes, groupId);
+        success = await savePartialPomodoroSession(userId, totalMinutes, groupId, finalStartedAt);
       }
 
       if (success) {

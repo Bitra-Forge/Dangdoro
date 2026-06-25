@@ -19,7 +19,7 @@ function ProfileStatsCardComponent({ user, rank }: ProfileStatsCardProps) {
 
   return (
     <div className={cn(
-      "relative flex flex-col bg-zinc-950/90 sm:bg-white/[0.02] backdrop-blur-none sm:backdrop-blur-2xl border border-white/10 rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.5)] transition-all duration-500 hover:border-[#C9B037]/40 hover:bg-white/[0.04] group animate-in fade-in slide-in-from-left-10",
+      "relative flex flex-col bg-zinc-950/95 sm:bg-zinc-900/90 border border-white/10 rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.5)] transition-all duration-500 hover:border-[#C9B037]/40 hover:bg-[#141311]/95 group animate-in fade-in slide-in-from-left-10",
       "font-sans"
     )}
       style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>

@@ -23,6 +23,7 @@ import { db, storage, auth } from "./firebase";
 import { User, updateProfile } from "firebase/auth";
 import { trackSessionEvent } from "@/lib/session-telemetry";
 import { FirebaseTimestampLike, FocusGroup, UserProfileData } from "./groups";
+import { getCurrentWeekId } from "./utils";
 
 const LIVE_SESSION_STALE_MS = 3 * 60 * 1000;
 
@@ -234,9 +235,13 @@ export const syncUserProfile = async (user: User) => {
         userProfileCache.delete(user.uid);
         saveMapToSession("dangdoro_profile_cache", userProfileCache);
         cachedLeaderboard = null;
+        cachedWeeklyLeaderboard = null;
+        cachedAllTimeLeaderboard = null;
         if (typeof window !== "undefined") {
             try {
                 sessionStorage.removeItem("dangdoro_leaderboard_cache");
+                sessionStorage.removeItem("dangdoro_weekly_leaderboard_cache");
+                sessionStorage.removeItem("dangdoro_alltime_leaderboard_cache");
                 sessionStorage.removeItem("dangdoro_group_leaderboard_cache");
             } catch {}
         }
@@ -247,10 +252,63 @@ export const syncUserProfile = async (user: User) => {
     }
 };
 
+const savePendingFocusToLocal = (userId: string, durationMinutes: number) => {
+    if (typeof window === "undefined") return;
+    try {
+        const key = `dangdoro_pending_focus_${userId}`;
+        const currentWeekId = getCurrentWeekId();
+        const existing = localStorage.getItem(key);
+        let minutes = durationMinutes;
+        if (existing) {
+            try {
+                const parsed = JSON.parse(existing);
+                if (parsed && parsed.weekId === currentWeekId && typeof parsed.minutes === "number") {
+                    minutes += parsed.minutes;
+                }
+            } catch {}
+        }
+        localStorage.setItem(key, JSON.stringify({ minutes, weekId: currentWeekId }));
+    } catch (err) {
+        console.error("Failed to save pending focus to localStorage:", err);
+    }
+};
+
+export const retryPendingFocusTimeLocal = async (userId: string) => {
+    if (typeof window === "undefined") return;
+    const key = `dangdoro_pending_focus_${userId}`;
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+
+    try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed.minutes !== "number" || parsed.minutes <= 0) {
+            localStorage.removeItem(key);
+            return;
+        }
+
+        const userRef = doc(db, "users", userId);
+        await updateDoc(userRef, {
+            totalMinutes: increment(parsed.minutes),
+            lastActive: serverTimestamp()
+        });
+
+        // Clear the key only after confirmed successful write
+        localStorage.removeItem(key);
+        console.log(`[FailedWriteRecovery] Successfully retried and recovered pending focus: ${parsed.minutes} mins`);
+    } catch (error) {
+        console.error("[FailedWriteRecovery] Failed to retry pending focus time:", error);
+    }
+};
+
 /**
  * Saves a completed Pomodoro session and increments the user's focus stats.
  */
-export const savePomodoroSession = async (userId: string, durationMinutes: number = 25, groupId: string | null = null) => {
+export const savePomodoroSession = async (
+    userId: string,
+    durationMinutes: number = 25,
+    groupId: string | null = null,
+    startedAt?: Date | number | null
+) => {
     try {
         if (process.env.NODE_ENV !== "production") {
             console.log("Writing focus time:", {
@@ -260,19 +318,25 @@ export const savePomodoroSession = async (userId: string, durationMinutes: numbe
             });
         }
 
+        const startedAtTimestamp = startedAt 
+            ? (startedAt instanceof Date ? Timestamp.fromDate(startedAt) : Timestamp.fromMillis(startedAt))
+            : null;
+
         try {
             await addDoc(collection(db, "sessions"), {
                 userId,
                 groupId,
                 duration: durationMinutes,
                 type: "work",
-                startedAt: null,
+                startedAt: startedAtTimestamp,
                 endedAt: serverTimestamp(),
                 status: "completed",
                 completedAt: serverTimestamp(),
+                weekId: getCurrentWeekId(),
             });
         } catch (error) {
             console.error("Failed to save session document:", error);
+            savePendingFocusToLocal(userId, durationMinutes);
             return false;
         }
 
@@ -288,8 +352,13 @@ export const savePomodoroSession = async (userId: string, durationMinutes: numbe
             });
         } catch (error) {
             console.error("Failed to update user focus stats:", error);
+            savePendingFocusToLocal(userId, durationMinutes);
             return false;
         }
+
+        // Clear profile cache so leaderboards/friends re-fetch fresh totalMinutes
+        userProfileCache.delete(userId);
+        saveMapToSession("dangdoro_profile_cache", userProfileCache);
 
         if (groupId) {
             const groupRef = doc(db, "focusGroups", groupId);
@@ -301,11 +370,19 @@ export const savePomodoroSession = async (userId: string, durationMinutes: numbe
                 });
             } catch (error) {
                 console.error("Failed to update group focus stats:", error);
+                savePendingFocusToLocal(userId, durationMinutes);
                 return false;
             }
         }
 
-        triggerLeaderboardRebuildIfStale();
+        groupLeaderboardCache.clear();
+        saveMapToSession("dangdoro_group_leaderboard_cache", groupLeaderboardCache);
+
+        try {
+            triggerLeaderboardRebuild();
+        } catch (err) {
+            console.error("Failed to trigger leaderboard rebuild:", err);
+        }
         return true;
     } catch (error) {
         console.error("Error saving session:", error);
@@ -446,7 +523,12 @@ export const updateLiveSessionStatus = async (
  * Saves a partially completed Pomodoro session (user stopped early).
  * The duration reflects actual time spent, not the full configured duration.
  */
-export const savePartialPomodoroSession = async (userId: string, durationMinutes: number, groupId: string | null = null) => {
+export const savePartialPomodoroSession = async (
+    userId: string,
+    durationMinutes: number,
+    groupId: string | null = null,
+    startedAt?: Date | number | null
+) => {
     if (durationMinutes < 1) return false;
 
     try {
@@ -458,19 +540,25 @@ export const savePartialPomodoroSession = async (userId: string, durationMinutes
             });
         }
 
+        const startedAtTimestamp = startedAt 
+            ? (startedAt instanceof Date ? Timestamp.fromDate(startedAt) : Timestamp.fromMillis(startedAt))
+            : null;
+
         try {
             await addDoc(collection(db, "sessions"), {
                 userId,
                 groupId,
                 duration: durationMinutes,
                 type: "work",
-                startedAt: null,
+                startedAt: startedAtTimestamp,
                 endedAt: serverTimestamp(),
                 status: "completed",
                 completedAt: serverTimestamp(),
+                weekId: getCurrentWeekId(),
             });
         } catch (error) {
             console.error("Failed to save partial session document:", error);
+            savePendingFocusToLocal(userId, durationMinutes);
             return false;
         }
 
@@ -480,12 +568,12 @@ export const savePartialPomodoroSession = async (userId: string, durationMinutes
         const userRef = doc(db, "users", userId);
         try {
             await updateDoc(userRef, {
-                totalPomodoros: increment(1),
                 totalMinutes: increment(durationMinutes),
                 lastActive: serverTimestamp()
             });
         } catch (error) {
             console.error("Failed to update user focus stats (partial):", error);
+            savePendingFocusToLocal(userId, durationMinutes);
             return false;
         }
 
@@ -499,11 +587,16 @@ export const savePartialPomodoroSession = async (userId: string, durationMinutes
                 });
             } catch (error) {
                 console.error("Failed to update group focus stats (partial):", error);
+                savePendingFocusToLocal(userId, durationMinutes);
                 return false;
             }
         }
 
-        triggerLeaderboardRebuildIfStale();
+        try {
+            triggerLeaderboardRebuild();
+        } catch (err) {
+            console.error("Failed to trigger leaderboard rebuild:", err);
+        }
         return true;
     } catch (error) {
         console.error("Error saving partial session:", error);
@@ -628,28 +721,30 @@ const saveMapToSession = <V>(key: string, map: Map<string, V>) => {
 };
 
 const userProfileCache = loadMapFromSession<{ data: UserProfileData; timestamp: number }>("dangdoro_profile_cache");
-const USER_PROFILE_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+const USER_PROFILE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 let cachedLeaderboard: { data: any[]; timestamp: number; queriedLimit: number } | null = getSessionStorageItem("dangdoro_leaderboard_cache");
+let cachedWeeklyLeaderboard: { data: any[]; timestamp: number; queriedLimit: number } | null = getSessionStorageItem("dangdoro_weekly_leaderboard_cache");
+let cachedAllTimeLeaderboard: { data: any[]; timestamp: number; queriedLimit: number } | null = getSessionStorageItem("dangdoro_alltime_leaderboard_cache");
 const LEADERBOARD_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
- * After a successful focusTime write, check if the cached leaderboard is stale (>5 min).
- * If stale, invalidate the local cache and fire a rebuild request.
- * The cron handles the actual /cache/leaderboard rebuild regardless.
+ * Trigger immediate leaderboard rebuild and clear client-side caches.
  */
-function triggerLeaderboardRebuildIfStale() {
-  const now = Date.now();
-  if (cachedLeaderboard && now - cachedLeaderboard.timestamp < LEADERBOARD_CACHE_TTL) {
-    return;
-  }
+export function triggerLeaderboardRebuild() {
   cachedLeaderboard = null;
+  cachedWeeklyLeaderboard = null;
+  cachedAllTimeLeaderboard = null;
   if (typeof window !== "undefined") {
     try {
       sessionStorage.removeItem("dangdoro_leaderboard_cache");
+      sessionStorage.removeItem("dangdoro_weekly_leaderboard_cache");
+      sessionStorage.removeItem("dangdoro_alltime_leaderboard_cache");
     } catch {}
   }
-  fetch("/api/update-leaderboard", { method: "POST" }).catch(() => {});
+  fetch("/api/update-leaderboard", { method: "POST" }).catch((err) => {
+    console.error("Error triggering leaderboard rebuild:", err);
+  });
 }
 
 const groupLeaderboardCache = loadMapFromSession<{ data: FocusGroup[]; timestamp: number }>("dangdoro_group_leaderboard_cache");
@@ -658,7 +753,8 @@ const GROUP_LEADERBOARD_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const sessionHistoryCache = loadMapFromSession<{ data: any[]; timestamp: number }>("dangdoro_session_history_cache");
 const SESSION_HISTORY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-let activeLeaderboardPromise: Promise<any[]> | null = null;
+let activeWeeklyLeaderboardPromise: Promise<any[]> | null = null;
+let activeAllTimeLeaderboardPromise: Promise<any[]> | null = null;
 const activeGroupLeaderboardPromises = new Map<string, Promise<FocusGroup[]>>();
 const activeSessionHistoryPromises = new Map<string, Promise<any[]>>();
 
@@ -674,99 +770,139 @@ export const invalidateSessionHistoryCache = (userId: string) => {
 /**
  * Fetches the top focusers for the leaderboard.
  */
-export const getLeaderboard = async (limitCount: number = 10) => {
+export const getLeaderboard = async (
+    limitCount: number = 10,
+    type: "weekly" | "alltime" = "alltime"
+) => {
     const now = Date.now();
-    if (cachedLeaderboard && now - cachedLeaderboard.timestamp < LEADERBOARD_CACHE_TTL) {
-        if (cachedLeaderboard.data.length >= limitCount || cachedLeaderboard.queriedLimit >= limitCount) {
+    const cached = type === "weekly" ? cachedWeeklyLeaderboard : cachedAllTimeLeaderboard;
+
+    if (cached && now - cached.timestamp < LEADERBOARD_CACHE_TTL) {
+        if (cached.data.length >= limitCount || cached.queriedLimit >= limitCount) {
             if (process.env.NODE_ENV !== "production") {
-                console.log("CACHE HIT: getLeaderboard");
-                console.log("⚡ [Leaderboard Cache] Hit! Returning cached leaderboards.");
+                console.log(`CACHE HIT: getLeaderboard (${type})`);
+                console.log(`⚡ [Leaderboard Cache] Hit! Returning cached ${type} leaderboard.`);
             }
-            return cachedLeaderboard.data.slice(0, limitCount);
+            return cached.data.slice(0, limitCount);
         }
     }
 
-    if (activeLeaderboardPromise) {
+    const activePromise = type === "weekly" ? activeWeeklyLeaderboardPromise : activeAllTimeLeaderboardPromise;
+    if (activePromise) {
         if (process.env.NODE_ENV !== "production") {
-            console.log("CACHE HIT: getLeaderboard (coalesced)");
-            console.log("⚡ [Leaderboard Cache] Coalescing concurrent request.");
+            console.log(`CACHE HIT: getLeaderboard (${type}) (coalesced)`);
+            console.log(`⚡ [Leaderboard Cache] Coalescing concurrent ${type} request.`);
         }
-        const data = await activeLeaderboardPromise;
+        const data = await activePromise;
         return data.slice(0, limitCount);
     }
 
     if (process.env.NODE_ENV !== "production") {
-        console.log("FIRESTORE READ: getLeaderboard");
-        console.log("⏳ [Leaderboard Cache] Miss! Querying Firestore cache/leaderboard.");
+        console.log(`FIRESTORE READ: getLeaderboard (${type})`);
+        console.log(`⏳ [Leaderboard Cache] Miss! Querying Firestore cache/leaderboard_${type}.`);
     }
-    activeLeaderboardPromise = (async () => {
-        const cacheDocRef = doc(db, "cache", "leaderboard");
+
+    const fetchPromise = (async () => {
+        const cacheDocRef = doc(db, "cache", `leaderboard_${type}`);
         const cacheDocSnap = await getDoc(cacheDocRef);
 
         let data: any[] = [];
-        let cacheStale = true;
         if (cacheDocSnap.exists()) {
             const docData = cacheDocSnap.data();
             data = docData.players || docData.data || [];
-            const updatedAt = docData.updatedAt
-                ? new Date(docData.updatedAt).getTime()
-                : 0;
-            cacheStale = Date.now() - updatedAt > LEADERBOARD_CACHE_TTL;
         } else {
-            // Cache doc doesn't exist yet (cron hasn't run). Fall back to a direct
-            // users query so the leaderboard is never empty.
-            console.warn("⚠️ [Leaderboard Cache] /cache/leaderboard not found. Falling back to users collection query.");
+            // Cache doc doesn't exist yet. Fall back to a direct query.
+            console.warn(`⚠️ [Leaderboard Cache] /cache/leaderboard_${type} not found. Falling back to direct query.`);
             try {
-                const usersSnap = await getDocs(
-                    query(collection(db, "users"), orderBy("totalMinutes", "desc"), limit(500))
-                );
-                data = usersSnap.docs
-                    .map(d => {
-                        const u = d.data();
-                        if (u.isAnonymous) return null;
+                if (type === "alltime") {
+                    const usersSnap = await getDocs(
+                        query(collection(db, "users"), orderBy("totalMinutes", "desc"), limit(500))
+                    );
+                    data = usersSnap.docs
+                        .map(d => {
+                            const u = d.data();
+                            if (u.isAnonymous) return null;
+                            return {
+                                id: d.id,
+                                uid: d.id,
+                                displayName: u.displayName || "Focus Hero",
+                                photoURL: u.photoURL && !(u.photoURL as string).startsWith("data:") ? (u.photoURL as string).slice(0, 2048) : null,
+                                totalMinutes: u.totalMinutes || 0,
+                                totalPomodoros: u.totalPomodoros || 0,
+                            };
+                        })
+                        .filter(Boolean) as any[];
+                } else {
+                    const currentWeekId = getCurrentWeekId();
+                    const sessionsSnap = await getDocs(
+                        query(
+                            collection(db, "sessions"),
+                            where("weekId", "==", currentWeekId),
+                            where("status", "==", "completed"),
+                            limit(500)
+                        )
+                    );
+                    const minutesMap: Record<string, number> = {};
+                    const pomodorosMap: Record<string, number> = {};
+                    sessionsSnap.docs.forEach(d => {
+                        const s = d.data();
+                        if (s.userId && s.duration > 0) {
+                            minutesMap[s.userId] = (minutesMap[s.userId] || 0) + s.duration;
+                            pomodorosMap[s.userId] = (pomodorosMap[s.userId] || 0) + 1;
+                        }
+                    });
+                    const userIds = Object.keys(minutesMap);
+                    let profiles: any[] = [];
+                    if (userIds.length > 0) {
+                        profiles = await fetchUserProfiles(userIds);
+                    }
+                    data = userIds.map(uid => {
+                        const prof = profiles.find(p => p.uid === uid);
+                        if (!prof || prof.isAnonymous) return null;
                         return {
-                            id: d.id,
-                            uid: d.id,
-                            displayName: u.displayName || "Focus Hero",
-                            photoURL: u.photoURL && !(u.photoURL as string).startsWith("data:") ? (u.photoURL as string).slice(0, 512) : null,
-                            totalMinutes: u.totalMinutes || 0,
-                            totalPomodoros: u.totalPomodoros || 0,
+                            id: uid,
+                            uid: uid,
+                            displayName: prof.displayName || "Focus Hero",
+                            photoURL: prof.photoURL && !(prof.photoURL as string).startsWith("data:") ? (prof.photoURL as string).slice(0, 2048) : null,
+                            totalMinutes: minutesMap[uid],
+                            totalPomodoros: pomodorosMap[uid] || 0,
                         };
-                    })
-                    .filter(Boolean) as any[];
+                    }).filter(Boolean) as any[];
+                    data.sort((a, b) => b.totalMinutes - a.totalMinutes);
+                }
             } catch (e) {
-                console.error("[Leaderboard Cache] Fallback users query failed:", e);
+                console.error(`[Leaderboard Cache] Fallback query failed for ${type}:`, e);
             }
         }
 
         const queryLimit = Math.max(150, limitCount);
+        const cacheObj = { data, timestamp: Date.now(), queriedLimit: queryLimit };
 
-        // Overlay fresh photoURLs only if the cache is stale.
-        // If the cron recently rebuilt it, trust the cached values.
-        if (cacheStale) {
-            const uids = data.map((p: any) => p.uid).filter(Boolean);
-            if (uids.length > 0) {
-                try {
-                    const freshProfiles = await fetchUserProfiles(uids);
-                    const photoMap = new Map(freshProfiles.map(p => [p.uid, p.photoURL]));
-                    data.forEach((p: any) => {
-                        const fresh = photoMap.get(p.uid);
-                        if (fresh) p.photoURL = fresh;
-                    });
-                } catch {}
-            }
+        if (type === "weekly") {
+            cachedWeeklyLeaderboard = cacheObj;
+            setSessionStorageItem("dangdoro_weekly_leaderboard_cache", cachedWeeklyLeaderboard);
+        } else {
+            cachedAllTimeLeaderboard = cacheObj;
+            setSessionStorageItem("dangdoro_alltime_leaderboard_cache", cachedAllTimeLeaderboard);
         }
-
-        cachedLeaderboard = { data, timestamp: Date.now(), queriedLimit: queryLimit };
-        setSessionStorageItem("dangdoro_leaderboard_cache", cachedLeaderboard);
         return data;
     })();
 
+    if (type === "weekly") {
+        activeWeeklyLeaderboardPromise = fetchPromise;
+    } else {
+        activeAllTimeLeaderboardPromise = fetchPromise;
+    }
+
     try {
-        const data = await activeLeaderboardPromise;
+        const data = await fetchPromise;
         return data.slice(0, limitCount);
     } finally {
-        activeLeaderboardPromise = null;
+        if (type === "weekly") {
+            activeWeeklyLeaderboardPromise = null;
+        } else {
+            activeAllTimeLeaderboardPromise = null;
+        }
     }
 };
 
@@ -907,18 +1043,20 @@ export const fetchUserProfiles = async (uids: string[]) => {
             // Create a single shared promise for this chunk's Firestore query
             const chunkFetchPromise = (async () => {
                 try {
-                    const q = query(usersRef, where("uid", "in", chunk));
-                    const querySnapshot = await getDocs(q);
+                    const docs = await Promise.all(
+                      chunk.map(uid => getDoc(doc(usersRef, uid)))
+                    );
                     const fetchedMap = new Map<string, UserProfileData>();
                     
-                    querySnapshot.docs.forEach(doc => {
+                    docs.forEach(docSnap => {
+                        if (!docSnap.exists()) return;
                         const profileData = {
-                            uid: doc.id,
-                            ...doc.data()
+                            uid: docSnap.id,
+                            ...docSnap.data()
                         } as unknown as UserProfileData;
                         
-                        userProfileCache.set(doc.id, { data: profileData, timestamp: Date.now() });
-                        fetchedMap.set(doc.id, profileData);
+                        userProfileCache.set(docSnap.id, { data: profileData, timestamp: Date.now() });
+                        fetchedMap.set(docSnap.id, profileData);
                     });
                     
                     saveMapToSession("dangdoro_profile_cache", userProfileCache);
@@ -1440,9 +1578,13 @@ export const updateUserProfile = async (userId: string, data: { displayName?: st
         userProfileCache.delete(userId);
         saveMapToSession("dangdoro_profile_cache", userProfileCache);
         cachedLeaderboard = null;
+        cachedWeeklyLeaderboard = null;
+        cachedAllTimeLeaderboard = null;
         if (typeof window !== "undefined") {
             try {
                 sessionStorage.removeItem("dangdoro_leaderboard_cache");
+                sessionStorage.removeItem("dangdoro_weekly_leaderboard_cache");
+                sessionStorage.removeItem("dangdoro_alltime_leaderboard_cache");
                 sessionStorage.removeItem("dangdoro_group_leaderboard_cache");
             } catch {}
         }

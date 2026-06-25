@@ -76,18 +76,18 @@ export function FocusZoneCeremony({ isOpen, onComplete, groupName }: FocusZoneCe
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ delay: 0.5 }}
-                            className="flex items-center justify-center gap-8 pt-8"
+                            className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 pt-8 px-4"
                         >
                             {[
                                 { icon: Shield, label: "Deep Work" },
-                                { icon: target === "target" ? Target : Zap, label: "Zero Distraction" },
+                                { icon: Target, label: "Zero Distraction" },
                                 { icon: Flame, label: "High Synergy" }
                             ].map((item, i) => (
                                 <div key={i} className="flex flex-col items-center gap-2">
-                                    <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-                                        <item.icon className="w-5 h-5 text-[#C9B037]" />
+                                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+                                        <item.icon className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-[#C9B037]" />
                                     </div>
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-zinc-600">{item.label}</span>
+                                    <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-zinc-600">{item.label}</span>
                                 </div>
                             ))}
                         </motion.div>
@@ -100,5 +100,3 @@ export function FocusZoneCeremony({ isOpen, onComplete, groupName }: FocusZoneCe
         </AnimatePresence>
     );
 }
-
-const target = "target"; // Fix for target is not defined

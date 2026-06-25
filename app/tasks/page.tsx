@@ -6,7 +6,7 @@ import {
     ClipboardList, Plus, Trash2, CheckCircle2, Circle,
     ChevronDown, ChevronRight, Pencil, Check, X, GripVertical,
     Play, Clock, Maximize2, Palette, Settings, Sparkles, Users,
-    ArrowUpDown
+    ArrowUpDown, HelpCircle
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
@@ -29,6 +29,7 @@ import { AnimatedDotGrid as AnimatedDotGridComponent } from "@/components/animat
 import { useBackgroundTheme } from "@/lib/use-background-theme";
 import { BackgroundTheme } from "@/components/background-theme";
 import { TaskAgent } from "@/components/task-agent";
+import { useTour, type TourStep } from "@/lib/use-tour";
 
 // ─── Priority config ──────────────────────────────────────────────────────────
 const PRIORITIES: { value: TaskPriority; label: string; border: string; dot: string; text: string }[] = [
@@ -270,7 +271,7 @@ function TaskRow({ task, onDragStart }: { task: any; onDragStart: (e: React.Poin
 
 function GroupCard({
     group, tasks, userId, isDragOver, onTaskDragStart, cardRef,
-    overTaskId, overTaskPosition
+    overTaskId, overTaskPosition, isMobileMode
 }: {
     group: { id: string; name: string; positionX: number; positionY: number; width?: number; height?: number; color?: string; sortBy?: string };
     tasks: any[]; userId: string; isDragOver: boolean;
@@ -278,6 +279,7 @@ function GroupCard({
     cardRef: (el: HTMLDivElement | null) => void;
     overTaskId: string | null;
     overTaskPosition: "before" | "after" | null;
+    isMobileMode?: boolean;
 }) {
     const [collapsed, setCollapsed] = useState(false);
     const [newTask, setNewTask] = useState("");
@@ -325,12 +327,19 @@ function GroupCard({
         posRef.current = { x: group.positionX, y: group.positionY };
         dimRef.current = { w: clampW(group.width ?? 300), h: clampH(group.height ?? 400) };
         if (cardEl.current) {
-            cardEl.current.style.left = `${group.positionX}px`;
-            cardEl.current.style.top = `${group.positionY}px`;
-            cardEl.current.style.width = `${dimRef.current.w}px`;
-            cardEl.current.style.height = collapsed ? "auto" : `${dimRef.current.h}px`;
+            if (isMobileMode) {
+                cardEl.current.style.left = "";
+                cardEl.current.style.top = "";
+                cardEl.current.style.width = "";
+                cardEl.current.style.height = "";
+            } else {
+                cardEl.current.style.left = `${group.positionX}px`;
+                cardEl.current.style.top = `${group.positionY}px`;
+                cardEl.current.style.width = `${dimRef.current.w}px`;
+                cardEl.current.style.height = collapsed ? "auto" : `${dimRef.current.h}px`;
+            }
         }
-    }, [group.positionX, group.positionY, group.width, group.height, collapsed]);
+    }, [group.positionX, group.positionY, group.width, group.height, collapsed, isMobileMode]);
 
     const sortBy = group.sortBy || "priority";
 
@@ -368,20 +377,21 @@ function GroupCard({
 
     // Draggable header logic
     const onHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (isMobileMode) return;
         if ((e.target as HTMLElement).closest("button, input")) return;
         e.currentTarget.setPointerCapture(e.pointerId);
         dragOffset.current = { x: e.clientX - posRef.current.x, y: e.clientY - posRef.current.y };
         setIsDraggingCard(true);
     };
     const onHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (!isDraggingCard) return;
+        if (isMobileMode || !isDraggingCard) return;
         const x = Math.max(0, e.clientX - dragOffset.current.x);
         const y = Math.max(0, e.clientY - dragOffset.current.y);
         posRef.current = { x, y };
         if (cardEl.current) { cardEl.current.style.left = `${x}px`; cardEl.current.style.top = `${y}px`; }
     };
     const onHeaderPointerUp = () => {
-        if (!isDraggingCard) return;
+        if (isMobileMode || !isDraggingCard) return;
         setIsDraggingCard(false);
         if (saveTimer.current) clearTimeout(saveTimer.current);
         saveTimer.current = setTimeout(() => {
@@ -391,12 +401,13 @@ function GroupCard({
 
     // Resizing logic
     const onResizePointerDown = (e: React.PointerEvent) => {
+        if (isMobileMode) return;
         e.stopPropagation();
         e.currentTarget.setPointerCapture(e.pointerId);
         setIsResizing(true);
     };
     const onResizePointerMove = (e: React.PointerEvent) => {
-        if (!isResizing || !cardEl.current) return;
+        if (isMobileMode || !isResizing || !cardEl.current) return;
         const newW = clampW(e.clientX - posRef.current.x);
         const newH = clampH(e.clientY - posRef.current.y);
         dimRef.current = { w: newW, h: newH };
@@ -404,7 +415,7 @@ function GroupCard({
         if (!collapsed) cardEl.current.style.height = `${newH}px`;
     };
     const onResizePointerUp = () => {
-        if (!isResizing) return;
+        if (isMobileMode || !isResizing) return;
         setIsResizing(false);
         if (saveTimer.current) clearTimeout(saveTimer.current);
         saveTimer.current = setTimeout(() => {
@@ -449,7 +460,10 @@ function GroupCard({
             ref={(el) => { cardEl.current = el; cardRef(el); }}
             data-group-id={group.id}
             data-group-color={group.color ?? "zinc"}
-            style={{
+            style={isMobileMode ? {
+                position: "relative",
+                willChange: "auto"
+            } : {
                 position: "absolute",
                 left: group.positionX,
                 top: group.positionY,
@@ -458,8 +472,9 @@ function GroupCard({
                 willChange: "left,top,width,height"
             }}
             className={cn(
-                "bg-zinc-900/70 backdrop-blur-2xl border rounded-2xl shadow-2xl transition-[box-shadow,border-color,transform] duration-200 flex flex-col",
-                isDraggingCard || isResizing
+                "task-group-card bg-zinc-900/95 border rounded-2xl shadow-2xl transition-[box-shadow,border-color,transform] duration-200 flex flex-col",
+                isMobileMode ? "w-full md:w-[320px] md:h-[500px] flex-shrink-0" : "",
+                !isMobileMode && (isDraggingCard || isResizing)
                     ? cn(groupColor.border, groupColor.glow, "scale-[1.01] z-50")
                     : isDragOver
                         ? cn(groupColor.border, groupColor.glow, "scale-[1.005] z-30")
@@ -471,7 +486,10 @@ function GroupCard({
                 onPointerDown={onHeaderPointerDown}
                 onPointerMove={onHeaderPointerMove}
                 onPointerUp={onHeaderPointerUp}
-                className="flex items-center gap-2 px-3 py-2.5 border-b border-white/5 select-none cursor-grab active:cursor-grabbing flex-shrink-0"
+                className={cn(
+                    "flex items-center gap-2 px-3 py-2.5 border-b border-white/5 select-none flex-shrink-0",
+                    isMobileMode ? "" : "cursor-grab active:cursor-grabbing"
+                )}
             >
                 <button onClick={() => setCollapsed(v => !v)} className="text-zinc-600 hover:text-white transition-colors">
                     {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -703,26 +721,29 @@ function GroupCard({
             )}
 
             {/* Resize Handle */}
-            <Tooltip content="Resize Group">
-                <div
-                    onPointerDown={onResizePointerDown}
-                    onPointerMove={onResizePointerMove}
-                    onPointerUp={onResizePointerUp}
-                    className="absolute bottom-1 right-1 cursor-nwse-resize p-1 text-white/5 hover:text-emerald-500/40 transition-colors"
-                >
-                    <Maximize2 className="w-3 h-3 rotate-90" />
-                </div>
-            </Tooltip>
+            {!isMobileMode && (
+                <Tooltip content="Resize Group">
+                    <div
+                        onPointerDown={onResizePointerDown}
+                        onPointerMove={onResizePointerMove}
+                        onPointerUp={onResizePointerUp}
+                        className="absolute bottom-1 right-1 cursor-nwse-resize p-1 text-white/5 hover:text-emerald-500/40 transition-colors"
+                    >
+                        <Maximize2 className="w-3 h-3 rotate-90" />
+                    </div>
+                </Tooltip>
+            )}
         </div>
     );
 }
 
 // ─── Assigned Tasks Card ─────────────────────────────────────────────────────
 function AssignedTasksCard({
-    tasks, userId, isDragOver, onTaskDragStart,
+    tasks, userId, isDragOver, onTaskDragStart, isMobileMode,
 }: {
     tasks: any[]; userId: string; isDragOver: boolean;
     onTaskDragStart: (e: React.PointerEvent, task: any) => void;
+    isMobileMode?: boolean;
 }) {
     const [collapsed, setCollapsed] = useState(false);
     const [groupNames, setGroupNames] = useState<Record<string, string>>({});
@@ -781,6 +802,22 @@ function AssignedTasksCard({
     const dragOffset = useRef({ x: 0, y: 0 });
     const cardEl = useRef<HTMLDivElement | null>(null);
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        if (cardEl.current) {
+            if (isMobileMode) {
+                cardEl.current.style.left = "";
+                cardEl.current.style.top = "";
+                cardEl.current.style.width = "";
+                cardEl.current.style.height = "";
+            } else {
+                cardEl.current.style.left = `${posRef.current.x}px`;
+                cardEl.current.style.top = `${posRef.current.y}px`;
+                cardEl.current.style.width = `${dimRef.current.w}px`;
+                cardEl.current.style.height = collapsed ? "auto" : `${dimRef.current.h}px`;
+            }
+        }
+    }, [collapsed, isMobileMode]);
 
     const saveDimensions = () => {
         if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -870,31 +907,33 @@ function AssignedTasksCard({
     };
 
     const onHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (isMobileMode) return;
         if ((e.target as HTMLElement).closest("button")) return;
         e.currentTarget.setPointerCapture(e.pointerId);
         dragOffset.current = { x: e.clientX - posRef.current.x, y: e.clientY - posRef.current.y };
         setIsDraggingCard(true);
     };
     const onHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (!isDraggingCard) return;
+        if (isMobileMode || !isDraggingCard) return;
         const x = Math.max(0, e.clientX - dragOffset.current.x);
         const y = Math.max(0, e.clientY - dragOffset.current.y);
         posRef.current = { x, y };
         if (cardEl.current) { cardEl.current.style.left = `${x}px`; cardEl.current.style.top = `${y}px`; }
     };
     const onHeaderPointerUp = () => {
-        if (!isDraggingCard) return;
+        if (isMobileMode || !isDraggingCard) return;
         setIsDraggingCard(false);
         savePosition();
     };
 
     const onResizePointerDown = (e: React.PointerEvent) => {
+        if (isMobileMode) return;
         e.stopPropagation();
         e.currentTarget.setPointerCapture(e.pointerId);
         setIsResizing(true);
     };
     const onResizePointerMove = (e: React.PointerEvent) => {
-        if (!isResizing || !cardEl.current) return;
+        if (isMobileMode || !isResizing || !cardEl.current) return;
         const newW = Math.min(600, Math.max(280, e.clientX - posRef.current.x));
         const newH = Math.min(800, Math.max(200, e.clientY - posRef.current.y));
         dimRef.current = { w: newW, h: newH };
@@ -902,7 +941,7 @@ function AssignedTasksCard({
         if (!collapsed) cardEl.current.style.height = `${newH}px`;
     };
     const onResizePointerUp = () => {
-        if (!isResizing) return;
+        if (isMobileMode || !isResizing) return;
         setIsResizing(false);
         saveDimensions();
     };
@@ -911,7 +950,10 @@ function AssignedTasksCard({
         <div
             ref={cardEl}
             data-group-id="assigned-tasks"
-            style={{
+            style={isMobileMode ? {
+                position: "relative",
+                willChange: "auto"
+            } : {
                 position: "absolute",
                 left: posRef.current.x,
                 top: posRef.current.y,
@@ -921,8 +963,9 @@ function AssignedTasksCard({
                 zIndex: isDraggingCard || isResizing ? 50 : 10
             }}
             className={cn(
-                "bg-zinc-900/70 backdrop-blur-2xl border rounded-2xl shadow-2xl flex flex-col transition-[box-shadow,border-color] duration-200",
-                (isDraggingCard || isResizing)
+                "bg-zinc-900/95 border rounded-2xl shadow-2xl flex flex-col transition-[box-shadow,border-color] duration-200",
+                isMobileMode ? "w-full md:w-[320px] md:h-[500px] flex-shrink-0" : "",
+                !isMobileMode && (isDraggingCard || isResizing)
                     ? cn(assignedGroupColor.border, assignedGroupColor.glow, "scale-[1.01]")
                     : isDragOver
                         ? cn(assignedGroupColor.border, assignedGroupColor.glow)
@@ -934,7 +977,10 @@ function AssignedTasksCard({
                 onPointerDown={onHeaderPointerDown}
                 onPointerMove={onHeaderPointerMove}
                 onPointerUp={onHeaderPointerUp}
-                className="flex items-center gap-2 px-3 py-2.5 border-b border-white/5 select-none cursor-grab active:cursor-grabbing flex-shrink-0"
+                className={cn(
+                    "flex items-center gap-2 px-3 py-2.5 border-b border-white/5 select-none flex-shrink-0",
+                    isMobileMode ? "" : "cursor-grab active:cursor-grabbing"
+                )}
             >
                 <button onClick={() => setCollapsed(v => !v)} className="text-zinc-600 hover:text-white transition-colors">
                     {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -1092,16 +1138,18 @@ function AssignedTasksCard({
             )}
 
             {/* Resize Handle */}
-            <Tooltip content="Resize">
-                <div
-                    onPointerDown={onResizePointerDown}
-                    onPointerMove={onResizePointerMove}
-                    onPointerUp={onResizePointerUp}
-                    className={cn("absolute bottom-1 right-1 cursor-nwse-resize p-1 text-white/5 transition-colors", isResizing ? assignedGroupColor.resizeActive : assignedGroupColor.resizeHover)}
-                >
-                    <Maximize2 className="w-3 h-3 rotate-90" />
-                </div>
-            </Tooltip>
+            {!isMobileMode && (
+                <Tooltip content="Resize">
+                    <div
+                        onPointerDown={onResizePointerDown}
+                        onPointerMove={onResizePointerMove}
+                        onPointerUp={onResizePointerUp}
+                        className={cn("absolute bottom-1 right-1 cursor-nwse-resize p-1 text-white/5 transition-colors", isResizing ? assignedGroupColor.resizeActive : assignedGroupColor.resizeHover)}
+                    >
+                        <Maximize2 className="w-3 h-3 rotate-90" />
+                    </div>
+                </Tooltip>
+            )}
         </div>
     );
 }
@@ -1222,6 +1270,39 @@ function AssignedTaskRow({
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function TasksPage() {
+    const tourSteps: TourStep[] = [
+        {
+            popover: {
+                title: "Welcome to Tasks",
+                description: "Organize tasks into customizable group boards with drag-and-drop, priorities, and AI planning.",
+            },
+        },
+        {
+            element: "#btn-new-group",
+            popover: {
+                title: "New Custom Group",
+                description: "Create a new board to organize your focus items by project, category, or workflow status.",
+                side: "left",
+                align: "center",
+            },
+        },
+        {
+            element: "#btn-planner",
+            popover: {
+                title: "AI Daily Planner",
+                description: "Stuck on planning? Ask the AI Task Planner Agent to automatically outline, structure, and generate task lists for you.",
+                side: "left",
+                align: "center",
+            },
+        },
+    ];
+
+    const { resetTour, startTour } = useTour({ pageName: "tasks", steps: tourSteps });
+    const handleRestartTour = () => {
+        resetTour();
+        startTour();
+    };
+
     const { user, loading: authLoading } = useAuth();
     const [tasks, setTasks] = useState<any[]>([]);
     const [groups, setGroups] = useState<any[]>([]);
@@ -1485,30 +1566,7 @@ export default function TasksPage() {
         );
     }
 
-    if (isMobileMode) {
-        return (
-            <BackgroundTheme>
-                <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center">
-                    <div className="relative p-8 rounded-3xl bg-zinc-900/60 backdrop-blur-2xl border border-white/10 max-w-sm shadow-2xl flex flex-col items-center gap-4 animate-in fade-in zoom-in duration-300">
-                        <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400">
-                            <ClipboardList className="w-8 h-8" />
-                        </div>
-                        <h2 className="text-lg font-black uppercase tracking-wider text-white">Desktop Only</h2>
-                        <p className="text-xs font-semibold leading-relaxed text-zinc-400">
-                            Dangdoro's interactive tasks board is designed for larger viewports. Please expand your browser window or switch to a desktop device to manage your tasks.
-                        </p>
-                        <Button 
-                            variant="outline" 
-                            onClick={() => window.location.href = "/"}
-                            className="w-full mt-2 py-5 rounded-2xl border-white/10 hover:bg-white/5 font-black uppercase tracking-wider text-xs text-white"
-                        >
-                            Return to Timer
-                        </Button>
-                    </div>
-                </div>
-            </BackgroundTheme>
-        );
-    }
+
     if (!user) {
         return (
             <BackgroundTheme showSettings={true}>
@@ -1522,11 +1580,14 @@ export default function TasksPage() {
     const tasksByGroup = (gid: string) => tasks.filter(t => t.groupId === gid);
 
     return (
-        <BackgroundTheme>
+        <BackgroundTheme showSettings={true}>
             <div
-                className="relative min-h-screen w-full overflow-hidden"
-                onPointerMove={draggingTask ? onCanvasPointerMove : undefined}
-                onPointerUp={draggingTask ? onCanvasPointerUp : undefined}
+                className={isMobileMode
+                    ? "flex flex-col md:flex-row gap-6 p-4 pt-24 pb-32 md:p-8 md:pt-24 md:pb-32 overflow-y-auto md:overflow-x-auto min-h-screen w-full"
+                    : "relative min-h-screen w-full overflow-hidden"
+                }
+                onPointerMove={draggingTask && !isMobileMode ? onCanvasPointerMove : undefined}
+                onPointerUp={draggingTask && !isMobileMode ? onCanvasPointerUp : undefined}
             >
 
 
@@ -1536,6 +1597,7 @@ export default function TasksPage() {
                         onTaskDragStart={onTaskDragStart} cardRef={el => { groupRefs.current[g.id] = el; }}
                         overTaskId={overTaskId}
                         overTaskPosition={overTaskPosition}
+                        isMobileMode={isMobileMode}
                     />
                 ))}
 
@@ -1546,25 +1608,26 @@ export default function TasksPage() {
                         userId={user.uid}
                         isDragOver={false}
                         onTaskDragStart={onTaskDragStart}
+                        isMobileMode={isMobileMode}
                     />
                 )}
 
                 {/* FAB */}
-                <div className="fixed bottom-8 right-8 z-30 flex flex-col items-end gap-3">
+                <div className="fixed bottom-24 right-4 md:bottom-8 md:right-8 z-30 flex flex-col items-end gap-3">
                     {isCreatingGroup && (
-                        <form onSubmit={handleCreateGroup} className="flex items-center gap-2 animate-in slide-in-from-bottom-4 fade-in duration-200">
+                        <form onSubmit={handleCreateGroup} className="flex items-center gap-2 animate-in slide-in-from-bottom-4 fade-in duration-200 max-w-[100vw]">
                             <input autoFocus value={newGroupName} onChange={e => setNewGroupName(e.target.value)}
                                 onKeyDown={e => e.key === "Escape" && setIsCreatingGroup(false)} placeholder="Group name…"
-                                className="bg-zinc-900/90 backdrop-blur-xl border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white font-bold outline-none focus:border-emerald-500/40 transition-colors w-48" />
+                                className="bg-zinc-900/90 backdrop-blur-xl border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white font-bold outline-none focus:border-emerald-500/40 transition-colors w-40 xs:w-48" />
                             <button type="submit" className="p-2.5 rounded-xl bg-emerald-500 text-black hover:bg-emerald-400 transition-colors"><Check className="w-4 h-4" /></button>
                             <button type="button" onClick={() => setIsCreatingGroup(false)} className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-400 hover:text-white transition-colors"><X className="w-4 h-4" /></button>
                         </form>
                     )}
-                    <button onClick={() => setShowAgent(v => !v)}
+                    <button id="btn-planner" onClick={() => setShowAgent(v => !v)}
                         className="flex items-center gap-2 px-5 py-3 bg-white/5 border border-white/10 text-zinc-400 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all backdrop-blur-xl shadow-lg">
                         <Sparkles className="w-4 h-4" /> Planner
                     </button>
-                    <button onClick={() => setIsCreatingGroup(v => !v)}
+                    <button id="btn-new-group" onClick={() => setIsCreatingGroup(v => !v)}
                         className="flex items-center gap-2 px-5 py-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-emerald-500/20 transition-all backdrop-blur-xl shadow-lg">
                         <Plus className="w-4 h-4" /> New Group
                     </button>
@@ -1684,15 +1747,25 @@ export default function TasksPage() {
 
                 {/* Guest nudge */}
                 {user.isAnonymous && (
-                    <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2.5 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-700 whitespace-nowrap">
+                    <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2.5 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-700 whitespace-normal sm:whitespace-nowrap max-w-[calc(100vw-2rem)] sm:max-w-none flex-wrap sm:flex-nowrap justify-center">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Your tasks are saved on this device. Sign in or register to keep them everywhere.</p>
+                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest text-center sm:text-left">Your tasks are saved on this device. Sign in or register to keep them everywhere.</p>
                         <Button variant="ghost" onClick={() => window.location.href = "/profile"}
                             className="text-emerald-500 hover:text-emerald-400 font-black uppercase tracking-widest text-[10px] h-auto p-0 flex-shrink-0">
                             Sign In | Register
                         </Button>
                     </div>
                 )}
+                {/* Floating Help/Tour Button */}
+                <div className="fixed bottom-6 left-6 z-50">
+                    <button
+                        onClick={handleRestartTour}
+                        className="p-3 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
+                        title="Restart Page Tour"
+                    >
+                        <HelpCircle className="w-5 h-5" />
+                    </button>
+                </div>
             </div>
         </BackgroundTheme>
     );

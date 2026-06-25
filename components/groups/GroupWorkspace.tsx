@@ -26,7 +26,7 @@ import {
     FocusGroup, SharedTask, ObjectiveTemplateDraft, 
     fmtMinutes, resolveLiveSessionsForGroup, toMillis, 
     getEarliestActiveStart, normalizeLiveSessions,
-    getGoalTypeLabel, GoalType, LiveSession
+    getGoalTypeLabel, GoalType, LiveSession, computeNextResetAt
 } from "@/lib/groups";
 import { fetchUserProfiles } from "@/lib/db";
 import { accumulateFocusTime } from "@/lib/focus-accumulator";
@@ -49,6 +49,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const { user } = useAuth();
     const router = useRouter();
     const permissionDeniedRef = useRef(false);
+    const isAutoResettingRef = useRef(false);
     const [group, setGroup] = useState<FocusGroup | null>(null);
     const [liveSessions, setLiveSessions] = useState<any[]>([]);
     const [tasks, setTasks] = useState<SharedTask[]>([]);
@@ -167,6 +168,14 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         getFriendsList(user.uid).then(setFriends);
     }, [user]);
 
+    const [now, setNow] = useState(Date.now());
+    useEffect(() => {
+        const interval = setInterval(() => setNow(Date.now()), 10000);
+        return () => clearInterval(interval);
+    }, []);
+
+
+
     // Derived State
     const enrichedGroup = useMemo(() => {
         if (!group || !user) return null;
@@ -194,11 +203,10 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
             };
         });
         return { ...group, memberDetails };
-    }, [group, user, hydratedProfiles, liveSessions]);
+    }, [group, user, hydratedProfiles, liveSessions, now]);
 
     const isMember = enrichedGroup?.members.includes(user?.uid || "");
-    const isInGroupSession = activeGroupId === groupId;
-    const effectiveIsFocusing = isInGroupSession || isPaused;
+    const isInGroupSession = activeGroupId === groupId && (timerIsActive || isPaused);
     const isHost = enrichedGroup?.hostId === user?.uid;
     const userRole = enrichedGroup?.memberStats?.[user?.uid || ""]?.role || (isHost ? "host" : "member");
     const isAdmin = userRole === "host" || userRole === "admin";
@@ -211,6 +219,100 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         if (!enrichedGroup) return [];
         return [...(enrichedGroup.memberDetails || [])].sort((a, b) => (b.totalMinutes || 0) - (a.totalMinutes || 0));
     }, [enrichedGroup]);
+
+    // Keep track of host presence to stop timer when host ends the session
+    const hostId = enrichedGroup?.hostId;
+    const wasHostActiveRef = useRef(false);
+
+    useEffect(() => {
+        if (!hostId || isHost || !isInGroupSession || !timerIsActive || !user) {
+            wasHostActiveRef.current = false;
+            return;
+        }
+
+        const hostSession = liveSessions.find(s => s.userId === hostId);
+        const hostIsActive = !!hostSession;
+
+        if (hostIsActive) {
+            wasHostActiveRef.current = true;
+        } else if (wasHostActiveRef.current) {
+            wasHostActiveRef.current = false;
+            
+            const stopSession = async () => {
+                const timerSnapshot = useTimerStore.getState();
+                if (timerSnapshot.mode === "focus" && timerSnapshot.timeLeft > 0) {
+                    const elapsedSeconds = Math.max(0, timerSnapshot.initialFocusTime - timerSnapshot.timeLeft);
+                    const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+                    if (elapsedMinutes >= 1) {
+                        await accumulateFocusTime(user.uid, elapsedMinutes, enrichedGroup.id, timerSnapshot.sessionStartTime);
+                    }
+                }
+                timerStop();
+                toast.info("The host has ended the focus session.");
+            };
+            stopSession();
+        }
+    }, [liveSessions, hostId, isHost, isInGroupSession, timerIsActive, user, enrichedGroup?.id, timerStop]);
+
+    // 8. Auto-reset goal period check (triggered by host/admin)
+    useEffect(() => {
+        if (!group || !user || !isAdmin) return;
+        if (!group.settings?.autoResetEnabled || !group.settings?.nextResetAt) return;
+
+        const nextResetMs = toMillis(group.settings.nextResetAt);
+        if (!nextResetMs) return;
+
+        const checkAndReset = async () => {
+            if (Date.now() < nextResetMs) return;
+            if (isAutoResettingRef.current) return;
+            isAutoResettingRef.current = true;
+
+            try {
+                const resetStats: any = {};
+                if (group.memberStats) {
+                    Object.keys(group.memberStats).forEach(key => {
+                        resetStats[key] = { ...(group.memberStats as any)[key], totalMinutes: 0 };
+                    });
+                }
+
+                const nextResetDate = computeNextResetAt(
+                    group.settings?.autoResetPeriod || "week",
+                    group.settings?.customDaysValue ?? 7,
+                    new Date()
+                );
+
+                await updateDoc(doc(db, "focusGroups", group.id), {
+                    totalMinutes: 0,
+                    memberStats: resetStats,
+                    lastResetAt: serverTimestamp(),
+                    "settings.nextResetAt": nextResetDate
+                });
+
+                toast.success("Goal period expired. Progress stats auto-reset successfully!");
+            } catch (error) {
+                console.error("Auto reset stats failed:", error);
+            } finally {
+                isAutoResettingRef.current = false;
+            }
+        };
+
+        checkAndReset();
+
+        const delay = nextResetMs - Date.now();
+        if (delay > 0) {
+            const timeoutId = setTimeout(checkAndReset, delay + 1000);
+            return () => clearTimeout(timeoutId);
+        }
+    }, [
+        group?.id,
+        group?.memberStats,
+        group?.settings?.autoResetEnabled,
+        group?.settings?.nextResetAt,
+        group?.settings?.autoResetPeriod,
+        group?.settings?.customDaysValue,
+        isAdmin,
+        user?.uid
+    ]);
 
     // Handlers
     const handleAddTask = async (title: string, priority: string = "medium", assignedTo: string = "all", silent: boolean = false, description: string = "") => {
@@ -301,17 +403,21 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
             if (result.shouldStartTimer && !timerIsActive) timerStart();
             if (result.shouldPauseTimer && willBePaused) timerPause();
             if (action === "pause" && !willBePaused && !timerIsActive) timerStart();
-            if (result.shouldStopTimer) {
+             if (result.shouldStopTimer) {
                 const timerSnapshot = useTimerStore.getState();
                 if (timerSnapshot.mode === "focus" && timerSnapshot.timeLeft > 0) {
                     const elapsedSeconds = Math.max(0, timerSnapshot.initialFocusTime - timerSnapshot.timeLeft);
                     const elapsedMinutes = Math.floor(elapsedSeconds / 60);
-                    if (elapsedMinutes >= 1 && isHost) {
-                        await accumulateFocusTime(user.uid, elapsedMinutes, enrichedGroup.id);
+                    if (elapsedMinutes >= 1) {
+                        if (isHost) {
+                            await accumulateFocusTime(user.uid, elapsedMinutes, enrichedGroup.id);
+                        } else {
+                            // Accumulate focus time for non-hosts on manual stop
+                            await accumulateFocusTime(user.uid, elapsedMinutes, enrichedGroup.id, timerSnapshot.sessionStartTime);
+                        }
                     }
                 }
                 timerStop();
-                setActiveGroupId(null);
             }
 
             toast.info(action === "pause" ? (willBePaused ? `Focus paused.` : `Focus resumed.`) : `Focus ${action}ed.`);
@@ -466,7 +572,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                 <ChevronRight className="w-5 h-5 rotate-180" />
                             </Link>
                             <h2 className="text-3xl font-black text-white tracking-tighter flex items-center gap-3">
-                                {isManagingRoles ? "Unit Management" : enrichedGroup.name}
+                                {isManagingRoles ? "Settings" : enrichedGroup.name}
                                 {!isManagingRoles && isActive && (
                                     <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
                                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -476,7 +582,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                         </h2>
                         </div>
                         <div className="flex items-center gap-3 ml-12">
-                            <p className="text-zinc-500 text-sm max-w-xl line-clamp-1">{isManagingRoles ? `Configure authorization and hierarchy for ${enrichedGroup.name}` : enrichedGroup.description}</p>
+                            <p className="text-zinc-500 text-sm max-w-xl line-clamp-1">{isManagingRoles ? `Manage settings and members for ${enrichedGroup.name}` : enrichedGroup.description}</p>
                         </div>
                     </div>
                     
@@ -484,7 +590,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                         {isMember ? (
                             <>
                                 <div className="flex items-center gap-2">
-                                    {!effectiveIsFocusing ? (
+                                    {!isInGroupSession ? (
                                         <button
                                             disabled={!!sessionActionPending}
                                             onClick={() => handleSessionAction("start")}
@@ -652,7 +758,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                         <div className="hidden lg:flex items-center gap-4">
                             <div className="h-4 w-[1px] bg-white/10 mr-2" />
                             <div className="flex -space-x-2">
-                                {enrichedGroup.memberDetails?.filter((m: any) => m.isFocusing || (m.uid === user?.uid && (optimisticFocusing || isPaused || effectiveIsFocusing))).slice(0, 8).map((m: any, i: number) => {
+                                {enrichedGroup.memberDetails?.filter((m: any) => m.isFocusing || (m.uid === user?.uid && (optimisticFocusing || isInGroupSession))).slice(0, 8).map((m: any, i: number) => {
                                     const isCurrentUser = m.uid === user?.uid;
                                     const isActuallyFocusing = m.isFocusing && m.sessionStatus !== "paused" && !(isCurrentUser && isPaused);
                                     const isPausedState = (isCurrentUser && isPaused) || (!isCurrentUser && m.sessionStatus === "paused");
@@ -689,13 +795,12 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
             <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
                 {isManagingRoles ? (
                     <div className="max-w-5xl mx-auto">
-                        <button onClick={() => setIsManagingRoles(false)} className="mb-8 flex items-center gap-2 text-zinc-500 hover:text-white transition-all text-xs font-black uppercase tracking-widest">
-                            <ChevronRight className="w-4 h-4 rotate-180" /> Back to Workspace
-                        </button>
                         <GroupManagementView 
                             group={enrichedGroup} user={user} userRole={userRole}
                             onUpdateRole={handleUpdateMemberRole} onRemove={handleRemoveMember}
                             roleActionPendingId={roleActionPendingId}
+                            onClose={() => setIsManagingRoles(false)}
+                            onInvite={() => setShowInviteModal(true)}
                         />
                     </div>
                 ) : (
@@ -839,7 +944,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                             </div>
                                         </div>
                                         <div className="space-y-2 mb-4">
-                                            {sortedMembers.slice(0, 5).map((m: any) => {
+                                            {sortedMembers.slice(0, 5).map((m: any, index: number) => {
                                                 const goalHours = enrichedGroup.settings?.goalHours || 0;
                                                 const goalPct = goalHours > 0 ? Math.round((((m.totalMinutes || 0) / 60) / goalHours) * 100) : null;
                                                 const isMe = m.uid === user.uid;
@@ -847,6 +952,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                                 return (
                                                     <div key={m.uid} className={cn("rounded-lg p-2.5 border border-white/10 bg-zinc-950/40", isMe && "bg-[white]/8 border-[white]/20")}>
                                                         <div className="flex items-center gap-3">
+                                                            <span className="w-5 text-[10px] font-black text-zinc-600 text-center shrink-0">{index + 1}</span>
                                                             <Avatar className="w-6 h-6 border border-white/10">
                                                                 <AvatarImage src={m.photoURL} />
                                                                 <AvatarFallback className="text-[8px] bg-zinc-900">{m.displayName?.[0]}</AvatarFallback>
@@ -873,10 +979,10 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                                 );
                                             })}
                                         </div>
-                                        <Link href={`/leaderboard?tab=groups&groupId=${groupId}`} className="flex items-center justify-between w-full p-3 bg-zinc-950/40 rounded-lg border border-white/10 text-[10px] font-black uppercase text-zinc-500 hover:text-white transition-all">
+                                        <button onClick={() => setActiveTab("members")} className="flex items-center justify-between w-full p-3 bg-zinc-950/40 rounded-lg border border-white/10 text-[10px] font-black uppercase text-zinc-500 hover:text-white transition-all cursor-pointer">
                                             <span>Full Ranking</span>
                                             <ChevronRight className="w-3 h-3" />
-                                        </Link>
+                                        </button>
                                     </div>
                                 </div>
                             </div>

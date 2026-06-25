@@ -22,7 +22,8 @@ import {
 import {
     sendFriendRequest, acceptFriendRequest, declineFriendRequest,
     removeFriend, cancelFriendRequest, subscribeToReceivedFriendRequests,
-    subscribeToFriendsList, getSentFriendRequests
+    subscribeToFriendsList, subscribeToFriendsPresence,
+    getSentFriendRequests
 } from "@/lib/friendship";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -88,11 +89,15 @@ export default function FriendsPage() {
     const [unfriendDialogOpen, setUnfriendDialogOpen] = useState(false);
     const [friendToRemoveId, setFriendToRemoveId] = useState<string | null>(null);
 
+    const [friendIds, setFriendIds] = useState<string[]>([]);
+
     useEffect(() => {
         if (!user || user.isAnonymous) return;
 
         const unsubFriends = subscribeToFriendsList(user.uid, (friendsData) => {
-            setFriends(friendsData as FriendItem[]);
+            const items = friendsData as FriendItem[];
+            setFriends(items);
+            setFriendIds(items.map(f => f.friendId));
             setLoading(false);
         });
 
@@ -111,6 +116,20 @@ export default function FriendsPage() {
             unsubRequests();
         };
     }, [user]);
+
+    useEffect(() => {
+        if (friendIds.length === 0) return;
+
+        const unsubPresence = subscribeToFriendsPresence(friendIds, (uid, lastActive) => {
+            setFriends(prev => prev.map(friend =>
+                friend.friendId === uid && friend.userData
+                    ? { ...friend, userData: { ...friend.userData, lastActive } }
+                    : friend
+            ));
+        });
+
+        return () => unsubPresence();
+    }, [friendIds]);
 
     useEffect(() => {
         if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
@@ -556,7 +575,7 @@ const FriendCard = memo(({ friend, online, onRemoveFriend }: FriendCardProps) =>
 
             <button
                 onClick={() => onRemoveFriend(friend.friendId)}
-                className="absolute top-3 right-3 p-2 opacity-0 translate-y-1 scale-95 group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 text-red-500 hover:text-red-400 cursor-pointer transition-all duration-200 ease-out z-20"
+                className="absolute top-3 right-3 p-2 opacity-0 translate-y-1 scale-95 group-hover:opacity-100 group-hover:translate-y-0 group-hover:scale-100 [@media(hover:none)]:opacity-100 [@media(hover:none)]:translate-y-0 [@media(hover:none)]:scale-100 text-red-500 hover:text-red-400 cursor-pointer transition-all duration-200 ease-out z-20"
                 aria-label="Remove friend"
             >
                 <motion.span

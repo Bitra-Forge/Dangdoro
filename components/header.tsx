@@ -20,7 +20,7 @@ export function Header() {
     const { user, loading } = useAuth();
 
     return (
-        <header className="fixed top-0 left-0 right-0 z-50 h-20 bg-background md:bg-background/80 backdrop-blur-none md:backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-12 transition-all duration-500">
+        <header className="fixed top-0 left-0 right-0 z-50 h-20 bg-background md:bg-background/80 backdrop-blur-none md:backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-4 sm:px-6 md:px-12 transition-all duration-500">
             <div className="flex items-center gap-12">
                 <h1 className="text-3xl font-black tracking-tighter text-primary select-none cursor-default hover:scale-105 transition-transform duration-500">
                     Dangdoro

@@ -15,8 +15,24 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 function initializeAdmin() {
+    const useEmulator = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true";
+    const projectId = process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+
+    if (useEmulator) {
+        console.log("🔌 Initializing Firebase Admin in EMULATOR mode...");
+        if (!process.env.FIRESTORE_EMULATOR_HOST) {
+            process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
+        }
+        if (!process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+            process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
+        }
+        admin.initializeApp({
+            projectId: "demo-dangdoro"
+        });
+        return;
+    }
+
     // 1. Check individual env variables
-    const projectId = process.env.FIREBASE_PROJECT_ID;
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
     const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
 

@@ -3,7 +3,27 @@ import * as admin from "firebase-admin";
 function initializeAdmin() {
   if (admin.apps.length) return;
 
+  const useEmulator = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true";
   const projectId = process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+
+  if (useEmulator) {
+    if (!process.env.FIRESTORE_EMULATOR_HOST) {
+      process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
+    }
+    if (!process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+      process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
+    }
+    if (!process.env.FIREBASE_STORAGE_EMULATOR_HOST) {
+      process.env.FIREBASE_STORAGE_EMULATOR_HOST = "127.0.0.1:9199";
+    }
+
+    admin.initializeApp({
+      projectId: "demo-dangdoro",
+    });
+    console.log("🔌 Firebase Admin SDK connected to Emulators (Auth: 9099, Firestore: 8080, Storage: 9199)");
+    return;
+  }
+
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   // Private keys in env files often have escaped newlines like \\n. We must replace them.
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
