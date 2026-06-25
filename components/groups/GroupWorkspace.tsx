@@ -572,7 +572,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                 <ChevronRight className="w-5 h-5 rotate-180" />
                             </Link>
                             <h2 className="text-3xl font-black text-white tracking-tighter flex items-center gap-3">
-                                {isManagingRoles ? "Unit Management" : enrichedGroup.name}
+                                {isManagingRoles ? "Settings" : enrichedGroup.name}
                                 {!isManagingRoles && isActive && (
                                     <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
                                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -582,7 +582,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                         </h2>
                         </div>
                         <div className="flex items-center gap-3 ml-12">
-                            <p className="text-zinc-500 text-sm max-w-xl line-clamp-1">{isManagingRoles ? `Configure authorization and hierarchy for ${enrichedGroup.name}` : enrichedGroup.description}</p>
+                            <p className="text-zinc-500 text-sm max-w-xl line-clamp-1">{isManagingRoles ? `Manage settings and members for ${enrichedGroup.name}` : enrichedGroup.description}</p>
                         </div>
                     </div>
                     
@@ -795,13 +795,12 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
             <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
                 {isManagingRoles ? (
                     <div className="max-w-5xl mx-auto">
-                        <button onClick={() => setIsManagingRoles(false)} className="mb-8 flex items-center gap-2 text-zinc-500 hover:text-white transition-all text-xs font-black uppercase tracking-widest">
-                            <ChevronRight className="w-4 h-4 rotate-180" /> Back to Workspace
-                        </button>
                         <GroupManagementView 
                             group={enrichedGroup} user={user} userRole={userRole}
                             onUpdateRole={handleUpdateMemberRole} onRemove={handleRemoveMember}
                             roleActionPendingId={roleActionPendingId}
+                            onClose={() => setIsManagingRoles(false)}
+                            onInvite={() => setShowInviteModal(true)}
                         />
                     </div>
                 ) : (

@@ -4,7 +4,7 @@ import { memo, useState, useEffect, useMemo } from "react";
 import { useTimerStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { 
-    Target, Copy, Crown, Zap, UserX, RotateCcw, Tag, AlignLeft, Clock
+    Target, Copy, Crown, Zap, UserX, RotateCcw, Tag, AlignLeft, Clock, ChevronLeft, MoreHorizontal, Plus
 } from "lucide-react";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -12,7 +12,16 @@ import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { fmtMinutes, getManagementGroupKey, computeNextResetAt, toMillis } from "@/lib/groups";
 
-export const GroupManagementView = memo(function GroupManagementView({ group, user, onUpdateRole, onRemove, userRole, roleActionPendingId }: any) {
+export const GroupManagementView = memo(function GroupManagementView({ 
+    group, 
+    user, 
+    onUpdateRole, 
+    onRemove, 
+    userRole, 
+    roleActionPendingId,
+    onClose,
+    onInvite
+}: any) {
     const isHost = userRole === "host";
     const isAdmin = userRole === "admin";
     const isHostOrAdmin = isHost || isAdmin;
@@ -28,6 +37,7 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
     const [draftAutoResetPeriod, setDraftAutoResetPeriod] = useState<string>(group.settings?.autoResetPeriod || "week");
     const [draftCustomDaysValue, setDraftCustomDaysValue] = useState<number | "">(group.settings?.customDaysValue ?? 7);
     const [isSaving, setIsSaving] = useState(false);
+    const [memberToRemove, setMemberToRemove] = useState<{ uid: string; displayName: string } | null>(null);
 
     // Estimate the next reset date dynamically for real-time preview
     const previewNextResetDate = useMemo(() => {
@@ -154,120 +164,129 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
     const regularMembers = group.memberDetails?.filter((m: any) => m.role === "member") ?? [];
 
     return (
-        <div className="space-y-12 animate-in fade-in slide-in-from-right-4 duration-150">
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-150 max-w-4xl mx-auto">
+            {/* Top Header bar matching Mockup */}
+            <div className="flex items-center justify-between border-b border-white/5 pb-6">
+                <button
+                    onClick={onClose}
+                    className="flex items-center gap-2 text-zinc-400 hover:text-white transition-all text-xs font-black uppercase tracking-widest cursor-pointer"
+                >
+                    <ChevronLeft className="w-4 h-4" />
+                    Back to workspace
+                </button>
+                
+                <button
+                    onClick={handleSave}
+                    disabled={!hasChanges || isSaving}
+                    className={cn(
+                        "px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer",
+                        hasChanges
+                            ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/10"
+                            : "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-white/5"
+                    )}
+                >
+                    {isSaving ? "Saving..." : "Save changes"}
+                </button>
+            </div>
+
+            {/* Page Titles */}
+            <div className="space-y-1">
+                <h3 className="text-2xl font-bold text-white">Settings</h3>
+                <p className="text-sm text-zinc-500">Customize your group's details, goals, and membership.</p>
+            </div>
+
             {isHostOrAdmin && (
                 <div className="space-y-6">
-                    <div className="flex items-center justify-between">
+                    {/* Basic Information Card */}
+                    <div className="p-6 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-6">
                         <div>
-                            <h3 className="text-lg font-bold text-white mb-1">Unit Configuration</h3>
-                            <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Manage core parameters.</p>
+                            <h4 className="text-base font-bold text-white">About the group</h4>
                         </div>
-                        <button
-                            onClick={handleSave}
-                            disabled={!hasChanges || isSaving}
-                            className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
-                                hasChanges
-                                    ? "bg-white text-black hover:bg-zinc-200"
-                                    : "bg-zinc-900 text-zinc-600 cursor-not-allowed"
-                            }`}
-                        >
-                            {isSaving ? "Saving..." : hasChanges ? "Save" : "Saved"}
-                        </button>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Group Name</label>
+                            <input 
+                                type="text" 
+                                value={draftName} 
+                                onChange={(e) => setDraftName(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                placeholder="Group Name" 
+                                className="w-full bg-zinc-900/55 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-[white]/40 outline-none" 
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Description</label>
+                            <textarea 
+                                value={draftDescription} 
+                                onChange={(e) => setDraftDescription(e.target.value)}
+                                placeholder="Enter a brief description for this group..." 
+                                rows={3}
+                                className="w-full bg-zinc-900/55 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-[white]/40 outline-none resize-none scrollbar-none [ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" 
+                            />
+                        </div>
                     </div>
 
-                    <div className="p-5 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4">
-                        <div className="flex items-center gap-2 text-zinc-400">
-                            <Tag className="w-4 h-4" />
-                            <span className="text-[10px] font-black uppercase tracking-widest">Group Name</span>
-                        </div>
-                        <input 
-                            type="text" 
-                            value={draftName} 
-                            onChange={(e) => setDraftName(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Unit Name" 
-                            className="w-full bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-[white]/40 outline-none" 
-                        />
-                    </div>
-
-                    <div className="p-5 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4">
-                        <div className="flex items-center gap-2 text-zinc-400">
-                            <AlignLeft className="w-4 h-4" />
-                            <span className="text-[10px] font-black uppercase tracking-widest">Group Description</span>
-                        </div>
-                        <textarea 
-                            value={draftDescription} 
-                            onChange={(e) => setDraftDescription(e.target.value)}
-                            placeholder="Unit Description" 
-                            rows={3}
-                            className="w-full bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-[white]/40 outline-none resize-none scrollbar-none [ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" 
-                        />
-                    </div>
-
+                    {/* Focus Goal & Reset Progress Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-5 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4">
-                            <div className="flex items-center gap-2 text-zinc-400">
-                                <Target className="w-4 h-4" />
-                                <span className="text-[10px] font-black uppercase tracking-widest">Focus Goal (Hours)</span>
+                        <div className="p-6 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-6 flex flex-col justify-between">
+                            <div className="space-y-2">
+                                <h4 className="text-base font-bold text-white">Weekly goal</h4>
+                                <p className="text-xs text-zinc-500">The number of hours group members aim to focus each week.</p>
                             </div>
-                            <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-2 flex-1">
-                                    <input 
-                                        type="number" 
-                                        value={draftGoalHours} 
-                                        onChange={(e) => setDraftGoalHours(e.target.value)}
-                                        onKeyDown={handleKeyDown}
-                                        placeholder="e.g. 100" 
-                                        className="w-full bg-zinc-900 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-[white]/40 outline-none appearance-none" 
-                                    />
-                                    <div className="flex flex-col gap-1">
-                                        <button 
-                                            onClick={() => setDraftGoalHours(prev => String(Math.max(0, (parseInt(prev) || 0) + 1)))} 
-                                            className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all"
-                                        >
-                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
-                                        </button>
-                                        <button 
-                                            onClick={() => setDraftGoalHours(prev => String(Math.max(0, (parseInt(prev) || 0) - 1)))} 
-                                            className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all"
-                                        >
-                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                                        </button>
+                            <div className="space-y-2 pt-4">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 block mb-2">Hours per week</label>
+                                <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-2 flex-1 max-w-[200px]">
+                                        <input 
+                                            type="number" 
+                                            value={draftGoalHours} 
+                                            onChange={(e) => setDraftGoalHours(e.target.value)}
+                                            onKeyDown={handleKeyDown}
+                                            placeholder="e.g. 10" 
+                                            className="w-full bg-zinc-900/55 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-[white]/40 outline-none appearance-none" 
+                                        />
+                                        <div className="flex flex-col gap-1">
+                                            <button 
+                                                onClick={() => setDraftGoalHours(prev => String(Math.max(0, (parseInt(prev) || 0) + 1)))} 
+                                                className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all"
+                                            >
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                                            </button>
+                                            <button 
+                                                onClick={() => setDraftGoalHours(prev => String(Math.max(0, (parseInt(prev) || 0) - 1)))} 
+                                                className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-all"
+                                            >
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                            </button>
+                                        </div>
                                     </div>
+                                    <span className="text-zinc-500 font-bold text-xs uppercase">hrs</span>
                                 </div>
-                                <span className="text-zinc-600 font-bold text-xs uppercase whitespace-nowrap">Hours</span>
                             </div>
                         </div>
 
-                        <div className="p-5 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-4 flex flex-col justify-between">
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-2 text-zinc-400">
-                                    <RotateCcw className="w-4 h-4" />
-                                    <span className="text-[10px] font-black uppercase tracking-widest">Reset Progress</span>
-                                </div>
-                                <p className="text-[10px] text-zinc-500">
-                                    Manually archive member minutes and restart the focus goal period.
-                                </p>
+                        <div className="p-6 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-6 flex flex-col justify-between">
+                            <div className="space-y-2">
+                                <h4 className="text-base font-bold text-white">Reset current progress</h4>
+                                <p className="text-xs text-zinc-500">Clear everyone's current focus minutes for this goal period.</p>
                             </div>
                             <button
                                 onClick={() => setShowResetConfirm(true)}
-                                className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                                className="w-full py-3 bg-red-500/5 hover:bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                             >
                                 <RotateCcw className="w-4 h-4" />
-                                Reset Stats
+                                Reset progress
                             </button>
                         </div>
                     </div>
 
-                    <div className="p-5 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-6">
+                    {/* Auto Reset Goal */}
+                    <div className="p-6 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-6">
                         <div className="flex items-center justify-between">
-                            <div className="space-y-1">
-                                <div className="flex items-center gap-2 text-zinc-400">
-                                    <Clock className="w-4 h-4" />
-                                    <span className="text-[10px] font-black uppercase tracking-widest">Auto Reset Goal</span>
-                                </div>
-                                <p className="text-[10px] text-zinc-500">
-                                    Automatically archive member stats and restart the focus goal period.
+                            <div className="space-y-2">
+                                <h4 className="text-base font-bold text-white">Automatic resets</h4>
+                                <p className="text-xs text-zinc-500">
+                                    Automatically clear member progress and restart the goal period at regular intervals.
                                 </p>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer group">
@@ -277,29 +296,29 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                                     onChange={(e) => setDraftAutoResetEnabled(e.target.checked)}
                                     className="sr-only peer"
                                 />
-                                <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-white/20 peer-checked:after:bg-white border border-white/5" />
+                                <div className="w-11 h-6 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 border border-white/5" />
                             </label>
                         </div>
 
                         {draftAutoResetEnabled && (
                             <div className="space-y-4 pt-4 border-t border-white/5 animate-in fade-in duration-200">
                                 <div className="space-y-2">
-                                    <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Reset Period</span>
-                                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                                    <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Reset frequency</span>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                         {[
                                             { value: "1day", label: "1 Day" },
                                             { value: "week", label: "1 Week" },
                                             { value: "month", label: "1 Month" },
-                                            { value: "custom-days", label: "Custom Days" },
+                                            { value: "custom-days", label: "Custom" },
                                         ].map((period) => (
                                             <button
                                                 key={period.value}
                                                 type="button"
                                                 onClick={() => setDraftAutoResetPeriod(period.value)}
                                                 className={cn(
-                                                    "py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all cursor-pointer relative overflow-hidden",
+                                                    "py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer relative overflow-hidden border",
                                                     draftAutoResetPeriod === period.value
-                                                        ? "bg-white text-black border-white"
+                                                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                                                         : "bg-zinc-900 text-zinc-400 border-white/5 hover:border-white/10 hover:text-white"
                                                 )}
                                             >
@@ -330,46 +349,104 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                                     </div>
                                 )}
 
-
-
                                 {previewNextResetDate && (
-                                    <div className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest flex items-center gap-1">
+                                    <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest flex items-center gap-1">
                                         <span>Next Reset:</span>
                                         <span className="text-white">
-                                            {previewNextResetDate.toLocaleString()}
+                                            {previewNextResetDate.toLocaleString(undefined, { month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
                                         </span>
                                     </div>
                                 )}
                             </div>
                         )}
                     </div>
-                    {(group.privacy === "private-code" || group.privacy === "public") && group.accessCode && (
-                        <div className="p-5 rounded-3xl bg-zinc-900/60 border border-white/5 flex items-center justify-between">
-                            <div>
-                                <h4 className="text-xs font-bold text-white mb-1">Group Code</h4>
-                                <p className="text-[10px] text-zinc-600">Share to expand your unit.</p>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <code className="text-sm font-black text-[white] tracking-[0.2em] bg-zinc-950 px-4 py-2 rounded-xl border border-[white]/30">{group.accessCode}</code>
-                                <button onClick={() => { navigator.clipboard.writeText(group.accessCode || ""); toast.success("Copied!"); }} className="p-2.5 bg-white/5 text-white rounded-xl hover:bg-white/10 transition-all">
-                                    <Copy className="w-4 h-4" />
-                                </button>
-                            </div>
-                        </div>
-                    )}
                 </div>
             )}
 
-            <div className="space-y-6">
-                <div>
-                    <h3 className="text-lg font-bold text-white mb-1">Unit Hierarchy</h3>
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Manage Roles & Access</p>
+            {/* Redesigned Hierarchy Table */}
+            <div className="p-6 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-6">
+                <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                        <h4 className="text-base font-bold text-white">Members & roles</h4>
+                        <p className="text-xs text-zinc-500">See who is in the group and manage roles.</p>
+                    </div>
+                    {isHostOrAdmin && (
+                        <button 
+                            onClick={onInvite}
+                            className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white border border-white/10 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer"
+                        >
+                            <Plus className="w-4 h-4" />
+                            Add Member
+                        </button>
+                    )}
                 </div>
-                <Section label="Command Unit" color="text-[white]" members={hostMembers} user={user} group={group} isHost={isHost} roleActionPendingId={roleActionPendingId} onUpdateRole={onUpdateRole} onRemove={onRemove} />
-                <Section label="Officers" color="text-zinc-300" members={adminMembers} user={user} group={group} isHost={isHost} roleActionPendingId={roleActionPendingId} onUpdateRole={onUpdateRole} onRemove={onRemove} />
-                <Section label="Members" color="text-zinc-500" members={regularMembers} user={user} group={group} isHost={isHost} roleActionPendingId={roleActionPendingId} onUpdateRole={onUpdateRole} onRemove={onRemove} />
+
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="border-b border-white/5 text-[9px] font-black uppercase tracking-widest text-zinc-500">
+                                <th className="pb-4 font-bold">Name</th>
+                                <th className="pb-4 font-bold">Role</th>
+                                <th className="pb-4 font-bold text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                            {group.memberDetails?.map((m: any) => {
+                                const isMe = m.uid === user.uid;
+                                const isGroupHostUser = m.uid === group.hostId;
+                                
+                                return (
+                                    <tr key={m.uid} className="group/row hover:bg-white/[0.01] transition-all">
+                                        <td className="py-4 flex items-center gap-3">
+                                            <Avatar className="w-9 h-9 border border-white/5 rounded-xl shrink-0">
+                                                <AvatarImage src={m.photoURL} />
+                                                <AvatarFallback className="text-xs bg-zinc-900 text-white rounded-xl flex items-center justify-center">{m.displayName?.[0]}</AvatarFallback>
+                                            </Avatar>
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-bold text-white truncate max-w-[120px] sm:max-w-[180px]">{m.displayName}</span>
+                                                    {isMe && <span className="text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-white/10 rounded text-zinc-400">You</span>}
+                                                </div>
+                                                {m.email && <span className="text-[10px] text-zinc-500 block truncate max-w-[120px] sm:max-w-[180px]">{m.email}</span>}
+                                            </div>
+                                        </td>
+                                        <td className="py-4">
+                                            {isGroupHostUser || !isHostOrAdmin || isMe ? (
+                                                <span className="text-xs font-bold text-zinc-400 capitalize">{m.role}</span>
+                                            ) : (
+                                                <select
+                                                    value={m.role}
+                                                    disabled={roleActionPendingId === m.uid}
+                                                    onChange={(e) => onUpdateRole(m.uid, e.target.value as any)}
+                                                    className="bg-zinc-900 border border-white/5 rounded-xl px-2 py-1.5 text-xs text-white focus:border-white/20 outline-none cursor-pointer"
+                                                >
+                                                    <option value="member">Member</option>
+                                                    <option value="admin">Admin</option>
+                                                    {isHost && <option value="host">Host</option>}
+                                                </select>
+                                            )}
+                                        </td>
+                                        <td className="py-4 text-right">
+                                            {!isGroupHostUser && !isMe && isHostOrAdmin && (
+                                                <button
+                                                    onClick={() => setMemberToRemove({ uid: m.uid, displayName: m.displayName })}
+                                                    disabled={roleActionPendingId === m.uid}
+                                                    className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all"
+                                                    title="Remove member"
+                                                >
+                                                    <UserX className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
+            {/* Reset Stats Confirm Modal */}
             {showResetConfirm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className={cn(
@@ -377,13 +454,13 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                         settingsGlassmorphism ? "bg-zinc-950/80 backdrop-blur-xl" : "bg-zinc-950"
                     )}>
                         <div className="flex flex-col items-center text-center space-y-3">
-                            <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20 text-red-500">
+                            <div className="w-12 h-12 rounded-full bg-red-700/10 flex items-center justify-center border border-red-700/25 text-red-400">
                                 <RotateCcw className="w-6 h-6 animate-pulse" />
                             </div>
                             <div>
-                                <h4 className="text-base font-bold text-white">Reset Progress Stats?</h4>
+                                <h4 className="text-base font-bold text-white">Reset everyone's progress?</h4>
                                 <p className="text-xs text-zinc-500 mt-1">
-                                    This will wipe the current focus minutes for all members in the group and start a new goal period. This action is irreversible.
+                                    This will clear the current focus minutes for everyone in this group and start a fresh goal period. This cannot be undone.
                                 </p>
                             </div>
                         </div>
@@ -398,11 +475,52 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
                             <button
                                 onClick={handleResetStats}
                                 disabled={isResetting}
-                                className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-red-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                                className="flex-1 py-3 bg-red-700 hover:bg-red-800 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-red-700/20 disabled:opacity-50 flex items-center justify-center gap-2"
                             >
                                 {isResetting ? (
                                     <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                                ) : "Yes, Reset Stats"}
+                                ) : "Yes, reset progress"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Remove Member Confirm Modal */}
+            {memberToRemove && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className={cn(
+                        "w-full max-w-md p-6 rounded-3xl border border-white/10 space-y-6 shadow-2xl animate-in zoom-in-95 duration-200",
+                        settingsGlassmorphism ? "bg-zinc-950/80 backdrop-blur-xl" : "bg-zinc-950"
+                    )}>
+                        <div className="flex flex-col items-center text-center space-y-3">
+                            <div className="w-12 h-12 rounded-full bg-red-700/10 flex items-center justify-center border border-red-700/25 text-red-400">
+                                <UserX className="w-6 h-6 animate-pulse" />
+                            </div>
+                            <div>
+                                <h4 className="text-base font-bold text-white">Remove member?</h4>
+                                <p className="text-xs text-zinc-500 mt-1">
+                                    Are you sure you want to remove <span className="text-white font-bold">{memberToRemove.displayName}</span> from this group? This person will no longer be able to see tasks or join focus sessions.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setMemberToRemove(null)}
+                                className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 font-bold rounded-xl text-xs uppercase tracking-wider transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    if (memberToRemove) {
+                                        await onRemove(memberToRemove.uid);
+                                        setMemberToRemove(null);
+                                    }
+                                }}
+                                className="flex-1 py-3 bg-red-700 hover:bg-red-800 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-red-700/20"
+                            >
+                                Yes, remove member
                             </button>
                         </div>
                     </div>
@@ -416,86 +534,5 @@ export const GroupManagementView = memo(function GroupManagementView({ group, us
         prevProps.userRole === nextProps.userRole &&
         prevProps.roleActionPendingId === nextProps.roleActionPendingId &&
         getManagementGroupKey(prevProps.group) === getManagementGroupKey(nextProps.group)
-    );
-});
-
-const MemberRow = memo(function MemberRow({ m, user, group, isHost, roleActionPendingId, onUpdateRole, onRemove }: any) {
-    return (
-        <div className="p-4 bg-zinc-900/40 border border-white/5 rounded-2xl flex items-center gap-4 group/item hover:bg-zinc-900/60 transition-all">
-            <Avatar className="w-10 h-10 border-2 border-zinc-950">
-                <AvatarImage src={m.photoURL} />
-                <AvatarFallback>{m.displayName?.[0]}</AvatarFallback>
-            </Avatar>
-            
-            <div className="flex-1">
-                <div className="flex items-center gap-2">
-                    <h4 className="text-xs font-bold text-white">{m.displayName}</h4>
-                    {m.uid === user.uid && <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 bg-white/10 rounded text-zinc-400">You</span>}
-                    {m.isFocusing && (
-                        <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/30 text-[7px] font-black uppercase text-indigo-400">
-                            Live Focus
-                        </span>
-                    )}
-                </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                    <span className={cn("text-[9px] font-black uppercase tracking-widest flex items-center gap-1", m.role === "host" ? "text-[white]" : m.role === "admin" ? "text-zinc-300" : "text-zinc-500")}>
-                        {m.role === "host" && <Crown className="w-2.5 h-2.5" />}
-                        {m.role === "admin" && <Zap className="w-2.5 h-2.5" />}
-                        {m.role}
-                    </span>
-                    <div className="w-1 h-1 rounded-full bg-zinc-800" />
-                    <span className="text-[9px] text-zinc-600 font-bold">{fmtMinutes(m.totalMinutes || 0)} contributed</span>
-                </div>
-            </div>
-
-            {m.uid !== group.hostId && m.uid !== user.uid && (
-                <div className="flex items-center gap-2 opacity-100 transition-all">
-                    {isHost && (
-                        <button 
-                            onClick={() => onUpdateRole(m.uid, m.role === "admin" ? "member" : "admin")}
-                            disabled={roleActionPendingId === m.uid}
-                            className={cn(
-                                "px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-60 disabled:cursor-not-allowed",
-                                m.role === "admin" ? "bg-zinc-800 text-zinc-400 hover:text-white" : "bg-zinc-300/10 text-zinc-300 hover:bg-zinc-300/20"
-                            )}
-                        >
-                            {roleActionPendingId === m.uid ? "Updating..." : m.role === "admin" ? "Demote" : "Promote"}
-                        </button>
-                    )}
-                    <button 
-                        onClick={() => { if (confirm(`Remove ${m.displayName}?`)) onRemove(m.uid); }}
-                        disabled={roleActionPendingId === m.uid}
-                        className="p-2 bg-red-400/10 text-red-400 rounded-xl hover:bg-red-400/20 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                        <UserX className="w-4 h-4" />
-                    </button>
-                </div>
-            )}
-        </div>
-    );
-});
-
-const Section = memo(function Section({ label, color, members, user, group, isHost, roleActionPendingId, onUpdateRole, onRemove }: any) {
-    if (!members.length) return null;
-    return (
-        <div className="space-y-2">
-            <div className="flex items-center gap-3 mb-3">
-                <div className="h-px flex-1 bg-white/5" />
-                <span className={cn("text-[9px] font-black uppercase tracking-[0.2em]", color)}>{label}</span>
-                <div className="h-px flex-1 bg-white/5" />
-            </div>
-            {members.map((m: any) => (
-                <MemberRow 
-                    key={m.uid} 
-                    m={m} 
-                    user={user} 
-                    group={group} 
-                    isHost={isHost} 
-                    roleActionPendingId={roleActionPendingId} 
-                    onUpdateRole={onUpdateRole} 
-                    onRemove={onRemove} 
-                />
-            ))}
-        </div>
     );
 });
