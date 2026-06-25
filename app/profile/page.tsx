@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { AuthRequired } from "@/components/auth-required";
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
+import frameBorder from "@/components/ui/Frame-1.png";
 
 const DotLottieReact = dynamic(
     () => import("@lottiefiles/dotlottie-react").then(mod => mod.DotLottieReact),
@@ -806,6 +807,8 @@ function ProfileContent() {
         );
     }
 
+    const effectiveId = targetUserId || user?.uid;
+    const isNa3iMo = effectiveId === 'wtdNPy3VSGWlVDgANbHohYfl0492';
     const currentTheme = THEMES[selectedTheme] || THEMES.obsidian;
 
     return (
@@ -906,13 +909,26 @@ function ProfileContent() {
                                                 />
 
                                                 <Avatar
-                                                    className="w-40 h-40 md:w-48 md:h-48 rounded-[2.2rem] border border-white/10 relative z-10 overflow-hidden transition-all duration-500 group-hover:border-white/30"
+                                                    className={cn(
+                                                        "w-40 h-40 md:w-48 md:h-48 border relative z-10 overflow-hidden transition-all duration-500",
+                                                        isNa3iMo
+                                                            ? "rounded-full border-none"
+                                                            : "rounded-[2.2rem] border-white/10 group-hover:border-white/30"
+                                                    )}
                                                 >
                                                     <AvatarImage
                                                         src={getHighQualityAvatarUrl(userData?.photoURL || (isOwnProfile ? user.photoURL : undefined), 256)}
-                                                        className="object-cover w-full h-full scale-100 group-hover:scale-105 transition-transform duration-[2s] ease-out rounded-[2.2rem]"
+                                                        className={cn(
+                                                            "object-cover w-full h-full scale-100 group-hover:scale-105 transition-transform duration-[2s] ease-out",
+                                                            isNa3iMo ? "rounded-full" : "rounded-[2.2rem]"
+                                                        )}
                                                     />
-                                                    <AvatarFallback className="bg-zinc-900 font-black text-6xl text-white rounded-[2.2rem] transition-all group-hover:bg-zinc-800">
+                                                    <AvatarFallback
+                                                        className={cn(
+                                                            "bg-zinc-900 font-black text-6xl text-white transition-all group-hover:bg-zinc-800",
+                                                            isNa3iMo ? "rounded-full" : "rounded-[2.2rem]"
+                                                        )}
+                                                    >
                                                         {userData?.displayName?.charAt(0) || user.displayName?.charAt(0) || "D"}
                                                     </AvatarFallback>
 
@@ -924,6 +940,15 @@ function ProfileContent() {
                                                         </label>
                                                     )}
                                                 </Avatar>
+
+                                                {isNa3iMo && (
+                                                    <img
+                                                        src={frameBorder.src}
+                                                        alt=""
+                                                        className="absolute inset-0 w-full h-full object-cover pointer-events-none z-20 rounded-full scale-[1.04]"
+                                                        draggable={false}
+                                                    />
+                                                )}
 
                                                 {/* Online Indicator */}
                                                 <div className={cn(
