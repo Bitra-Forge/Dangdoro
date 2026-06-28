@@ -183,20 +183,12 @@ export const syncUserProfile = async (user: User) => {
             if (!user.isAnonymous) {
                 // Find a provider (like Google) that has a real display name
                 const provider = user.providerData.find(p => p.displayName && !p.displayName.startsWith("Guest #"));
-                const photoFromProvider = provider?.photoURL;
 
                 const resolvedName = resolveUserDisplayName(
                     user.providerData || [],
                     user.displayName,
                     existingData.displayName
                 );
-
-                if (process.env.NODE_ENV !== "production") {
-                    console.log("🔍 syncUserProfile [Debug]: providerData =", user.providerData);
-                    console.log("🔍 syncUserProfile [Debug]: user.displayName =", user.displayName);
-                    console.log("🔍 syncUserProfile [Debug]: existingData.displayName =", existingData?.displayName);
-                    console.log("🔍 syncUserProfile [Debug]: resolvedName =", resolvedName);
-                }
 
                 updateData.displayName = resolvedName;
 
@@ -207,9 +199,9 @@ export const syncUserProfile = async (user: User) => {
                     await user.reload();
                 }
 
-                // PHOTO SYNC PRIORITY: Firestore > Auth > Provider.
-                // This ensures manual uploads in our app aren't overwritten by Google.
-                updateData.photoURL = [existingData.photoURL, user.photoURL, photoFromProvider].find(isValidPhoto) || null;
+                // PHOTO SYNC PRIORITY: Firestore > Auth.
+                // Provider photo is excluded so explicit removals aren't re-populated.
+                updateData.photoURL = [existingData.photoURL, user.photoURL].find(isValidPhoto) || null;
             } else {
                 // For Anonymous users
                 let finalName = existingData.displayName;
@@ -1561,6 +1553,36 @@ export const updateUserSettings = async (userId: string, settings: Record<string
         return true;
     } catch {
         console.error("Error updating settings");
+        return false;
+    }
+};
+
+export const removeProfilePicture = async (userId: string) => {
+    try {
+        const userRef = doc(db, "users", userId);
+        await updateDoc(userRef, { photoURL: null });
+
+        if (auth.currentUser) {
+            await updateProfile(auth.currentUser, { photoURL: "" });
+        }
+
+        userProfileCache.delete(userId);
+        cachedLeaderboard = null;
+        cachedWeeklyLeaderboard = null;
+        cachedAllTimeLeaderboard = null;
+        if (typeof window !== "undefined") {
+            try {
+                sessionStorage.removeItem("dangdoro_leaderboard_cache");
+                sessionStorage.removeItem("dangdoro_weekly_leaderboard_cache");
+                sessionStorage.removeItem("dangdoro_alltime_leaderboard_cache");
+                sessionStorage.removeItem("dangdoro_group_leaderboard_cache");
+            } catch {}
+        }
+        groupLeaderboardCache.clear();
+
+        return true;
+    } catch (error) {
+        console.error("Error removing profile picture:", error);
         return false;
     }
 };

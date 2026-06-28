@@ -459,6 +459,7 @@ function ProfileContent() {
     // Cropping State
     const [image, setImage] = useState<string | null>(null);
     const [unfriendConfirmOpen, setUnfriendConfirmOpen] = useState(false);
+    const [removePhotoConfirmOpen, setRemovePhotoConfirmOpen] = useState(false);
 
     // Edit State
     const [isEditing, setIsEditing] = useState(false);
@@ -933,11 +934,21 @@ function ProfileContent() {
                                                     </AvatarFallback>
 
                                                     {isEditing && (
-                                                        <label className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all cursor-pointer z-30">
-                                                            <Camera className="w-10 h-10 text-white mb-3" />
-                                                            <span className="text-[10px] ubuntu-bold font-black tracking-widest uppercase">Update Scan</span>
-                                                            <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
-                                                        </label>
+                                                        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all z-30">
+                                                            <label className="flex flex-col items-center cursor-pointer">
+                                                                <Camera className="w-10 h-10 text-white mb-3" />
+                                                                <span className="text-[10px] ubuntu-bold font-black tracking-widest uppercase">Update Scan</span>
+                                                                <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+                                                            </label>
+                                                            {userData?.photoURL && (
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); setRemovePhotoConfirmOpen(true); }}
+                                                                    className="mt-3 text-[10px] ubuntu-bold font-black tracking-widest uppercase text-zinc-400 hover:text-white transition-colors"
+                                                                >
+                                                                    Remove
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     )}
                                                 </Avatar>
 
@@ -1756,6 +1767,45 @@ function ProfileContent() {
                             className="flex-1 sm:flex-none h-9 rounded-[5px] border border-red-500/30 bg-red-500/15 px-4 ubuntu-medium text-red-300 hover:bg-red-500/25 hover:text-red-200"
                         >
                             Unfriend
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Remove Photo Confirmation Dialog */}
+            <Dialog open={removePhotoConfirmOpen} onOpenChange={setRemovePhotoConfirmOpen}>
+                <DialogContent className="rounded-[5px] bg-zinc-900 border border-white/10 text-zinc-100 max-w-[350px]">
+                    <DialogHeader>
+                        <DialogTitle className="ubuntu-bold text-zinc-100">Remove profile photo?</DialogTitle>
+                        <DialogDescription className="ubuntu-regular text-zinc-400">
+                            Your avatar will show your initials instead.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="rounded-b-[5px] bg-transparent border-t border-white/10 p-3 pt-4 gap-2 sm:justify-end flex-row">
+                        <Button
+                            variant="outline"
+                            onClick={() => setRemovePhotoConfirmOpen(false)}
+                            className="flex-1 sm:flex-none h-9 rounded-[5px] border-white/15 px-4 ubuntu-medium text-zinc-300 hover:bg-white/5 hover:text-white"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={async () => {
+                                if (!user) return;
+                                const { removeProfilePicture } = await import("@/lib/db");
+                                setRemovePhotoConfirmOpen(false);
+                                toast.loading("Removing photo...", { id: "remove-photo" });
+                                const ok = await removeProfilePicture(user.uid);
+                                if (ok) {
+                                    toast.success("Photo removed!", { id: "remove-photo" });
+                                    setUserData(prev => prev ? { ...prev, photoURL: undefined } : prev);
+                                } else {
+                                    toast.error("Failed to remove photo.", { id: "remove-photo" });
+                                }
+                            }}
+                            className="flex-1 sm:flex-none h-9 rounded-[5px] border border-red-500/30 bg-red-500/15 px-4 ubuntu-medium text-red-300 hover:bg-red-500/25 hover:text-red-200"
+                        >
+                            Remove
                         </Button>
                     </DialogFooter>
                 </DialogContent>

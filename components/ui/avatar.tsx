@@ -29,14 +29,14 @@ function AvatarImage({
   src,
   ...props
 }: React.ComponentProps<typeof AvatarPrimitive.Image>) {
-  const isValidPhoto = src && typeof src === 'string' && src.trim() !== '' && src !== 'null' && src !== 'undefined';
-
-  if (!isValidPhoto) return null;
+  const finalSrc = src && typeof src === 'string' && src.trim() !== '' && src !== 'null' && src !== 'undefined'
+    ? src
+    : undefined;
 
   return (
     <AvatarPrimitive.Image
       data-slot="avatar-image"
-      src={src}
+      src={finalSrc}
       className={cn(
         "aspect-square size-full object-cover",
         className
