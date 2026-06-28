@@ -595,112 +595,159 @@ export default function PatchNotesPage() {
 
       {/* ── Main Content ───────────────────────────────────────── */}
       <div className="relative z-10 mx-auto max-w-4xl px-4 py-12 sm:px-6 md:py-16">
-        {/* Page Title — Centered Pixelify Sans Design */}
-        <div className="mb-14 text-center">
-          <h1 className="font-pixelify text-5xl sm:text-7xl font-bold tracking-normal text-white drop-shadow-[0_0_25px_rgba(255,255,255,0.2)]">
-            Patch Notes
-          </h1>
-          <p className="font-pixelify mt-4 text-base sm:text-lg text-zinc-300 max-w-xl mx-auto leading-relaxed tracking-wide">
-            We hear your feedback | every feature, fix, and improvement starts with you.
-          </p>
-        </div>
-
-        {/* ── Filter Tabs — Retro Arcade Switcher ──────── */}
-        <div className="sticky top-[57px] z-40 -mx-4 px-4 bg-[#0b0b0a]/92 backdrop-blur-2xl sm:mx-0 sm:px-0 sm:bg-transparent sm:backdrop-blur-none mb-12 flex justify-center w-full">
-          <div className="p-1.5 sm:p-2.5 rounded-2xl bg-[#121110] border border-white/[0.08] shadow-[0_10px_30px_rgba(0,0,0,0.5)] inline-flex items-center justify-center gap-2 sm:gap-3 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {tabsConfig.map((tab) => {
-              const isActive = activeTab === tab.id;
-              const count = tabCounts[tab.id];
-
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={cn(
-                    "relative group font-pixelify px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold tracking-wider uppercase transition-all duration-150 cursor-pointer select-none shrink-0 flex items-center gap-2 sm:gap-2.5 overflow-hidden",
-                    "border-2",
-                    isActive
-                      ? "translate-y-[2px] shadow-[0_2px_0_0_#000000] text-white"
-                      : "bg-[#191816] text-zinc-400 hover:text-zinc-200 border-zinc-800 hover:border-zinc-700 shadow-[0_4px_0_0_#000000,0_5px_0_0_rgba(255,255,255,0.03)] active:translate-y-[2px] active:shadow-[0_2px_0_0_#000]"
-                  )}
-                  style={
-                    isActive
-                      ? {
-                        borderColor: tab.color,
-                        backgroundColor: "#1c1b18",
-                        boxShadow: `0 2px 0 0 #000000, 0 0 16px ${tab.glow}, inset 0 0 12px ${tab.glow}`,
-                      }
-                      : undefined
-                  }
-                >
-                  {/* Scanline CRT overlay for active button */}
-                  {isActive && (
-                    <div
-                      className="absolute inset-0 pointer-events-none opacity-20 z-10"
-                      style={{
-                        backgroundImage:
-                          "linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.5) 50%)",
-                        backgroundSize: "100% 4px",
-                      }}
-                    />
-                  )}
-
-                  {/* Laser Scanline Flash effect on active toggle */}
-                  {isActive && (
-                    <motion.div
-                      initial={{ x: "-100%" }}
-                      animate={{ x: "200%" }}
-                      transition={{ duration: 0.6, ease: "easeInOut" }}
-                      className="absolute inset-y-0 w-1/2 pointer-events-none z-20"
-                      style={{
-                        background: `linear-gradient(90deg, transparent, ${tab.color}, transparent)`,
-                        opacity: 0.6,
-                      }}
-                    />
-                  )}
-
-                  {/* Arcade LED light dot */}
-                  <span
-                    className={cn(
-                      "w-2 h-2 rounded-full transition-all duration-300 shrink-0",
-                      isActive
-                        ? "shadow-[0_0_8px_currentColor]"
-                        : "bg-zinc-700 opacity-50 group-hover:opacity-80"
-                    )}
-                    style={{
-                      backgroundColor: isActive ? tab.color : undefined,
-                      color: isActive ? tab.color : undefined,
-                    }}
-                  />
-
-                  {/* Label */}
-                  <span className="relative z-10">{tab.label}</span>
-
-                  {/* Item count bracket */}
-                  <span
-                    className={cn(
-                      "relative z-10 text-xs sm:text-sm font-black px-2 py-0.5 rounded-md transition-colors duration-200 font-pixelify",
-                      isActive
-                        ? "bg-black/50 text-white border border-white/20 shadow-sm"
-                        : "bg-black/30 text-zinc-400 group-hover:text-zinc-200"
-                    )}
-                  >
-                    ({count})
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ── Loading ─────────────────────────────────────────── */}
         {loading ? (
-          <div className="flex items-center justify-center py-36">
-            <div className="h-5 w-5 rounded-full border-[1.5px] border-white/[0.08] border-t-[#C9B037] animate-spin" />
+          /* ── Full Page Skeleton Loader ─────────────────────── */
+          <div className="animate-pulse space-y-12">
+            {/* Title Skeleton */}
+            <div className="text-center space-y-4 mb-14">
+              <div className="h-12 sm:h-16 w-64 sm:w-80 bg-zinc-800/60 rounded-2xl mx-auto border border-white/[0.05]" />
+              <div className="h-5 w-72 sm:w-[28rem] bg-zinc-800/40 rounded-lg mx-auto" />
+            </div>
+
+            {/* Arcade Tabs Skeleton */}
+            <div className="flex justify-center w-full mb-12">
+              <div className="p-2 sm:p-2.5 rounded-2xl bg-[#121110] border border-white/[0.08] inline-flex items-center gap-3">
+                <div className="h-9 w-20 sm:w-24 bg-zinc-800/70 rounded-xl" />
+                <div className="h-9 w-24 sm:w-28 bg-zinc-800/40 rounded-xl" />
+                <div className="h-9 w-20 sm:w-24 bg-zinc-800/40 rounded-xl" />
+                <div className="h-9 w-24 sm:w-28 bg-zinc-800/40 rounded-xl" />
+              </div>
+            </div>
+
+            {/* Timeline Skeleton */}
+            <div className="relative pl-10 sm:pl-12 space-y-8">
+              {/* Vertical timeline line skeleton */}
+              <div className="absolute left-[16px] sm:left-[20px] top-0 bottom-0 w-[2px] bg-white/[0.06]">
+                <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-zinc-700" />
+                <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-zinc-800" />
+              </div>
+
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="relative">
+                  {/* Marker Skeleton */}
+                  <div className="absolute left-[-24px] sm:left-[-28px] -translate-x-1/2 top-4 h-7 w-7 rounded-full bg-zinc-800/80 border border-white/10 ring-[4px] ring-[#0b0b0a]" />
+
+                  {/* Card Skeleton */}
+                  <div className="p-6 rounded-[10px] bg-[#111110] border border-white/[0.06] border-l-2 border-l-zinc-700/40 space-y-4">
+                    <div className="flex justify-between items-center">
+                      <div className="h-4 w-28 bg-zinc-800/70 rounded-md" />
+                      <div className="h-3 w-20 bg-zinc-800/40 rounded-md" />
+                    </div>
+                    <div className="h-6 w-3/4 bg-zinc-800/80 rounded-md" />
+                    <div className="space-y-2">
+                      <div className="h-4 w-full bg-zinc-800/40 rounded-md" />
+                      <div className="h-4 w-4/5 bg-zinc-800/30 rounded-md" />
+                    </div>
+                    {i === 1 && (
+                      <div className="h-44 w-full bg-zinc-800/30 rounded-lg mt-4" />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
-          /* ── Timeline ─────────────────────────────────────── */
-          <div ref={timelineRef} className="relative pl-10 sm:pl-12 min-h-[500px]">
+          <>
+            {/* Page Title — Centered Pixelify Sans Design */}
+            <div className="mb-14 text-center">
+              <h1 className="font-pixelify text-5xl sm:text-7xl font-bold tracking-normal text-white drop-shadow-[0_0_25px_rgba(255,255,255,0.2)]">
+                Patch Notes
+              </h1>
+              <p className="font-pixelify mt-4 text-base sm:text-lg text-zinc-300 max-w-xl mx-auto leading-relaxed tracking-wide">
+                We hear your feedback | every feature, fix, and improvement starts with you.
+              </p>
+            </div>
+
+            {/* ── Filter Tabs — Retro Arcade Switcher ──────── */}
+            <div className="sticky top-[57px] z-40 -mx-4 px-4 bg-[#0b0b0a]/92 backdrop-blur-2xl sm:mx-0 sm:px-0 sm:bg-transparent sm:backdrop-blur-none mb-12 flex justify-center w-full">
+              <div className="p-1.5 sm:p-2.5 rounded-2xl bg-[#121110] border border-white/[0.08] shadow-[0_10px_30px_rgba(0,0,0,0.5)] inline-flex items-center justify-center gap-2 sm:gap-3 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {tabsConfig.map((tab) => {
+                  const isActive = activeTab === tab.id;
+                  const count = tabCounts[tab.id];
+
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={cn(
+                        "relative group font-pixelify px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold tracking-wider uppercase transition-all duration-150 cursor-pointer select-none shrink-0 flex items-center gap-2 sm:gap-2.5 overflow-hidden",
+                        "border-2",
+                        isActive
+                          ? "translate-y-[2px] shadow-[0_2px_0_0_#000000] text-white"
+                          : "bg-[#191816] text-zinc-400 hover:text-zinc-200 border-zinc-800 hover:border-zinc-700 shadow-[0_4px_0_0_#000000,0_5px_0_0_rgba(255,255,255,0.03)] active:translate-y-[2px] active:shadow-[0_2px_0_0_#000]"
+                      )}
+                      style={
+                        isActive
+                          ? {
+                            borderColor: tab.color,
+                            backgroundColor: "#1c1b18",
+                            boxShadow: `0 2px 0 0 #000000, 0 0 16px ${tab.glow}, inset 0 0 12px ${tab.glow}`,
+                          }
+                          : undefined
+                      }
+                    >
+                      {/* Scanline CRT overlay for active button */}
+                      {isActive && (
+                        <div
+                          className="absolute inset-0 pointer-events-none opacity-20 z-10"
+                          style={{
+                            backgroundImage:
+                              "linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.5) 50%)",
+                            backgroundSize: "100% 4px",
+                          }}
+                        />
+                      )}
+
+                      {/* Laser Scanline Flash effect on active toggle */}
+                      {isActive && (
+                        <motion.div
+                          initial={{ x: "-100%" }}
+                          animate={{ x: "200%" }}
+                          transition={{ duration: 0.6, ease: "easeInOut" }}
+                          className="absolute inset-y-0 w-1/2 pointer-events-none z-20"
+                          style={{
+                            background: `linear-gradient(90deg, transparent, ${tab.color}, transparent)`,
+                            opacity: 0.6,
+                          }}
+                        />
+                      )}
+
+                      {/* Arcade LED light dot */}
+                      <span
+                        className={cn(
+                          "w-2 h-2 rounded-full transition-all duration-300 shrink-0",
+                          isActive
+                            ? "shadow-[0_0_8px_currentColor]"
+                            : "bg-zinc-700 opacity-50 group-hover:opacity-80"
+                        )}
+                        style={{
+                          backgroundColor: isActive ? tab.color : undefined,
+                          color: isActive ? tab.color : undefined,
+                        }}
+                      />
+
+                      {/* Label */}
+                      <span className="relative z-10">{tab.label}</span>
+
+                      {/* Item count bracket */}
+                      <span
+                        className={cn(
+                          "relative z-10 text-xs sm:text-sm font-black px-2 py-0.5 rounded-md transition-colors duration-200 font-pixelify",
+                          isActive
+                            ? "bg-black/50 text-white border border-white/20 shadow-sm"
+                            : "bg-black/30 text-zinc-400 group-hover:text-zinc-200"
+                        )}
+                      >
+                        ({count})
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ── Timeline ─────────────────────────────────────── */}
+            <div ref={timelineRef} className="relative pl-10 sm:pl-12 min-h-[500px]">
             {(() => {
               const currentTabProgress = tabProgress[activeTab] || 0;
               return (
@@ -935,7 +982,8 @@ export default function PatchNotesPage() {
               </motion.div>
             </AnimatePresence>
           </div>
-        )}
+        </>
+      )}
 
         {/* ── Footer ─────────────────────────────────────────── */}
         <footer className="mt-24 pt-8 text-center relative z-10">
