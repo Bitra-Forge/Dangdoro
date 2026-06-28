@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { auth } from "@/lib/firebase";
+import ReactMarkdown from "react-markdown";
 
 
 interface Message {
@@ -50,7 +51,7 @@ export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
     const [messages, setMessages] = useState<Message[]>([
         {
             role: "assistant",
-            content: "Tell me what you need to get done — I'll break it into groups and tasks for your board.",
+            content: "Describe a project or goal — include scope, deadlines, and priorities if you can. I'll architect task groups for your board.",
         },
     ]);
     const [input, setInput] = useState("");
@@ -196,7 +197,23 @@ export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
                                         ? "bg-white/10 text-zinc-100 border border-white/10 rounded-br-md"
                                         : "bg-zinc-900/60 text-zinc-400 border border-white/5 rounded-bl-md"
                                 )}>
-                                    {msg.content}
+                                    {msg.role === "assistant" ? (
+                                        <ReactMarkdown
+                                            components={{
+                                                p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                                                ol: ({ children }) => <ol className="list-decimal list-inside space-y-1.5 mb-2 last:mb-0">{children}</ol>,
+                                                ul: ({ children }) => <ul className="list-disc list-inside space-y-1.5 mb-2 last:mb-0">{children}</ul>,
+                                                li: ({ children }) => <li className="text-zinc-300">{children}</li>,
+                                                strong: ({ children }) => <strong className="text-zinc-200 font-semibold">{children}</strong>,
+                                                em: ({ children }) => <em className="text-zinc-500 italic">{children}</em>,
+                                                code: ({ children }) => <code className="bg-white/5 text-zinc-300 px-1 py-0.5 rounded text-[12px] font-mono">{children}</code>,
+                                            }}
+                                        >
+                                            {msg.content}
+                                        </ReactMarkdown>
+                                    ) : (
+                                        msg.content
+                                    )}
                                 </div>
                             </motion.div>
                         ))}
