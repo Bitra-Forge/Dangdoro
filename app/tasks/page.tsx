@@ -6,7 +6,7 @@ import {
     ClipboardList, Plus, Trash2, CheckCircle2, Circle,
     ChevronDown, ChevronRight, Pencil, Check, X, GripVertical,
     Play, Clock, Maximize2, Palette, Settings, Sparkles, Users,
-    ArrowUpDown, HelpCircle, ZoomIn, ZoomOut
+    ArrowUpDown, Hand, HelpCircle, MousePointer, ZoomIn, ZoomOut
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
@@ -326,6 +326,8 @@ function GroupCard({
     const startDim = useRef({ w: 0, h: 0 });
     const cardEl = useRef<HTMLDivElement | null>(null);
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const zoomRef = useRef(zoom)
+    useEffect(() => { zoomRef.current = zoom }, [zoom])
 
     useEffect(() => {
         posRef.current = { x: group.positionX, y: group.positionY };
@@ -390,8 +392,8 @@ function GroupCard({
     };
     const onHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
         if (isMobileMode || !isDraggingCard) return;
-        const deltaX = (e.clientX - startPointer.current.x) / zoom;
-        const deltaY = (e.clientY - startPointer.current.y) / zoom;
+        const deltaX = (e.clientX - startPointer.current.x) / zoomRef.current;
+        const deltaY = (e.clientY - startPointer.current.y) / zoomRef.current;
         const x = Math.max(0, startPos.current.x + deltaX);
         const y = Math.max(0, startPos.current.y + deltaY);
         posRef.current = { x, y };
@@ -417,8 +419,8 @@ function GroupCard({
     };
     const onResizePointerMove = (e: React.PointerEvent) => {
         if (isMobileMode || !isResizing || !cardEl.current) return;
-        const deltaX = (e.clientX - startPointer.current.x) / zoom;
-        const deltaY = (e.clientY - startPointer.current.y) / zoom;
+        const deltaX = (e.clientX - startPointer.current.x) / zoomRef.current;
+        const deltaY = (e.clientY - startPointer.current.y) / zoomRef.current;
         const newW = clampW(startDim.current.w + deltaX);
         const newH = clampH(startDim.current.h + deltaY);
         dimRef.current = { w: newW, h: newH };
@@ -1348,7 +1350,14 @@ export default function TasksPage() {
 
     const [zoom, setZoom] = useState(1);
     const viewportRef = useRef<HTMLDivElement>(null);
+    const canvasRef = useRef<HTMLDivElement>(null);
     const [viewportSize, setViewportSize] = useState({ w: 1200, h: 800 });
+    const [pan, setPan] = useState({ x: 0, y: 0 });
+    type ToolMode = "default" | "hand"
+    const [toolMode, setToolMode] = useState<ToolMode>("default")
+    const [isPanning, setIsPanning] = useState(false)
+    const panStartRef = useRef<{ x: number, y: number } | null>(null)
+    const panOriginRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 })
 
     useEffect(() => {
         const el = viewportRef.current;
@@ -1360,6 +1369,75 @@ export default function TasksPage() {
         observer.observe(el);
         return () => observer.disconnect();
     }, [isMobileMode]);
+
+    const handleWheel = (e: WheelEvent) => {
+        if (!e.ctrlKey) return
+        e.preventDefault()
+
+        if (!viewportRef.current) return
+        const rect = viewportRef.current.getBoundingClientRect()
+
+        const cursorX = e.clientX - rect.left
+        const cursorY = e.clientY - rect.top
+
+        const canvasX = (cursorX - pan.x) / zoom
+        const canvasY = (cursorY - pan.y) / zoom
+
+        const delta = e.deltaY < 0 ? 1.1 : 0.909
+        const newZoom = Math.min(Math.max(zoom * delta, 0.1), 5)
+
+        const newPanX = cursorX - canvasX * newZoom
+        const newPanY = cursorY - canvasY * newZoom
+
+        setPan({ x: newPanX, y: newPanY })
+        setZoom(newZoom)
+    }
+
+    useEffect(() => {
+        const el = viewportRef.current
+        if (!el) return
+        el.addEventListener("wheel", handleWheel, { passive: false })
+        return () => el.removeEventListener("wheel", handleWheel)
+    }, [zoom, pan])
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.code === "Space" && e.target instanceof HTMLElement) {
+                if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable) return
+                e.preventDefault()
+                setToolMode("hand")
+            }
+        }
+        const onKeyUp = (e: KeyboardEvent) => {
+            if (e.code === "Space") {
+                setToolMode("default")
+                setIsPanning(false)
+            }
+        }
+        window.addEventListener("keydown", onKeyDown)
+        window.addEventListener("keyup", onKeyUp)
+        return () => {
+            window.removeEventListener("keydown", onKeyDown)
+            window.removeEventListener("keyup", onKeyUp)
+        }
+    }, [])
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.target instanceof HTMLElement && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) return
+
+            if (e.code === "KeyH") {
+                setToolMode(t => t === "hand" ? "default" : "hand")
+            }
+            if (e.code === "Digit0" && e.ctrlKey) {
+                e.preventDefault()
+                setPan({ x: 0, y: 0 })
+                setZoom(1)
+            }
+        }
+        window.addEventListener("keydown", onKeyDown)
+        return () => window.removeEventListener("keydown", onKeyDown)
+    }, [])
 
     // Use the custom hook for background theme
     const { showDots, bgPalette } = useBackgroundTheme();
@@ -1413,6 +1491,31 @@ export default function TasksPage() {
             if (u3) u3();
         };
     }, [user, authLoading]);
+
+    const handleViewportMouseDown = useCallback((e: React.MouseEvent) => {
+        if (toolMode !== "hand") return
+        setIsPanning(true)
+        panStartRef.current = { x: e.clientX, y: e.clientY }
+        panOriginRef.current = { x: pan.x, y: pan.y }
+        e.preventDefault()
+    }, [toolMode, pan])
+
+    const handleViewportMouseMove = useCallback((e: React.MouseEvent) => {
+        if (!isPanning || !panStartRef.current) return
+        const dx = e.clientX - panStartRef.current.x
+        const dy = e.clientY - panStartRef.current.y
+        setPan({ x: panOriginRef.current.x + dx, y: panOriginRef.current.y + dy })
+    }, [isPanning])
+
+    const handleViewportMouseUp = useCallback(() => {
+        setIsPanning(false)
+        panStartRef.current = null
+    }, [])
+
+    const handleViewportMouseLeave = useCallback(() => {
+        setIsPanning(false)
+        panStartRef.current = null
+    }, [])
 
     // Helper to get task's group color
     const getTaskGroupColor = useCallback((task: any) => {
@@ -1653,14 +1756,22 @@ export default function TasksPage() {
                     {canvasContent}
                 </div>
             ) : (
-                <div ref={viewportRef} className="min-h-screen w-full overflow-auto" style={{ height: '100vh' }}>
-                    <div style={{
-                        transform: `scale(${zoom})`,
-                        transformOrigin: 'top left',
+                <div ref={viewportRef}
+                    className={cn("min-h-screen w-full overflow-hidden select-none", toolMode === "hand" ? (isPanning ? "cursor-grabbing" : "cursor-grab") : "cursor-default")}
+                    style={{ height: '100vh', touchAction: 'none' }}
+                    onMouseDown={handleViewportMouseDown}
+                    onMouseMove={handleViewportMouseMove}
+                    onMouseUp={handleViewportMouseUp}
+                    onMouseLeave={handleViewportMouseLeave}
+                >
+                    <div ref={canvasRef} style={{
+                        transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                        transformOrigin: '0 0',
                         width: viewportSize.w / zoom,
                         height: viewportSize.h / zoom,
                         position: 'relative',
                         minHeight: viewportSize.h / zoom,
+                        pointerEvents: toolMode === "hand" ? 'none' : undefined,
                     }}
                         onPointerMove={draggingTask ? onCanvasPointerMove : undefined}
                         onPointerUp={draggingTask ? onCanvasPointerUp : undefined}
@@ -1825,29 +1936,58 @@ export default function TasksPage() {
                     </button>
                 </div>
 
-                {/* Zoom controls */}
+                {/* Toolbar */}
                 {!isMobileMode && (
-                    <div className="fixed top-24 right-4 z-50 flex flex-col items-center gap-2">
+                    <div className="fixed top-24 right-4 sm:right-8 z-50 flex flex-col items-center gap-2">
+                        {/* Tool buttons */}
+                        <div className="flex items-center gap-1">
+                            <Tooltip content="Select tool" side="left">
+                                <button onClick={() => setToolMode("default")}
+                                    className={cn("p-1.5 rounded-lg transition-colors", toolMode === "default" ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>
+                                    <MousePointer className="w-4 h-4" />
+                                </button>
+                            </Tooltip>
+                            <Tooltip content="Hand tool (H or hold Space)" side="left">
+                                <button onClick={() => setToolMode(t => t === "hand" ? "default" : "hand")}
+                                    className={cn("p-1.5 rounded-lg transition-colors", toolMode === "hand" ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>
+                                    <Hand className="w-4 h-4" />
+                                </button>
+                            </Tooltip>
+                        </div>
+                        {/* Zoom controls */}
                         <button
-                            onClick={() => setZoom(z => Math.max(0.25, +(z - 0.1).toFixed(2)))}
+                            onClick={() => {
+                                const newZoom = Math.max(0.25, +(zoom - 0.1).toFixed(2))
+                                const cx = viewportSize.w / 2
+                                const cy = viewportSize.h / 2
+                                const canvasX = (cx - pan.x) / zoom
+                                const canvasY = (cy - pan.y) / zoom
+                                setPan({ x: cx - canvasX * newZoom, y: cy - canvasY * newZoom })
+                                setZoom(newZoom)
+                            }}
                             className="text-zinc-400 hover:text-white transition-colors p-1"
                         >
                             <ZoomOut className="w-5 h-5" />
                         </button>
-                        <span className="text-xs font-black text-zinc-400 min-w-[3.5rem] text-center select-none">
-                            {Math.round(zoom * 100)}%
-                        </span>
+                        <Tooltip content="Reset zoom (Ctrl+0)" side="left">
+                            <span onClick={() => { setPan({ x: 0, y: 0 }); setZoom(1) }}
+                                className="text-xs font-black text-zinc-400 min-w-[3.5rem] text-center select-none cursor-pointer hover:text-white transition-colors">
+                                {Math.round(zoom * 100)}%
+                            </span>
+                        </Tooltip>
                         <button
-                            onClick={() => setZoom(z => Math.min(2, +(z + 0.1).toFixed(2)))}
+                            onClick={() => {
+                                const newZoom = Math.min(2, +(zoom + 0.1).toFixed(2))
+                                const cx = viewportSize.w / 2
+                                const cy = viewportSize.h / 2
+                                const canvasX = (cx - pan.x) / zoom
+                                const canvasY = (cy - pan.y) / zoom
+                                setPan({ x: cx - canvasX * newZoom, y: cy - canvasY * newZoom })
+                                setZoom(newZoom)
+                            }}
                             className="text-zinc-400 hover:text-white transition-colors p-1"
                         >
                             <ZoomIn className="w-5 h-5" />
-                        </button>
-                        <button
-                            onClick={() => setZoom(1)}
-                            className="text-[10px] font-black text-zinc-500 hover:text-white transition-colors px-1 uppercase tracking-wider"
-                        >
-                            Reset
                         </button>
                     </div>
                 )}
