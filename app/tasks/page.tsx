@@ -6,7 +6,7 @@ import {
     ClipboardList, Plus, Trash2, CheckCircle2, Circle,
     ChevronDown, ChevronRight, Pencil, Check, X, GripVertical,
     Play, Clock, Maximize2, Palette, Settings, Sparkles, Users,
-    ArrowUpDown, HelpCircle
+    ArrowUpDown, HelpCircle, ZoomIn, ZoomOut
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
@@ -271,7 +271,7 @@ function TaskRow({ task, onDragStart }: { task: any; onDragStart: (e: React.Poin
 
 function GroupCard({
     group, tasks, userId, isDragOver, onTaskDragStart, cardRef,
-    overTaskId, overTaskPosition, isMobileMode
+    overTaskId, overTaskPosition, isMobileMode, zoom = 1
 }: {
     group: { id: string; name: string; positionX: number; positionY: number; width?: number; height?: number; color?: string; sortBy?: string };
     tasks: any[]; userId: string; isDragOver: boolean;
@@ -280,6 +280,7 @@ function GroupCard({
     overTaskId: string | null;
     overTaskPosition: "before" | "after" | null;
     isMobileMode?: boolean;
+    zoom?: number;
 }) {
     const [collapsed, setCollapsed] = useState(false);
     const [newTask, setNewTask] = useState("");
@@ -319,7 +320,9 @@ function GroupCard({
 
     const posRef = useRef({ x: group.positionX, y: group.positionY });
     const dimRef = useRef({ w: clampW(group.width ?? 300), h: clampH(group.height ?? 400) });
-    const dragOffset = useRef({ x: 0, y: 0 });
+    const startPointer = useRef({ x: 0, y: 0 });
+    const startPos = useRef({ x: 0, y: 0 });
+    const startDim = useRef({ w: 0, h: 0 });
     const cardEl = useRef<HTMLDivElement | null>(null);
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -380,13 +383,16 @@ function GroupCard({
         if (isMobileMode) return;
         if ((e.target as HTMLElement).closest("button, input")) return;
         e.currentTarget.setPointerCapture(e.pointerId);
-        dragOffset.current = { x: e.clientX - posRef.current.x, y: e.clientY - posRef.current.y };
+        startPointer.current = { x: e.clientX, y: e.clientY };
+        startPos.current = { x: posRef.current.x, y: posRef.current.y };
         setIsDraggingCard(true);
     };
     const onHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
         if (isMobileMode || !isDraggingCard) return;
-        const x = Math.max(0, e.clientX - dragOffset.current.x);
-        const y = Math.max(0, e.clientY - dragOffset.current.y);
+        const deltaX = (e.clientX - startPointer.current.x) / zoom;
+        const deltaY = (e.clientY - startPointer.current.y) / zoom;
+        const x = Math.max(0, startPos.current.x + deltaX);
+        const y = Math.max(0, startPos.current.y + deltaY);
         posRef.current = { x, y };
         if (cardEl.current) { cardEl.current.style.left = `${x}px`; cardEl.current.style.top = `${y}px`; }
     };
@@ -404,12 +410,16 @@ function GroupCard({
         if (isMobileMode) return;
         e.stopPropagation();
         e.currentTarget.setPointerCapture(e.pointerId);
+        startPointer.current = { x: e.clientX, y: e.clientY };
+        startDim.current = { w: dimRef.current.w, h: dimRef.current.h };
         setIsResizing(true);
     };
     const onResizePointerMove = (e: React.PointerEvent) => {
         if (isMobileMode || !isResizing || !cardEl.current) return;
-        const newW = clampW(e.clientX - posRef.current.x);
-        const newH = clampH(e.clientY - posRef.current.y);
+        const deltaX = (e.clientX - startPointer.current.x) / zoom;
+        const deltaY = (e.clientY - startPointer.current.y) / zoom;
+        const newW = clampW(startDim.current.w + deltaX);
+        const newH = clampH(startDim.current.h + deltaY);
         dimRef.current = { w: newW, h: newH };
         cardEl.current.style.width = `${newW}px`;
         if (!collapsed) cardEl.current.style.height = `${newH}px`;
@@ -739,11 +749,12 @@ function GroupCard({
 
 // ─── Assigned Tasks Card ─────────────────────────────────────────────────────
 function AssignedTasksCard({
-    tasks, userId, isDragOver, onTaskDragStart, isMobileMode,
+    tasks, userId, isDragOver, onTaskDragStart, isMobileMode, zoom = 1,
 }: {
     tasks: any[]; userId: string; isDragOver: boolean;
     onTaskDragStart: (e: React.PointerEvent, task: any) => void;
     isMobileMode?: boolean;
+    zoom?: number;
 }) {
     const [collapsed, setCollapsed] = useState(false);
     const [groupNames, setGroupNames] = useState<Record<string, string>>({});
@@ -799,7 +810,9 @@ function AssignedTasksCard({
 
     const posRef = useRef(loadSavedPosition());
     const dimRef = useRef(loadSavedDimensions());
-    const dragOffset = useRef({ x: 0, y: 0 });
+    const startPointer = useRef({ x: 0, y: 0 });
+    const startPos = useRef({ x: 0, y: 0 });
+    const startDim = useRef({ w: 0, h: 0 });
     const cardEl = useRef<HTMLDivElement | null>(null);
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -910,13 +923,16 @@ function AssignedTasksCard({
         if (isMobileMode) return;
         if ((e.target as HTMLElement).closest("button")) return;
         e.currentTarget.setPointerCapture(e.pointerId);
-        dragOffset.current = { x: e.clientX - posRef.current.x, y: e.clientY - posRef.current.y };
+        startPointer.current = { x: e.clientX, y: e.clientY };
+        startPos.current = { x: posRef.current.x, y: posRef.current.y };
         setIsDraggingCard(true);
     };
     const onHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
         if (isMobileMode || !isDraggingCard) return;
-        const x = Math.max(0, e.clientX - dragOffset.current.x);
-        const y = Math.max(0, e.clientY - dragOffset.current.y);
+        const deltaX = (e.clientX - startPointer.current.x) / zoom;
+        const deltaY = (e.clientY - startPointer.current.y) / zoom;
+        const x = Math.max(0, startPos.current.x + deltaX);
+        const y = Math.max(0, startPos.current.y + deltaY);
         posRef.current = { x, y };
         if (cardEl.current) { cardEl.current.style.left = `${x}px`; cardEl.current.style.top = `${y}px`; }
     };
@@ -930,12 +946,16 @@ function AssignedTasksCard({
         if (isMobileMode) return;
         e.stopPropagation();
         e.currentTarget.setPointerCapture(e.pointerId);
+        startPointer.current = { x: e.clientX, y: e.clientY };
+        startDim.current = { w: dimRef.current.w, h: dimRef.current.h };
         setIsResizing(true);
     };
     const onResizePointerMove = (e: React.PointerEvent) => {
         if (isMobileMode || !isResizing || !cardEl.current) return;
-        const newW = Math.min(600, Math.max(280, e.clientX - posRef.current.x));
-        const newH = Math.min(800, Math.max(200, e.clientY - posRef.current.y));
+        const deltaX = (e.clientX - startPointer.current.x) / zoom;
+        const deltaY = (e.clientY - startPointer.current.y) / zoom;
+        const newW = Math.min(600, Math.max(280, startDim.current.w + deltaX));
+        const newH = Math.min(800, Math.max(200, startDim.current.h + deltaY));
         dimRef.current = { w: newW, h: newH };
         cardEl.current.style.width = `${newW}px`;
         if (!collapsed) cardEl.current.style.height = `${newH}px`;
@@ -1320,7 +1340,20 @@ export default function TasksPage() {
         return () => window.removeEventListener("resize", checkMobile);
     }, []);
 
+    const [zoom, setZoom] = useState(1);
+    const viewportRef = useRef<HTMLDivElement>(null);
+    const [viewportSize, setViewportSize] = useState({ w: 1200, h: 800 });
 
+    useEffect(() => {
+        const el = viewportRef.current;
+        if (!el || isMobileMode) return;
+        const observer = new ResizeObserver(entries => {
+            const { width, height } = entries[0].contentRect;
+            setViewportSize({ w: width || 1200, h: height || 800 });
+        });
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [isMobileMode]);
 
     // Use the custom hook for background theme
     const { showDots, bgPalette } = useBackgroundTheme();
@@ -1579,38 +1612,57 @@ export default function TasksPage() {
 
     const tasksByGroup = (gid: string) => tasks.filter(t => t.groupId === gid);
 
+    const canvasContent = (
+        <>
+            {groups.map(g => (
+                <GroupCard key={g.id} group={g} tasks={tasksByGroup(g.id)}
+                    userId={user.uid} isDragOver={overGroupId === g.id}
+                    onTaskDragStart={onTaskDragStart} cardRef={el => { groupRefs.current[g.id] = el; }}
+                    overTaskId={overTaskId}
+                    overTaskPosition={overTaskPosition}
+                    isMobileMode={isMobileMode}
+                    zoom={zoom}
+                />
+            ))}
+
+            {/* Assigned Tasks Group */}
+            {assignedTasks.length > 0 && (
+                <AssignedTasksCard
+                    tasks={assignedTasks}
+                    userId={user.uid}
+                    isDragOver={false}
+                    onTaskDragStart={onTaskDragStart}
+                    isMobileMode={isMobileMode}
+                    zoom={zoom}
+                />
+            )}
+        </>
+    );
+
     return (
         <BackgroundTheme showSettings={true}>
-            <div
-                className={isMobileMode
-                    ? "flex flex-col md:flex-row gap-6 p-4 pt-24 pb-32 md:p-8 md:pt-24 md:pb-32 overflow-y-auto md:overflow-x-auto min-h-screen w-full"
-                    : "relative min-h-screen w-full overflow-hidden"
-                }
-                onPointerMove={draggingTask && !isMobileMode ? onCanvasPointerMove : undefined}
-                onPointerUp={draggingTask && !isMobileMode ? onCanvasPointerUp : undefined}
-            >
-
-
-                {groups.map(g => (
-                    <GroupCard key={g.id} group={g} tasks={tasksByGroup(g.id)}
-                        userId={user.uid} isDragOver={overGroupId === g.id}
-                        onTaskDragStart={onTaskDragStart} cardRef={el => { groupRefs.current[g.id] = el; }}
-                        overTaskId={overTaskId}
-                        overTaskPosition={overTaskPosition}
-                        isMobileMode={isMobileMode}
-                    />
-                ))}
-
-                {/* Assigned Tasks Group */}
-                {assignedTasks.length > 0 && (
-                    <AssignedTasksCard
-                        tasks={assignedTasks}
-                        userId={user.uid}
-                        isDragOver={false}
-                        onTaskDragStart={onTaskDragStart}
-                        isMobileMode={isMobileMode}
-                    />
-                )}
+            {/* Canvas area */}
+            {isMobileMode ? (
+                <div className="flex flex-col md:flex-row gap-6 p-4 pt-24 pb-32 md:p-8 md:pt-24 md:pb-32 overflow-y-auto md:overflow-x-auto min-h-screen w-full">
+                    {canvasContent}
+                </div>
+            ) : (
+                <div ref={viewportRef} className="min-h-screen w-full overflow-auto" style={{ height: '100vh' }}>
+                    <div style={{
+                        transform: `scale(${zoom})`,
+                        transformOrigin: 'top left',
+                        width: viewportSize.w / zoom,
+                        height: viewportSize.h / zoom,
+                        position: 'relative',
+                        minHeight: viewportSize.h / zoom,
+                    }}
+                        onPointerMove={draggingTask ? onCanvasPointerMove : undefined}
+                        onPointerUp={draggingTask ? onCanvasPointerUp : undefined}
+                    >
+                        {canvasContent}
+                    </div>
+                </div>
+            )}
 
                 {/* FAB */}
                 <div className="fixed bottom-24 right-4 md:bottom-8 md:right-8 z-30 flex flex-col items-end gap-3">
@@ -1766,7 +1818,33 @@ export default function TasksPage() {
                         <HelpCircle className="w-5 h-5" />
                     </button>
                 </div>
-            </div>
+
+                {/* Zoom controls */}
+                {!isMobileMode && (
+                    <div className="fixed top-24 right-4 z-50 flex flex-col items-center gap-2">
+                        <button
+                            onClick={() => setZoom(z => Math.max(0.25, +(z - 0.1).toFixed(2)))}
+                            className="text-zinc-400 hover:text-white transition-colors p-1"
+                        >
+                            <ZoomOut className="w-5 h-5" />
+                        </button>
+                        <span className="text-xs font-black text-zinc-400 min-w-[3.5rem] text-center select-none">
+                            {Math.round(zoom * 100)}%
+                        </span>
+                        <button
+                            onClick={() => setZoom(z => Math.min(2, +(z + 0.1).toFixed(2)))}
+                            className="text-zinc-400 hover:text-white transition-colors p-1"
+                        >
+                            <ZoomIn className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={() => setZoom(1)}
+                            className="text-[10px] font-black text-zinc-500 hover:text-white transition-colors px-1 uppercase tracking-wider"
+                        >
+                            Reset
+                        </button>
+                    </div>
+                )}
         </BackgroundTheme>
     );
 }
