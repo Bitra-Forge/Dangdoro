@@ -394,8 +394,8 @@ function GroupCard({
         if (isMobileMode || !isDraggingCard) return;
         const deltaX = (e.clientX - startPointer.current.x) / zoomRef.current;
         const deltaY = (e.clientY - startPointer.current.y) / zoomRef.current;
-        const x = Math.max(0, startPos.current.x + deltaX);
-        const y = Math.max(0, startPos.current.y + deltaY);
+        const x = startPos.current.x + deltaX;
+        const y = startPos.current.y + deltaY;
         posRef.current = { x, y };
         if (cardEl.current) { cardEl.current.style.left = `${x}px`; cardEl.current.style.top = `${y}px`; }
     };
@@ -648,7 +648,7 @@ function GroupCard({
 
             {/* Scrollable Body */}
             {!collapsed && (
-                <div className="flex-1 min-h-0 overflow-y-auto p-2.5" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                <div data-scroll-container className="flex-1 min-h-0 overflow-y-auto p-2.5" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                     <form onSubmit={handleAddTask} className="flex flex-col gap-2 mb-4 bg-white/5 p-2 rounded-xl border border-white/5">
                         <div className="flex items-center gap-1.5">
                             <input value={newTask} onChange={e => setNewTask(e.target.value)} placeholder="Task title…"
@@ -934,8 +934,8 @@ function AssignedTasksCard({
         if (isMobileMode || !isDraggingCard) return;
         const deltaX = (e.clientX - startPointer.current.x) / zoom;
         const deltaY = (e.clientY - startPointer.current.y) / zoom;
-        const x = Math.max(0, startPos.current.x + deltaX);
-        const y = Math.max(0, startPos.current.y + deltaY);
+        const x = startPos.current.x + deltaX;
+        const y = startPos.current.y + deltaY;
         posRef.current = { x, y };
         if (cardEl.current) { cardEl.current.style.left = `${x}px`; cardEl.current.style.top = `${y}px`; }
     };
@@ -1119,7 +1119,7 @@ function AssignedTasksCard({
 
             {/* Scrollable Body */}
             {!collapsed && (
-                <div className="flex-1 min-h-0 overflow-y-auto p-2.5 rounded-b-2xl" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                <div data-scroll-container className="flex-1 min-h-0 overflow-y-auto p-2.5 rounded-b-2xl" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                     <div className="space-y-0.5">
                         {tasks.length === 0 ? (
                             <p className="text-[10px] text-zinc-700 uppercase tracking-widest font-bold text-center py-8">No assigned tasks</p>
@@ -1348,11 +1348,18 @@ export default function TasksPage() {
         return () => window.removeEventListener("resize", checkMobile);
     }, []);
 
-    const [zoom, setZoom] = useState(1);
+    const [zoom, setZoom] = useState(() => {
+        try { return +(localStorage.getItem("tasks-zoom") ?? "1"); } catch { return 1; }
+    });
     const viewportRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLDivElement>(null);
     const [viewportSize, setViewportSize] = useState({ w: 1200, h: 800 });
-    const [pan, setPan] = useState({ x: 0, y: 0 });
+    const [pan, setPan] = useState(() => {
+        try {
+            const saved = localStorage.getItem("tasks-pan");
+            return saved ? JSON.parse(saved) : { x: 0, y: 0 };
+        } catch { return { x: 0, y: 0 }; }
+    });
     type ToolMode = "default" | "hand"
     const [toolMode, setToolMode] = useState<ToolMode>("default")
     const [isPanning, setIsPanning] = useState(false)
@@ -1371,7 +1378,9 @@ export default function TasksPage() {
     }, [isMobileMode]);
 
     const handleWheel = (e: WheelEvent) => {
-        if (!e.ctrlKey) return
+        const target = e.target as HTMLElement | null
+        if (target?.closest('[data-scroll-container]')) return
+
         e.preventDefault()
 
         if (!viewportRef.current) return
@@ -1394,11 +1403,17 @@ export default function TasksPage() {
     }
 
     useEffect(() => {
-        const el = viewportRef.current
-        if (!el) return
-        el.addEventListener("wheel", handleWheel, { passive: false })
-        return () => el.removeEventListener("wheel", handleWheel)
+        window.addEventListener("wheel", handleWheel, { passive: false })
+        return () => window.removeEventListener("wheel", handleWheel)
     }, [zoom, pan])
+
+    useEffect(() => {
+        localStorage.setItem("tasks-zoom", String(zoom))
+    }, [zoom])
+
+    useEffect(() => {
+        localStorage.setItem("tasks-pan", JSON.stringify(pan))
+    }, [pan])
 
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
@@ -1758,7 +1773,7 @@ export default function TasksPage() {
             ) : (
                 <div ref={viewportRef}
                     className={cn("min-h-screen w-full overflow-hidden select-none", toolMode === "hand" ? (isPanning ? "cursor-grabbing" : "cursor-grab") : "cursor-default")}
-                    style={{ height: '100vh', touchAction: 'none' }}
+                    style={{ height: '100vh', touchAction: 'none', position: 'relative' }}
                     onMouseDown={handleViewportMouseDown}
                     onMouseMove={handleViewportMouseMove}
                     onMouseUp={handleViewportMouseUp}
@@ -1767,10 +1782,8 @@ export default function TasksPage() {
                     <div ref={canvasRef} style={{
                         transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
                         transformOrigin: '0 0',
-                        width: viewportSize.w / zoom,
-                        height: viewportSize.h / zoom,
-                        position: 'relative',
-                        minHeight: viewportSize.h / zoom,
+                        position: 'absolute',
+                        inset: 0,
                         pointerEvents: toolMode === "hand" ? 'none' : undefined,
                     }}
                         onPointerMove={draggingTask ? onCanvasPointerMove : undefined}
