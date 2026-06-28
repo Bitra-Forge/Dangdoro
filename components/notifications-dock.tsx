@@ -6,7 +6,7 @@ import { useTimerStore } from "@/lib/store";
 import { useDockPopoverStore } from "@/lib/dock-popover-store";
 import { cn } from "@/lib/utils";
 import { Heart, Send, X, ScrollText } from "lucide-react";
-import { PatchNotesModal } from "@/components/patch-notes-modal";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/components/AuthProvider";
@@ -33,7 +33,6 @@ export function NotificationsDock() {
   const isFeedbackOpen = useDockPopoverStore((s) => s.active === "feedback");
   const toggleFeedback = useDockPopoverStore((s) => s.toggle);
   const closeFeedback = useDockPopoverStore((s) => s.close);
-  const [isPatchNotesOpen, setIsPatchNotesOpen] = useState(false);
   const [hasNewChangelog, setHasNewChangelog] = useState(false);
   const [latestChangelogId, setLatestChangelogId] = useState<string | null>(null);
 
@@ -59,7 +58,6 @@ export function NotificationsDock() {
   }, []);
 
   const handleOpenPatchNotes = () => {
-    setIsPatchNotesOpen(true);
     setHasNewChangelog(false);
     if (latestChangelogId) {
       localStorage.setItem("last_seen_changelog_id", latestChangelogId);
@@ -190,7 +188,9 @@ export function NotificationsDock() {
     };
   }, [isNavFocusMode]);
 
-  if (isAdminPage) return null;
+  const isPatchNotesPage = pathname?.startsWith("/patch-notes") || pathname?.startsWith("/changelog");
+
+  if (isAdminPage || isPatchNotesPage) return null;
 
   return (
     <>
@@ -224,9 +224,10 @@ export function NotificationsDock() {
         )}
 
         {!isGroupPage && (
-          /* Patch notes button */
+          /* Patch notes link */
           <Tooltip content="What's New" side="bottom">
-            <button
+            <Link
+              href="/patch-notes"
               onClick={handleOpenPatchNotes}
               className={cn(
                 "items-center justify-center p-2.5 rounded-full bg-zinc-900/80 backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-visible group text-zinc-400 hover:text-white hover:bg-zinc-800/50",
@@ -239,7 +240,7 @@ export function NotificationsDock() {
               {hasNewChangelog && (
                 <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-white shadow-[0_0_6px_rgba(255,255,255,0.9)] z-20" />
               )}
-            </button>
+            </Link>
           </Tooltip>
         )}
 
@@ -387,14 +388,7 @@ export function NotificationsDock() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {isPatchNotesOpen && (
-          <PatchNotesModal
-            isOpen={isPatchNotesOpen}
-            onClose={() => setIsPatchNotesOpen(false)}
-          />
-        )}
-      </AnimatePresence>
+
     </>
   );
 }

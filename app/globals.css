@@ -1,8 +1,18 @@
+@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+.font-pixelify {
+    font-family: 'Pixelify Sans', sans-serif;
+}
+
 @custom-variant dark (&:is(.dark *));
+
+html {
+    scrollbar-gutter: stable;
+    overflow-y: scroll;
+}
 
 @theme inline {
     --breakpoint-xs: 375px;
@@ -337,8 +347,7 @@ input[type="number"] {
     color: var(--foreground) !important;
     border: 1px solid var(--border) !important;
     border-radius: var(--radius-xl) !important;
-    box-shadow:
-        0 20px 40px rgba(0, 0, 0, 0.5) !important;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5) !important;
     padding: 20px 24px !important;
     min-width: 280px !important;
     max-width: 380px !important;
@@ -352,6 +361,7 @@ input[type="number"] {
         opacity: 0;
         transform: scale(0.95) translateY(-4px);
     }
+
     to {
         opacity: 1;
         transform: scale(1) translateY(0);
@@ -428,21 +438,29 @@ input[type="number"] {
 
 .driver-popover-prev-btn,
 .tour-skip-btn {
-    background: color-mix(in oklab, var(--foreground) 6%, transparent) !important;
+    background: color-mix(in oklab,
+            var(--foreground) 6%,
+            transparent) !important;
     color: var(--muted-foreground) !important;
     border: 1px solid var(--border) !important;
 }
 
 .driver-popover-prev-btn:hover,
 .tour-skip-btn:hover {
-    background: color-mix(in oklab, var(--foreground) 12%, transparent) !important;
-    border-color: color-mix(in oklab, var(--foreground) 15%, transparent) !important;
+    background: color-mix(in oklab,
+            var(--foreground) 12%,
+            transparent) !important;
+    border-color: color-mix(in oklab,
+            var(--foreground) 15%,
+            transparent) !important;
     color: var(--foreground) !important;
 }
 
 .driver-popover-close-btn {
     color: var(--muted-foreground) !important;
-    transition: color 150ms ease, transform 150ms ease !important;
+    transition:
+        color 150ms ease,
+        transform 150ms ease !important;
     background: transparent !important;
     border-radius: 6px !important;
     display: none !important;
@@ -457,7 +475,9 @@ input[type="number"] {
 
 .driver-popover-close-btn:hover {
     color: var(--foreground) !important;
-    background: color-mix(in oklab, var(--foreground) 8%, transparent) !important;
+    background: color-mix(in oklab,
+            var(--foreground) 8%,
+            transparent) !important;
     transform: rotate(90deg) !important;
 }
 
@@ -488,10 +508,217 @@ input[type="number"] {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
     .driver-popover,
     .driver-popover-navigation-btns button,
     .driver-highlighted-element {
         transition: none !important;
+        animation: none !important;
+    }
+}
+
+/* ── Patch Notes Neon Marker Animations ───────────────────── */
+
+/*
+  Neon breathing — gently pulses the outer glow intensity on the
+  single newest-shipped marker. The core border stays constant;
+  only the shadow spread fluctuates so it never feels restless.
+*/
+@keyframes neonBreathGold {
+
+    0%,
+    100% {
+        box-shadow:
+            inset 0 0 8px rgba(201, 176, 55, 0.12),
+            0 0 3px #c9b037,
+            0 0 9px rgba(201, 176, 55, 0.7),
+            0 0 20px rgba(201, 176, 55, 0.38),
+            0 0 38px rgba(201, 176, 55, 0.14);
+    }
+
+    50% {
+        box-shadow:
+            inset 0 0 12px rgba(201, 176, 55, 0.22),
+            0 0 5px #e5c748,
+            0 0 14px rgba(201, 176, 55, 0.92),
+            0 0 32px rgba(201, 176, 55, 0.58),
+            0 0 58px rgba(201, 176, 55, 0.22);
+    }
+}
+
+@keyframes neonBreathEmerald {
+
+    0%,
+    100% {
+        box-shadow:
+            inset 0 0 8px rgba(52, 211, 153, 0.1),
+            0 0 3px #34d399,
+            0 0 9px rgba(52, 211, 153, 0.7),
+            0 0 20px rgba(52, 211, 153, 0.38),
+            0 0 38px rgba(52, 211, 153, 0.14);
+    }
+
+    50% {
+        box-shadow:
+            inset 0 0 12px rgba(52, 211, 153, 0.18),
+            0 0 5px #6ee7b7,
+            0 0 14px rgba(52, 211, 153, 0.92),
+            0 0 32px rgba(52, 211, 153, 0.58),
+            0 0 58px rgba(52, 211, 153, 0.22);
+    }
+}
+
+@keyframes neonBreathPurple {
+
+    0%,
+    100% {
+        box-shadow:
+            inset 0 0 8px rgba(192, 132, 252, 0.1),
+            0 0 3px #c084fc,
+            0 0 9px rgba(192, 132, 252, 0.7),
+            0 0 20px rgba(192, 132, 252, 0.38),
+            0 0 38px rgba(192, 132, 252, 0.14);
+    }
+
+    50% {
+        box-shadow:
+            inset 0 0 12px rgba(192, 132, 252, 0.18),
+            0 0 5px #d8b4fe,
+            0 0 14px rgba(192, 132, 252, 0.92),
+            0 0 32px rgba(192, 132, 252, 0.58),
+            0 0 58px rgba(192, 132, 252, 0.22);
+    }
+}
+
+@keyframes neonBreathRed {
+
+    0%,
+    100% {
+        box-shadow:
+            inset 0 0 8px rgba(248, 113, 113, 0.1),
+            0 0 3px #f87171,
+            0 0 9px rgba(248, 113, 113, 0.7),
+            0 0 20px rgba(248, 113, 113, 0.38),
+            0 0 38px rgba(248, 113, 113, 0.14);
+    }
+
+    50% {
+        box-shadow:
+            inset 0 0 12px rgba(248, 113, 113, 0.18),
+            0 0 5px #fca5a5,
+            0 0 14px rgba(248, 113, 113, 0.92),
+            0 0 32px rgba(248, 113, 113, 0.58),
+            0 0 58px rgba(248, 113, 113, 0.22);
+    }
+}
+
+.neon-breath-gold {
+    animation: neonBreathGold 2.8s ease-in-out infinite;
+}
+
+.neon-breath-emerald {
+    animation: neonBreathEmerald 2.8s ease-in-out infinite;
+}
+
+.neon-breath-purple {
+    animation: neonBreathPurple 2.8s ease-in-out infinite;
+}
+
+.neon-breath-red {
+    animation: neonBreathRed 2.8s ease-in-out infinite;
+}
+
+@keyframes letterFadeWave {
+    0% {
+        color: #fff4a3;
+        text-shadow: 0 0 10px rgba(255, 244, 163, 0.9), 0 0 4px #c9b037;
+        opacity: 1;
+    }
+    25% {
+        color: #c9b037;
+        text-shadow: 0 0 6px rgba(201, 176, 55, 0.6);
+        opacity: 0.85;
+    }
+    60%, 100% {
+        color: rgba(201, 176, 55, 0.4);
+        text-shadow: none;
+        opacity: 0.45;
+    }
+}
+
+.animate-letter-fade {
+    animation: letterFadeWave 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .neon-breath-gold,
+    .neon-breath-emerald,
+    .neon-breath-purple,
+    .neon-breath-red {
+        animation: none !important;
+    }
+}
+
+/* ── Timeline Polish Animations ────────────────────────────── */
+
+@keyframes markerPulseRing {
+    0% {
+        transform: scale(1);
+        opacity: 0.8;
+        box-shadow: 0 0 0 0 rgba(201, 176, 55, 0.6);
+    }
+
+    70% {
+        transform: scale(1.5);
+        opacity: 0;
+        box-shadow: 0 0 0 14px rgba(201, 176, 55, 0);
+    }
+
+    100% {
+        transform: scale(1.5);
+        opacity: 0;
+        box-shadow: 0 0 0 0 rgba(201, 176, 55, 0);
+    }
+}
+
+@keyframes slowRotate {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.marker-pulse-ring {
+    position: relative;
+}
+
+.marker-pulse-ring::before {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: 9999px;
+    border: 1.5px solid #c9b037;
+    animation: markerPulseRing 2s ease-in-out infinite;
+    pointer-events: none;
+    z-index: -1;
+}
+
+.animate-spin-slow {
+    animation: slowRotate 9s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .marker-pulse-ring::before {
+        animation: none !important;
+        opacity: 0.3 !important;
+        transform: scale(1.1) !important;
+    }
+
+    .animate-spin-slow {
         animation: none !important;
     }
 }
