@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { X, Send, Loader2, Check, Sparkles, Clock } from "lucide-react";
+import { X, Send, Loader2, Check, Sparkles, Clock, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { auth } from "@/lib/firebase";
 import ReactMarkdown from "react-markdown";
+import { usePlannerStore } from "@/lib/stores/planner-store";
 
 
 interface Message {
@@ -48,25 +49,28 @@ const groupColorDot: Record<string, string> = {
 };
 
 export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
-    const [messages, setMessages] = useState<Message[]>([
-        {
-            role: "assistant",
-            content: "Describe a project or goal — include scope, deadlines, and priorities if you can. I'll architect task groups for your board.",
-        },
-    ]);
+    const { messages, loading, pendingGroups, setMessages, addMessage, setLoading, setPendingGroups, setSessionActive, clearSession } =
+        usePlannerStore();
     const [input, setInput] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [pendingGroups, setPendingGroups] = useState<GeneratedGroup[] | null>(null);
     const [applying, setApplying] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
+    const mountedRef = useRef(true);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        return () => { mountedRef.current = false };
+    }, []);
+
+    useEffect(() => {
+        if (mountedRef.current) {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }
     }, [messages, loading]);
 
     useEffect(() => {
-        setTimeout(() => inputRef.current?.focus(), 200);
+        if (mountedRef.current) {
+            setTimeout(() => inputRef.current?.focus(), 200);
+        }
     }, []);
 
     const sendMessage = async () => {
@@ -78,6 +82,7 @@ export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
         setInput("");
         setLoading(true);
         setPendingGroups(null);
+        setSessionActive(true);
 
         try {
             const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
@@ -99,6 +104,9 @@ export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
 
             if (parsed?.groups && Array.isArray(parsed.groups)) {
                 setPendingGroups(parsed.groups);
+                if (!mountedRef.current) {
+                    usePlannerStore.getState().setNotification({ type: "finished", message: "Your plan is ready — tap to review" });
+                }
                 const total = parsed.groups.reduce((s: number, g: GeneratedGroup) => s + g.tasks.length, 0);
                 setMessages([
                     ...newMessages,
@@ -109,6 +117,9 @@ export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
                 ]);
             } else if (parsed?.message) {
                 setMessages([...newMessages, { role: "assistant", content: parsed.message }]);
+                if (!mountedRef.current) {
+                    usePlannerStore.getState().setNotification({ type: "needs_input", message: "Your planner needs input" });
+                }
             } else if (parsed?.error) {
                 throw new Error(parsed.error);
             } else {
@@ -116,12 +127,18 @@ export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
                     ...newMessages,
                     { role: "assistant", content: "Couldn't parse that into tasks. Try rephrasing what you need to get done." }
                 ]);
+                if (!mountedRef.current) {
+                    usePlannerStore.getState().setNotification({ type: "needs_input", message: "Your planner needs input" });
+                }
             }
         } catch {
             setMessages([
                 ...newMessages,
                 { role: "assistant", content: "Something went wrong. Please try again." },
             ]);
+            if (!mountedRef.current) {
+                usePlannerStore.getState().setNotification({ type: "needs_input", message: "Your planner needs input" });
+            }
         } finally {
             setLoading(false);
         }
@@ -130,10 +147,13 @@ export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
     const handleApply = async () => {
         if (!pendingGroups?.length || applying) return;
         setApplying(true);
-        await onApply(pendingGroups);
-        setApplying(false);
-        setPendingGroups(null);
-        toast.success("Tasks added to your board");
+        try {
+            await onApply(pendingGroups);
+            clearSession();
+            toast.success("Tasks added to your board");
+        } finally {
+            setApplying(false);
+        }
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -172,12 +192,21 @@ export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
                             </span>
                         </div>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="p-2 rounded-xl hover:bg-white/5 text-zinc-600 hover:text-white transition-all relative z-10"
-                    >
-                        <X className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1 relative z-10">
+                        <button
+                            onClick={clearSession}
+                            className="p-2 rounded-xl hover:bg-white/5 text-zinc-600 hover:text-white transition-all"
+                            title="Clear conversation"
+                        >
+                            <RotateCcw className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="p-2 rounded-xl hover:bg-white/5 text-zinc-600 hover:text-white transition-all"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Messages */}

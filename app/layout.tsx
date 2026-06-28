@@ -10,6 +10,7 @@ import { GlobalAuthModal } from "@/components/GlobalAuthModal";
 import { NavigationHub } from "@/components/navigation-hub";
 import { NotificationsDock } from "@/components/notifications-dock";
 import { Heartbeat } from "@/components/Heartbeat";
+import { PlannerNotification } from "@/components/planner-notification";
 import { GroupSessionSync } from "@/components/group-session-sync";
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -99,6 +100,7 @@ export default function RootLayout({
           <SoundEngine />
           <GlobalAuthModal />
           <NavigationHub />
+          <PlannerNotification />
           
           <Toaster position="top-center" richColors closeButton duration={2000} />
           <Heartbeat />

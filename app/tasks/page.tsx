@@ -30,6 +30,7 @@ import { useBackgroundTheme } from "@/lib/use-background-theme";
 import { BackgroundTheme } from "@/components/background-theme";
 import { TaskAgent } from "@/components/task-agent";
 import { useTour, type TourStep } from "@/lib/use-tour";
+import { usePlannerStore } from "@/lib/stores/planner-store";
 
 // ─── Priority config ──────────────────────────────────────────────────────────
 const PRIORITIES: { value: TaskPriority; label: string; border: string; dot: string; text: string }[] = [
@@ -1331,7 +1332,12 @@ export default function TasksPage() {
     const [isCreatingGroup, setIsCreatingGroup] = useState(false);
     const [newGroupName, setNewGroupName] = useState("");
     const [showAgent, setShowAgent] = useState(false);
+    const sessionActive = usePlannerStore((s) => s.sessionActive);
     const [isMobileMode, setIsMobileMode] = useState(false);
+
+    useEffect(() => {
+        if (sessionActive) setShowAgent(true);
+    }, [sessionActive]);
 
     useEffect(() => {
         const checkMobile = () => setIsMobileMode(window.innerWidth < 1024);
