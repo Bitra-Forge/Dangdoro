@@ -21,30 +21,33 @@ export async function POST(req: Request) {
     const uuid = Math.random().toString(36).substring(2, 9);
     const filename = `changelog/${Date.now()}_${uuid}.${extension}`;
 
-    const bucket = adminStorage.bucket();
+    const useEmulator = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true";
+    const bucketName = useEmulator
+      ? "demo-dangdoro"
+      : (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "dangdoro-7579a.firebasestorage.app");
+
+    const bucket = adminStorage.bucket(bucketName);
     const fileRef = bucket.file(filename);
+
+    const downloadToken =
+      Math.random().toString(36).substring(2, 15) +
+      Math.random().toString(36).substring(2, 15);
 
     await fileRef.save(buffer, {
       metadata: {
         contentType: file.type || (isGif ? "image/gif" : "image/png"),
+        metadata: {
+          firebaseStorageDownloadTokens: downloadToken,
+        },
       },
-      public: true,
     });
 
-    try {
-      await fileRef.makePublic();
-    } catch {
-      // Ignore if public permissions are managed at bucket level or emulator
-    }
-
-    const useEmulator = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true";
     let publicUrl = "";
     if (useEmulator) {
       const emulatorHost = process.env.FIREBASE_STORAGE_EMULATOR_HOST || "127.0.0.1:9199";
-      const bucketName = bucket.name || "demo-dangdoro";
       publicUrl = `http://${emulatorHost}/v0/b/${bucketName}/o/${encodeURIComponent(filename)}?alt=media`;
     } else {
-      publicUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`;
+      publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(filename)}?alt=media&token=${downloadToken}`;
     }
 
     return NextResponse.json({

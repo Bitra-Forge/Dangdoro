@@ -32,37 +32,36 @@ export async function PUT(
     const { id } = await params;
 
     const body = await req.json();
-    const { type, title, description, date, status, media, order } = body;
 
-    if (!title || (!description && !body.content)) {
-      return NextResponse.json(
-        { error: "Title and description are required" },
-        { status: 400 }
-      );
-    }
-
-    const itemType = type || "feature";
-    const itemDescription = description || body.content || "";
-    let dateTimestamp: Timestamp | null = null;
-
-    if (itemType !== "upcoming") {
-      const d = date ? new Date(date) : new Date();
-      dateTimestamp = isNaN(d.getTime()) ? Timestamp.now() : Timestamp.fromDate(d);
+    if (body.title !== undefined || body.description !== undefined) {
+      if (!body.title || (!body.description && !body.content)) {
+        return NextResponse.json(
+          { error: "Title and description are required" },
+          { status: 400 }
+        );
+      }
     }
 
     const updateData: Record<string, any> = {
-      type: itemType,
-      title,
-      description: itemDescription,
-      date: dateTimestamp,
-      status: itemType === "upcoming" ? (status || "planned") : null,
-      media: media !== undefined ? media : null,
       updatedAt: Timestamp.now(),
     };
 
-    if (typeof order === "number") {
-      updateData.order = order;
+    if (body.type !== undefined) updateData.type = body.type;
+    if (body.title !== undefined) updateData.title = body.title;
+    if (body.description !== undefined || body.content !== undefined) {
+      updateData.description = body.description || body.content || "";
     }
+    if (body.date !== undefined) {
+      if (body.type !== "upcoming" && body.date) {
+        const d = new Date(body.date);
+        updateData.date = isNaN(d.getTime()) ? Timestamp.now() : Timestamp.fromDate(d);
+      } else if (body.type === "upcoming") {
+        updateData.date = null;
+      }
+    }
+    if (body.status !== undefined) updateData.status = body.status;
+    if (body.media !== undefined) updateData.media = body.media;
+    if (typeof body.order === "number") updateData.order = body.order;
 
     await adminDb.collection("changelog").doc(id).update(updateData);
 
