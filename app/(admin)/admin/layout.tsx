@@ -114,29 +114,41 @@ export default function AdminLayout({
         {/* Sidebar Container */}
         <aside
           className={cn(
-            "shrink-0 border-r border-white/[0.06] flex flex-col bg-zinc-900/40 backdrop-blur-md transition-all duration-300 relative z-10",
+            "shrink-0 border-r border-white/[0.08] flex flex-col bg-[#0b0b0a] transition-all duration-300 relative z-40 overflow-visible shadow-2xl",
             isCollapsed ? "w-16" : "w-56",
           )}
         >
+          {/* Background Textures & Lighting Wrapper */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+            {/* Subtle Dark Pixelated Grid Texture matching page background */}
+            <div className="absolute inset-0 opacity-30 bg-[radial-gradient(rgba(255,255,255,0.15)_1px,transparent_1px)] [background-size:8px_8px]" />
+            <div className="absolute inset-0 opacity-12 bg-[linear-gradient(to_right,rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:16px_16px]" />
+
+            {/* Very Quiet & Simple Left-Side Light Effect */}
+            <div className="absolute inset-y-0 left-0 w-10 bg-[linear-gradient(to_right,rgba(2,52,63,0.2)_0%,transparent_100%)]" />
+            <div className="absolute top-1/3 -left-12 w-20 h-44 rounded-full bg-[#02343F]/18 blur-3xl" />
+            <div className="absolute bottom-1/4 -left-10 w-[70px] h-32 rounded-full bg-[#F0EDCC]/06 blur-3xl" />
+          </div>
+
           {/* Toggle Collapse Button */}
           <button
+            type="button"
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="absolute -right-[18px] top-1/2 -translate-y-1/2 z-50 w-9 h-9 bg-white/[0.06] backdrop-blur-md border border-white/10 hover:bg-white/[0.12] hover:border-white/20 text-white/70 hover:text-white rounded-full flex items-center justify-center transition-all cursor-pointer shadow-md select-none"
+            className="absolute -right-[20px] top-1/2 -translate-y-1/2 z-[100] w-10 h-10 bg-[#02343F] backdrop-blur-md border-[1.5px] border-[#F0EDCC]/40 hover:border-[#F0EDCC] hover:bg-[#034857] text-[#F0EDCC] rounded-full flex items-center justify-center transition-all cursor-pointer shadow-lg active:scale-90 select-none outline-none after:absolute after:-inset-2 after:rounded-full"
           >
             {isCollapsed ? (
-              <ChevronRight className="w-[18px] h-[18px]" />
+              <ChevronRight className="w-[18px] h-[18px] pointer-events-none" />
             ) : (
-              <ChevronLeft className="w-[18px] h-[18px]" />
+              <ChevronLeft className="w-[18px] h-[18px] pointer-events-none" />
             )}
           </button>
-
           {/* Logo and Brand area */}
-          <div className="p-4 border-b border-white/[0.05] h-16 flex items-center overflow-hidden">
+          <div className="p-4 border-b border-white/[0.08] h-16 flex items-center overflow-hidden relative z-10 bg-[#0b0b0a]/85 backdrop-blur-sm">
             <Link
               href="/admin"
-              className="flex items-center gap-3.5 animate-in fade-in duration-300"
+              className="flex items-center gap-3.5 animate-in fade-in duration-300 group cursor-pointer active:scale-95 transition-transform"
             >
-              <Avatar className="w-8 h-8 border border-white/15 shadow-inner shrink-0">
+              <Avatar className="w-8 h-8 border border-white/15 shadow-inner shrink-0 group-hover:border-[#F0EDCC] transition-colors">
                 <AvatarImage
                   src={getHighQualityAvatarUrl(
                     profileData?.photoURL || user?.photoURL,
@@ -144,7 +156,7 @@ export default function AdminLayout({
                   )}
                   className="object-cover"
                 />
-                <AvatarFallback className="text-[10px] bg-zinc-800 text-zinc-300 font-bold uppercase">
+                <AvatarFallback className="text-[10px] bg-zinc-800 text-zinc-300 font-bold uppercase font-pixelify">
                   {profileData?.displayName?.[0] ||
                     user?.displayName?.[0] ||
                     user?.email?.[0] ||
@@ -153,10 +165,10 @@ export default function AdminLayout({
               </Avatar>
               {!isCollapsed && (
                 <div className="min-w-0 transition-opacity duration-300">
-                  <p className="text-sm font-black text-white leading-none truncate">
+                  <p className="text-sm font-bold text-white leading-none truncate font-pixelify tracking-wide group-hover:text-[#F0EDCC] transition-colors">
                     {profileData?.displayName || user?.displayName || "Admin"}
                   </p>
-                  <p className="text-[7.5px] text-zinc-500 uppercase tracking-widest mt-1">
+                  <p className="text-[8px] text-zinc-500 uppercase tracking-widest mt-1 font-pixelify font-bold">
                     Admin
                   </p>
                 </div>
@@ -165,7 +177,7 @@ export default function AdminLayout({
           </div>
 
           {/* Navigation Section */}
-          <nav className="flex-1 p-3 space-y-1.5 mt-2">
+          <nav className="flex-1 p-3 space-y-2 mt-2 relative z-10">
             {sidebarLinks.map((link) => {
               const Icon = link.icon;
               const isActive =
@@ -177,19 +189,22 @@ export default function AdminLayout({
                   key={link.href}
                   href={link.href}
                   className={cn(
-                    "flex items-center rounded-[5px] text-xs font-bold tracking-wide transition-all duration-200 group relative border",
+                    "flex items-center rounded-[5px] text-xs font-bold font-pixelify uppercase tracking-wider transition-all duration-150 group relative border-[1.5px] select-none active:scale-[0.96] active:translate-y-0.5 cursor-pointer",
                     isCollapsed ? "justify-center p-2.5" : "gap-3 px-3.5 py-3",
                     isActive
-                      ? "bg-white/[0.06] border-white/[0.12] text-white shadow-inner"
-                      : "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.02] hover:border-white/[0.06]",
+                      ? "bg-[#02343F] border-[#F0EDCC] text-[#F0EDCC] shadow-[0_0_14px_rgba(240,237,204,0.3)]"
+                      : "border-[#F0EDCC]/30 bg-[#061e24]/70 text-zinc-300 hover:text-white hover:bg-[#02343F]/80 hover:border-[#F0EDCC]/70",
                   )}
                 >
-                  <Icon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-105 duration-200" />
+                  <Icon className={cn(
+                    "w-4 h-4 shrink-0 transition-transform duration-200 group-hover:scale-110",
+                    isActive ? "text-[#F0EDCC]" : "text-zinc-400 group-hover:text-[#F0EDCC]"
+                  )} />
                   {!isCollapsed && <span>{link.label}</span>}
 
-                  {/* Visual active tick on the left edge */}
+                  {/* Retro glowing arcade tick on the left edge */}
                   {isActive && (
-                    <div className="absolute left-0 top-2 bottom-2 w-1 bg-white rounded-r-full shadow-[0_0_8px_white]" />
+                    <div className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-[#F0EDCC] rounded-r-[2px] shadow-[0_0_8px_#F0EDCC]" />
                   )}
                 </Link>
               );
@@ -198,21 +213,21 @@ export default function AdminLayout({
 
           {/* User Info Bar */}
           {user && (
-            <div className="p-3 border-t border-white/[0.05] bg-zinc-950/20">
+            <div className="p-3 border-t border-white/[0.08] bg-[#0b0b0a]/90 space-y-1.5 relative z-10 backdrop-blur-sm">
               <div
                 className={cn(
                   "flex items-center gap-2.5 px-2.5 py-2",
                   isCollapsed ? "justify-center" : "",
                 )}
               >
-                <Avatar size="sm" className="border border-white/10">
+                <Avatar size="sm" className="border border-white/10 shrink-0">
                   <AvatarImage
                     src={getHighQualityAvatarUrl(
                       profileData?.photoURL || user.photoURL,
                       32,
                     )}
                   />
-                  <AvatarFallback className="text-[10px] bg-zinc-800 text-zinc-300 font-bold uppercase">
+                  <AvatarFallback className="text-[10px] bg-zinc-800 text-zinc-300 font-bold uppercase font-pixelify">
                     {profileData?.displayName?.[0] ||
                       user.displayName?.[0] ||
                       user.email?.[0] ||
@@ -221,12 +236,12 @@ export default function AdminLayout({
                 </Avatar>
                 {!isCollapsed && (
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] ubuntu-bold font-black text-zinc-300 truncate">
+                    <p className="text-[11px] font-pixelify font-bold text-zinc-200 truncate">
                       {profileData?.displayName ||
                         user.displayName ||
                         "Admin User"}
                     </p>
-                    <p className="text-[9px] text-zinc-600 truncate mt-0.5">
+                    <p className="text-[9px] font-pixelify text-zinc-500 truncate mt-0.5">
                       {user.email || ""}
                     </p>
                   </div>
@@ -236,7 +251,7 @@ export default function AdminLayout({
               <Link
                 href="/"
                 className={cn(
-                  "flex items-center mt-1.5 rounded-xl text-[10px] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03] transition-all duration-200 select-none",
+                  "flex items-center rounded-[5px] text-[10px] font-pixelify font-bold uppercase tracking-wider text-zinc-300 hover:text-[#F0EDCC] bg-[#061e24]/70 hover:bg-[#02343F]/80 border-[1.5px] border-[#F0EDCC]/30 hover:border-[#F0EDCC]/70 transition-all duration-150 select-none active:scale-[0.96] active:translate-y-0.5 cursor-pointer",
                   isCollapsed ? "justify-center p-2" : "gap-2 px-3 py-2.5",
                 )}
               >
