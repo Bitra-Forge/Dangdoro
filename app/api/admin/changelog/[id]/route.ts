@@ -32,20 +32,39 @@ export async function PUT(
     const { id } = await params;
 
     const body = await req.json();
-    const { title, content } = body;
+    const { type, title, description, date, status, media, order } = body;
 
-    if (!title || !content) {
+    if (!title || (!description && !body.content)) {
       return NextResponse.json(
-        { error: "Title and content are required" },
+        { error: "Title and description are required" },
         { status: 400 }
       );
     }
 
-    await adminDb.collection("changelog").doc(id).update({
+    const itemType = type || "feature";
+    const itemDescription = description || body.content || "";
+    let dateTimestamp: Timestamp | null = null;
+
+    if (itemType !== "upcoming") {
+      const d = date ? new Date(date) : new Date();
+      dateTimestamp = isNaN(d.getTime()) ? Timestamp.now() : Timestamp.fromDate(d);
+    }
+
+    const updateData: Record<string, any> = {
+      type: itemType,
       title,
-      content,
+      description: itemDescription,
+      date: dateTimestamp,
+      status: itemType === "upcoming" ? (status || "planned") : null,
+      media: media !== undefined ? media : null,
       updatedAt: Timestamp.now(),
-    });
+    };
+
+    if (typeof order === "number") {
+      updateData.order = order;
+    }
+
+    await adminDb.collection("changelog").doc(id).update(updateData);
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
@@ -56,4 +75,3 @@ export async function PUT(
     );
   }
 }
-

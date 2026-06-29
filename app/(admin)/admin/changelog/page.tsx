@@ -4,16 +4,10 @@ import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ChangelogManager } from "@/components/admin/ChangelogManager";
 import { ChangelogSkeleton } from "@/components/admin/LoadingSkeleton";
-
-interface ChangelogEntry {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: string | null;
-}
+import { ChangelogItem } from "@/components/changelog/changelog-types";
 
 export default function AdminChangelogPage() {
-  const [entries, setEntries] = useState<ChangelogEntry[]>([]);
+  const [entries, setEntries] = useState<ChangelogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -22,7 +16,6 @@ export default function AdminChangelogPage() {
   const getToken = async () => {
     const { getAuth } = await import("firebase/auth");
     const auth = getAuth();
-    // Wait for the user to load if not initialized yet
     return new Promise<string>((resolve) => {
       const checkUser = () => {
         const u = auth.currentUser;
@@ -60,7 +53,7 @@ export default function AdminChangelogPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSubmit = async (title: string, content: string): Promise<boolean> => {
+  const handleSubmit = async (data: Partial<ChangelogItem>): Promise<boolean> => {
     setSubmitting(true);
     try {
       const res = await fetch("/api/admin/changelog", {
@@ -69,7 +62,7 @@ export default function AdminChangelogPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ title, content }),
+        body: JSON.stringify(data),
       });
       if (res.ok) {
         toast.success("Changelog entry published successfully");
@@ -88,7 +81,7 @@ export default function AdminChangelogPage() {
     }
   };
 
-  const handleUpdate = async (id: string, title: string, content: string): Promise<boolean> => {
+  const handleUpdate = async (id: string, data: Partial<ChangelogItem>): Promise<boolean> => {
     setSubmitting(true);
     try {
       const res = await fetch(`/api/admin/changelog/${id}`, {
@@ -97,7 +90,7 @@ export default function AdminChangelogPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ title, content }),
+        body: JSON.stringify(data),
       });
       if (res.ok) {
         toast.success("Changelog entry updated successfully");
@@ -113,6 +106,22 @@ export default function AdminChangelogPage() {
       return false;
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSilentUpdate = async (id: string, data: Partial<ChangelogItem>): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/admin/changelog/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      });
+      return res.ok;
+    } catch {
+      return false;
     }
   };
 
@@ -137,7 +146,7 @@ export default function AdminChangelogPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="h-full flex flex-col min-h-0">
       {loading ? (
         <div className="space-y-6">
           <div className="space-y-2">
@@ -151,6 +160,7 @@ export default function AdminChangelogPage() {
           entries={entries}
           onSubmit={handleSubmit}
           onUpdate={handleUpdate}
+          onSilentUpdate={handleSilentUpdate}
           onDelete={handleDelete}
           submitting={submitting}
           deletingId={deletingId}

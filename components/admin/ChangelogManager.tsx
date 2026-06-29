@@ -1,21 +1,36 @@
 "use client";
 
-import React, { useState } from "react";
-import { Plus, X, Trash2, Edit3, Eye, FileText, AlertCircle } from "lucide-react";
+import React, { useState, useMemo, useEffect } from "react";
+import {
+  Trash2,
+  Edit3,
+  Upload,
+  X,
+  Loader2,
+  Sparkles,
+  Wrench,
+  Calendar,
+  ImageIcon,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-
-interface ChangelogEntry {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: string | null;
-}
+import {
+  ChangelogItem,
+  ChangelogType,
+  UpcomingStatus,
+  ChangelogMedia,
+  TabFilter,
+  typeConfig,
+  formatDate,
+} from "@/components/changelog/changelog-types";
+import { ChangelogTabs } from "@/components/changelog/ChangelogTabs";
+import { ChangelogTimeline } from "@/components/changelog/ChangelogTimeline";
 
 interface ChangelogManagerProps {
-  entries: ChangelogEntry[];
-  onSubmit: (title: string, content: string) => Promise<boolean>;
-  onUpdate?: (id: string, title: string, content: string) => Promise<boolean>;
+  entries: ChangelogItem[];
+  onSubmit: (data: Partial<ChangelogItem>) => Promise<boolean>;
+  onUpdate: (id: string, data: Partial<ChangelogItem>) => Promise<boolean>;
+  onSilentUpdate?: (id: string, data: Partial<ChangelogItem>) => Promise<boolean>;
   onDelete: (id: string) => Promise<void>;
   submitting: boolean;
   deletingId: string | null;
@@ -25,660 +40,605 @@ export function ChangelogManager({
   entries,
   onSubmit,
   onUpdate,
+  onSilentUpdate,
   onDelete,
   submitting,
   deletingId,
 }: ChangelogManagerProps) {
-  const [showForm, setShowForm] = useState(false);
-  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
-  const [editingEntryDate, setEditingEntryDate] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [localEntries, setLocalEntries] = useState<ChangelogItem[]>(entries);
+
+  useEffect(() => {
+    setLocalEntries(entries);
+  }, [entries]);
+
+  // Form state
+  const [type, setType] = useState<ChangelogType>("feature");
   const [title, setTitle] = useState("");
-  const [featuresText, setFeaturesText] = useState("");
-  const [fixesText, setFixesText] = useState("");
-  const [upcomingText, setUpcomingText] = useState("");
-  const [activeEditorTab, setActiveEditorTab] = useState<"write" | "preview">("write");
-  const [activePreviewSection, setActivePreviewSection] = useState<"features" | "fixes" | "upcoming">("features");
+  const [description, setDescription] = useState("");
+  const [date, setDate] = useState<string>(
+    new Date().toISOString().split("T")[0]
+  );
+  const [status, setStatus] = useState<UpcomingStatus>("planned");
+  const [media, setMedia] = useState<ChangelogMedia | null>(null);
+  const [uploading, setUploading] = useState(false);
 
-  const parseChangelogContent = (content: string, stripComments = false) => {
-    const sections = {
-      features: [] as string[],
-      fixes: [] as string[],
-      upcoming: [] as string[],
-    };
-
-    const lines = content.split("\n");
-    let currentSection: "features" | "fixes" | "upcoming" | null = null;
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-
-      if (trimmed.match(/^#+\s*(features|new features|feature|added)/i)) {
-        currentSection = "features";
-        continue;
-      } else if (trimmed.match(/^#+\s*(fixes|improvements|fix|fixed|improved)/i)) {
-        currentSection = "fixes";
-        continue;
-      } else if (trimmed.match(/^#+\s*(upcoming|next|future)/i)) {
-        currentSection = "upcoming";
-        continue;
-      }
-
-      if (trimmed.startsWith("-") || trimmed.startsWith("*")) {
-        let itemContent = trimmed.substring(1).trim();
-        if (stripComments) {
-          itemContent = itemContent.replace(/\s*<!--.*?-->/g, "").trim();
-        }
-        if (currentSection) {
-          sections[currentSection].push(itemContent);
-        } else {
-          sections.features.push(itemContent);
-        }
-      } else if (trimmed.match(/^\d+\.\s/)) {
-        let itemContent = trimmed.replace(/^\d+\.\s/, "").trim();
-        if (stripComments) {
-          itemContent = itemContent.replace(/\s*<!--.*?-->/g, "").trim();
-        }
-        if (currentSection) {
-          sections[currentSection].push(itemContent);
-        } else {
-          sections.features.push(itemContent);
-        }
-      }
-    }
-
-    return {
-      featuresText: sections.features.join("\n"),
-      fixesText: sections.fixes.join("\n"),
-      upcomingText: sections.upcoming.join("\n"),
-    };
-  };
-
-  const parseSectionLines = (text: string) => {
-    return text
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0)
-      .map((l) => l.replace(/^[-*]\s*/, ""));
-  };
-
-  const getPreviewItems = (section: "features" | "fixes" | "upcoming") => {
-    const text = section === "features" ? featuresText : section === "fixes" ? fixesText : upcomingText;
-    const newLines = parseSectionLines(text);
-
-    if (editingEntryId) {
-      return newLines;
-    }
-
-    const latestEntry = entries[0];
-    const prevParsed = latestEntry ? parseChangelogContent(latestEntry.content, false) : null;
-    const prevText = prevParsed ? (section === "features" ? prevParsed.featuresText : section === "fixes" ? prevParsed.fixesText : prevParsed.upcomingText) : "";
-    
-    const prevLines = prevText
-      ? prevText
-          .split("\n")
-          .map((l) => l.trim())
-          .filter((l) => l.length > 0)
-          .map((l) => l.replace(/^[-*]\s*/, ""))
-      : [];
-
-    if (newLines.length === 0) {
-      return prevLines;
-    }
-
-    const prevLinesWithoutDividers = prevLines.filter((l) => {
-      const isSep = l.includes("<!-- separator:") || (l.trim().length >= 5 && l.trim().replace(/[-─*]/g, "").length === 0);
-      return !isSep;
-    });
-
-    if (prevLinesWithoutDividers.length > 0) {
-      return [
-        "────────────────────────────── <!-- separator:new -->",
-        ...newLines,
-        "────────────────────────────── <!-- separator:previous -->",
-        ...prevLinesWithoutDividers
-      ];
-    }
-    return [
-      "────────────────────────────── <!-- separator:new -->",
-      ...newLines
-    ];
-  };
-
-  const parsedDraft = {
-    features: getPreviewItems("features"),
-    fixes: getPreviewItems("fixes"),
-    upcoming: getPreviewItems("upcoming"),
-  };
-
-  const totalParsedItems =
-    parsedDraft.features.length +
-    parsedDraft.fixes.length +
-    parsedDraft.upcoming.length;
+  // Preview state
+  const [previewTab, setPreviewTab] = useState<TabFilter>("all");
 
   const resetForm = () => {
+    setEditingId(null);
+    setType("feature");
     setTitle("");
-    setFeaturesText("");
-    setFixesText("");
-    setUpcomingText("");
-    setEditingEntryDate(null);
+    setDescription("");
+    setDate(new Date().toISOString().split("T")[0]);
+    setStatus("planned");
+    setMedia(null);
   };
 
-  const handleNewEntryClick = () => {
-    if (showForm && !editingEntryId) {
-      setShowForm(false);
-      resetForm();
-    } else {
-      resetForm();
-      setEditingEntryId(null);
-      setShowForm(true);
-      setActiveEditorTab("write");
-    }
-  };
-
-  const handleEditClick = (entry: ChangelogEntry) => {
-    const parsed = parseChangelogContent(entry.content, true);
+  const handleEditClick = (entry: ChangelogItem) => {
+    setEditingId(entry.id);
+    setType(entry.type);
     setTitle(entry.title);
-    setFeaturesText(parsed.featuresText);
-    setFixesText(parsed.fixesText);
-    setUpcomingText(parsed.upcomingText);
-    setEditingEntryId(entry.id);
-
-    const dateStr = entry.createdAt
-      ? new Date(entry.createdAt).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        })
-      : new Date().toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        });
-    setEditingEntryDate(dateStr);
-
-    setShowForm(true);
-    setActiveEditorTab("write");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setDescription(entry.description);
+    if (entry.date) {
+      try {
+        setDate(new Date(entry.date).toISOString().split("T")[0]);
+      } catch {
+        setDate(new Date().toISOString().split("T")[0]);
+      }
+    } else {
+      setDate(new Date().toISOString().split("T")[0]);
+    }
+    setStatus(entry.status || "planned");
+    setMedia(
+      entry.media ||
+        (entry.imageUrl ? { url: entry.imageUrl, type: "image" } : null)
+    );
   };
 
-  const appendDateToLines = (text: string, dateStr: string): string => {
-    return text
-      .split("\n")
-      .map((line) => {
-        const trimmed = line.trim();
-        if (!trimmed) return "";
-        
-        // Don't append date to divider lines
-        const isSep = trimmed.includes("<!-- separator:") || (trimmed.replace(/^[-\*]\s*/, "").trim().length >= 5 && trimmed.replace(/^[-\*]\s*/, "").trim().replace(/[-─*]/g, "").length === 0);
-        if (isSep) return trimmed;
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-        // Check if it already has a date comment
-        if (trimmed.match(/<!--.*?-->/)) {
-          return trimmed;
+    if (file.size > 10 * 1024 * 1024) {
+      alert("File size exceeds 10MB limit.");
+      return;
+    }
+
+    const isGif = file.type === "image/gif";
+
+    // 1. Instant local preview (0ms delay)
+    const localBlobUrl = URL.createObjectURL(file);
+    setMedia({
+      url: localBlobUrl,
+      type: isGif ? "gif" : "image",
+    });
+
+    setUploading(true);
+    try {
+      const { getAuth } = await import("firebase/auth");
+      const auth = getAuth();
+      const token = await auth.currentUser?.getIdToken();
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/admin/upload", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.url) {
+          setMedia({
+            url: data.url,
+            type: data.type || (isGif ? "gif" : "image"),
+          });
         }
-        return `${trimmed} <!-- ${dateStr} -->`;
-      })
-      .join("\n");
+      } else {
+        console.warn("Server upload failed, keeping local preview.");
+      }
+    } catch (err) {
+      console.error("Failed to upload media to Firebase Storage:", err);
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
-    if (!featuresText.trim() && !fixesText.trim() && !upcomingText.trim()) return;
+    if (!title.trim() || !description.trim()) return;
+    if (type !== "upcoming" && !date) return;
 
-    let contentMd = "";
+    const existingEntry = editingId ? localEntries.find((item) => item.id === editingId) : null;
+    let existingOrder = existingEntry?.order;
 
-    const formatToListLines = (text: string): string[] => {
-      let dividerCount = 0;
-      return text
-        .split("\n")
-        .map((l) => l.trim())
-        .filter((l) => l.length > 0)
-        .map((l) => {
-          const isSep = l.includes("<!-- separator:") || (l.trim().length >= 5 && l.replace(/[-─*]/g, "").length === 0);
-          if (isSep) {
-            dividerCount++;
-            const type = dividerCount === 1 ? "new" : "previous";
-            return `- ────────────────────────────── <!-- separator:${type} -->`;
-          }
-          return l.startsWith("-") || l.startsWith("*") ? l : `- ${l}`;
-        });
+    if (editingId && existingOrder === undefined) {
+      const idx = localEntries.findIndex((item) => item.id === editingId);
+      if (idx !== -1) {
+        existingOrder = (idx + 1) * 10;
+      }
+    }
+
+    const payload: Partial<ChangelogItem> = {
+      type,
+      title: title.trim(),
+      description: description.trim(),
+      date: type === "upcoming" ? null : new Date(date).toISOString(),
+      status: type === "upcoming" ? status : null,
+      media: media,
     };
 
-    const targetDate = editingEntryDate || new Date().toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-
-    const finalFeatures = appendDateToLines(featuresText, targetDate);
-    const finalFixes = appendDateToLines(fixesText, targetDate);
-    const finalUpcoming = appendDateToLines(upcomingText, targetDate);
-
-    if (editingEntryId) {
-      const appendSection = (header: string, text: string) => {
-        if (!text.trim()) return;
-        const lines = formatToListLines(text);
-        if (lines.length > 0) {
-          contentMd += `# ${header}\n${lines.join("\n")}\n\n`;
-        }
-      };
-
-      appendSection("Features", finalFeatures);
-      appendSection("Fixes", finalFixes);
-      appendSection("Upcoming", finalUpcoming);
-    } else {
-      const latestEntry = entries[0];
-      const prevParsed = latestEntry ? parseChangelogContent(latestEntry.content, false) : null;
-
-      const processSection = (header: string, newTextWithDates: string, prevTextWithDates: string | undefined) => {
-        const newLines = formatToListLines(newTextWithDates);
-        const prevLines = prevTextWithDates ? formatToListLines(prevTextWithDates) : [];
-
-        let finalLines: string[] = [];
-
-        if (newLines.length === 0) {
-          finalLines = prevLines;
-        } else {
-          // Filter out existing dividers from old lines to ensure we only have a single divider
-          const prevLinesWithoutDividers = prevLines.filter((l) => {
-            const content = l.replace(/^[-*]\s*/, "").trim();
-            const isSep = content.includes("<!-- separator:") || (content.length >= 5 && content.replace(/[-─*]/g, "").length === 0);
-            return !isSep;
-          });
-
-          if (prevLinesWithoutDividers.length > 0) {
-            finalLines = [
-              "- ────────────────────────────── <!-- separator:new -->",
-              ...newLines,
-              "- ────────────────────────────── <!-- separator:previous -->",
-              ...prevLinesWithoutDividers
-            ];
-          } else {
-            finalLines = [
-              "- ────────────────────────────── <!-- separator:new -->",
-              ...newLines
-            ];
-          }
-        }
-
-        if (finalLines.length > 0) {
-          contentMd += `# ${header}\n${finalLines.join("\n")}\n\n`;
-        }
-      };
-
-      processSection("Features", finalFeatures, prevParsed?.featuresText);
-      processSection("Fixes", finalFixes, prevParsed?.fixesText);
-      processSection("Upcoming", finalUpcoming, prevParsed?.upcomingText);
+    if (existingOrder !== undefined) {
+      payload.order = existingOrder;
     }
 
-    let success = false;
-    if (editingEntryId && onUpdate) {
-      success = await onUpdate(editingEntryId, title.trim(), contentMd.trim());
+    let ok = false;
+    if (editingId) {
+      setLocalEntries((prev) =>
+        prev.map((item) =>
+          item.id === editingId ? ({ ...item, ...payload } as ChangelogItem) : item
+        )
+      );
+      ok = await onUpdate(editingId, payload);
     } else {
-      success = await onSubmit(title.trim(), contentMd.trim());
+      ok = await onSubmit(payload);
     }
 
-    if (success) {
+    if (ok) {
       resetForm();
-      setEditingEntryId(null);
-      setShowForm(false);
-      setActiveEditorTab("write");
     }
   };
 
-  const sectionsConfig = [
-    { id: "features", title: "New Features", color: "text-yellow-400", dotBg: "bg-yellow-400" },
-    { id: "fixes", title: "Fixes & Improvements", color: "text-emerald-400", dotBg: "bg-emerald-400" },
-    { id: "upcoming", title: "Upcoming", color: "text-sky-400", dotBg: "bg-sky-400" },
-  ] as const;
+  /* Draft item computed live for the preview */
+  const draftItem: ChangelogItem = useMemo(() => {
+    return {
+      id: editingId || "draft-preview",
+      type,
+      title: title || "Your Update Title",
+      description:
+        description ||
+        "Enter a description on the left to see live preview updates...",
+      date: type === "upcoming" ? null : new Date(date || Date.now()).toISOString(),
+      status: type === "upcoming" ? status : null,
+      media,
+    };
+  }, [editingId, type, title, description, date, status, media]);
+
+  /* Combined entries for Live Preview */
+  const previewEntries = useMemo(() => {
+    const list = localEntries.filter((e) => e.id !== editingId);
+    return [draftItem, ...list];
+  }, [localEntries, editingId, draftItem]);
+
+  /* Reorder handler for live preview up/down arrows (silent and local) */
+  const handleReorder = async (entryId: string, direction: "up" | "down") => {
+    let list = [...previewEntries];
+    if (previewTab !== "all") {
+      list = list.filter((item) => item.type === previewTab);
+    }
+    list.sort((a, b) => {
+      const isDraftA = a.id === "draft-preview" || a.id === editingId;
+      const isDraftB = b.id === "draft-preview" || b.id === editingId;
+      if (isDraftA) return -1;
+      if (isDraftB) return 1;
+
+      if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+      if (a.type === "upcoming" && b.type !== "upcoming") return -1;
+      if (a.type !== "upcoming" && b.type === "upcoming") return 1;
+      const timeA = a.date ? new Date(a.date).getTime() : 0;
+      const timeB = b.date ? new Date(b.date).getTime() : 0;
+      return timeB - timeA;
+    });
+
+    const index = list.findIndex((item) => item.id === entryId);
+    if (index === -1) return;
+
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    const minIndex = (list[0]?.id === "draft-preview" || list[0]?.id === editingId) ? 1 : 0;
+    if (targetIndex < minIndex || targetIndex >= list.length) return;
+
+    const item1 = list[index];
+    const item2 = list[targetIndex];
+
+    const order1 = item2.order !== undefined ? item2.order : (targetIndex + 1) * 10;
+    const order2 = item1.order !== undefined ? item1.order : (index + 1) * 10;
+
+    const finalOrder1 = order1 === order2 ? order1 - 1 : order1;
+    const finalOrder2 = order2;
+
+    setLocalEntries((prev) =>
+      prev.map((item) => {
+        if (item.id === item1.id) return { ...item, order: finalOrder1 };
+        if (item.id === item2.id) return { ...item, order: finalOrder2 };
+        return item;
+      })
+    );
+
+    const updateFn = onSilentUpdate || onUpdate;
+    if (item1.id !== "draft-preview") {
+      updateFn(item1.id, { order: finalOrder1 });
+    }
+    if (item2.id !== "draft-preview") {
+      updateFn(item2.id, { order: finalOrder2 });
+    }
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-black text-white">Changelog</h1>
-          <p className="text-xs text-zinc-500 mt-1">Publish patch notes for the userbase</p>
-        </div>
-        <button
-          onClick={handleNewEntryClick}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold transition-all cursor-pointer select-none"
-        >
-          {showForm && !editingEntryId ? (
-            <>
-              <X className="w-3.5 h-3.5" /> Cancel
-            </>
-          ) : (
-            <>
-              <Plus className="w-3.5 h-3.5" /> New Entry
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* Expandable Form */}
-      <AnimatePresence>
-        {showForm && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="rounded-2xl border border-white/5 bg-zinc-900/40 backdrop-blur-md p-5 space-y-4">
-              {/* Form Navigation (Write vs Preview) */}
-              <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex gap-1 bg-black/40 p-1 rounded-xl">
-                    <button
-                      type="button"
-                      onClick={() => setActiveEditorTab("write")}
-                      className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer",
-                        activeEditorTab === "write"
-                          ? "bg-white text-black"
-                          : "text-zinc-500 hover:text-zinc-300"
-                      )}
-                    >
-                      <Edit3 className="w-3 h-3" /> Write
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveEditorTab("preview")}
-                      className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer",
-                        activeEditorTab === "preview"
-                          ? "bg-white text-black"
-                          : "text-zinc-500 hover:text-zinc-300"
-                      )}
-                    >
-                      <Eye className="w-3 h-3" /> Live Preview
-                    </button>
-                  </div>
-                  {editingEntryId && (
-                    <span className="text-[10px] font-bold text-yellow-400 bg-yellow-400/10 px-2.5 py-1 rounded-lg border border-yellow-400/20 uppercase tracking-wider">
-                      Editing Mode
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {editingEntryId && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowForm(false);
-                        resetForm();
-                        setEditingEntryId(null);
-                      }}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-bold transition-all cursor-pointer"
-                    >
-                      <X className="w-3 h-3" /> Cancel Edit
-                    </button>
-                  )}
-                  {activeEditorTab === "preview" && totalParsedItems === 0 && (
-                    <div className="flex items-center gap-1.5 text-orange-400 text-[10px] font-bold">
-                      <AlertCircle className="w-3.5 h-3.5" />
-                      <span>No bullet points parsed</span>
-                    </div>
-                  )}
-                </div>
+    <div className="h-full flex flex-col min-h-0">
+      {/* Split Screen 50/50 Layout with Middle Divider Line */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 min-h-0 h-full relative">
+        {/* LEFT COLUMN: Form + Entries List (6 cols on lg, with right border line) */}
+        <div className="lg:col-span-6 h-full overflow-y-auto flex flex-col space-y-6 lg:pr-8 lg:border-r lg:border-white/10 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.2)_transparent]">
+          {/* Entry Form Window */}
+          <div className="rounded-[10px] border border-white/10 bg-[#121110] overflow-hidden shadow-2xl shrink-0">
+            {editingId && (
+              <div className="flex items-center justify-between bg-[#C9B037]/10 border-b border-[#C9B037]/20 px-4 py-2 text-[#C9B037]">
+                <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2 font-pixelify">
+                  <Edit3 className="w-3.5 h-3.5" /> Editing Entry ({editingId.slice(0, 8)})
+                </span>
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-[5px] bg-black/40 hover:bg-black/60 text-zinc-300 text-xs font-bold transition-all cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" /> Exit
+                </button>
               </div>
+            )}
 
-              {/* Form Input Content */}
-              {activeEditorTab === "write" ? (
-                <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Top Segmented Type Selector Tabs */}
+            <div className="grid grid-cols-3 border-b border-white/10 bg-[#181716] divide-x divide-white/10">
+              {[
+                { id: "feature", label: "Feature", Icon: Sparkles, activeColor: "text-emerald-400 bg-emerald-500/10", barColor: "bg-emerald-500 shadow-[0_0_8px_#10b981]" },
+                { id: "fix", label: "Fix", Icon: Wrench, activeColor: "text-red-400 bg-red-500/10", barColor: "bg-red-500 shadow-[0_0_8px_#ef4444]" },
+                { id: "upcoming", label: "Upcoming", Icon: Calendar, activeColor: "text-blue-400 bg-blue-500/10", barColor: "bg-blue-500 shadow-[0_0_8px_#3b82f6]" },
+              ].map((tab) => {
+                const isActive = type === tab.id;
+                const { Icon } = tab;
+
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setType(tab.id as ChangelogType)}
+                    className={cn(
+                      "py-3.5 px-3 font-pixelify text-sm font-bold tracking-wider uppercase transition-all flex items-center justify-center gap-2 cursor-pointer relative select-none",
+                      isActive
+                        ? tab.activeColor
+                        : "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.02]"
+                    )}
+                  >
+                    {isActive && (
+                      <div className={cn("absolute top-0 inset-x-0 h-[3px]", tab.barColor)} />
+                    )}
+                    <Icon
+                      className={cn(
+                        "w-4 h-4 transition-transform duration-300",
+                        isActive ? "scale-110" : "text-zinc-400"
+                      )}
+                    />
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Form Fields Container */}
+            <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-5">
+              {/* Title & Date / Status Side-by-Side Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Title */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-300 block font-pixelify tracking-wide">
+                    Title
+                  </label>
+                  <input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="e.g. Focus Zone Ambient Soundscapes"
+                    className="w-full bg-[#181716] border border-white/10 rounded-[5px] px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-[#C9B037]/60 focus:bg-[#1c1b1a] transition-all shadow-inner"
+                    required
+                  />
+                </div>
+
+                {/* Release Date or Progress Status */}
+                {type !== "upcoming" ? (
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 block">
-                      Release Tag / Title
+                    <label className="text-xs font-bold text-zinc-300 block font-pixelify tracking-wide">
+                      Release Date
                     </label>
                     <input
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      placeholder="e.g. v2.1.0 - The Analytics Update"
-                      className="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-white/10 focus:bg-black/50 transition-all"
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="w-full bg-[#181716] border border-white/10 rounded-[5px] px-3.5 py-2.5 text-xs text-white outline-none focus:border-[#C9B037]/60 transition-all shadow-inner [color-scheme:dark]"
                       required
                     />
                   </div>
-                  
-                  {/* Three separate inputs grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 block">
-                        New Features
-                      </label>
-                      <textarea
-                        value={featuresText}
-                        onChange={(e) => setFeaturesText(e.target.value)}
-                        placeholder="e.g. Added Focus Zone ceremony&#10;Added collapsible sidebar"
-                        rows={6}
-                        className="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-white/10 focus:bg-black/50 transition-all resize-none font-sans"
-                      />
-                    </div>
-                    
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 block">
-                        Fixes & Improvements
-                      </label>
-                      <textarea
-                        value={fixesText}
-                        onChange={(e) => setFixesText(e.target.value)}
-                        placeholder="e.g. Fixed concurrent session logs&#10;Fixed table styling alignment"
-                        rows={6}
-                        className="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-white/10 focus:bg-black/50 transition-all resize-none font-sans"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 block">
-                        Upcoming
-                      </label>
-                      <textarea
-                        value={upcomingText}
-                        onChange={(e) => setUpcomingText(e.target.value)}
-                        placeholder="e.g. Spotify music widget&#10;Analytics export features"
-                        rows={6}
-                        className="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-white/10 focus:bg-black/50 transition-all resize-none font-sans"
-                      />
+                ) : (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-zinc-300 block font-pixelify tracking-wide">
+                      Progress Status
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 bg-[#181716] p-1 rounded-[5px] border border-white/10">
+                      {(["planned", "in-progress"] as UpcomingStatus[]).map(
+                        (st) => (
+                          <button
+                            key={st}
+                            type="button"
+                            onClick={() => setStatus(st)}
+                            className={cn(
+                              "py-1.5 rounded-[5px] text-xs font-bold uppercase tracking-wider transition-all cursor-pointer font-pixelify",
+                              status === st
+                                ? st === "in-progress"
+                                  ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                                  : "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                                : "text-zinc-500 hover:text-zinc-300"
+                            )}
+                          >
+                            {st === "in-progress" ? "In Progress" : "Planned"}
+                          </button>
+                        )
+                      )}
                     </div>
                   </div>
+                )}
+              </div>
 
-                  <p className="text-[9px] text-zinc-500 italic mt-1 select-none">
-                    Enter each improvement or feature on a new line. Bullet points are formatted automatically.
-                  </p>
+              {/* Description Textarea */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-zinc-300 block font-pixelify tracking-wide">
+                  Description
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Describe the update details clearly..."
+                  rows={4}
+                  className="w-full bg-[#181716] border border-white/10 rounded-[5px] px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-[#C9B037]/60 focus:bg-[#1c1b1a] transition-all resize-y min-h-[90px] leading-relaxed shadow-inner"
+                  required
+                />
+              </div>
 
-                  <div className="flex justify-end pt-1">
-                    <button
-                      type="submit"
-                      disabled={submitting || !title.trim() || (!featuresText.trim() && !fixesText.trim() && !upcomingText.trim())}
-                      className="px-4 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-bold transition-all disabled:opacity-50 cursor-pointer select-none"
-                    >
-                      {submitting ? (editingEntryId ? "Updating..." : "Publishing...") : (editingEntryId ? "Update Notes" : "Publish Notes")}
-                    </button>
-                  </div>
-                </form>
-              ) : (
+              {/* Media Attachment Dropzone */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-zinc-300 block font-pixelify tracking-wide">
+                  Media Attachment (optional image / GIF)
+                </label>
 
-                /* Live Preview Layout */
-                <div className="rounded-xl border border-white/5 bg-zinc-950 p-4 space-y-4">
-                  {/* Mock Modal Header */}
-                  <div className="flex items-center gap-3 border-b border-white/5 pb-3">
-                    <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center border border-white/15">
-                      <FileText className="w-4 h-4 text-white" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-black text-white">{title || "Draft Version"}</h4>
-                      <p className="text-[9px] text-zinc-500 uppercase tracking-widest mt-0.5">
-                        {new Date().toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Mock Modal Tabs */}
-                  <div className="flex gap-1">
-                    {sectionsConfig.map((sect) => (
+                {media?.url ? (
+                  <div className="relative rounded-[5px] overflow-hidden border border-white/10 group aspect-video bg-black/50">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={media.url}
+                      alt="Uploaded media preview"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <span className="text-[10px] font-bold uppercase text-zinc-300 bg-black/60 px-2.5 py-1 rounded-[5px] border border-white/10 font-pixelify">
+                        {media.type}
+                      </span>
                       <button
-                        key={sect.id}
                         type="button"
-                        onClick={() => setActivePreviewSection(sect.id)}
-                        className={cn(
-                          "flex-1 py-1.5 text-[9px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer rounded-full border border-white/5",
-                          activePreviewSection === sect.id
-                            ? "text-white bg-white/10"
-                            : "text-zinc-600 hover:text-zinc-400"
-                        )}
+                        onClick={() => setMedia(null)}
+                        className="p-2 rounded-[5px] bg-red-500/80 hover:bg-red-600 text-white text-xs font-bold transition-all cursor-pointer"
                       >
-                        {sect.title}
+                        <Trash2 className="w-4 h-4" />
                       </button>
-                    ))}
+                    </div>
                   </div>
-
-                  {/* Mock Modal List Content */}
-                  <div className="min-h-[120px] py-1 text-left w-full">
-                    {parsedDraft[activePreviewSection].length > 0 ? (
-                      <ul className="space-y-2 w-full">
-                        {(() => {
-                          let dividerCount = 0;
-                          return parsedDraft[activePreviewSection].map((item, idx) => {
-                            const isSep = item.includes("<!-- separator:") || (item.trim().length >= 5 && item.trim().replace(/[-─*]/g, "").length === 0);
-
-                            if (isSep) {
-                              dividerCount++;
-                              const label = dividerCount === 1 ? "NEW" : "PREVIOUS";
-                              return (
-                                <li key={idx} className="w-full py-1">
-                                  <div className="flex items-center gap-3 w-full select-none">
-                                    <div className="h-px bg-white/10 flex-1" />
-                                    <span className="text-[8px] font-black uppercase tracking-widest text-zinc-600 shrink-0">
-                                      {label}
-                                    </span>
-                                    <div className="h-px bg-white/10 flex-1" />
-                                  </div>
-                                </li>
-                              );
-                            }
-
-                            const match = item.match(/(.*)\s*<!--\s*(.*?)\s*-->/);
-                            const text = match ? match[1].trim() : item;
-                            const dateStr = match
-                              ? match[2].trim()
-                              : (editingEntryId
-                                  ? editingEntryDate
-                                  : new Date().toLocaleDateString("en-US", {
-                                      month: "short",
-                                      day: "numeric",
-                                      year: "numeric",
-                                    }));
-
-                            return (
-                              <li
-                                  key={idx}
-                                  className="flex items-start justify-between gap-3 text-xs text-zinc-300 leading-relaxed w-full"
-                              >
-                                <div className="flex items-start gap-2.5 flex-1">
-                                  <span
-                                      className={cn(
-                                        "w-1.5 h-1.5 rounded-full mt-1.5 shrink-0",
-                                        sectionsConfig.find((s) => s.id === activePreviewSection)?.dotBg
-                                      )}
-                                  />
-                                  <span>{text}</span>
-                                </div>
-                                {dateStr && (
-                                  <span className="text-[9px] text-zinc-500 shrink-0 font-medium tabular-nums mt-0.5 select-none">
-                                    {dateStr}
-                                  </span>
-                                )}
-                              </li>
-                            );
-                          });
-                        })()}
-                      </ul>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-8 text-center">
-                        <p className="text-xs text-zinc-600 font-medium">Nothing parsed for this section</p>
+                ) : (
+                  <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-white/10 rounded-[5px] bg-[#181716]/60 hover:bg-[#181716] hover:border-white/20 transition-all cursor-pointer text-center group">
+                    {uploading ? (
+                      <div className="flex items-center gap-2 py-3 text-xs text-[#C9B037] font-bold font-pixelify">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Uploading to Firebase Storage...
                       </div>
+                    ) : (
+                      <>
+                        <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-2.5 text-zinc-400 group-hover:text-white group-hover:bg-white/10 transition-all shadow-sm">
+                          <Upload className="w-4 h-4" />
+                        </div>
+                        <span className="text-xs font-bold text-zinc-200">
+                          Drop an image or GIF here, or click to browse
+                        </span>
+                        <span className="text-[10px] text-zinc-500 mt-1">
+                          PNG, JPG, WEBP, or GIF (max 10MB)
+                        </span>
+                      </>
                     )}
-                  </div>
+                    <input
+                      type="file"
+                      accept="image/*,.gif"
+                      onChange={handleMediaUpload}
+                      disabled={uploading}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+              </div>
+
+              {/* Submit Button */}
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={
+                    submitting || uploading || !title.trim() || !description.trim()
+                  }
+                  className="w-full py-3.5 rounded-[5px] bg-[#C9B037] hover:bg-[#d9c147] text-black font-pixelify text-sm font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shadow-lg shadow-[#C9B037]/15 flex items-center justify-center active:scale-[0.99]"
+                >
+                  {submitting ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Saving Doc...
+                    </span>
+                  ) : (
+                    <span>{editingId ? "Update Patch Note" : "Publish Patch Note"}</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Existing Saved Entries Section */}
+          <div className="space-y-3 shrink-0 pb-4">
+            <div className="flex items-center gap-2 px-1">
+              <h3 className="text-xs font-bold text-zinc-400 font-pixelify tracking-wide">
+                Existing Saved Entries
+              </h3>
+              <span className="bg-white/10 text-zinc-300 text-[10px] font-bold px-2 py-0.5 rounded-full tabular-nums font-pixelify">
+                {localEntries.length}
+              </span>
+            </div>
+
+            <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1 [scrollbar-width:thin]">
+              <AnimatePresence mode="popLayout">
+                {localEntries.map((entry) => {
+                  const cfg = typeConfig[entry.type] || typeConfig.feature;
+                  const { Icon } = cfg;
+
+                  return (
+                    <motion.div
+                      key={entry.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.96 }}
+                      className={cn(
+                        "group relative rounded-[10px] border p-3.5 flex items-center justify-between gap-3.5 transition-all bg-[#121110] overflow-hidden",
+                        editingId === entry.id
+                          ? "border-[#C9B037]/60 shadow-[0_0_15px_rgba(201,176,55,0.15)]"
+                          : "border-white/10 hover:border-white/20"
+                      )}
+                    >
+                      {/* Left vertical colored indicator bar */}
+                      <div
+                        className="absolute left-0 inset-y-0 w-1"
+                        style={{ backgroundColor: cfg.dot }}
+                      />
+
+                      <div className="flex items-center gap-3.5 min-w-0 flex-1 pl-1">
+                        {/* Icon Container inside rounded square */}
+                        <div
+                          className="w-10 h-10 rounded-[8px] flex items-center justify-center shrink-0 border border-white/10 bg-[#181716]"
+                          style={{ color: cfg.dot }}
+                        >
+                          <Icon className="w-4 h-4" />
+                        </div>
+
+                        {/* Text Content */}
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span
+                              className="px-1.5 py-0.5 rounded-[5px] text-[9px] font-bold uppercase tracking-wider font-pixelify border"
+                              style={{
+                                color: cfg.textColor,
+                                backgroundColor: cfg.bgGlow,
+                                borderColor: cfg.borderColor,
+                              }}
+                            >
+                              {entry.type}
+                            </span>
+                            <h4 className="text-xs font-bold text-white truncate">
+                              {entry.title}
+                            </h4>
+                            {(entry.media?.url || entry.imageUrl) && (
+                              <ImageIcon className="w-3 h-3 text-zinc-400" />
+                            )}
+                          </div>
+                          <p className="text-xs text-zinc-400 line-clamp-1 leading-relaxed">
+                            {entry.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Right Date + Actions */}
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <span className="text-[11px] text-zinc-500 font-medium tabular-nums select-none font-pixelify mr-1">
+                          {formatDate(entry)}
+                        </span>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleEditClick(entry)}
+                            disabled={submitting || deletingId === entry.id}
+                            className="w-8 h-8 rounded-[5px] border border-white/10 bg-[#181716] hover:bg-white/15 text-zinc-400 hover:text-white flex items-center justify-center transition-all cursor-pointer disabled:opacity-30"
+                            title="Edit entry"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDelete(entry.id)}
+                            disabled={deletingId === entry.id}
+                            className="w-8 h-8 rounded-[5px] border border-white/10 bg-[#181716] hover:bg-red-500/20 text-zinc-400 hover:text-red-400 hover:border-red-500/30 flex items-center justify-center transition-all cursor-pointer disabled:opacity-30"
+                            title="Remove entry"
+                          >
+                            {deletingId === entry.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-red-400" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+
+              {localEntries.length === 0 && (
+                <div className="text-center py-10 rounded-[10px] border border-dashed border-white/10 bg-[#121110]">
+                  <p className="text-xs text-zinc-500 font-bold font-pixelify">
+                    No saved entries in Firestore
+                  </p>
                 </div>
               )}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+        </div>
 
-      {/* Entries List */}
-      <div className="space-y-3">
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 px-1">
-          Historical Entries ({entries.length})
-        </h3>
-        
-        <AnimatePresence mode="popLayout">
-          {entries.map((entry) => (
-            <motion.div
-              key={entry.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              className="group relative rounded-xl border border-white/[0.05] bg-zinc-900/40 backdrop-blur-md p-4 flex items-start justify-between gap-4 hover:border-white/10 transition-colors"
-            >
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex items-center gap-2">
-                  <h4 className="text-xs font-bold text-white group-hover:text-primary transition-colors">
-                    {entry.title}
-                  </h4>
-                  {entry.createdAt && (
-                    <span className="text-[8px] text-zinc-600 uppercase tracking-widest tabular-nums">
-                      {new Date(entry.createdAt).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-zinc-400 leading-relaxed whitespace-pre-wrap line-clamp-4 font-mono text-[11px] bg-black/20 rounded-lg p-2.5 border border-white/[0.02] mt-2 select-text">
-                  {entry.content}
+        {/* RIGHT COLUMN: Live 50/50 Split Preview Window (6 cols on lg) */}
+        <div className="lg:col-span-6 h-full flex flex-col min-h-0">
+          <div className="h-full flex flex-col min-h-0 rounded-[10px] border border-white/15 bg-[#0b0b0a] shadow-2xl overflow-hidden">
+            {/* Scrollable Public Page Mirror Container */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.2)_transparent]">
+              {/* Public Page Mock Header */}
+              <div className="text-center space-y-2 py-2 border-b border-white/5 pb-6">
+                <h2 className="font-pixelify text-3xl sm:text-4xl font-bold text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.15)]">
+                  Patch Notes
+                </h2>
+                <p className="font-pixelify text-xs text-zinc-400 max-w-xs mx-auto">
+                  Every feature, fix, and improvement starts with you.
                 </p>
               </div>
 
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  onClick={() => handleEditClick(entry)}
-                  disabled={submitting || deletingId === entry.id}
-                  className="p-2.5 rounded-xl text-zinc-500 hover:text-white hover:bg-white/10 transition-all shrink-0 cursor-pointer disabled:opacity-50 select-none border border-transparent hover:border-white/10"
-                  title="Edit entry"
-                >
-                  <Edit3 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => onDelete(entry.id)}
-                  disabled={deletingId === entry.id}
-                  className="p-2.5 rounded-xl text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0 cursor-pointer disabled:opacity-50 select-none border border-transparent hover:border-red-500/10"
-                  title="Delete entry"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
+              {/* Shared Tabs Component */}
+              <ChangelogTabs
+                activeTab={previewTab}
+                onTabChange={setPreviewTab}
+                entries={previewEntries}
+                compact={true}
+              />
 
-        {entries.length === 0 && (
-          <div className="text-center py-16 rounded-xl border border-dashed border-white/5">
-            <FileText className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
-            <p className="text-xs text-zinc-500 font-bold">No entries found</p>
-            <p className="text-[10px] text-zinc-600 uppercase tracking-wider mt-1">
-              Add your first changelog update using the button above
-            </p>
+              {/* Shared Timeline Component */}
+              <ChangelogTimeline
+                entries={previewEntries}
+                activeTab={previewTab}
+                previewMode={true}
+                onReorder={handleReorder}
+                draftId={editingId || "draft-preview"}
+              />
+            </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

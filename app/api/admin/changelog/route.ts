@@ -12,11 +12,44 @@ export async function GET(req: Request) {
       .orderBy("createdAt", "desc")
       .get();
 
-    const entries = snap.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || null,
-    }));
+    const entries = snap.docs.map((doc) => {
+      const data = doc.data();
+      let dateIso: string | null = null;
+      let createdAtIso: string | null = null;
+      let updatedAtIso: string | null = null;
+
+      if (data.date?.toDate) {
+        dateIso = data.date.toDate().toISOString();
+      } else if (typeof data.date === "string") {
+        dateIso = data.date;
+      }
+
+      if (data.createdAt?.toDate) {
+        createdAtIso = data.createdAt.toDate().toISOString();
+      } else if (typeof data.createdAt === "string") {
+        createdAtIso = data.createdAt;
+      }
+
+      if (data.updatedAt?.toDate) {
+        updatedAtIso = data.updatedAt.toDate().toISOString();
+      } else if (typeof data.updatedAt === "string") {
+        updatedAtIso = data.updatedAt;
+      }
+
+      return {
+        id: doc.id,
+        type: data.type || "feature",
+        title: data.title || "",
+        description: data.description || data.content || "",
+        date: dateIso || createdAtIso,
+        status: data.status || null,
+        media: data.media || (data.imageUrl ? { url: data.imageUrl, type: "image" } : null),
+        order: typeof data.order === "number" ? data.order : undefined,
+        createdAt: createdAtIso,
+        updatedAt: updatedAtIso,
+        content: data.content || "",
+      };
+    });
 
     return NextResponse.json({ entries });
   } catch (err: unknown) {
@@ -31,23 +64,40 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const decoded = await getAdminFromRequest(req);
-
     const body = await req.json();
-    const { title, content } = body;
+    const { type, title, description, date, status, media, order } = body;
 
-    if (!title || !content) {
+    if (!title || (!description && !body.content)) {
       return NextResponse.json(
-        { error: "Title and content are required" },
+        { error: "Title and description are required" },
         { status: 400 }
       );
     }
 
-    const docRef = await adminDb.collection("changelog").add({
+    const itemType = type || "feature";
+    const itemDescription = description || body.content || "";
+    let dateTimestamp: Timestamp | null = null;
+
+    if (itemType !== "upcoming") {
+      const d = date ? new Date(date) : new Date();
+      dateTimestamp = isNaN(d.getTime()) ? Timestamp.now() : Timestamp.fromDate(d);
+    }
+
+    const now = Timestamp.now();
+    const docData = {
+      type: itemType,
       title,
-      content,
+      description: itemDescription,
+      date: dateTimestamp,
+      status: itemType === "upcoming" ? (status || "planned") : null,
+      media: media || null,
+      order: typeof order === "number" ? order : Date.now(),
       createdBy: decoded.uid,
-      createdAt: Timestamp.now(),
-    });
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const docRef = await adminDb.collection("changelog").add(docData);
 
     return NextResponse.json({ id: docRef.id });
   } catch (err: unknown) {

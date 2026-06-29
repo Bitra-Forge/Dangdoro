@@ -250,14 +250,16 @@ export default function AdminLayout({
         {/* Main Content Pane */}
         <main
           className={cn(
-            "flex-1 overflow-y-auto relative z-10",
-            pathname === "/admin" ? "h-screen overflow-hidden" : "p-8 lg:p-10",
+            "flex-1 relative z-10",
+            pathname === "/admin" || pathname.startsWith("/admin/changelog")
+              ? "h-screen overflow-hidden p-6 lg:p-8 flex flex-col"
+              : "overflow-y-auto p-8 lg:p-10",
           )}
         >
           <div
             className={cn(
-              pathname === "/admin"
-                ? "h-full w-full"
+              pathname === "/admin" || pathname.startsWith("/admin/changelog")
+                ? "h-full w-full flex flex-col flex-1 min-h-0"
                 : "max-w-5xl mx-auto space-y-6",
             )}
           >

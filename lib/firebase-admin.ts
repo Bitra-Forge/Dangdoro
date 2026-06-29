@@ -17,8 +17,11 @@ function initializeAdmin() {
       process.env.FIREBASE_STORAGE_EMULATOR_HOST = "127.0.0.1:9199";
     }
 
+    const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || `${projectId || "demo-dangdoro"}.appspot.com`;
+
     admin.initializeApp({
       projectId: "demo-dangdoro",
+      storageBucket: bucketName,
     });
     console.log("🔌 Firebase Admin SDK connected to Emulators (Auth: 9099, Firestore: 8080, Storage: 9199)");
     return;
@@ -27,6 +30,7 @@ function initializeAdmin() {
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   // Private keys in env files often have escaped newlines like \\n. We must replace them.
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || `${projectId}.appspot.com`;
 
   if (projectId && clientEmail && privateKey) {
     admin.initializeApp({
@@ -35,6 +39,7 @@ function initializeAdmin() {
         clientEmail,
         privateKey,
       }),
+      storageBucket: bucketName,
     });
     return;
   }
@@ -94,8 +99,17 @@ function getAdminDb() {
   return admin.firestore();
 }
 
+function getAdminStorage() {
+  if (!admin.apps.length) {
+    throw new Error(
+      "Firebase Admin is not initialized. Ensure credentials are configured."
+    );
+  }
+  return admin.storage();
+}
+
 // Export getters that are safe to import even when admin isn't initialized.
-// The actual auth()/firestore() calls are deferred to first use.
+// The actual auth()/firestore()/storage() calls are deferred to first use.
 export const adminAuth = new Proxy({} as ReturnType<typeof admin.auth>, {
   get(_, prop) {
     return (getAdminAuth() as any)[prop];
@@ -105,6 +119,12 @@ export const adminAuth = new Proxy({} as ReturnType<typeof admin.auth>, {
 export const adminDb = new Proxy({} as ReturnType<typeof admin.firestore>, {
   get(_, prop) {
     return (getAdminDb() as any)[prop];
+  },
+});
+
+export const adminStorage = new Proxy({} as ReturnType<typeof admin.storage>, {
+  get(_, prop) {
+    return (getAdminStorage() as any)[prop];
   },
 });
 
