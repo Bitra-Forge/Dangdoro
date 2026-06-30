@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
+import { v2 as cloudinary } from "cloudinary";
 import { getAdminFromRequest } from "@/lib/admin-check";
-import { adminStorage } from "@/lib/firebase-admin";
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 export async function POST(req: Request) {
   try {
@@ -17,45 +23,28 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(bytes);
 
     const isGif = file.type === "image/gif";
-    const extension = file.name.split(".").pop() || (isGif ? "gif" : "png");
-    const uuid = Math.random().toString(36).substring(2, 9);
-    const filename = `changelog/${Date.now()}_${uuid}.${extension}`;
 
-    const useEmulator = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true";
-    const bucketName = useEmulator
-      ? "demo-dangdoro"
-      : (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "dangdoro-7579a.firebasestorage.app");
-
-    const bucket = adminStorage.bucket(bucketName);
-    const fileRef = bucket.file(filename);
-
-    const downloadToken =
-      Math.random().toString(36).substring(2, 15) +
-      Math.random().toString(36).substring(2, 15);
-
-    await fileRef.save(buffer, {
-      metadata: {
-        contentType: file.type || (isGif ? "image/gif" : "image/png"),
-        metadata: {
-          firebaseStorageDownloadTokens: downloadToken,
+    // Upload buffer to Cloudinary via upload_stream
+    const result = await new Promise<{ secure_url: string; resource_type: string }>((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: "dangdoro_changelog",
+          resource_type: "auto",
         },
-      },
+        (error, result) => {
+          if (error || !result) return reject(error || new Error("Cloudinary upload failed"));
+          resolve(result);
+        }
+      );
+      uploadStream.end(buffer);
     });
 
-    let publicUrl = "";
-    if (useEmulator) {
-      const emulatorHost = process.env.FIREBASE_STORAGE_EMULATOR_HOST || "127.0.0.1:9199";
-      publicUrl = `http://${emulatorHost}/v0/b/${bucketName}/o/${encodeURIComponent(filename)}?alt=media`;
-    } else {
-      publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(filename)}?alt=media&token=${downloadToken}`;
-    }
-
     return NextResponse.json({
-      url: publicUrl,
+      url: result.secure_url,
       type: isGif ? "gif" : "image",
     });
   } catch (err: unknown) {
-    console.error("Upload route error:", err);
+    console.error("Cloudinary upload error:", err);
     const message = err instanceof Error ? err.message : "Upload failed";
     return NextResponse.json(
       { error: message },

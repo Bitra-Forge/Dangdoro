@@ -169,7 +169,7 @@ export function ChangelogCard({
             </div>
 
             <span className="text-[11px] text-zinc-500 tabular-nums font-medium select-none flex items-center gap-2">
-              {item.type === "upcoming" && item.status && (
+              {item.type === "upcoming" && item.status ? (
                 <span
                   className={cn(
                     "px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border",
@@ -180,8 +180,9 @@ export function ChangelogCard({
                 >
                   {item.status === "in-progress" ? "In Progress" : "Planned"}
                 </span>
+              ) : (
+                <span>{formatDate(item)}</span>
               )}
-              <span>{formatDate(item)}</span>
             </span>
           </div>
 

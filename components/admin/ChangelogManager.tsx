@@ -539,7 +539,7 @@ export function ChangelogManager({
                               className="px-1.5 py-0.5 rounded-[5px] text-[9px] font-bold uppercase tracking-wider font-pixelify border"
                               style={{
                                 color: cfg.textColor,
-                                backgroundColor: cfg.bgGlow,
+                                backgroundColor: cfg.accentBg,
                                 borderColor: cfg.borderColor,
                               }}
                             >
