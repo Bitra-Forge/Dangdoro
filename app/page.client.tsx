@@ -1,7 +1,7 @@
 "use client";
 
 import { TimerCard } from "@/components/timer-card";
-import { Clock, CheckCircle2 as CheckIcon, X as CloseIcon, ChevronDown } from "lucide-react";
+import { Clock, CheckCircle2 as CheckIcon, X as CloseIcon, ChevronDown, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useTimerStore } from "@/lib/store";
 import { toggleTask, toggleGroupTask } from "@/lib/db";
@@ -10,8 +10,60 @@ import { useEffect, useRef, useState } from "react";
 import { BackgroundTheme } from "@/components/background-theme";
 import { GroupFocusSelector } from "@/components/group-focus-selector";
 import { FloatingFocusAvatars, InlinePausedDock } from "@/components/floating-focus-avatars";
+import { useTour, type TourStep } from "@/lib/use-tour";
 
 export default function Home() {
+  const tourSteps: TourStep[] = [
+    {
+      popover: {
+        title: "Welcome to the Timer",
+        description: "Your central focus cockpit. Run Pomodoro sessions, track active tasks, and manage your workflow.",
+      },
+    },
+    {
+      element: "#timer-display",
+      popover: {
+        title: "Timer Display",
+        description: "This is your primary focus timer. You can click on the text to edit the session duration manually at any time.",
+        side: "bottom",
+        align: "center",
+      },
+    },
+    {
+      element: "#timer-start",
+      popover: {
+        title: "Start Concentrating",
+        description: "Click this button to start, pause, or resume your current Pomodoro timer.",
+        side: "top",
+        align: "center",
+      },
+    },
+    {
+      element: "#timer-settings",
+      popover: {
+        title: "Customization Controls",
+        description: "Open settings to fine-tune your step adjustments, select immersive background ambient colors, or customize audio end-session sounds.",
+        side: "left",
+        align: "center",
+      },
+    },
+    {
+      element: "#group-selector-btn",
+      popover: {
+        title: "Focus Solo or Group",
+        description: "Concentrate alone, or switch to your active group to study and work side-by-side with other community users in real-time.",
+        side: "right",
+        align: "center",
+      },
+    },
+  ];
+
+  const { resetTour, startTour } = useTour({ pageName: "home", steps: tourSteps });
+  const handleRestartTour = () => {
+    resetTour();
+    startTour();
+  };
+
   const backgroundSolidColor = useTimerStore((state) => state.backgroundSolidColor);
   const noneBackgroundMode = useTimerStore((state) => state.noneBackgroundMode);
   const noneBackgroundGradient = useTimerStore((state) => state.noneBackgroundGradient);
@@ -248,6 +300,17 @@ export default function Home() {
           <TimerCard />
         </div>
       </main>
+
+      {/* Floating Help/Tour Button */}
+      <div className="fixed bottom-6 left-6 z-50">
+        <button
+          onClick={handleRestartTour}
+          className="p-3 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
+          title="Restart Page Tour"
+        >
+          <HelpCircle className="w-5 h-5" />
+        </button>
+      </div>
       </div>
     </BackgroundTheme>
   );

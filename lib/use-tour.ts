@@ -20,9 +20,10 @@ export interface UseTourOptions {
     onComplete?: () => void;
     onDismiss?: () => void;
     isGuest?: boolean;
+    disabled?: boolean;
 }
 
-export function useTour({ pageName, steps, onComplete, onDismiss, isGuest = false }: UseTourOptions) {
+export function useTour({ pageName, steps, onComplete, onDismiss, isGuest = false, disabled = false }: UseTourOptions) {
     const driverRef = useRef<Driver | null>(null);
     const [hasSeenTour, setHasSeenTour] = useState(false);
     const [isHydrated, setIsHydrated] = useState(false);
@@ -50,7 +51,7 @@ export function useTour({ pageName, steps, onComplete, onDismiss, isGuest = fals
     const isUnmountingRef = useRef(false);
 
     useEffect(() => {
-        if (!isHydrated || hasSeenTour || steps.length === 0) return;
+        if (!isHydrated || hasSeenTour || steps.length === 0 || disabled) return;
 
         isUnmountingRef.current = false;
         let countdownInterval: ReturnType<typeof setInterval> | null = null;
@@ -189,7 +190,7 @@ export function useTour({ pageName, steps, onComplete, onDismiss, isGuest = fals
             }
             driverObj.destroy();
         };
-    }, [isHydrated, hasSeenTour, stepsString, storageKey]);
+    }, [isHydrated, hasSeenTour, stepsString, storageKey, disabled]);
 
     const startTour = () => {
         if (driverRef.current) {

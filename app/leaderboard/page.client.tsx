@@ -3,10 +3,11 @@
 import { useEffect, useState, Suspense, useMemo } from "react";
 import { 
     Trophy, Zap, Clock, Medal, Sprout, Leaf, Flower2, ChevronRight, 
-    TrendingUp, Search, Info, Users, Briefcase, ChevronLeft 
+    TrendingUp, Search, Info, Users, Briefcase, ChevronLeft, HelpCircle
 } from "lucide-react";
 import { getLeaderboard, getGroupLeaderboard, fetchUserProfiles } from "@/lib/db";
 import { getFriendsLeaderboard } from "@/lib/friendship";
+import { useTour, type TourStep } from "@/lib/use-tour";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn, getHighQualityAvatarUrl } from "@/lib/utils";
 import { syncUserProfile } from "@/lib/db";
@@ -21,10 +22,47 @@ import Image from "next/image";
 type LeaderboardTab = "global" | "friends" | "groups";
 
 function LeaderboardContent() {
+    const tourSteps: TourStep[] = [
+        {
+            popover: {
+                title: "Welcome to the Leaderboard",
+                description: "Climb the ranks with focus minutes. Compare weekly, all-time, and friend standings.",
+            },
+        },
+        {
+            element: "#leaderboard-tabs",
+            popover: {
+                title: "Filter Rankings",
+                description: "Filter focus statistics by current weekly growth, all-time accumulated minutes, friend lists, or historical weeks.",
+                side: "bottom",
+                align: "center",
+            },
+        },
+        {
+            element: "#leaderboard-podium",
+            popover: {
+                title: "Focus Podium",
+                description: "The top 3 focused pilots are displayed on the podium cards. Hover over them to inspect their avatar cards and total active hours.",
+                side: "top",
+                align: "center",
+            },
+        },
+    ];
+
     const { user, loading: authLoading } = useAuth();
+    const [loading, setLoading] = useState(true);
+    const { resetTour, startTour } = useTour({
+        pageName: "leaderboard",
+        steps: tourSteps,
+        disabled: authLoading || !user || user.isAnonymous || loading
+    });
+    const handleRestartTour = () => {
+        resetTour();
+        startTour();
+    };
+
     const router = useRouter();
     const [players, setPlayers] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
     const [visibleCount, setVisibleCount] = useState(20);
     const searchParams = useSearchParams();
     
@@ -195,7 +233,7 @@ function LeaderboardContent() {
                     {/* Tab Toggle */}
                     {!selectedGroup && (
                         <div className="flex flex-col items-center gap-6 mb-12 w-full max-w-2xl">
-                            <div className="flex items-center gap-2 p-1.5 bg-zinc-950/90 sm:bg-zinc-900/40 backdrop-blur-none sm:backdrop-blur-2xl border border-white/10 rounded-full w-full">
+                            <div id="leaderboard-tabs" className="flex items-center gap-2 p-1.5 bg-zinc-950/90 sm:bg-zinc-900/40 backdrop-blur-none sm:backdrop-blur-2xl border border-white/10 rounded-full w-full">
                                 {[
                                     { id: "global", icon: Trophy, label: "Global" },
                                     { id: "friends", icon: Users, label: "Friends" },
@@ -362,7 +400,7 @@ function LeaderboardContent() {
                     ) : (
                         <div className="w-full flex flex-col items-center gap-16">
                             {/* THE PODIUM (Top 3 Cards) - 100% VISUAL RESTORATION */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl items-end relative">
+                            <div id="leaderboard-podium" className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl items-end relative">
                                 {podiumOrder.map((player, idx) => {
                                     const rank = player === topThree[0] ? 1 : player === topThree[1] ? 2 : 3;
                                     const totalMinutes = player.totalMinutes || 0;
@@ -478,6 +516,17 @@ function LeaderboardContent() {
                         </motion.div>
                     </AnimatePresence>
                 </main>
+
+                {/* Floating Help/Tour Button */}
+                <div className="fixed bottom-6 left-6 z-50">
+                    <button
+                        onClick={handleRestartTour}
+                        className="p-3 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
+                        title="Restart Page Tour"
+                    >
+                        <HelpCircle className="w-5 h-5" />
+                    </button>
+                </div>
             </div>
         </BackgroundTheme>
     );
