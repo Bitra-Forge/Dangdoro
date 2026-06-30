@@ -152,4 +152,8 @@ export function getTimeUntilReset(now: Date = new Date()): string {
   return `Resets in ${parts.join(" ")}`;
 }
 
+export function extractFirstUrl(content: string): string | null {
+  const match = content.match(/(https?:\/\/[^\s]+)/g);
+  return match ? match[0] : null;
+}
 

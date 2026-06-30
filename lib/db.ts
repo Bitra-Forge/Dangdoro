@@ -16,6 +16,7 @@ import {
     where,
     writeBatch,
     arrayRemove,
+    arrayUnion,
     Timestamp
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -1615,6 +1616,25 @@ export const updateUserProfile = async (userId: string, data: { displayName?: st
         return true;
     } catch {
         console.error("Error updating user profile");
+        return false;
+    }
+};
+
+/**
+ * Toggles a group in the user's muted groups list.
+ * When muted, the user won't receive chat notifications for that group.
+ */
+export const toggleMuteGroup = async (userId: string, groupId: string, muted: boolean) => {
+    try {
+        const userRef = doc(db, "users", userId);
+        if (muted) {
+            await updateDoc(userRef, { mutedGroups: arrayUnion(groupId) });
+        } else {
+            await updateDoc(userRef, { mutedGroups: arrayRemove(groupId) });
+        }
+        return true;
+    } catch (error) {
+        console.error("Error toggling mute group:", error);
         return false;
     }
 };

@@ -137,6 +137,42 @@ service cloud.firestore {
           get(/databases/$(database)/documents/focusGroups/$(groupId)).data
         );
       }
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && isGroupMember(
+          get(/databases/$(database)/documents/focusGroups/$(groupId)).data
+        );
+        allow create: if isSignedIn() && isGroupMember(
+          get(/databases/$(database)/documents/focusGroups/$(groupId)).data
+        ) && request.resource.data.senderId == request.auth.uid;
+        allow update: if isSignedIn() && (
+          resource.data.senderId == request.auth.uid ||
+          isGroupHost(get(/databases/$(database)/documents/focusGroups/$(groupId)).data)
+        );
+        allow delete: if isSignedIn() && (
+          resource.data.senderId == request.auth.uid ||
+          isGroupHost(get(/databases/$(database)/documents/focusGroups/$(groupId)).data)
+        );
+      }
+
+      match /materials/{materialId} {
+        allow read: if isSignedIn() && isGroupMember(
+          get(/databases/$(database)/documents/focusGroups/$(groupId)).data
+        );
+        allow create: if isSignedIn() && isGroupMember(
+          get(/databases/$(database)/documents/focusGroups/$(groupId)).data
+        );
+        allow delete: if isSignedIn() && (
+          resource.data.addedBy == request.auth.uid ||
+          isGroupHost(get(/databases/$(database)/documents/focusGroups/$(groupId)).data)
+        );
+      }
+
+      match /presence/{userId} {
+        allow read: if isSignedIn();
+        allow create, update: if isSignedIn() && request.auth.uid == userId;
+        allow delete: if isSignedIn() && request.auth.uid == userId;
+      }
     }
 
     // Helper: only allow admins to update name, description, settings, and member/invite fields

@@ -103,6 +103,38 @@ export interface LiveSession {
     userPhoto?: string;
 }
 
+export interface ChatMessage {
+    id: string;
+    senderId: string;
+    senderName: string;
+    senderPhoto: string;
+    content: string;
+    type: "text";
+    replyTo: { messageId: string; senderName: string; preview: string } | null;
+    reactions: Record<string, string[]>;
+    edited: boolean;
+    editedAt: Timestamp | null;
+    deletedAt: Timestamp | null;
+    pinned: boolean;
+    pinnedBy: string | null;
+    createdAt: Timestamp;
+}
+
+export interface Material {
+    id: string;
+    addedBy: string;
+    addedByName: string;
+    type: "link" | "image" | "file";
+    url: string;
+    thumbnailUrl: string | null;
+    fileName: string | null;
+    fileSize: number | null;
+    title: string;
+    description: string;
+    tags: string[];
+    createdAt: Timestamp;
+}
+
 export function generateInviteToken() {
     // Use crypto for a cryptographically secure token (8 uppercase alphanumeric chars)
     if (typeof crypto !== "undefined" && crypto.randomUUID) {

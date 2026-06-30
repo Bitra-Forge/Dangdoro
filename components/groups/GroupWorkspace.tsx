@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, memo, useRef, useCallback } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import {
-    doc, onSnapshot, collection, query, orderBy,
+    doc, onSnapshot, collection, query, orderBy, limit,
     updateDoc, arrayUnion, increment, serverTimestamp,
     addDoc, deleteDoc, getDocs, where, writeBatch
 } from "firebase/firestore";
@@ -16,8 +16,9 @@ import { useRouter } from "next/navigation";
 import { 
     Users, Briefcase, ChevronRight, Play, Pause, 
     StopCircle, MoreVertical, UserPlus, LogOut, X, 
-    LayoutGrid, Target, Crown, Zap, User, Trash2
+    LayoutGrid, Target, Crown, Zap, User, Trash2, MessageCircle, Bell, BellOff
 } from "lucide-react";
+import { LinkIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -28,7 +29,7 @@ import {
     getEarliestActiveStart, normalizeLiveSessions,
     getGoalTypeLabel, GoalType, LiveSession, computeNextResetAt
 } from "@/lib/groups";
-import { fetchUserProfiles } from "@/lib/db";
+import { fetchUserProfiles, toggleMuteGroup } from "@/lib/db";
 import { accumulateFocusTime } from "@/lib/focus-accumulator";
 import { applyGroupSessionAction } from "@/lib/group-session";
 import { getFriendsList } from "@/lib/friendship";
@@ -39,6 +40,9 @@ import { SharedTasksPanel } from "./SharedTasksPanel";
 import { ParticipantsTab } from "./ParticipantsTab";
 import { InviteModal } from "./InviteModal";
 import { GroupManagementView } from "./GroupManagementView";
+import { GroupChat } from "./GroupChat";
+import { GroupMaterials } from "./GroupMaterials";
+import { useChatNotificationStore } from "@/lib/stores/chat-notification-store";
 
 interface GroupWorkspaceProps {
     groupId: string;
@@ -57,7 +61,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const [loading, setLoading] = useState(true);
     
     // UI State (moved from GroupDetailModal)
-    const [activeTab, setActiveTab] = useState<"workspace" | "members">("workspace");
+    const [activeTab, setActiveTab] = useState<"workspace" | "members" | "chat" | "materials">("workspace");
 
     const [isManagingRoles, setIsManagingRoles] = useState(false);
     const [showInviteModal, setShowInviteModal] = useState(false);
@@ -68,6 +72,8 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [objectiveTemplateDraft, setObjectiveTemplateDraft] = useState<ObjectiveTemplateDraft | null>(null);
     const [friends, setFriends] = useState<any[]>([]);
+    const [isMuted, setIsMuted] = useState(false);
+    const clearChatNotification = useChatNotificationStore(s => s.clearChatNotification);
 
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
     const timerStart = useTimerStore(s => s.start);
@@ -167,6 +173,61 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         if (!user) return;
         getFriendsList(user.uid).then(setFriends);
     }, [user]);
+
+    // 8. Subscribe to muted groups
+    useEffect(() => {
+        if (!user || !groupId) return;
+        const unsub = onSnapshot(doc(db, "users", user.uid), (snap) => {
+            if (snap.exists()) {
+                const data = snap.data();
+                setIsMuted(data.mutedGroups?.includes(groupId) ?? false);
+            }
+        });
+        return unsub;
+    }, [user, groupId]);
+
+    // Clear chat notification when switching to chat tab
+    useEffect(() => {
+        if (activeTab === "chat") {
+            clearChatNotification();
+        }
+    }, [activeTab, clearChatNotification]);
+
+    // 10. Chat notification subscription
+    const lastMessageIdRef = useRef<string | null>(null);
+    const setChatNotification = useChatNotificationStore(s => s.setChatNotification);
+    useEffect(() => {
+        if (!user || !groupId) return;
+        const messagesRef = collection(db, `focusGroups/${groupId}/messages`);
+        const q = query(messagesRef, orderBy("createdAt", "desc"), limit(1));
+        const unsub = onSnapshot(q, (snap) => {
+            if (snap.empty) return;
+            const msg = snap.docs[0].data() as { senderId: string; content: string; senderName: string };
+            const msgId = snap.docs[0].id;
+            if (msg.senderId === user.uid) return;
+            if (msgId === lastMessageIdRef.current) return;
+            lastMessageIdRef.current = msgId;
+            if (isMuted) return;
+            if (activeTab !== "chat") {
+                setChatNotification({
+                    groupId,
+                    message: `New message in ${group?.name || "group"}: ${msg.content.slice(0, 80)}`,
+                });
+            }
+        });
+        return unsub;
+    }, [user, groupId, isMuted, activeTab, group?.name, setChatNotification]);
+
+    const handleToggleMute = async () => {
+        if (!user) return;
+        const result = await toggleMuteGroup(user.uid, groupId, !isMuted);
+        if (result) {
+            setIsMuted(!isMuted);
+            if (isMuted) {
+                clearChatNotification();
+            }
+        }
+    };
 
     const [now, setNow] = useState(Date.now());
     useEffect(() => {
@@ -695,6 +756,16 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                             )}
                                             <button
                                                 onClick={() => {
+                                                    handleToggleMute();
+                                                    setIsHeaderMenuOpen(false);
+                                                }}
+                                                className="w-full px-3 py-2 rounded-lg text-left text-[11px] font-bold text-zinc-300 hover:bg-white/10 inline-flex items-center gap-2"
+                                            >
+                                                {isMuted ? <BellOff className="w-3.5 h-3.5" /> : <Bell className="w-3.5 h-3.5" />}
+                                                {isMuted ? "Unmute notifications" : "Mute notifications"}
+                                            </button>
+                                            <button
+                                                onClick={() => {
                                                     handleLeaveGroup();
                                                     setIsHeaderMenuOpen(false);
                                                 }}
@@ -730,7 +801,9 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                         <div className="flex gap-1 p-1 bg-zinc-950/40 rounded-xl w-fit border border-white/5 relative">
                             {[
                                 { id: "workspace", icon: LayoutGrid, label: "Overview" },
-                                { id: "members",   icon: Users, label: "Participants" }
+                                { id: "members",   icon: Users, label: "Participants" },
+                                { id: "chat",      icon: MessageCircle, label: "Chat" },
+                                { id: "materials", icon: LinkIcon, label: "Materials" }
                             ].map(t => (
                                 <button
                                     key={t.id}
@@ -986,7 +1059,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                     </div>
                                 </div>
                             </div>
-                        ) : (
+                        ) : activeTab === "members" ? (
                             <ParticipantsTab 
                                 group={enrichedGroup} 
                                 sortedMembers={sortedMembers} 
@@ -997,8 +1070,12 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                 goalHours={enrichedGroup.settings?.goalHours || 0}
                                 goalType={enrichedGroup.settings?.goalType || "weekly"}
                             />
+                         ) : activeTab === "chat" ? (
+                            <GroupChat groupId={groupId} isHost={isHost} />
+                         ) : (
+                            <GroupMaterials groupId={groupId} isHost={isHost} groupName={enrichedGroup.name} />
                          )}
-                     </div>
+                      </div>
                 )}
             </div>
 
