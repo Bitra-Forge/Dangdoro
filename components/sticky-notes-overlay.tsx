@@ -6,12 +6,53 @@ import { useState, useRef, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Tooltip } from "@/components/ui/tooltip";
 
-const COLOR_STYLES: Record<NoteColor, { bg: string; text: string; border: string; glow: string }> = {
-  yellow: { bg: "bg-amber-400/90", text: "text-amber-950", border: "border-amber-300/60", glow: "rgba(251,191,36,0.35)" },
-  green:  { bg: "bg-emerald-400/90", text: "text-emerald-950", border: "border-emerald-300/60", glow: "rgba(52,211,153,0.35)" },
-  blue:   { bg: "bg-sky-400/90", text: "text-sky-950", border: "border-sky-300/60", glow: "rgba(56,189,248,0.35)" },
-  pink:   { bg: "bg-pink-400/90", text: "text-pink-950", border: "border-pink-300/60", glow: "rgba(244,114,182,0.35)" },
-  purple: { bg: "bg-violet-400/90", text: "text-violet-950", border: "border-violet-300/60", glow: "rgba(167,139,250,0.35)" },
+// Paper-look color palette: warm, physical-feeling backgrounds
+const COLOR_STYLES: Record<NoteColor, { bg: string; text: string; border: string; glow: string; lines: string; fold: string; dotBg: string }> = {
+  yellow: {
+    bg: "#fef6e5",
+    text: "#6d4508",
+    border: "transparent",
+    glow: "rgba(245,158,11,0.15)",
+    lines: "rgba(109,69,8,0.15)",
+    fold: "transparent",
+    dotBg: "#f59e0b",
+  },
+  green: {
+    bg: "#e0f7fa",
+    text: "#0d4a34",
+    border: "transparent",
+    glow: "rgba(16,185,129,0.15)",
+    lines: "rgba(13,74,52,0.15)",
+    fold: "transparent",
+    dotBg: "#10b981",
+  },
+  blue: {
+    bg: "#e0f2fe",
+    text: "#0c4a6e",
+    border: "transparent",
+    glow: "rgba(56,189,248,0.15)",
+    lines: "rgba(12,74,110,0.15)",
+    fold: "transparent",
+    dotBg: "#38bdf8",
+  },
+  pink: {
+    bg: "#fcebf3",
+    text: "#700c3b",
+    border: "transparent",
+    glow: "rgba(236,72,153,0.15)",
+    lines: "rgba(112,12,59,0.15)",
+    fold: "transparent",
+    dotBg: "#ec4899",
+  },
+  purple: {
+    bg: "#f3e8ff",
+    text: "#581c87",
+    border: "transparent",
+    glow: "rgba(139,92,246,0.15)",
+    lines: "rgba(88,28,135,0.15)",
+    fold: "transparent",
+    dotBg: "#8b5cf6",
+  },
 };
 
 const NOTE_COLORS: NoteColor[] = ["yellow", "green", "blue", "pink", "purple"];
@@ -73,6 +114,14 @@ function FloatingNoteCard({
   const dragOffset = useRef({ x: 0, y: 0 });
   const isDragging = useRef(false);
   const cardEl = useRef<HTMLDivElement | null>(null);
+  // Track whether this note was just freshly placed (for wobble)
+  const [justPlaced, setJustPlaced] = useState(true);
+
+  useEffect(() => {
+    // After the entry wobble, mark as settled
+    const t = setTimeout(() => setJustPlaced(false), 700);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     posRef.current = { x: note.positionX, y: note.positionY };
@@ -115,65 +164,124 @@ function FloatingNoteCard({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.8 }}
+      initial={{ opacity: 0, scale: 0.75, rotate: -6 }}
+      animate={
+        justPlaced
+          ? {
+              opacity: 1,
+              scale: [0.75, 1.08, 0.97, 1.03, 1],
+              rotate: [-6, 3, -2, 1.5, -2],
+            }
+          : { opacity: 1, scale: 1, rotate: -2.5 }
+      }
+      exit={{ opacity: 0, scale: 0.8, rotate: -4 }}
+      transition={
+        justPlaced
+          ? { duration: 0.6, ease: "easeOut" }
+          : { type: "spring", stiffness: 280, damping: 28 }
+      }
       style={{
         position: "fixed",
         left: note.positionX,
         top: note.positionY,
-        zIndex: 50,
-        filter: `drop-shadow(0 8px 24px ${colors.glow})`,
+        zIndex: 58,
+        filter: `drop-shadow(0 8px 28px ${colors.glow}) drop-shadow(0 2px 6px rgba(0,0,0,0.18))`,
+        transformOrigin: "top right",
       }}
       className="w-[220px] cursor-grab active:cursor-grabbing select-none"
     >
-      <div className={`${colors.bg} ${colors.border} border rounded-2xl p-3 shadow-xl backdrop-blur-sm relative group`}>
-        <p className={`text-sm ${colors.text} whitespace-pre-wrap break-words leading-relaxed pr-6`}>
-          {note.content}
-        </p>
+      {/* Translucent scotch tape at top right */}
+      <div
+        className="absolute -top-3 right-6 w-11 h-4 bg-white/20 backdrop-blur-[0.5px] border border-white/5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] rotate-[-12deg] pointer-events-none z-10"
+        style={{
+          boxShadow: "inset 0 0 3px rgba(255,255,255,0.15)",
+        }}
+      />
 
-        {/* Action buttons — appear on hover */}
-        <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* Paper note card */}
+      <div className="relative group w-full">
+        {/* Inner card with overflow-hidden to crop left strip curvature */}
+        <div
+          className="rounded-[20px] overflow-hidden flex w-full border-none"
+          style={{
+            backgroundColor: colors.bg,
+            backgroundImage: `repeating-linear-gradient(
+              180deg,
+              transparent,
+              transparent 19px,
+              ${colors.lines} 19px,
+              ${colors.lines} 20px
+            )`,
+            backgroundSize: "100% 20px",
+            backgroundPosition: "0 14px",
+          }}
+        >
+          {/* Left Accent Strip */}
+          <div
+            className="w-2 shrink-0"
+            style={{ background: colors.dotBg }}
+          />
+          {/* ── Content ─────────────────────────────────────────────── */}
+          <div className="relative z-[1] p-4 pr-7 pb-7 flex-1 min-w-0">
+            <p
+              className="text-sm whitespace-pre-wrap break-words leading-relaxed font-medium font-serif"
+              style={{ color: colors.text }}
+            >
+              {note.content}
+            </p>
+          </div>
+        </div>
+
+        {/* ── Action buttons — appear on hover ────────────────────── */}
+        <div className="absolute bottom-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-[3]">
           {/* Color picker */}
           <div className="relative">
             <Tooltip content="Change color" side="top">
               <button
                 onClick={() => onColorPickerToggle(note.id)}
-                className={`p-1 rounded-lg ${colors.text} hover:bg-black/10 transition-colors cursor-pointer`}
+                className="p-1 rounded-lg hover:bg-black/10 transition-colors cursor-pointer"
+                style={{ color: colors.text }}
                 tabIndex={-1}
               >
                 <Palette className="w-3.5 h-3.5" />
               </button>
             </Tooltip>
             {colorPickerId === note.id && (
-              <div className="absolute right-0 top-full mt-1 z-[70] flex items-center gap-1 p-1.5 rounded-xl bg-[#1a1e26] border border-white/10 shadow-xl">
+              <div className="absolute right-0 bottom-full mb-1 z-[70] flex items-center gap-1.5 p-2 rounded-xl bg-white/95 backdrop-blur-sm border border-black/10 shadow-xl">
                 {NOTE_COLORS.map((c) => (
                   <button
                     key={c}
                     onClick={() => { onSetColor(note.id, c); onColorPickerToggle(""); }}
-                    className={`w-4 h-4 rounded-full ${COLOR_STYLES[c].bg.replace("/90", "")} transition-transform hover:scale-125 cursor-pointer ${note.color === c ? "ring-2 ring-white/60" : ""}`}
+                    className="w-4 h-4 rounded-full transition-transform hover:scale-125 cursor-pointer"
+                    style={{
+                      background: COLOR_STYLES[c].dotBg,
+                      outline: note.color === c ? `2px solid ${COLOR_STYLES[c].text}` : "none",
+                      outlineOffset: "2px",
+                    }}
                   />
                 ))}
               </div>
             )}
           </div>
 
-          {/* Recall — send back to panel, keep note */}
+          {/* Recall — send back to panel */}
           <Tooltip content="Send back to panel" side="top">
             <button
               onClick={() => onRecall(note.id)}
-              className={`p-1 rounded-lg ${colors.text} hover:bg-black/10 transition-colors cursor-pointer`}
+              className="p-1 rounded-lg hover:bg-black/10 transition-colors cursor-pointer"
+              style={{ color: colors.text }}
               tabIndex={-1}
             >
               <CornerUpLeft className="w-3.5 h-3.5" />
             </button>
           </Tooltip>
 
-          {/* Delete — permanently removes */}
+          {/* Delete */}
           <Tooltip content="Delete note" side="top">
             <button
               onClick={() => onDelete(note.id)}
-              className={`p-1 rounded-lg ${colors.text} hover:bg-red-500/20 hover:text-red-700 transition-colors cursor-pointer`}
+              className="p-1 rounded-lg hover:bg-red-500/20 transition-colors cursor-pointer"
+              style={{ color: colors.text }}
               tabIndex={-1}
             >
               <Trash2 className="w-3.5 h-3.5" />

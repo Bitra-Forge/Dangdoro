@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckSquare, StickyNote, Volume2 } from "lucide-react";
+import { CheckSquare, Pin, Volume2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTimerStore } from "@/lib/store";
 import { useStickyNotesStore } from "@/lib/sticky-notes-store";
@@ -48,7 +48,7 @@ export function QuickActionsNav() {
           </button>
         </Tooltip>
 
-        <Tooltip content="Quick Notes">
+        <Tooltip content="Sticky Notes">
           <button
             data-quick-action-trigger="true"
             onClick={() => {
@@ -61,7 +61,7 @@ export function QuickActionsNav() {
               isNotesOpen ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
             )}
           >
-            <StickyNote className={cn(
+            <Pin className={cn(
               "w-5 h-5 transition-transform duration-300",
               isNotesOpen ? "scale-110" : "group-hover:scale-110"
             )} />
