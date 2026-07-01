@@ -88,20 +88,20 @@ export function QuickTasksPanel() {
   };
 
   return (
-    <AnimatePresence>
+    <AnimatePresence initial={false}>
       {isOpen && (
         <motion.div
           key="quick-tasks-panel"
           ref={panelRef}
-          initial={{ opacity: 1, scale: 0.96, y: 10 }}
+          initial={{ opacity: 1, scale: 0.94, y: 14 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ 
             opacity: 0, 
-            scale: 0.96, 
-            y: 10,
+            scale: 0.94, 
+            y: 14,
             transition: { duration: 0.15, ease: "easeIn" }
           }}
-          transition={{ type: "spring", stiffness: 360, damping: 34, mass: 0.7 }}
+          transition={{ type: "spring", stiffness: 380, damping: 36, mass: 0.7 }}
           className="fixed left-1/2 -translate-x-1/2 bottom-40 sm:bottom-28 w-[92vw] sm:w-full max-w-[420px] transform origin-bottom z-[61]"
         >
           <div className="bg-[#13161C]/95 backdrop-blur-3xl border border-white/[0.06] rounded-[28px] shadow-[0_30px_60px_rgba(0,0,0,0.8)] flex flex-col p-6 gap-6 overflow-hidden h-[530px] max-h-[calc(100dvh-12rem)] sm:max-h-[calc(100dvh-10rem)]">

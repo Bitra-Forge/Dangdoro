@@ -272,7 +272,7 @@ export function StickyNotesPanel() {
         <motion.div
           key="sticky-notes-panel"
           ref={panelRef}
-          initial={{ opacity: 0, scale: 0.94, y: 14 }}
+          initial={{ opacity: 1, scale: 0.94, y: 14 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.94, y: 14, transition: { duration: 0.15, ease: "easeIn" } }}
           transition={{ type: "spring", stiffness: 380, damping: 36, mass: 0.7 }}
