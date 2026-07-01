@@ -1,7 +1,7 @@
 import {
     collection, addDoc, doc, updateDoc, getDoc, setDoc, query, orderBy, onSnapshot,
     where, getDocs, deleteDoc, limit, serverTimestamp,
-    arrayUnion, arrayRemove
+    arrayUnion, arrayRemove, deleteField
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { ChatMessage } from "@/lib/groups";
@@ -142,9 +142,16 @@ export async function toggleReaction(
     const data = snap.data();
     const current: string[] = data.reactions?.[emoji] || [];
     if (current.includes(userId)) {
-        await updateDoc(msgRef, {
-            [`reactions.${emoji}`]: arrayRemove(userId),
-        });
+        const remaining = current.filter(id => id !== userId);
+        if (remaining.length === 0) {
+            await updateDoc(msgRef, {
+                [`reactions.${emoji}`]: deleteField(),
+            });
+        } else {
+            await updateDoc(msgRef, {
+                [`reactions.${emoji}`]: arrayRemove(userId),
+            });
+        }
     } else {
         await updateDoc(msgRef, {
             [`reactions.${emoji}`]: arrayUnion(userId),

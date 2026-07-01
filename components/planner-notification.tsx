@@ -19,8 +19,8 @@ export function PlannerNotification() {
     const handleClick = () => {
         if (chatNotification) {
             const gid = chatNotification.groupId;
+            router.push(`/groups/${gid}?tab=chat`);
             clearChatNotification();
-            router.push(`/groups/${gid}`);
         } else {
             clearPlannerNotification();
             router.push("/tasks");
@@ -39,13 +39,21 @@ export function PlannerNotification() {
     return (
         <AnimatePresence>
             {notification && (
-                <motion.button
+                <motion.div
+                    role="button"
+                    tabIndex={0}
                     onClick={handleClick}
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            handleClick();
+                        }
+                    }}
                     initial={{ opacity: 0, y: -40, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -40, scale: 0.95 }}
                     transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                    className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-3 px-5 py-3 bg-zinc-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.7)] cursor-pointer group"
+                    className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-3 px-5 py-3 bg-zinc-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.7)] cursor-pointer group outline-none focus:ring-1 focus:ring-white/20"
                 >
                     {isChat ? (
                         <MessageCircle className="w-4 h-4 text-cyan-400 shrink-0" />
@@ -61,7 +69,7 @@ export function PlannerNotification() {
                     >
                         <X className="w-3.5 h-3.5" />
                     </button>
-                </motion.button>
+                </motion.div>
             )}
         </AnimatePresence>
     );

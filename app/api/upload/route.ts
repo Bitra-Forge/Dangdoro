@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     }
 
     const allowedMimeTypes: Record<string, string[]> = {
-      image: ["image/jpeg", "image/png", "image/gif", "image/webp"],
+      image: ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"],
       raw: [
         "application/pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

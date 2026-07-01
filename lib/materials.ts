@@ -1,10 +1,10 @@
 import {
-    collection, addDoc, getDocs, serverTimestamp
+    collection, addDoc, getDocs, serverTimestamp, doc, updateDoc
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Material } from "@/lib/groups";
 
-const MAX_MATERIALS = 20;
+export const MAX_MATERIALS = 20;
 
 export async function addMaterial(
     groupId: string,
@@ -42,4 +42,18 @@ export async function addMaterial(
     } as Omit<Material, "id">);
 
     return { success: true };
+}
+
+export async function updateMaterial(
+    groupId: string,
+    materialId: string,
+    updates: Partial<Pick<Material, "title" | "description" | "tags" | "url">>
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const materialRef = doc(db, `focusGroups/${groupId}/materials`, materialId);
+        await updateDoc(materialRef, updates);
+        return { success: true };
+    } catch (err: any) {
+        return { success: false, error: err.message || "Failed to update material" };
+    }
 }

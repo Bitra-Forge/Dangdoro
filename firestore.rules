@@ -146,6 +146,11 @@ service cloud.firestore {
           get(/databases/$(database)/documents/focusGroups/$(groupId)).data
         ) && request.resource.data.senderId == request.auth.uid;
         allow update: if isSignedIn() && (
+          (
+            isGroupMember(get(/databases/$(database)/documents/focusGroups/$(groupId)).data) &&
+            request.resource.data.diff(resource.data)
+              .affectedKeys().hasOnly(['reactions', 'pinned', 'pinnedBy'])
+          ) ||
           resource.data.senderId == request.auth.uid ||
           isGroupHost(get(/databases/$(database)/documents/focusGroups/$(groupId)).data)
         );
@@ -161,6 +166,10 @@ service cloud.firestore {
         );
         allow create: if isSignedIn() && isGroupMember(
           get(/databases/$(database)/documents/focusGroups/$(groupId)).data
+        );
+        allow update: if isSignedIn() && (
+          resource.data.addedBy == request.auth.uid ||
+          isGroupHost(get(/databases/$(database)/documents/focusGroups/$(groupId)).data)
         );
         allow delete: if isSignedIn() && (
           resource.data.addedBy == request.auth.uid ||

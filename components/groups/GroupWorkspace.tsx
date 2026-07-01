@@ -12,7 +12,7 @@ import { useTimerStore } from "@/lib/store";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { 
     Users, Briefcase, ChevronRight, Play, Pause, 
     StopCircle, MoreVertical, UserPlus, LogOut, X, 
@@ -60,8 +60,22 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const [hydratedProfiles, setHydratedProfiles] = useState<Record<string, any>>({});
     const [loading, setLoading] = useState(true);
     
+    const searchParams = useSearchParams();
+    const tabParam = searchParams.get("tab");
+    
     // UI State (moved from GroupDetailModal)
-    const [activeTab, setActiveTab] = useState<"workspace" | "members" | "chat" | "materials">("workspace");
+    const [activeTab, setActiveTab] = useState<"workspace" | "members" | "chat" | "materials">(() => {
+        if (tabParam === "workspace" || tabParam === "members" || tabParam === "chat" || tabParam === "materials") {
+            return tabParam;
+        }
+        return "workspace";
+    });
+
+    useEffect(() => {
+        if (tabParam === "workspace" || tabParam === "members" || tabParam === "chat" || tabParam === "materials") {
+            setActiveTab(tabParam);
+        }
+    }, [tabParam]);
 
     const [isManagingRoles, setIsManagingRoles] = useState(false);
     const [showInviteModal, setShowInviteModal] = useState(false);
@@ -1071,9 +1085,9 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                 goalType={enrichedGroup.settings?.goalType || "weekly"}
                             />
                          ) : activeTab === "chat" ? (
-                            <GroupChat groupId={groupId} isHost={isHost} />
+                            <GroupChat groupId={groupId} isHost={isHost} groupMembers={enrichedGroup.memberDetails} />
                          ) : (
-                            <GroupMaterials groupId={groupId} isHost={isHost} groupName={enrichedGroup.name} />
+                            <GroupMaterials groupId={groupId} isHost={isHost} groupName={enrichedGroup.name} groupMembers={enrichedGroup.memberDetails} />
                          )}
                       </div>
                 )}
