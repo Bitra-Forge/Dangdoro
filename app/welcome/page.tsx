@@ -5,6 +5,9 @@ import { motion } from "framer-motion";
 import { Timer, Music, Trophy, Sparkles, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import pixelForestBg from "@/components/ui/Pixel-bg/pixel art golden forest GIF.gif";
+import owlSleepy from "@/components/ui/Pixel-bg/Idle-owl-sleepy.gif";
+import owlAware from "@/components/ui/Pixel-bg/Idle-owl-aware.gif";
+import owlQuite from "@/components/ui/Pixel-bg/Idle-owl-quite.gif";
 import { useAuth } from "@/components/AuthProvider";
 
 function useLiveCounter(target: number, duration = 3000, start = true) {
@@ -57,12 +60,60 @@ function LiveNumberDisplay({ value, flash }: { value: number; flash: boolean }) 
   );
 }
 
+function HeaderOwl({ isHovered }: { isHovered: boolean }) {
+  const [stage, setStage] = useState<'sleepy' | 'aware' | 'quite'>('sleepy');
+
+  useEffect(() => {
+    if (isHovered) {
+      setStage('aware');
+    } else if (stage === 'aware') {
+      setStage('quite');
+    }
+  }, [isHovered, stage]);
+
+  useEffect(() => {
+    if (stage === 'quite') {
+      const timer = setTimeout(() => {
+        setStage('sleepy');
+      }, 4800);
+      return () => clearTimeout(timer);
+    }
+  }, [stage]);
+
+  return (
+    <div className="absolute bottom-[82%] left-1/2 -translate-x-[65%] w-8 h-8 sm:w-12 sm:h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 xl:w-24 xl:h-24 pointer-events-none select-none z-20">
+      <motion.img
+        src={owlSleepy.src}
+        alt="Owl Sleepy"
+        animate={{ opacity: stage === 'sleepy' ? 1 : 0 }}
+        transition={{ duration: 0.1, ease: "easeInOut" }}
+        className="absolute inset-0 w-full h-full object-contain"
+      />
+      <motion.img
+        src={owlAware.src}
+        alt="Owl Aware"
+        animate={{ opacity: stage === 'aware' ? 1 : 0 }}
+        transition={{ duration: 0.1, ease: "easeInOut" }}
+        className="absolute inset-0 w-full h-full object-contain"
+      />
+      <motion.img
+        src={owlQuite.src}
+        alt="Owl Quite"
+        animate={{ opacity: stage === 'quite' ? 1 : 0 }}
+        transition={{ duration: 0.1, ease: "easeInOut" }}
+        className="absolute inset-0 w-full h-full object-contain"
+      />
+    </div>
+  );
+}
+
 export default function WelcomePage() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const section2Ref = useRef<HTMLDivElement | null>(null);
   const [typedSub, setTypedSub] = useState("");
   const subtitleText = "FOCUS. COMPETE. WIN.";
   const [mounted, setMounted] = useState(false);
+  const [isHoveredD, setIsHoveredD] = useState(false);
   const [statsData, setStatsData] = useState<{
     totalUsers: number;
     totalTimeHours: number;
@@ -224,8 +275,11 @@ export default function WelcomePage() {
                 key={idx}
                 variants={letterVariants}
                 whileHover="hover"
-                className="font-pixelify text-6xl sm:text-8xl md:text-[7.5rem] lg:text-[9rem] xl:text-[10rem] font-bold cursor-default select-none text-[#F0EDCC] drop-shadow-[0_0_15px_rgba(240, 237, 204, 0.35)]"
+                onHoverStart={idx === 0 ? () => setIsHoveredD(true) : undefined}
+                onHoverEnd={idx === 0 ? () => setIsHoveredD(false) : undefined}
+                className="relative font-pixelify text-6xl sm:text-8xl md:text-[7.5rem] lg:text-[9rem] xl:text-[10rem] font-bold cursor-default select-none text-[#F0EDCC] drop-shadow-[0_0_15px_rgba(240, 237, 204, 0.35)]"
               >
+                {idx === 0 && <HeaderOwl isHovered={isHoveredD} />}
                 {letter}
               </motion.span>
             ))}
