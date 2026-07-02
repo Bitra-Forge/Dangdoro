@@ -334,7 +334,7 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
 
     return (
         <div className="flex flex-col border border-border bg-card rounded-xl overflow-hidden">
-            <div ref={containerRef} className="h-[calc(100vh-360px)] min-h-[300px] overflow-y-auto space-y-3 p-4 chat-scroll">
+            <div ref={containerRef} className="h-[calc(100vh-460px)] min-h-[300px] overflow-y-auto space-y-3 p-4 chat-scroll">
                 {pinnedMessages.length > 0 && (
                     <div className="mb-3 bg-zinc-900/60 border border-zinc-800 rounded-xl overflow-hidden">
                         <button

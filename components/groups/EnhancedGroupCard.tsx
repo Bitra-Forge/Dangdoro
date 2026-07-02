@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
     Users, Briefcase, Flame,
     Shield, User, ChevronRight, X, Clock,
-    Globe, Key, Mail, MessageSquare
+    Globe, Key, Mail, MessageSquare, BookOpen
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTimerStore } from "@/lib/store";
@@ -17,6 +17,7 @@ import { db } from "@/lib/firebase";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useChatNotificationStore } from "@/lib/stores/chat-notification-store";
+import { Tooltip } from "@/components/ui/tooltip";
 
 type MemberDetail = {
     role?: "host" | "admin" | "member";
@@ -162,20 +163,37 @@ export const EnhancedGroupCard = memo(function EnhancedGroupCard({ group, isMemb
                                 </span>
                                 <div className="flex items-center gap-3">
                                     {isMember && (
-                                        <button
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                router.push(`/groups/${group.id}?tab=chat`);
-                                            }}
-                                            className="relative p-1.5 rounded-lg hover:bg-white/5 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                                            title="Group Chat"
-                                        >
-                                            <MessageSquare className="w-4 h-4" />
-                                            {isUnread && (
-                                                <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-red-500 ring-1 ring-zinc-950 animate-pulse" />
-                                            )}
-                                        </button>
+                                        <>
+                                            <Tooltip content="Group Chat" side="top">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        router.push(`/groups/${group.id}?tab=chat`);
+                                                    }}
+                                                    className="relative p-1.5 rounded-lg hover:bg-white/5 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                                >
+                                                    <span className="relative inline-flex">
+                                                        <MessageSquare className="w-4 h-4" />
+                                                        {isUnread && (
+                                                            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500 ring-1 ring-zinc-950 animate-pulse" />
+                                                        )}
+                                                    </span>
+                                                </button>
+                                            </Tooltip>
+                                            <Tooltip content="Materials" side="top">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        router.push(`/groups/${group.id}?tab=materials`);
+                                                    }}
+                                                    className="relative p-1.5 rounded-lg hover:bg-white/5 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                                >
+                                                    <BookOpen className="w-4 h-4" />
+                                                </button>
+                                            </Tooltip>
+                                        </>
                                     )}
                                     <div className="flex items-center gap-2 text-zinc-600 group-hover:text-blue-400 transition-all duration-300">
                                         <span className="text-xs font-bold">View</span>
@@ -250,4 +268,6 @@ export const EnhancedGroupCard = memo(function EnhancedGroupCard({ group, isMemb
            prev.group.settings?.goalHours === next.group.settings?.goalHours &&
            prev.group.members?.length === next.group.members?.length &&
            (prev.group.memberDetails as MemberDetail[] | undefined)?.filter(m => m.isFocusing).length === (next.group.memberDetails as MemberDetail[] | undefined)?.filter(m => m.isFocusing).length;
+    // Note: isUnread is read directly from the Zustand store inside the component,
+    // so the memo comparator doesn't need to track it — store subscription triggers re-render automatically.
 });

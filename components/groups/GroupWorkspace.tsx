@@ -89,6 +89,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const [isMuted, setIsMuted] = useState(false);
     const clearChatNotification = useChatNotificationStore(s => s.clearChatNotification);
     const setGroupUnread = useChatNotificationStore(s => s.setGroupUnread);
+    const isGroupUnread = useChatNotificationStore(s => !!s.unreadGroups[groupId]);
 
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
     const timerStart = useTimerStore(s => s.start);
@@ -813,7 +814,12 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                         />
                                     )}
                                     <span className="relative z-10 flex items-center gap-2">
-                                        <t.icon className="w-4 h-4" />
+                                        <span className="relative inline-flex">
+                                            <t.icon className="w-4 h-4" />
+                                            {t.id === "chat" && isGroupUnread && activeTab !== "chat" && (
+                                                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500 ring-1 ring-zinc-950 animate-pulse" />
+                                            )}
+                                        </span>
                                         <span>{t.label}</span>
                                     </span>
                                 </button>

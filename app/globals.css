@@ -723,13 +723,21 @@ input[type="number"] {
     }
 }
 
+/* Firefox: hidden by default, visible on hover via scrollbar-color */
 .chat-scroll {
     scrollbar-width: thin;
-    scrollbar-color: hsl(var(--border)) transparent;
+    scrollbar-color: transparent transparent;
 }
 
+.chat-scroll:hover {
+    scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+/* Chrome / Safari: always render the track but keep thumb nearly invisible;
+   Chrome does NOT support parent-container hover for ::-webkit-scrollbar-thumb
+   so we use a faint always-on thumb and brighten only on direct thumb hover */
 .chat-scroll::-webkit-scrollbar {
-    width: 4px;
+    width: 3px;
 }
 
 .chat-scroll::-webkit-scrollbar-track {
@@ -737,10 +745,11 @@ input[type="number"] {
 }
 
 .chat-scroll::-webkit-scrollbar-thumb {
-    background: hsl(var(--border));
+    background: rgba(255, 255, 255, 0.07);
     border-radius: 999px;
+    transition: background 200ms ease;
 }
 
 .chat-scroll::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground));
+    background: rgba(255, 255, 255, 0.25);
 }
