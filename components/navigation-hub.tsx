@@ -116,7 +116,7 @@ export function NavigationHub() {
     };
   }, [isFocusMode, clearHideNavTimeout, scheduleHideNav]);
 
-  if (isAdminPage) return null;
+  if (isAdminPage || pathname?.startsWith("/welcome")) return null;
 
   return (
     <>

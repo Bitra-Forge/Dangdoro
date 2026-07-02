@@ -189,8 +189,9 @@ export function NotificationsDock() {
   }, [isNavFocusMode]);
 
   const isPatchNotesPage = pathname?.startsWith("/patch-notes") || pathname?.startsWith("/changelog");
+  const isWelcomePage = pathname?.startsWith("/welcome");
 
-  if (isAdminPage || isPatchNotesPage) return null;
+  if (isAdminPage || isPatchNotesPage || isWelcomePage) return null;
 
   return (
     <>
