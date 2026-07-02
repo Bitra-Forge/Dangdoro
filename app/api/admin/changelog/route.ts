@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { adminDb } from "@/lib/firebase-admin";
 import { getAdminFromRequest } from "@/lib/admin-check";
 import { Timestamp } from "firebase-admin/firestore";
@@ -98,6 +99,7 @@ export async function POST(req: Request) {
     };
 
     const docRef = await adminDb.collection("changelog").add(docData);
+    revalidatePath('/patch-notes');
 
     return NextResponse.json({ id: docRef.id });
   } catch (err: unknown) {

@@ -1,16 +1,12 @@
-"use client";
-
-import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { adminDb } from "@/lib/firebase-admin";
 import {
   ChangelogItem,
   ChangelogType,
   UpcomingStatus,
-  TabFilter,
 } from "@/components/changelog/changelog-types";
-import { ChangelogTabs } from "@/components/changelog/ChangelogTabs";
-import { ChangelogTimeline } from "@/components/changelog/ChangelogTimeline";
+import { PatchNotesClient } from "./_client";
 
 /* ── Default Timeline Data ────────────────────────────────────── */
 
@@ -146,86 +142,71 @@ function parseMarkdownContentToItems(
   return items;
 }
 
-/* ── Main Component ───────────────────────────────────────────── */
+/* ── Server-side Data Fetching ────────────────────────────────── */
 
-export default function PatchNotesPage() {
-  const [activeTab, setActiveTab] = useState<TabFilter>("all");
-  const [entries, setEntries] = useState<ChangelogItem[]>([]);
-  const [loading, setLoading] = useState(true);
+async function getChangelogEntries(): Promise<ChangelogItem[]> {
+  console.log(`[patch-notes] Fetching from Firestore at ${new Date().toISOString()}`);
+  try {
+    const snap = await adminDb
+      .collection("changelog")
+      .orderBy("createdAt", "desc")
+      .limit(100)
+      .get();
 
-  useEffect(() => {
-    let isMounted = true;
-    fetch("/api/changelog")
-      .then((res) => res.json())
-      .then((data) => {
-        if (!isMounted) return;
-        if (
-          data.entries &&
-          Array.isArray(data.entries) &&
-          data.entries.length > 0
-        ) {
-          const parsedList: ChangelogItem[] = [];
+    const parsedList: ChangelogItem[] = [];
 
-          data.entries.forEach(
-            (doc: {
-              id: string;
-              type?: string;
-              description?: string;
-              title?: string;
-              date?: string;
-              createdAt?: string;
-              status?: string;
-              media?: { url: string; type: "image" | "gif" };
-              imageUrl?: string;
-              order?: number;
-              content?: string;
-            }) => {
-              if (doc.type && doc.description) {
-                parsedList.push({
-                  id: doc.id,
-                  type: doc.type as ChangelogType,
-                  title: doc.title ?? "",
-                  description: doc.description,
-                  date: doc.date || doc.createdAt,
-                  status: doc.status as UpcomingStatus,
-                  media: doc.media || (doc.imageUrl ? { url: doc.imageUrl, type: "image" } : null),
-                  order: doc.order,
-                });
-              } else if (doc.content) {
-                const items = parseMarkdownContentToItems(
-                  doc.id,
-                  doc.title ?? "",
-                  doc.content,
-                  doc.createdAt
-                );
-                parsedList.push(...items);
-              }
-            }
-          );
+    for (const doc of snap.docs) {
+      const data = doc.data();
 
-          if (parsedList.length > 0) {
-            setEntries(parsedList);
-          } else {
-            setEntries(defaultTimelineEntries);
-          }
-        } else {
-          setEntries(defaultTimelineEntries);
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to load changelog entries:", err);
-        if (isMounted) setEntries(defaultTimelineEntries);
-      })
-      .finally(() => {
-        if (isMounted) {
-          setLoading(false);
-        }
-      });
+      let dateIso: string | null = null;
+      let createdAtIso: string | null = null;
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+      if (data.date?.toDate) {
+        dateIso = data.date.toDate().toISOString();
+      } else if (typeof data.date === "string") {
+        dateIso = data.date;
+      }
+
+      if (data.createdAt?.toDate) {
+        createdAtIso = data.createdAt.toDate().toISOString();
+      } else if (typeof data.createdAt === "string") {
+        createdAtIso = data.createdAt;
+      }
+
+      if (data.type && data.description) {
+        parsedList.push({
+          id: doc.id,
+          type: data.type as ChangelogType,
+          title: data.title ?? "",
+          description: data.description,
+          date: dateIso || createdAtIso,
+          status: data.status as UpcomingStatus,
+          media: data.media || (data.imageUrl ? { url: data.imageUrl, type: "image" } : null),
+          order: typeof data.order === "number" ? data.order : undefined,
+        });
+      } else if (data.content) {
+        const items = parseMarkdownContentToItems(
+          doc.id,
+          data.title ?? "",
+          data.content,
+          createdAtIso
+        );
+        parsedList.push(...items);
+      }
+    }
+
+    return parsedList;
+  } catch (err) {
+    console.error("Failed to fetch changelog entries:", err);
+    return [];
+  }
+}
+
+/* ── Page Component ───────────────────────────────────────────── */
+
+export default async function PatchNotesPage() {
+  const fetchedEntries = await getChangelogEntries();
+  const entries = fetchedEntries.length > 0 ? fetchedEntries : defaultTimelineEntries;
 
   return (
     <main className="relative min-h-screen bg-[#0b0b0a] text-zinc-100 selection:bg-[#C9B037]/20 selection:text-[#C9B037] font-sans overflow-x-hidden">
@@ -305,71 +286,18 @@ export default function PatchNotesPage() {
 
       {/* Main Content Container */}
       <div className="relative z-10 mx-auto max-w-4xl px-4 py-12 sm:px-6 md:py-16">
-        {loading ? (
-          /* Full Page Skeleton Loader */
-          <div className="animate-pulse space-y-12">
-            <div className="text-center space-y-4 mb-14">
-              <div className="h-12 sm:h-16 w-64 sm:w-80 bg-zinc-800/60 rounded-2xl mx-auto border border-white/[0.05]" />
-              <div className="h-5 w-72 sm:w-[28rem] bg-zinc-800/40 rounded-lg mx-auto" />
-            </div>
+        {/* Page Title */}
+        <div className="mb-14 text-center">
+          <h1 className="font-pixelify text-5xl sm:text-7xl font-bold tracking-normal text-white drop-shadow-[0_0_25px_rgba(255,255,255,0.2)]">
+            Patch Notes
+          </h1>
+          <p className="font-pixelify mt-4 text-base sm:text-lg text-zinc-300 max-w-xl mx-auto leading-relaxed tracking-wide">
+            We hear your feedback | every feature, fix, and improvement starts with you.
+          </p>
+        </div>
 
-            <div className="flex justify-center w-full mb-12">
-              <div className="p-2 sm:p-2.5 rounded-2xl bg-[#121110] border border-white/[0.08] inline-flex items-center gap-3">
-                <div className="h-9 w-20 sm:w-24 bg-zinc-800/70 rounded-xl" />
-                <div className="h-9 w-24 sm:w-28 bg-zinc-800/40 rounded-xl" />
-                <div className="h-9 w-20 sm:w-24 bg-zinc-800/40 rounded-xl" />
-                <div className="h-9 w-24 sm:w-28 bg-zinc-800/40 rounded-xl" />
-              </div>
-            </div>
-
-            <div className="relative pl-10 sm:pl-12 space-y-8">
-              <div className="absolute left-[16px] sm:left-[20px] top-0 bottom-0 w-[2px] bg-white/[0.06]">
-                <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-zinc-700" />
-                <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-zinc-800" />
-              </div>
-
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="relative">
-                  <div className="absolute left-[-24px] sm:left-[-28px] -translate-x-1/2 top-4 h-7 w-7 rounded-full bg-zinc-800/80 border border-white/10 ring-[4px] ring-[#0b0b0a]" />
-                  <div className="p-6 rounded-[10px] bg-[#111110] border border-white/[0.06] border-l-2 border-l-zinc-700/40 space-y-4">
-                    <div className="flex justify-between items-center">
-                      <div className="h-4 w-28 bg-zinc-800/70 rounded-md" />
-                      <div className="h-3 w-20 bg-zinc-800/40 rounded-md" />
-                    </div>
-                    <div className="h-6 w-3/4 bg-zinc-800/80 rounded-md" />
-                    <div className="space-y-2">
-                      <div className="h-4 w-full bg-zinc-800/40 rounded-md" />
-                      <div className="h-4 w-4/5 bg-zinc-800/30 rounded-md" />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* Page Title */}
-            <div className="mb-14 text-center">
-              <h1 className="font-pixelify text-5xl sm:text-7xl font-bold tracking-normal text-white drop-shadow-[0_0_25px_rgba(255,255,255,0.2)]">
-                Patch Notes
-              </h1>
-              <p className="font-pixelify mt-4 text-base sm:text-lg text-zinc-300 max-w-xl mx-auto leading-relaxed tracking-wide">
-                We hear your feedback | every feature, fix, and improvement starts with you.
-              </p>
-            </div>
-
-            {/* Retro Arcade Filter Tabs */}
-            <ChangelogTabs
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-              entries={entries}
-              className="sticky top-[57px] z-40 -mx-4 px-4 bg-[#0b0b0a]/92 backdrop-blur-2xl sm:mx-0 sm:px-0 sm:bg-transparent sm:backdrop-blur-none mb-12"
-            />
-
-            {/* Timeline */}
-            <ChangelogTimeline entries={entries} activeTab={activeTab} />
-          </>
-        )}
+        {/* Interactive client component */}
+        <PatchNotesClient entries={entries} />
 
         {/* Footer */}
         <footer className="mt-24 pt-8 text-center relative z-10">
@@ -391,3 +319,5 @@ export default function PatchNotesPage() {
     </main>
   );
 }
+
+export const revalidate = 3600;

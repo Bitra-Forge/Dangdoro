@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { adminDb } from "@/lib/firebase-admin";
 import { getAdminFromRequest } from "@/lib/admin-check";
 import { Timestamp } from "firebase-admin/firestore";
@@ -12,6 +13,7 @@ export async function DELETE(
     const { id } = await params;
 
     await adminDb.collection("changelog").doc(id).delete();
+    revalidatePath('/patch-notes');
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
@@ -64,6 +66,7 @@ export async function PUT(
     if (typeof body.order === "number") updateData.order = body.order;
 
     await adminDb.collection("changelog").doc(id).update(updateData);
+    revalidatePath('/patch-notes');
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
