@@ -2,27 +2,59 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ChevronDown, Timer, Music, Trophy, Sparkles, ArrowRight } from "lucide-react";
+import { Timer, Music, Trophy, Sparkles, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import pixelForestBg from "@/components/ui/Pixel-bg/pixel art golden forest GIF.gif";
+import { useAuth } from "@/components/AuthProvider";
 
-function useCountUp(end: number, duration = 2000): number {
+function useLiveCounter(target: number, duration = 3000, start = true) {
   const [value, setValue] = useState(0);
+  const [flash, setFlash] = useState(false);
+  const valueRef = useRef(0);
+  const prevTargetRef = useRef(target);
 
   useEffect(() => {
+    if (!start) return;
+    const from = valueRef.current;
+
     let startTimestamp: number | null = null;
     let raf: number;
     const step = (timestamp: number) => {
       if (!startTimestamp) startTimestamp = timestamp;
       const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-      setValue(Math.floor(progress * end));
+      const next = from + Math.floor(progress * (target - from));
+      setValue(next);
+      valueRef.current = next;
       if (progress < 1) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [end, duration]);
+  }, [target, duration, start]);
 
-  return value;
+  useEffect(() => {
+    if (!start) return;
+    if (prevTargetRef.current > 0 && target > prevTargetRef.current) {
+      setFlash(true);
+      setTimeout(() => setFlash(false), 200);
+    }
+    prevTargetRef.current = target;
+  }, [target, start]);
+
+  return { value, flash };
+}
+
+function LiveNumberDisplay({ value, flash }: { value: number; flash: boolean }) {
+  const str = value.toLocaleString("en-US");
+  const prefix = str.length > 2 ? str.slice(0, -2) : "";
+  const suffix = str.length > 2 ? str.slice(-2) : str;
+  return (
+    <span>
+      {prefix}
+      <span className={flash ? "drop-shadow-[0_0_10px_rgba(240,237,204,0.9)]" : ""}>
+        {suffix}
+      </span>
+    </span>
+  );
 }
 
 export default function WelcomePage() {
@@ -31,19 +63,40 @@ export default function WelcomePage() {
   const [typedSub, setTypedSub] = useState("");
   const subtitleText = "FOCUS. COMPETE. WIN.";
   const [mounted, setMounted] = useState(false);
-  const userCount = useCountUp(12847, 2500);
-  const hoursCount = useCountUp(342591, 3000);
-  const sessionsCount = useCountUp(1024836, 3500);
+  const [statsData, setStatsData] = useState<{
+    totalUsers: number;
+    totalTimeHours: number;
+    totalSessions: number;
+  } | null>(null);
 
   useEffect(() => {
     setMounted(true);
+
+    const fetchStats = () =>
+      fetch("/api/public-stats")
+        .then((r) => r.json())
+        .then((data) => setStatsData(data))
+        .catch(() => { });
+
+    fetchStats().catch(() =>
+      setStatsData({ totalUsers: 0, totalTimeHours: 0, totalSessions: 0 })
+    );
+
+    const interval = setInterval(fetchStats, 5000);
+    return () => clearInterval(interval);
   }, []);
 
+  const ready = mounted && statsData !== null;
+  const targetUsers = statsData?.totalUsers ?? 0;
+  const targetHours = statsData?.totalTimeHours ?? 0;
+  const targetSessions = statsData?.totalSessions ?? 0;
+  const userLive = useLiveCounter(ready ? targetUsers : 0, 3000, ready);
+  const hoursLive = useLiveCounter(ready ? targetHours : 0, 3500, ready);
+  const sessionsLive = useLiveCounter(ready ? targetSessions : 0, 4000, ready);
 
 
-  const handleScrollDown = () => {
-    section2Ref.current?.scrollIntoView({ behavior: "smooth" });
-  };
+
+  const { openAuthVault } = useAuth();
 
   const handleEnterWorkspace = () => {
     if (typeof window !== "undefined") {
@@ -158,7 +211,6 @@ export default function WelcomePage() {
       <section
         className="relative h-screen w-full flex flex-col items-center justify-center px-6 z-10"
       >
-
         <div className="text-center select-none max-w-3xl relative z-10">
           {/* Animated Pixelated Header */}
           <motion.div
@@ -190,78 +242,220 @@ export default function WelcomePage() {
           </div>
         </div>
 
-        {/* Scroll Indicator */}
+        {/* CTA Buttons */}
         <motion.div
-          initial={{ opacity: 0, y: -10 }}
+          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1.5, duration: 0.6 }}
-          className="absolute bottom-12 flex flex-col items-center gap-2.5 cursor-pointer group"
-          onClick={handleScrollDown}
+          transition={{ delay: 2, duration: 0.5 }}
+          className="absolute bottom-20 left-1/2 -translate-x-1/2 flex items-center justify-center gap-6"
         >
+          {/* Start Focusing */}
           <motion.div
-            animate={{ y: [0, 5, 0] }}
-            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-            className="p-1.5 rounded-full border border-[#F0EDCC]/15 group-hover:border-[#F0EDCC]/40 bg-[#02343F]/50 backdrop-blur-md transition-colors duration-300 shadow-inner"
+            whileHover={{
+              x: -3,
+              y: -3,
+              boxShadow: "8px 8px 0px 0px rgba(240, 237, 204, 0.35)",
+              transition: { duration: 0.1 },
+            }}
+            className="relative"
           >
-            <ChevronDown className="w-4.5 h-4.5 text-[#F0EDCC]/50 group-hover:text-[#F0EDCC] transition-colors duration-300" />
+            <Link
+              href="/"
+              onClick={handleEnterWorkspace}
+              className="block px-10 py-4 border-4 border-[#F0EDCC] bg-[#02343F] font-pixelify text-sm font-bold uppercase tracking-wider text-[#F0EDCC] shadow-[4px_4px_0_0_rgba(240,237,204,0.15)] hover:bg-[#F0EDCC] hover:text-[#02343F] hover:border-[#02343F] transition-none"
+            >
+              Start Focusing
+            </Link>
+          </motion.div>
+
+          {/* Join Us */}
+          <motion.div
+            whileHover={{
+              x: -3,
+              y: -3,
+              boxShadow: "8px 8px 0px 0px rgba(240, 237, 204, 0.35)",
+              transition: { duration: 0.1 },
+            }}
+            className="relative"
+          >
+            <button
+              onClick={openAuthVault}
+              className="block px-10 py-4 border-4 border-[#F0EDCC] bg-[#02343F] font-pixelify text-sm font-bold uppercase tracking-wider text-[#F0EDCC] shadow-[4px_4px_0_0_rgba(240,237,204,0.15)] hover:bg-[#F0EDCC] hover:text-[#02343F] hover:border-[#02343F] transition-none"
+            >
+              Join Us
+            </button>
           </motion.div>
         </motion.div>
       </section>
 
       {/* ─── LIVE STAT TICKER ─── */}
-      <section className="relative w-full py-24 px-6 z-10">
+      <section className="relative w-full py-24 px-6 z-10 mt-48">
         <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-14">
-            <div className="inline-block border-2 border-[#F0EDCC]/30 px-5 py-1.5 mb-4 font-pixelify text-xs tracking-[0.3em] text-[#F0EDCC]/60 uppercase select-none">
+          <div className="text-center mb-16 max-w-xl mx-auto">
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4 text-[#F0EDCC]">
               Live Ticker
-            </div>
+            </h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
             {/* Stat: Users */}
-            <div className="border-4 border-[#F0EDCC]/15 bg-[#02343F]/80 p-8 text-center hover:border-[#F0EDCC]/40 transition-all duration-300 shadow-[4px_4px_0_0_rgba(240,237,204,0.08)] hover:shadow-[6px_6px_0_0_rgba(240,237,204,0.2)] hover:-translate-x-0.5 hover:-translate-y-0.5">
-              <div className="font-pixelify text-5xl md:text-6xl font-bold text-[#F0EDCC] mb-2 select-none">
-                {mounted ? userCount.toLocaleString("en-US") : "0"}
-              </div>
+            <motion.div
+              initial="rest"
+              whileHover="hover"
+              className="border-4 border-[#F0EDCC]/15 bg-[#02343F]/80 p-8 text-center hover:border-[#F0EDCC]/40 transition-all duration-300 shadow-[4px_4px_0_0_rgba(240,237,204,0.08)] hover:shadow-[6px_6px_0_0_rgba(240,237,204,0.2)] hover:-translate-x-0.5 hover:-translate-y-0.5"
+            >
+              <motion.div
+                whileHover={{
+                  x: [0, -3, 3, -1, 2, 0],
+                  skewX: [0, 2, -2, 1, -1, 0],
+                  scaleX: [1, 1.02, 0.98, 1.01, 1],
+                  transition: { duration: 0.08 },
+                }}
+                className="font-pixelify text-5xl md:text-6xl font-bold text-[#F0EDCC] mb-2 select-none"
+              >
+                {mounted ? (
+                  <LiveNumberDisplay value={userLive.value} flash={userLive.flash} />
+                ) : "0"}
+              </motion.div>
               <div className="font-pixelify text-xs tracking-[0.2em] text-[#F0EDCC]/50 uppercase">
                 Focus Users
               </div>
               <div className="flex justify-center gap-1 mt-4">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="w-1.5 h-1.5 bg-[#F0EDCC]/30" />
+                  <motion.div
+                    key={i}
+                    variants={{
+                      rest: {
+                        opacity: 0.3,
+                        backgroundColor: "rgba(240, 237, 204, 0.3)",
+                        transition: { duration: 0.25 },
+                      },
+                      hover: {
+                        opacity: [0.3, 1, 0.3],
+                        backgroundColor: [
+                          "rgba(240, 237, 204, 0.3)",
+                          "rgba(240, 237, 204, 1)",
+                          "rgba(240, 237, 204, 0.3)",
+                        ],
+                        transition: {
+                          duration: 0.8,
+                          repeat: Infinity,
+                          delay: i * 0.12,
+                          ease: "easeInOut",
+                        },
+                      },
+                    }}
+                    className="w-1.5 h-1.5"
+                  />
                 ))}
               </div>
-            </div>
+            </motion.div>
 
             {/* Stat: Hours */}
-            <div className="border-4 border-[#F0EDCC]/15 bg-[#02343F]/80 p-8 text-center hover:border-[#F0EDCC]/40 transition-all duration-300 shadow-[4px_4px_0_0_rgba(240,237,204,0.08)] hover:shadow-[6px_6px_0_0_rgba(240,237,204,0.2)] hover:-translate-x-0.5 hover:-translate-y-0.5">
-              <div className="font-pixelify text-5xl md:text-6xl font-bold text-[#F0EDCC] mb-2 select-none">
-                {mounted ? hoursCount.toLocaleString("en-US") : "0"}
-              </div>
+            <motion.div
+              initial="rest"
+              whileHover="hover"
+              className="border-4 border-[#F0EDCC]/15 bg-[#02343F]/80 p-8 text-center hover:border-[#F0EDCC]/40 transition-all duration-300 shadow-[4px_4px_0_0_rgba(240,237,204,0.08)] hover:shadow-[6px_6px_0_0_rgba(240,237,204,0.2)] hover:-translate-x-0.5 hover:-translate-y-0.5"
+            >
+              <motion.div
+                whileHover={{
+                  x: [0, -3, 3, -1, 2, 0],
+                  skewX: [0, 2, -2, 1, -1, 0],
+                  scaleX: [1, 1.02, 0.98, 1.01, 1],
+                  transition: { duration: 0.08 },
+                }}
+                className="font-pixelify text-5xl md:text-6xl font-bold text-[#F0EDCC] mb-2 select-none"
+              >
+                {mounted ? (
+                  <LiveNumberDisplay value={hoursLive.value} flash={hoursLive.flash} />
+                ) : "0"}
+              </motion.div>
               <div className="font-pixelify text-xs tracking-[0.2em] text-[#F0EDCC]/50 uppercase">
                 Focus Hours
               </div>
               <div className="flex justify-center gap-1 mt-4">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="w-1.5 h-1.5 bg-[#F0EDCC]/30" />
+                  <motion.div
+                    key={i}
+                    variants={{
+                      rest: {
+                        opacity: 0.3,
+                        backgroundColor: "rgba(240, 237, 204, 0.3)",
+                        transition: { duration: 0.25 },
+                      },
+                      hover: {
+                        opacity: [0.3, 1, 0.3],
+                        backgroundColor: [
+                          "rgba(240, 237, 204, 0.3)",
+                          "rgba(240, 237, 204, 1)",
+                          "rgba(240, 237, 204, 0.3)",
+                        ],
+                        transition: {
+                          duration: 0.8,
+                          repeat: Infinity,
+                          delay: i * 0.12,
+                          ease: "easeInOut",
+                        },
+                      },
+                    }}
+                    className="w-1.5 h-1.5"
+                  />
                 ))}
               </div>
-            </div>
+            </motion.div>
 
             {/* Stat: Sessions */}
-            <div className="border-4 border-[#F0EDCC]/15 bg-[#02343F]/80 p-8 text-center hover:border-[#F0EDCC]/40 transition-all duration-300 shadow-[4px_4px_0_0_rgba(240,237,204,0.08)] hover:shadow-[6px_6px_0_0_rgba(240,237,204,0.2)] hover:-translate-x-0.5 hover:-translate-y-0.5">
-              <div className="font-pixelify text-5xl md:text-6xl font-bold text-[#F0EDCC] mb-2 select-none">
-                {mounted ? sessionsCount.toLocaleString("en-US") : "0"}
-              </div>
+            <motion.div
+              initial="rest"
+              whileHover="hover"
+              className="border-4 border-[#F0EDCC]/15 bg-[#02343F]/80 p-8 text-center hover:border-[#F0EDCC]/40 transition-all duration-300 shadow-[4px_4px_0_0_rgba(240,237,204,0.08)] hover:shadow-[6px_6px_0_0_rgba(240,237,204,0.2)] hover:-translate-x-0.5 hover:-translate-y-0.5"
+            >
+              <motion.div
+                whileHover={{
+                  x: [0, -3, 3, -1, 2, 0],
+                  skewX: [0, 2, -2, 1, -1, 0],
+                  scaleX: [1, 1.02, 0.98, 1.01, 1],
+                  transition: { duration: 0.08 },
+                }}
+                className="font-pixelify text-5xl md:text-6xl font-bold text-[#F0EDCC] mb-2 select-none"
+              >
+                {mounted ? (
+                  <LiveNumberDisplay value={sessionsLive.value} flash={sessionsLive.flash} />
+                ) : "0"}
+              </motion.div>
               <div className="font-pixelify text-xs tracking-[0.2em] text-[#F0EDCC]/50 uppercase">
                 Sessions Done
               </div>
               <div className="flex justify-center gap-1 mt-4">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="w-1.5 h-1.5 bg-[#F0EDCC]/30" />
+                  <motion.div
+                    key={i}
+                    variants={{
+                      rest: {
+                        opacity: 0.3,
+                        backgroundColor: "rgba(240, 237, 204, 0.3)",
+                        transition: { duration: 0.25 },
+                      },
+                      hover: {
+                        opacity: [0.3, 1, 0.3],
+                        backgroundColor: [
+                          "rgba(240, 237, 204, 0.3)",
+                          "rgba(240, 237, 204, 1)",
+                          "rgba(240, 237, 204, 0.3)",
+                        ],
+                        transition: {
+                          duration: 0.8,
+                          repeat: Infinity,
+                          delay: i * 0.12,
+                          ease: "easeInOut",
+                        },
+                      },
+                    }}
+                    className="w-1.5 h-1.5"
+                  />
                 ))}
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </section>

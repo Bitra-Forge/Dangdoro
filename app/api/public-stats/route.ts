@@ -1,23 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 
-let cachedStats: {
-  totalUsers: number;
-  totalTimeHours: number;
-  totalSessions: number;
-  newUsers: number;
-  newSignedInUsers: number;
-  timestamp: number;
-} | null = null;
-
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
 export async function GET() {
-  const now = Date.now();
-  if (cachedStats && now - cachedStats.timestamp < CACHE_TTL) {
-    return NextResponse.json(cachedStats);
-  }
-
   try {
     // 1. Fetch users
     const usersSnap = await adminDb.collection("users").get();
@@ -57,10 +41,8 @@ export async function GET() {
       totalSessions,
       newUsers,
       newSignedInUsers,
-      timestamp: now,
     };
 
-    cachedStats = stats;
     return NextResponse.json(stats);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Error fetching stats";
