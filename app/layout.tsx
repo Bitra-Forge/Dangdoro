@@ -14,6 +14,7 @@ import { PlannerNotification } from "@/components/planner-notification";
 import { GroupSessionSync } from "@/components/group-session-sync";
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import GlobalChatNotificationListener from "@/components/GlobalChatNotificationListener";
 
 
 
@@ -89,6 +90,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-zinc-950 text-white" suppressHydrationWarning>
         <AuthProvider>
           <NotificationsDock />
+          <GlobalChatNotificationListener />
 
           {children}
           

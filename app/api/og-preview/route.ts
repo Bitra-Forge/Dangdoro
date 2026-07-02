@@ -83,7 +83,25 @@ export async function GET(req: Request) {
             const html = await res.text();
             const title = extractMetaTag(html, "og:title") || extractTitleTag(html);
             const description = extractMetaTag(html, "og:description") || extractMetaTag(html, "description");
-            const image = extractMetaTag(html, "og:image");
+            let image = extractMetaTag(html, "og:image");
+
+            if (image && !image.startsWith("http://") && !image.startsWith("https://")) {
+                try {
+                    if (image.startsWith("//")) {
+                        image = "https:" + image;
+                    } else {
+                        const parsedUrl = new URL(url);
+                        const baseUrl = parsedUrl.origin;
+                        if (image.startsWith("/")) {
+                            image = baseUrl + image;
+                        } else {
+                            image = baseUrl + "/" + image;
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed resolving relative image URL:", image, e);
+                }
+            }
 
             const data = { title, description, image };
             ogCache.set(url, {

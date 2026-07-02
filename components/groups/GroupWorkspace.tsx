@@ -88,6 +88,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const [friends, setFriends] = useState<any[]>([]);
     const [isMuted, setIsMuted] = useState(false);
     const clearChatNotification = useChatNotificationStore(s => s.clearChatNotification);
+    const setGroupUnread = useChatNotificationStore(s => s.setGroupUnread);
 
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
     const timerStart = useTimerStore(s => s.start);
@@ -200,37 +201,14 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         return unsub;
     }, [user, groupId]);
 
-    // Clear chat notification when switching to chat tab
+    // Clear chat notification and unread state when switching to chat tab
     useEffect(() => {
-        if (activeTab === "chat") {
+        if (activeTab === "chat" && user) {
             clearChatNotification();
+            setGroupUnread(groupId, false);
+            localStorage.setItem(`dangdoro_last_read_${groupId}`, Date.now().toString());
         }
-    }, [activeTab, clearChatNotification]);
-
-    // 10. Chat notification subscription
-    const lastMessageIdRef = useRef<string | null>(null);
-    const setChatNotification = useChatNotificationStore(s => s.setChatNotification);
-    useEffect(() => {
-        if (!user || !groupId) return;
-        const messagesRef = collection(db, `focusGroups/${groupId}/messages`);
-        const q = query(messagesRef, orderBy("createdAt", "desc"), limit(1));
-        const unsub = onSnapshot(q, (snap) => {
-            if (snap.empty) return;
-            const msg = snap.docs[0].data() as { senderId: string; content: string; senderName: string };
-            const msgId = snap.docs[0].id;
-            if (msg.senderId === user.uid) return;
-            if (msgId === lastMessageIdRef.current) return;
-            lastMessageIdRef.current = msgId;
-            if (isMuted) return;
-            if (activeTab !== "chat") {
-                setChatNotification({
-                    groupId,
-                    message: `New message in ${group?.name || "group"}: ${msg.content.slice(0, 80)}`,
-                });
-            }
-        });
-        return unsub;
-    }, [user, groupId, isMuted, activeTab, group?.name, setChatNotification]);
+    }, [activeTab, groupId, user, clearChatNotification, setGroupUnread]);
 
     const handleToggleMute = async () => {
         if (!user) return;

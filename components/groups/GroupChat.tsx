@@ -31,6 +31,19 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
         });
         return map;
     }, [groupMembers]);
+    const memberNameMap = useMemo(() => {
+        const map: Record<string, string> = {};
+        groupMembers.forEach(m => {
+            if (m.uid && m.displayName) {
+                map[m.uid] = m.displayName;
+            }
+        });
+        return map;
+    }, [groupMembers]);
+    const getUserName = (uid: string) => {
+        if (uid === user?.uid) return "You";
+        return memberNameMap[uid] || "Unknown User";
+    };
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
     const [sending, setSending] = useState(false);
@@ -434,7 +447,7 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
                                                             key={emoji}
                                                             onClick={() => handleToggleReaction(msg.id, emoji)}
                                                             className={cn(
-                                                                "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] border transition-colors cursor-pointer",
+                                                                "group/reaction relative flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] border transition-colors cursor-pointer",
                                                                 userIds.includes(user?.uid || "")
                                                                     ? "bg-white/10 text-white border-white/20"
                                                                     : "bg-white/5 text-zinc-400 border-transparent hover:border-white/10"
@@ -442,6 +455,11 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
                                                         >
                                                             <span>{emoji}</span>
                                                             <span className="font-bold">{userIds.length}</span>
+
+                                                            {/* Tooltip on hover */}
+                                                            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/reaction:block bg-zinc-950/90 border border-white/15 px-2 py-1 rounded-md text-[9px] font-bold text-zinc-200 whitespace-nowrap shadow-xl z-20 backdrop-blur-md animate-in fade-in slide-in-from-bottom-1 duration-150">
+                                                                {userIds.map(uid => getUserName(uid)).join(", ")}
+                                                            </span>
                                                         </button>
                                                     ))}
                                                 </div>

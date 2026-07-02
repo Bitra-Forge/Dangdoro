@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
     Users, Briefcase, Flame,
     Shield, User, ChevronRight, X, Clock,
-    Globe, Key, Mail
+    Globe, Key, Mail, MessageSquare
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTimerStore } from "@/lib/store";
@@ -16,6 +16,7 @@ import { doc, updateDoc, arrayUnion, increment, serverTimestamp } from "firebase
 import { db } from "@/lib/firebase";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useChatNotificationStore } from "@/lib/stores/chat-notification-store";
 
 type MemberDetail = {
     role?: "host" | "admin" | "member";
@@ -28,6 +29,7 @@ export const EnhancedGroupCard = memo(function EnhancedGroupCard({ group, isMemb
     const router = useRouter();
     const [joining, setJoining] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
+    const isUnread = useChatNotificationStore(s => !!s.unreadGroups[group.id]);
     const isOrg = group.type === "organization";
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
     const privacyMeta = PRIVACY_META[group.privacy as GroupPrivacy] ?? PRIVACY_META["public"];
@@ -158,9 +160,27 @@ export const EnhancedGroupCard = memo(function EnhancedGroupCard({ group, isMemb
                                 <span className="text-[10px] font-black uppercase tracking-wider text-zinc-600">
                                     Focus Group
                                 </span>
-                                <div className="flex items-center gap-2 text-zinc-600 group-hover:text-blue-400 transition-all duration-300">
-                                    <span className="text-xs font-bold">View</span>
-                                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                <div className="flex items-center gap-3">
+                                    {isMember && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                router.push(`/groups/${group.id}?tab=chat`);
+                                            }}
+                                            className="relative p-1.5 rounded-lg hover:bg-white/5 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                            title="Group Chat"
+                                        >
+                                            <MessageSquare className="w-4 h-4" />
+                                            {isUnread && (
+                                                <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-red-500 ring-1 ring-zinc-950 animate-pulse" />
+                                            )}
+                                        </button>
+                                    )}
+                                    <div className="flex items-center gap-2 text-zinc-600 group-hover:text-blue-400 transition-all duration-300">
+                                        <span className="text-xs font-bold">View</span>
+                                        <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                    </div>
                                 </div>
                             </div>
                         </div>

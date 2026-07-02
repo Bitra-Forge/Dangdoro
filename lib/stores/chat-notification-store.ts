@@ -10,6 +10,8 @@ interface ChatNotificationState {
     drafts: Record<string, string>;
     setDraft: (groupId: string, text: string) => void;
     clearDraft: (groupId: string) => void;
+    unreadGroups: Record<string, boolean>;
+    setGroupUnread: (groupId: string, unread: boolean) => void;
 }
 
 export const useChatNotificationStore = create<ChatNotificationState>()(
@@ -29,6 +31,11 @@ export const useChatNotificationStore = create<ChatNotificationState>()(
                     delete newDrafts[groupId];
                     return { drafts: newDrafts };
                 }),
+            unreadGroups: {},
+            setGroupUnread: (groupId, unread) =>
+                set((state) => ({
+                    unreadGroups: { ...state.unreadGroups, [groupId]: unread },
+                })),
         }),
         {
             name: "dangdoro-chat-drafts",

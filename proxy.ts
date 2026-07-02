@@ -8,7 +8,7 @@ export function proxy(request: NextRequest) {
   const response = NextResponse.next();
 
   // Prevent clickjacking
-  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("X-Frame-Options", "SAMEORIGIN");
 
   // Prevent MIME-type sniffing
   response.headers.set("X-Content-Type-Options", "nosniff");

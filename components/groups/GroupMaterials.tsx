@@ -9,7 +9,7 @@ import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { collection, query, orderBy, onSnapshot, deleteDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { X, Link, Image, FileText, Trash2, Plus, Upload, Download, Pencil, ExternalLink } from "lucide-react";
+import { X, Link, Image, FileText, Trash2, Plus, Upload, Download, Pencil, ExternalLink, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -28,12 +28,13 @@ const FILE_ICONS: Record<string, string> = {
     pptx: "PPT",
     xlsx: "XLS",
     txt: "TXT",
+    md: "MD",
 };
 
 function getFileExtension(url: string, fileName?: string | null): string {
     const name = fileName || url;
     const ext = name.split(".").pop()?.toLowerCase() || "";
-    return FILE_ICONS[ext] || "FILE";
+    return ext.toUpperCase();
 }
 
 function formatFileSize(bytes: number | null): string {
@@ -92,6 +93,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
     const [previewOgLoading, setPreviewOgLoading] = useState(false);
     const [previewTxtContent, setPreviewTxtContent] = useState<string | null>(null);
     const [previewTxtLoading, setPreviewTxtLoading] = useState(false);
+
 
     useEffect(() => {
         const materialsRef = collection(db, `focusGroups/${groupId}/materials`);
@@ -218,6 +220,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
             "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "text/plain",
+            "text/markdown",
         ];
 
         if (isImage) {
@@ -233,10 +236,10 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
             setPreviewUrl(url);
         } else {
             const ext = file.name.split(".").pop()?.toLowerCase();
-            const allowedExts = ["pdf", "docx", "pptx", "xlsx", "txt"];
+            const allowedExts = ["pdf", "docx", "pptx", "xlsx", "txt", "md"];
             const isAllowedType = allowedRaw.includes(file.type) || (ext && allowedExts.includes(ext));
             if (!isAllowedType) {
-                toast.error("File type not allowed. Allowed: PDF, DOCX, PPTX, XLSX, TXT");
+                toast.error("File type not allowed. Allowed: PDF, DOCX, PPTX, XLSX, TXT, MD");
                 return;
             }
             if (file.size > 10 * 1024 * 1024) {
@@ -334,23 +337,28 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
     const handleDownload = async (m: Material) => {
         setDownloadingId(m.id);
         try {
-            const res = await fetch(m.url);
+            // Fetch via server-side proxy-download to bypass CORS and force direct attachment headers
+            const proxyUrl = `/api/proxy-download?url=${encodeURIComponent(m.url)}&filename=${encodeURIComponent(m.fileName || m.title || "download")}`;
+            const res = await fetch(proxyUrl);
+            if (!res.ok) {
+                throw new Error(`Failed to fetch from proxy: ${res.statusText}`);
+            }
             const blob = await res.blob();
             const blobUrl = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = blobUrl;
-            a.download = m.fileName || 'download';
+            a.download = m.fileName || m.title || 'download';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(blobUrl);
             toast.success("Download completed");
         } catch (err) {
-            console.warn("CORS fetch download failed, falling back to direct link:", err);
+            console.warn("Proxy download failed, falling back to direct link:", err);
             const a = document.createElement('a');
             a.href = m.url;
             a.target = "_blank";
-            a.download = m.fileName || 'download';
+            a.download = m.fileName || m.title || 'download';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -400,6 +408,10 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
 
     const handleCardClick = async (m: Material) => {
         setPreviewMaterial(m);
+        const ext = getFileExtension(m.url, m.fileName);
+        const isTextOrCode = ["TXT", "JS", "JSX", "TS", "TSX", "HTML", "CSS", "JSON", "PY", "GO", "RS", "JAVA", "CPP", "C", "SH", "YAML", "YML", "XML", "INI", "CONF", "SQL"].includes(ext);
+        const isMarkdown = ["MD", "MARKDOWN"].includes(ext);
+
         if (m.type === "link") {
             setPreviewOgLoading(true);
             setPreviewOgData(null);
@@ -412,15 +424,19 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
             } finally {
                 setPreviewOgLoading(false);
             }
-        } else if (m.type === "file" && getFileExtension(m.url, m.fileName) === "TXT") {
+        } else if (m.type === "file" && (isTextOrCode || isMarkdown)) {
             setPreviewTxtLoading(true);
             setPreviewTxtContent(null);
             try {
-                const res = await fetch(m.url);
+                const proxyUrl = `/api/proxy-text?url=${encodeURIComponent(m.url)}`;
+                const res = await fetch(proxyUrl);
+                if (!res.ok) {
+                    throw new Error(`Failed to fetch from text proxy: ${res.statusText}`);
+                }
                 const txt = await res.text();
                 setPreviewTxtContent(txt);
             } catch (err) {
-                console.error("TXT content fetch failed:", err);
+                console.error("Content fetch failed:", err);
                 setPreviewTxtContent("Failed to load text content.");
             } finally {
                 setPreviewTxtLoading(false);
@@ -484,18 +500,31 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                     </button>
                 </div>
             ) : (
-                <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
+                <motion.div
+                    layout
+                    className="grid gap-4"
+                    style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}
+                >
+                    <AnimatePresence mode="popLayout">
                     {filtered.map(m => {
                         const canDelete = user?.uid === m.addedBy || isHost;
                         const canEdit = user?.uid === m.addedBy || isHost;
                         return (
                             <motion.div
                                 key={m.id}
-                                layout
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
+                                layout="position"
+                                layoutId={m.id}
+                                initial={{ opacity: 0, scale: 0.94, y: 12 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.92, y: -8, transition: { duration: 0.18, ease: "easeIn" } }}
+                                transition={{
+                                    layout: { type: "spring", stiffness: 300, damping: 30 },
+                                    opacity: { duration: 0.22, ease: "easeOut" },
+                                    scale: { duration: 0.22, ease: "easeOut" },
+                                    y: { duration: 0.22, ease: "easeOut" },
+                                }}
                                 onClick={() => handleCardClick(m)}
-                                className="group bg-zinc-900/60 border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition-all relative flex flex-col h-[360px] max-h-[360px] w-full cursor-pointer"
+                                className="group bg-zinc-900/60 border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition-colors relative flex flex-col h-[360px] max-h-[360px] w-full cursor-pointer"
                             >
                                 {/* Media / Thumbnail area */}
                                 {m.type === "image" && (
@@ -516,21 +545,48 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                                     </div>
                                 )}
                                 {m.type === "link" && (
-                                    <div className="w-full aspect-video bg-zinc-950 overflow-hidden shrink-0 relative border-b border-white/5 flex items-center justify-center">
+                                    <div className="w-full aspect-video bg-gradient-to-br from-zinc-950 to-zinc-900 overflow-hidden shrink-0 relative border-b border-white/5 flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
                                         {m.thumbnailUrl ? (
                                             <img
                                                 src={m.thumbnailUrl}
                                                 alt={m.title}
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                className="w-full h-full object-cover"
                                             />
                                         ) : (
-                                            <Link className="w-10 h-10 text-zinc-700" />
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-zinc-950/40 backdrop-blur-[2px]">
+                                                <div className="w-10 h-10 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mb-2 shadow-[0_0_15px_rgba(6,182,212,0.15)]">
+                                                    <Link className="w-4 h-4 text-cyan-400" />
+                                                </div>
+                                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center truncate max-w-full">
+                                                    {(() => {
+                                                        try {
+                                                            return new URL(m.url).hostname.replace("www.", "");
+                                                        } catch {
+                                                            return "LINK";
+                                                        }
+                                                    })()}
+                                                </span>
+                                            </div>
                                         )}
+                                        {/* Subtle overlay grid lines */}
+                                        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />
                                     </div>
                                 )}
 
                                 {/* Action Buttons overlay */}
                                 <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-zinc-950/80 backdrop-blur-sm p-1 rounded-lg border border-white/10">
+                                    {m.type === "link" && (
+                                        <a
+                                            href={m.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
+                                            title="Open Link"
+                                        >
+                                            <ExternalLink className="w-3.5 h-3.5" />
+                                        </a>
+                                    )}
                                     {(m.type === "image" || m.type === "file") && (
                                         <button
                                             onClick={(e) => { e.stopPropagation(); handleDownload(m); }}
@@ -539,7 +595,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                                             disabled={downloadingId === m.id}
                                         >
                                             {downloadingId === m.id ? (
-                                                <span className="text-[8px] font-bold px-0.5">...</span>
+                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                             ) : (
                                                 <Download className="w-3.5 h-3.5" />
                                             )}
@@ -620,7 +676,8 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                             </motion.div>
                         );
                     })}
-                </div>
+                    </AnimatePresence>
+                </motion.div>
             )}
 
             <AnimatePresence>
@@ -708,14 +765,14 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                                     {!selectedFile ? (
                                         <div className="space-y-4">
                                             <p className="text-xs text-zinc-500">
-                                                {modalType === "image" ? "Max 5MB. JPEG, PNG, GIF, WebP." : "Max 10MB. PDF, DOCX, PPTX, XLSX, TXT."}
+                                                {modalType === "image" ? "Max 5MB. JPEG, PNG, GIF, WebP." : "Max 10MB. PDF, DOCX, PPTX, XLSX, TXT, MD."}
                                             </p>
                                             <label className="flex flex-col items-center gap-3 p-8 border-2 border-dashed border-white/10 rounded-xl hover:border-white/20 transition-colors cursor-pointer bg-zinc-950/60">
                                                 <Upload className="w-8 h-8 text-zinc-500" />
                                                 <span className="text-sm font-medium text-zinc-400">Click to select file</span>
                                                 <input
                                                     type="file"
-                                                    accept={modalType === "image" ? "image/*" : ".pdf,.docx,.pptx,.xlsx,.txt"}
+                                                    accept={modalType === "image" ? "image/*" : ".pdf,.docx,.pptx,.xlsx,.txt,.md"}
                                                     onChange={handleFileSelect}
                                                     className="hidden"
                                                 />
@@ -874,56 +931,118 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                             className="max-w-4xl w-full bg-zinc-900 border border-white/10 rounded-[20px] overflow-hidden shadow-2xl flex flex-col md:flex-row max-h-[90vh]"
                         >
                             {/* Left Side: Media preview */}
-                            <div className="flex-1 bg-zinc-950 flex items-center justify-center min-h-[300px] md:min-h-[500px]">
+                            <div className="flex-1 bg-zinc-950 flex items-center justify-center min-h-[300px] md:min-h-[500px] overflow-hidden">
                                 {previewMaterial.type === "image" && (
                                     <img src={previewMaterial.url} alt={previewMaterial.title} className="max-w-full max-h-[70vh] object-contain" />
                                 )}
 
-                                {previewMaterial.type === "file" && getFileExtension(previewMaterial.url, previewMaterial.fileName) === "TXT" && (
-                                    <div className="w-full h-full p-6 overflow-y-auto max-h-[70vh] flex flex-col">
-                                        <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2">TXT FILE CONTENT</h4>
-                                        {previewTxtLoading ? (
-                                            <div className="flex-1 flex items-center justify-center py-12">
-                                                <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                {previewMaterial.type === "file" && (() => {
+                                    const ext = getFileExtension(previewMaterial.url, previewMaterial.fileName);
+                                    const isTextOrCode = ["TXT", "JS", "JSX", "TS", "TSX", "HTML", "CSS", "JSON", "PY", "GO", "RS", "JAVA", "CPP", "C", "SH", "YAML", "YML", "XML", "INI", "CONF", "SQL"].includes(ext);
+                                    const isMarkdown = ["MD", "MARKDOWN"].includes(ext);
+                                    const isAudio = ["MP3", "WAV", "OGG", "M4A", "AAC"].includes(ext);
+                                    const isVideo = ["MP4", "WEBM", "OGV", "MOV"].includes(ext);
+                                    const isPdf = ext === "PDF";
+
+                                    if (isMarkdown) {
+                                        return (
+                                            <div className="w-full h-full p-6 overflow-y-auto max-h-[70vh] flex flex-col select-text bg-zinc-950">
+                                                <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2">MARKDOWN PREVIEW</h4>
+                                                {previewTxtLoading ? (
+                                                    <div className="flex-1 flex items-center justify-center py-12">
+                                                        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-sm text-zinc-300 prose prose-invert max-w-none bg-zinc-900/40 p-4 rounded-xl border border-white/5 flex-1 overflow-auto max-h-[400px]">
+                                                        <MarkdownRenderer content={previewTxtContent || ""} />
+                                                    </div>
+                                                )}
                                             </div>
-                                        ) : (
-                                            <pre className="text-xs font-mono text-zinc-300 whitespace-pre-wrap select-text bg-zinc-900 p-4 rounded-xl border border-white/5 flex-1 overflow-auto max-h-[350px]">
-                                                {previewTxtContent}
-                                            </pre>
-                                        )}
-                                    </div>
-                                )}
+                                        );
+                                    }
 
-                                {previewMaterial.type === "file" && getFileExtension(previewMaterial.url, previewMaterial.fileName) === "PDF" && (
-                                    <div className="w-full h-full min-h-[500px] flex flex-col p-4 bg-zinc-950">
-                                        <iframe
-                                            src={getInlinePdfUrl(previewMaterial.url)}
-                                            className="w-full h-full min-h-[460px] border-0 rounded-xl bg-zinc-900"
-                                            title="PDF Preview"
-                                        />
-                                    </div>
-                                )}
+                                    if (isTextOrCode) {
+                                        return (
+                                            <div className="w-full h-full p-6 overflow-y-auto max-h-[70vh] flex flex-col select-text bg-zinc-950">
+                                                <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2">{ext} FILE CONTENT</h4>
+                                                {previewTxtLoading ? (
+                                                    <div className="flex-1 flex items-center justify-center py-12">
+                                                        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                    </div>
+                                                ) : (
+                                                    <pre className="text-xs font-mono text-zinc-300 whitespace-pre-wrap bg-zinc-900 p-4 rounded-xl border border-white/5 flex-1 overflow-auto max-h-[400px] leading-relaxed">
+                                                        {previewTxtContent}
+                                                    </pre>
+                                                )}
+                                            </div>
+                                        );
+                                    }
 
-                                {previewMaterial.type === "file" &&
-                                 getFileExtension(previewMaterial.url, previewMaterial.fileName) !== "TXT" &&
-                                 getFileExtension(previewMaterial.url, previewMaterial.fileName) !== "PDF" && (
-                                    <div className="flex flex-col items-center gap-4 py-12">
-                                        <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-2xl flex items-center justify-center text-zinc-500 font-bold text-lg uppercase shadow-xl">
-                                            {getFileExtension(previewMaterial.url, previewMaterial.fileName)}
+                                    if (isAudio) {
+                                        return (
+                                            <div className="flex flex-col items-center gap-6 py-12 px-6 w-full max-w-sm">
+                                                <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-2xl flex items-center justify-center text-zinc-400 font-bold text-3xl shadow-xl">
+                                                    🎧
+                                                </div>
+                                                <div className="text-center w-full">
+                                                    <p className="text-sm font-bold text-white truncate">{previewMaterial.fileName || previewMaterial.title}</p>
+                                                    <p className="text-xs text-zinc-500 mt-1">{previewMaterial.fileSize ? formatFileSize(previewMaterial.fileSize) : ""}</p>
+                                                </div>
+                                                <audio controls src={previewMaterial.url} className="w-full mt-2" />
+                                            </div>
+                                        );
+                                    }
+
+                                    if (isVideo) {
+                                        return (
+                                            <div className="w-full h-full min-h-[350px] md:min-h-[500px] flex flex-col p-4 bg-zinc-950 justify-center">
+                                                <video controls src={previewMaterial.url} className="max-w-full max-h-[70vh] rounded-xl border border-white/5 shadow-2xl" />
+                                            </div>
+                                        );
+                                    }
+
+                                    if (isPdf) {
+                                        return (
+                                            <div className="w-full h-full min-h-[500px] flex flex-col p-4 bg-zinc-950">
+                                                <iframe
+                                                    src={`/api/proxy-pdf?url=${encodeURIComponent(previewMaterial.url)}`}
+                                                    className="w-full h-full min-h-[460px] border-0 rounded-xl bg-zinc-900"
+                                                    title="PDF Preview"
+                                                />
+                                            </div>
+                                        );
+                                    }
+
+                                    // Default fallback
+                                    return (
+                                        <div className="flex flex-col items-center gap-4 py-12">
+                                            <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-2xl flex items-center justify-center text-zinc-500 font-bold text-lg uppercase shadow-xl">
+                                                {ext}
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="text-sm font-bold text-white max-w-[300px] truncate">{previewMaterial.fileName || previewMaterial.title}</p>
+                                                <p className="text-xs text-zinc-500 mt-1">{previewMaterial.fileSize ? formatFileSize(previewMaterial.fileSize) : ""}</p>
+                                            </div>
+                                            <button
+                                                onClick={() => handleDownload(previewMaterial)}
+                                                className="px-6 py-2.5 bg-white text-black font-black text-xs rounded-xl hover:bg-zinc-100 transition-colors flex items-center gap-2 mt-2 cursor-pointer"
+                                                disabled={downloadingId === previewMaterial.id}
+                                            >
+                                                {downloadingId === previewMaterial.id ? (
+                                                    <>
+                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                        Downloading...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Download className="w-3.5 h-3.5" />
+                                                        Download File
+                                                    </>
+                                                )}
+                                            </button>
                                         </div>
-                                        <div className="text-center">
-                                            <p className="text-sm font-bold text-white max-w-[300px] truncate">{previewMaterial.fileName || previewMaterial.title}</p>
-                                            <p className="text-xs text-zinc-500 mt-1">{previewMaterial.fileSize ? formatFileSize(previewMaterial.fileSize) : ""}</p>
-                                        </div>
-                                        <button
-                                            onClick={() => handleDownload(previewMaterial)}
-                                            className="px-6 py-2.5 bg-white text-black font-black text-xs rounded-xl hover:bg-zinc-100 transition-colors flex items-center gap-2 mt-2"
-                                        >
-                                            <Download className="w-3.5 h-3.5" />
-                                            Download File
-                                        </button>
-                                    </div>
-                                )}
+                                    );
+                                })()}
 
                                 {previewMaterial.type === "link" && (
                                     <div className="w-full p-6 flex flex-col justify-center items-center">
@@ -935,22 +1054,14 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                                             <div className="w-full max-w-md bg-zinc-900 border border-white/10 rounded-xl overflow-hidden shadow-lg flex flex-col">
                                                 {(previewOgData?.image || previewMaterial.thumbnailUrl) && (
                                                     <div className="w-full aspect-video bg-zinc-950 overflow-hidden border-b border-white/5">
-                                                        <img src={previewOgData?.image || previewMaterial.thumbnailUrl} alt="OG Preview" className="w-full h-full object-cover" />
+                                                        <img src={(previewOgData?.image || previewMaterial.thumbnailUrl) || undefined} alt="OG Preview" className="w-full h-full object-cover" />
                                                     </div>
                                                 )}
                                                 <div className="p-4 space-y-2">
                                                     <span className="text-[8px] font-black uppercase tracking-wider text-cyan-400 px-1.5 py-0.5 rounded-full bg-cyan-950/50 border border-cyan-900/30">LINK PREVIEW</span>
                                                     <h4 className="text-sm font-bold text-white mt-1 leading-snug">{previewOgData?.title || previewMaterial.title || previewMaterial.url}</h4>
                                                     <p className="text-xs text-zinc-400 line-clamp-3 leading-relaxed">{previewOgData?.description || previewMaterial.description || "No link description parsed."}</p>
-                                                    <a
-                                                        href={previewMaterial.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="w-full py-2.5 bg-zinc-800 text-white font-bold text-xs rounded-lg hover:bg-zinc-700 transition-colors flex items-center justify-center gap-2 mt-4 border border-white/5"
-                                                    >
-                                                        <ExternalLink className="w-3.5 h-3.5" />
-                                                        Open link
-                                                    </a>
+
                                                 </div>
                                             </div>
                                         )}
@@ -958,67 +1069,158 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                                 )}
                             </div>
 
-                            {/* Right Side: Metadata Panel (shown for everything except TXT file detail because text takes full space) */}
-                            {!(previewMaterial.type === "file" && getFileExtension(previewMaterial.url, previewMaterial.fileName) === "TXT") && (
-                                <div className="w-full md:w-80 border-t md:border-t-0 md:border-l border-white/10 p-6 flex flex-col justify-between max-h-[300px] md:max-h-[500px]">
-                                    <div className="space-y-4 overflow-y-auto">
-                                        <div className="space-y-1">
-                                            <span className="text-[9px] font-black uppercase tracking-wider text-zinc-500">{previewMaterial.type}</span>
-                                            <h3 className="text-lg font-black text-white leading-tight tracking-tight">{previewMaterial.title}</h3>
+                            {/* Right Side: Metadata Panel */}
+                            <div className="w-full md:w-80 border-t md:border-t-0 md:border-l border-white/10 p-6 flex flex-col justify-between max-h-[500px] md:max-h-none overflow-y-auto">
+                                <div className="space-y-6">
+                                    {/* Title / Type Header */}
+                                    <div className="flex justify-between items-start gap-4">
+                                        <div className="space-y-1 flex-1">
+                                            <span className={cn(
+                                                "text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border w-fit block",
+                                                previewMaterial.type === "link" ? "text-cyan-400 bg-cyan-950/30 border-cyan-900/30" :
+                                                previewMaterial.type === "image" ? "text-purple-400 bg-purple-950/30 border-purple-900/30" :
+                                                "text-amber-400 bg-amber-950/30 border-amber-900/30"
+                                            )}>
+                                                {previewMaterial.type}
+                                            </span>
+                                            <h3 className="text-base font-black text-white leading-tight tracking-tight pt-1 select-all">{previewMaterial.title}</h3>
                                         </div>
 
-                                        {previewMaterial.description && (
-                                            <div className="text-xs text-zinc-400 leading-relaxed border-t border-white/5 pt-3">
-                                                <MarkdownRenderer content={previewMaterial.description} />
+                                        {/* Edit/Delete Icons at the top of the card/modal */}
+                                        {(user?.uid === previewMaterial.addedBy || isHost) && (
+                                            <div className="flex items-center gap-1 bg-zinc-950/60 p-1 rounded-xl border border-white/10 shrink-0">
+                                                <button
+                                                    onClick={() => {
+                                                        handleEditClick(previewMaterial);
+                                                        setPreviewMaterial(null);
+                                                    }}
+                                                    className="p-1.5 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                                    title="Edit"
+                                                >
+                                                    <Pencil className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        handleDelete(previewMaterial.id);
+                                                        setPreviewMaterial(null);
+                                                    }}
+                                                    className="p-1.5 text-zinc-400 hover:text-red-400 transition-colors cursor-pointer"
+                                                    title="Delete"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
                                             </div>
                                         )}
                                     </div>
 
-                                    <div className="border-t border-white/5 pt-4 flex flex-col gap-3">
-                                        {previewMaterial.type === "file" && getFileExtension(previewMaterial.url, previewMaterial.fileName) === "PDF" && (
-                                            <div className="flex gap-2">
-                                                <button
-                                                    onClick={() => window.open(previewMaterial.url, "_blank")}
-                                                    className="flex-1 py-2 bg-zinc-800 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg hover:bg-zinc-700 transition-colors flex items-center justify-center gap-1 border border-white/5 cursor-pointer"
-                                                >
-                                                    <ExternalLink className="w-3.5 h-3.5" />
-                                                    Open
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDownload(previewMaterial)}
-                                                    className="flex-1 py-2 bg-white text-black font-black text-[10px] uppercase tracking-wider rounded-lg hover:bg-zinc-100 transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                                                    disabled={downloadingId === previewMaterial.id}
-                                                >
-                                                    <Download className="w-3.5 h-3.5" />
-                                                    {downloadingId === previewMaterial.id ? "..." : "Download"}
-                                                </button>
+                                    {/* Details Grid */}
+                                    <div className="space-y-3 border-t border-white/5 pt-4 text-xs">
+                                        <div className="flex justify-between items-start gap-4">
+                                            <span className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider shrink-0 mt-0.5">Name</span>
+                                            <span className="text-zinc-300 font-medium text-right select-all break-all">{previewMaterial.fileName || previewMaterial.title}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center gap-4">
+                                            <span className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider shrink-0">Type</span>
+                                            <span className="text-zinc-300 font-medium capitalize">{previewMaterial.type === "file" ? `${getFileExtension(previewMaterial.url, previewMaterial.fileName)} File` : previewMaterial.type}</span>
+                                        </div>
+                                        {previewMaterial.fileSize && (
+                                            <div className="flex justify-between items-center gap-4">
+                                                <span className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider shrink-0">Size</span>
+                                                <span className="text-zinc-300 font-medium">{formatFileSize(previewMaterial.fileSize)}</span>
                                             </div>
                                         )}
-
-                                        <div className="flex items-center justify-between text-[11px] text-zinc-500">
-                                            <span>Shared by:</span>
+                                        <div className="flex justify-between items-center gap-4">
+                                            <span className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider shrink-0">Added By</span>
                                             <div className="flex items-center gap-1.5 font-semibold text-white">
-                                                <Avatar className="w-4 h-4 rounded-full border border-white/10">
+                                                <Avatar className="w-4 h-4 rounded-full border border-white/10 shrink-0">
                                                     <AvatarImage src={memberPhotoMap[previewMaterial.addedBy]} />
                                                     <AvatarFallback className="text-[6px] bg-zinc-800">{previewMaterial.addedByName?.[0]}</AvatarFallback>
                                                 </Avatar>
-                                                <span>{previewMaterial.addedByName}</span>
+                                                <span className="max-w-[120px] truncate font-bold">{previewMaterial.addedByName}</span>
                                             </div>
                                         </div>
-
+                                        <div className="flex justify-between items-center gap-4">
+                                            <span className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider shrink-0">Added At</span>
+                                            <span className="text-zinc-300 font-medium text-right">
+                                                {previewMaterial.createdAt ? (
+                                                    new Date((previewMaterial.createdAt as any).toDate ? (previewMaterial.createdAt as any).toDate() : (previewMaterial.createdAt as any)).toLocaleDateString(undefined, {
+                                                        month: "short",
+                                                        day: "numeric",
+                                                        year: "numeric",
+                                                        hour: "2-digit",
+                                                        minute: "2-digit"
+                                                    })
+                                                ) : "N/A"}
+                                            </span>
+                                        </div>
                                         {previewMaterial.tags && previewMaterial.tags.length > 0 && (
-                                            <div className="flex flex-wrap gap-1">
-                                                {previewMaterial.tags.map(tag => (
-                                                    <span key={tag} className="px-2 py-0.5 rounded-full bg-white/5 border border-white/5 text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
-                                                        {tag}
-                                                    </span>
-                                                ))}
+                                            <div className="flex justify-between items-start gap-4 border-t border-white/5 pt-3">
+                                                <span className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider shrink-0 mt-0.5">Tags</span>
+                                                <div className="flex flex-wrap gap-1 justify-end max-w-[160px]">
+                                                    {previewMaterial.tags.map(tag => (
+                                                        <span key={tag} className="px-2 py-0.5 rounded-full bg-white/5 border border-white/5 text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                                                            {tag}
+                                                        </span>
+                                                    ))}
+                                                </div>
                                             </div>
                                         )}
                                     </div>
+
+                                    {previewMaterial.description && (
+                                        <div className="text-xs text-zinc-400 leading-relaxed border-t border-white/5 pt-4">
+                                            <div className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider mb-1.5">Description</div>
+                                            <div className="bg-zinc-950/40 p-3 rounded-lg border border-white/5 select-text overflow-y-auto max-h-[120px]">
+                                                <MarkdownRenderer content={previewMaterial.description} />
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                        </motion.div>
+
+                                {/* Action Buttons */}
+                                {previewMaterial.type === "link" ? (
+                                    <div className="border-t border-white/5 pt-4 flex flex-col gap-3">
+                                        <div className="flex gap-2">
+                                            <a
+                                                href={previewMaterial.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="w-full py-2 bg-white text-black font-black text-[10px] uppercase tracking-wider rounded-lg hover:bg-zinc-100 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                                            >
+                                                <ExternalLink className="w-3.5 h-3.5" />
+                                                Open Link
+                                            </a>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="border-t border-white/5 pt-4 flex flex-col gap-3">
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => handleDownload(previewMaterial)}
+                                                className="w-full py-2 bg-white text-black font-black text-[10px] uppercase tracking-wider rounded-lg hover:bg-zinc-100 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                                                disabled={downloadingId === previewMaterial.id}
+                                            >
+                                                {downloadingId === previewMaterial.id ? (
+                                                    <>
+                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                        Downloading...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Download className="w-3.5 h-3.5" />
+                                                        Download
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+
+
+
+                                </div>
+                            </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>
