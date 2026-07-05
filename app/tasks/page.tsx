@@ -471,6 +471,7 @@ function GroupCard({
     return (
         <div
             ref={(el) => { cardEl.current = el; cardRef(el); }}
+            data-group-card="true"
             data-group-id={group.id}
             data-group-color={group.color ?? "zinc"}
             style={isMobileMode ? {
@@ -1767,25 +1768,59 @@ export default function TasksPage() {
         <BackgroundTheme showSettings={true}>
             {/* Canvas area */}
             {isMobileMode ? (
-                <div className="flex flex-col md:flex-row gap-6 p-4 pt-24 pb-32 md:p-8 md:pt-24 md:pb-32 overflow-y-auto md:overflow-x-auto min-h-screen w-full">
-                    {canvasContent}
+                // MOBILE — simple scrollable layout, no canvas
+                <div className="flex flex-col gap-4 p-4 pt-24 pb-32 overflow-y-auto min-h-screen w-full">
+                    {groups.map(g => (
+                        <GroupCard
+                            key={g.id}
+                            group={g}
+                            tasks={tasksByGroup(g.id)}
+                            userId={user.uid}
+                            isDragOver={false}
+                            onTaskDragStart={() => {}}
+                            cardRef={el => { groupRefs.current[g.id] = el }}
+                            overTaskId={null}
+                            overTaskPosition={null}
+                            isMobileMode={true}
+                            zoom={1}
+                        />
+                    ))}
+                    {assignedTasks.length > 0 && (
+                        <AssignedTasksCard
+                            tasks={assignedTasks}
+                            userId={user.uid}
+                            isDragOver={false}
+                            onTaskDragStart={() => {}}
+                            isMobileMode={true}
+                            zoom={1}
+                        />
+                    )}
                 </div>
             ) : (
-                <div ref={viewportRef}
-                    className={cn("min-h-screen w-full overflow-hidden select-none", toolMode === "hand" ? (isPanning ? "cursor-grabbing" : "cursor-grab") : "cursor-default")}
-                    style={{ height: '100vh', touchAction: 'none', position: 'relative' }}
+                // DESKTOP — infinite canvas with pan/zoom
+                <div
+                    ref={viewportRef}
+                    className={cn(
+                        "min-h-screen w-full overflow-hidden select-none",
+                        toolMode === "hand"
+                            ? isPanning ? "cursor-grabbing" : "cursor-grab"
+                            : "cursor-default"
+                    )}
+                    style={{ height: '100dvh', touchAction: 'none', position: 'relative' }}
                     onMouseDown={handleViewportMouseDown}
                     onMouseMove={handleViewportMouseMove}
                     onMouseUp={handleViewportMouseUp}
                     onMouseLeave={handleViewportMouseLeave}
                 >
-                    <div ref={canvasRef} style={{
-                        transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                        transformOrigin: '0 0',
-                        position: 'absolute',
-                        inset: 0,
-                        pointerEvents: toolMode === "hand" ? 'none' : undefined,
-                    }}
+                    <div
+                        ref={canvasRef}
+                        style={{
+                            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                            transformOrigin: '0 0',
+                            position: 'absolute',
+                            inset: 0,
+                            pointerEvents: toolMode === "hand" ? 'none' : undefined,
+                        }}
                         onPointerMove={draggingTask ? onCanvasPointerMove : undefined}
                         onPointerUp={draggingTask ? onCanvasPointerUp : undefined}
                     >

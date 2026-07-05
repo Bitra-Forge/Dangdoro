@@ -173,7 +173,7 @@ export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
     };
 
     return (
-        <div className="fixed inset-x-4 sm:right-4 sm:left-auto top-4 bottom-20 z-[101] sm:w-[400px] animate-in slide-in-from-right-6 fade-in duration-300">
+        <div data-scroll-container className="fixed inset-x-4 sm:right-4 sm:left-auto top-4 bottom-24 sm:bottom-20 z-[101] sm:w-[400px] animate-in slide-in-from-right-6 fade-in duration-300">
             <div className="flex flex-col h-full bg-zinc-950/90 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-[0_25px_60px_rgba(0,0,0,0.8)] overflow-hidden">
 
                 {/* Header */}
@@ -210,7 +210,7 @@ export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4" style={{ scrollbarWidth: "none" }}>
+                <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4" style={{ scrollbarWidth: "none" }}>
                     <AnimatePresence initial={false}>
                         {messages.map((msg, i) => (
                             <motion.div

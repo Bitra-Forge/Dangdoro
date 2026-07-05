@@ -49,7 +49,7 @@ const spaceGrotesk = Space_Grotesk({
   weight: ["300", "400", "500", "600", "700"],
 });
 
-export { metadata } from "./metadata";
+export { metadata, viewport } from "./metadata";
 
 const structuredData = {
   "@context": "https://schema.org",
