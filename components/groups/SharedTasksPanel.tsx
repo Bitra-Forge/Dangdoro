@@ -4,19 +4,48 @@ import { useState, useMemo, useEffect, memo } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
 import { 
-    Plus, Sparkles, Mail, Target, 
+    Plus, Sparkles, Mail, Target, Users,
     Play, Search, Check, Edit2, X, Save, Trash2, Filter,
     ChevronUp, ChevronDown, GripVertical
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SharedTask } from "@/lib/groups";
 import { Tooltip } from "@/components/ui/tooltip";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-const TASK_STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
-    "todo":        { label: "Todo",        color: "text-zinc-400 bg-zinc-500/10 border-zinc-500/20",    icon: Check },
-    "in-progress": { label: "In Progress", color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",    icon: Play },
-    "in-review":   { label: "In Review",   color: "text-amber-400 bg-amber-500/10 border-amber-500/20", icon: Search },
-    "done":        { label: "Done",        color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20", icon: Check },
+const TASK_STATUS_CONFIG: Record<string, { label: string; color: string; pillColor: string; icon: any }> = {
+    "todo":        { label: "Todo",        color: "text-zinc-400 bg-zinc-500/10 border-zinc-500/20",    pillColor: "bg-zinc-800/80 text-zinc-400 border-zinc-700/50",        icon: Check },
+    "in-progress": { label: "In Progress", color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",    pillColor: "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",        icon: Play },
+    "in-review":   { label: "In Review",   color: "text-amber-400 bg-amber-500/10 border-amber-500/20", pillColor: "bg-amber-500/15 text-amber-300 border-amber-500/30",    icon: Search },
+    "done":        { label: "Done",        color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20", pillColor: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", icon: Check },
+};
+
+const STATUS_CYCLE = ["todo", "in-progress", "in-review", "done"] as const;
+
+const PRIORITY_CONFIG: Record<string, { color: string; dot: string }> = {
+    "high":   { color: "bg-red-500/15 text-red-400 border-red-500/30",    dot: "bg-red-400" },
+    "medium": { color: "bg-amber-500/15 text-amber-400 border-amber-500/30", dot: "bg-amber-400" },
+    "low":    { color: "bg-sky-500/15 text-sky-400 border-sky-500/30",    dot: "bg-sky-400" },
+};
+
+// Deterministic color palette for task icon boxes
+const CARD_COLORS = [
+    { iconBg: "bg-violet-600",  bar: "bg-violet-500",  glow: "rgba(139,92,246,0.15)" },
+    { iconBg: "bg-emerald-600", bar: "bg-emerald-500", glow: "rgba(16,185,129,0.15)" },
+    { iconBg: "bg-amber-600",   bar: "bg-amber-500",   glow: "rgba(245,158,11,0.15)" },
+    { iconBg: "bg-red-600",     bar: "bg-red-500",     glow: "rgba(239,68,68,0.15)" },
+    { iconBg: "bg-blue-600",    bar: "bg-blue-500",    glow: "rgba(59,130,246,0.15)" },
+    { iconBg: "bg-pink-600",    bar: "bg-pink-500",    glow: "rgba(236,72,153,0.15)" },
+    { iconBg: "bg-teal-600",    bar: "bg-teal-500",    glow: "rgba(20,184,166,0.15)" },
+];
+
+const CARD_ICONS = [Target, Sparkles, Mail, Check, Play, Search];
+
+const PROGRESS_BY_STATUS: Record<string, number> = {
+    "todo":        15,
+    "in-progress": 45,
+    "in-review":   72,
+    "done":        100,
 };
 
 const TasksListWrapper = ({ children, isAdmin, values, onReorder, className }: any) => {
@@ -593,7 +622,6 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                         <span className="relative z-10 flex items-center justify-center gap-2"><Save className="w-3 h-3" /> Save Changes</span>
                                     </button>
                                     <button onClick={() => setEditingTaskId(null)} className="px-8 py-3 bg-white/5 text-zinc-400 font-black rounded-[10px] text-xs relative overflow-hidden hover:bg-white/10 hover:text-white transition-all cursor-pointer">
-                                        {/* Curved Glass Edge Lights */}
                                         <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none z-10" />
                                         <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
                                         <div className="absolute top-0 inset-x-0 h-[4px] bg-gradient-to-b from-white/5 to-transparent z-10" />
@@ -604,140 +632,208 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                         );
                     }
 
-                    return (
-                        <TaskWrapper 
-                            key={task.id} 
+                    {
+                        const prioCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
+                        const assignee = task.assignedTo !== "all" ? groupMembers?.find((m: any) => m.uid === task.assignedTo) : null;
+
+                        return (
+                        <TaskWrapper
+                            key={task.id}
                             task={task}
                             isAdmin={isAdmin}
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.5 }}
                             className={cn(
-                                "flex flex-col gap-3 p-5 rounded-2xl transition-colors duration-200 border relative group/task", 
-                                task.status === "done" 
-                                    ? "bg-zinc-900/20 border-white/5 opacity-60" 
-                                    : "bg-zinc-900/60 border-white/10 hover:border-white/20 active:scale-[0.99]"
+                                "flex flex-col gap-3.5 p-5 rounded-2xl border relative group/task transition-all duration-200",
+                                task.status === "done"
+                                    ? "bg-zinc-900/20 border-white/5 opacity-60"
+                                    : "bg-zinc-900/60 border-white/10 hover:border-white/20 active:scale-[0.99]",
+                                task.priority === "high" ? "border-l-[3px] border-l-red-500" :
+                                task.priority === "medium" ? "border-l-[3px] border-l-amber-500" :
+                                "border-l-[3px] border-l-sky-500"
                             )}
                         >
-                            <div className="flex items-start gap-4">
-                                {isAdmin && (
-                                    <div className="pt-1.5 text-zinc-600 group-hover/task:text-zinc-400 cursor-grab active:cursor-grabbing transition-colors shrink-0">
-                                        <GripVertical className="w-4 h-4" />
-                                    </div>
-                                )}
-                                <div className="flex-1 min-w-0">
+                            {/* Top row: drag + title + actions */}
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="flex items-center gap-2">
+                                    {isAdmin && (
+                                        <div className="text-zinc-700 group-hover/task:text-zinc-500 cursor-grab active:cursor-grabbing transition-colors shrink-0">
+                                            <GripVertical className="w-3.5 h-3.5" />
+                                        </div>
+                                    )}
                                     <h4 className={cn(
-                                        "text-[13px] font-black tracking-tight transition-all duration-500 truncate mb-1", 
-                                        task.status === "done" ? "text-zinc-600 line-through" : "text-white group-hover/task:text-[white]"
+                                        "text-[13px] font-bold tracking-tight text-white",
+                                        task.status === "done" && "text-zinc-500 line-through"
                                     )}>
                                         {task.title}
                                     </h4>
-                                    {task.description && (
-                                        <p className="text-[11px] text-zinc-500 line-clamp-2">{task.description}</p>
-                                    )}
                                 </div>
 
-                                {canEdit && (
-                                    <div className="flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-all shrink-0">
-                                        <Tooltip content="Edit objective">
-                                            <button 
-                                                onClick={() => startEditing(task)} 
-                                                className="flex items-center justify-center p-1 text-zinc-400 hover:text-white hover:bg-white/5 rounded-md transition-all cursor-pointer" 
-                                            >
-                                                <Edit2 className="w-4 h-4" />
-                                            </button>
-                                        </Tooltip>
-                                        {isAdmin && (
-                                            <>
-                                                <Tooltip content="Move Up">
-                                                    <button 
-                                                        disabled={i === 0}
-                                                        onClick={() => handleMoveIncomplete(task, 'up')}
-                                                        className="flex items-center justify-center p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all cursor-pointer"
-                                                    >
-                                                        <ChevronUp className="w-4 h-4" />
-                                                    </button>
-                                                </Tooltip>
-                                                <Tooltip content="Move Down">
-                                                    <button 
-                                                        disabled={i === incompleteTasks.length - 1}
-                                                        onClick={() => handleMoveIncomplete(task, 'down')}
-                                                        className="flex items-center justify-center p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all cursor-pointer"
-                                                    >
-                                                        <ChevronDown className="w-4 h-4" />
-                                                    </button>
-                                                </Tooltip>
-                                            </>
-                                        )}
-                                        <Tooltip content="Delete objective">
-                                            <button
-                                                onClick={() => onDelete(task.id)}
-                                                className="flex items-center justify-center p-1 text-zinc-700 hover:bg-red-500/10 hover:text-red-500 rounded-md transition-all cursor-pointer"
-                                            >
-                                                <X className="w-4 h-4" />
-                                            </button>
-                                        </Tooltip>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-white/5">
-                                <div className="flex items-center gap-2">
-                                    {["todo", "in-progress", "in-review", "done"].map((status) => {
-                                        const cfg = TASK_STATUS_CONFIG[status];
-                                        const isActive = task.status === status;
-                                        const Icon = cfg.icon;
-                                        
-                                        return (
-                                            <Tooltip
-                                                key={status}
-                                                content={canEdit ? `Mark as ${cfg.label}` : "Only assignee or admins can change status"}
-                                            >
+                                {/* Actions */}
+                                <div className="flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-all shrink-0">
+                                    {canEdit && (
+                                        <>
+                                            <Tooltip content="Edit objective">
                                                 <button
-                                                    disabled={!canEdit}
-                                                    onClick={() => onUpdate(task.id, { status })}
-                                                    className={cn(
-                                                        "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border",
-                                                        isActive 
-                                                            ? cfg.color 
-                                                            : "bg-white/5 border-transparent text-zinc-600 hover:bg-white/10 hover:text-zinc-400 disabled:hover:bg-white/5 disabled:hover:text-zinc-600"
-                                                    )}
+                                                    onClick={() => startEditing(task)}
+                                                    className="p-1 text-zinc-500 hover:text-white hover:bg-white/5 rounded-lg transition-all cursor-pointer"
                                                 >
-                                                    <Icon className="w-2.5 h-2.5" />
-                                                    <span className={cn(isActive ? "inline" : "hidden sm:inline")}>{cfg.label}</span>
+                                                    <Edit2 className="w-3.5 h-3.5" />
                                                 </button>
                                             </Tooltip>
-                                        );
-                                    })}
-                                </div>
-
-                                <div className="flex items-center gap-3">
-                                    <div className={cn(
-                                        "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest",
-                                        task.priority === "high" ? "bg-red-500/10 text-red-500 border border-red-500/20" : 
-                                        task.priority === "medium" ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : 
-                                        "bg-sky-500/10 text-sky-500 border border-sky-500/20"
-                                    )}>
-                                        {task.priority}
-                                    </div>
-                                    <div className="flex items-center gap-1.5 text-[8px] font-bold text-zinc-600 uppercase tracking-widest">
-                                        <div className="w-1 h-1 rounded-full bg-zinc-800" />
-                                        {task.assignedTo === "all" ? "All" : assigneeNameById[task.assignedTo] || "Member"}
-                                    </div>
+                                            {isAdmin && (
+                                                <>
+                                                    <Tooltip content="Move Up">
+                                                        <button
+                                                            disabled={i === 0}
+                                                            onClick={() => handleMoveIncomplete(task, 'up')}
+                                                            className="p-1 text-zinc-500 hover:text-white hover:bg-white/5 disabled:opacity-20 disabled:hover:bg-transparent rounded-lg transition-all cursor-pointer"
+                                                        >
+                                                            <ChevronUp className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </Tooltip>
+                                                    <Tooltip content="Move Down">
+                                                        <button
+                                                            disabled={i === incompleteTasks.length - 1}
+                                                            onClick={() => handleMoveIncomplete(task, 'down')}
+                                                            className="p-1 text-zinc-500 hover:text-white hover:bg-white/5 disabled:opacity-20 disabled:hover:bg-transparent rounded-lg transition-all cursor-pointer"
+                                                        >
+                                                            <ChevronDown className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </Tooltip>
+                                                </>
+                                            )}
+                                            <Tooltip content="Delete objective">
+                                                <button
+                                                    onClick={() => onDelete(task.id)}
+                                                    className="p-1 text-zinc-700 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            </Tooltip>
+                                        </>
+                                    )}
                                 </div>
                             </div>
+
+                            {/* Description if present */}
+                            {task.description && (
+                                <p className="text-[11px] text-zinc-500 leading-relaxed -mt-1.5">
+                                    {task.description}
+                                </p>
+                            )}
+
+                            {/* Middle row: Stages bar */}
+                            <div className="flex items-center gap-1 my-1 select-none flex-wrap">
+                                {STATUS_CYCLE.map((statusId, idx) => {
+                                    const currentIdx = STATUS_CYCLE.indexOf(task.status as any);
+                                    const isCompleted = idx < currentIdx;
+                                    const isActive = idx === currentIdx;
+
+                                    let dotColor = "";
+                                    if (isCompleted) {
+                                        dotColor = "bg-emerald-500";
+                                    } else if (isActive) {
+                                        dotColor = statusId === "todo" ? "bg-emerald-500" :
+                                                   statusId === "in-progress" ? "bg-emerald-500" :
+                                                   statusId === "in-review" ? "bg-indigo-500" :
+                                                   "bg-emerald-500";
+                                    } else {
+                                        dotColor = "bg-zinc-950 border border-zinc-800";
+                                    }
+
+                                    const label = TASK_STATUS_CONFIG[statusId]?.label.toUpperCase();
+
+                                    return (
+                                        <div key={statusId} className="flex items-center">
+                                            {idx > 0 && (
+                                                <div className={cn(
+                                                    "w-6 h-[1px] mx-1.5",
+                                                    idx <= currentIdx ? "bg-zinc-700" : "bg-zinc-800/60"
+                                                )} />
+                                            )}
+                                            <button
+                                                disabled={!canEdit}
+                                                onClick={() => canEdit && onUpdate(task.id, {
+                                                    status: statusId,
+                                                    ...(statusId === "done" ? { completedAt: new Date().toISOString() } : {})
+                                                })}
+                                                className={cn(
+                                                    "flex items-center gap-1.5 text-[9px] font-black tracking-widest transition-all",
+                                                    isActive ? "text-zinc-200" : "text-zinc-600 hover:text-zinc-400"
+                                                )}
+                                            >
+                                                <div className={cn("w-2.5 h-2.5 rounded-full transition-all shrink-0", dotColor)} />
+                                                <span>{label}</span>
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Bottom row: assignees & priority */}
+                            <div className="flex items-center justify-between pt-3.5 border-t border-white/[0.04] mt-1">
+                                {task.assignedTo === "all" ? (
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex -space-x-1.5">
+                                            {(groupMembers || []).slice(0, 4).map((m: any) => (
+                                                <Tooltip key={m.uid} content={m.displayName || "Member"}>
+                                                    <Avatar className="w-5 h-5 rounded-full ring-1 ring-zinc-950">
+                                                        <AvatarImage src={m.photoURL} className="rounded-full" />
+                                                        <AvatarFallback className="bg-zinc-800 text-[8px] font-bold text-zinc-400 rounded-full">
+                                                            {(m.displayName || "?")[0].toUpperCase()}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                </Tooltip>
+                                            ))}
+                                            {(groupMembers || []).length > 4 && (
+                                                <div className="w-5 h-5 rounded-full bg-zinc-800 ring-1 ring-zinc-950 flex items-center justify-center text-[8px] font-bold text-zinc-400">
+                                                    +{(groupMembers || []).length - 4}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-wider">Entire Unit</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <Avatar className="w-5 h-5 rounded-full">
+                                            <AvatarImage src={assignee?.photoURL} className="rounded-full" />
+                                            <AvatarFallback className="bg-zinc-800 text-[8px] font-bold text-zinc-400 rounded-full">
+                                                {assignee?.displayName?.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() || "?"}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <span className="text-[9px] font-bold text-zinc-500">
+                                            {assignee?.displayName || assigneeNameById[task.assignedTo] || "Member"}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {/* Priority badge */}
+                                <span className={cn(
+                                    "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border",
+                                    prioCfg.color
+                                )}>
+                                    {task.priority === "high" && <span className="w-1 h-1 rounded-full bg-red-400" />}
+                                    {task.priority}
+                                </span>
+                            </div>
                         </TaskWrapper>
-                    );
+                        );
+                    }
                 })}
-            </TasksListWrapper>    {incompleteTasks.length > 0 && completedTasks.length > 0 && (
-                    <div className="py-2">
-                        <div className="flex items-center gap-3">
-                            <div className="h-px flex-1 bg-white/5" />
-                            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600">Completed</span>
-                            <div className="h-px flex-1 bg-white/5" />
-                        </div>
+            </TasksListWrapper>
+
+            {incompleteTasks.length > 0 && completedTasks.length > 0 && (
+                <div className="py-2">
+                    <div className="flex items-center gap-3">
+                        <div className="h-px flex-1 bg-white/5" />
+                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600">Completed</span>
+                        <div className="h-px flex-1 bg-white/5" />
                     </div>
-                )}
+                </div>
+            )}
+
             <TasksListWrapper 
                 isAdmin={isAdmin} 
                 values={completedTasks} 
@@ -813,130 +909,195 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                         );
                     }
 
-                    return (
-                        <TaskWrapper 
-                            key={task.id} 
+                    {
+                        const prioCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
+                        const assignee = task.assignedTo !== "all" ? groupMembers?.find((m: any) => m.uid === task.assignedTo) : null;
+
+                        return (
+                        <TaskWrapper
+                            key={task.id}
                             task={task}
                             isAdmin={isAdmin}
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.5 }}
                             className={cn(
-                                "flex flex-col gap-3 p-5 rounded-2xl transition-colors duration-200 border relative group/task", 
-                                task.status === "done" 
-                                    ? "bg-zinc-900/20 border-white/5 opacity-60" 
-                                    : "bg-zinc-900/60 border-white/10 hover:border-white/20 active:scale-[0.99]"
+                                "flex flex-col gap-3.5 p-5 rounded-2xl border relative group/task transition-all duration-200",
+                                task.status === "done"
+                                    ? "bg-zinc-900/20 border-white/5 opacity-60"
+                                    : "bg-zinc-900/60 border-white/10 hover:border-white/20 active:scale-[0.99]",
+                                task.priority === "high" ? "border-l-[3px] border-l-red-500" :
+                                task.priority === "medium" ? "border-l-[3px] border-l-amber-500" :
+                                "border-l-[3px] border-l-sky-500"
                             )}
                         >
-                            <div className="flex items-start gap-4">
-                                {isAdmin && (
-                                    <div className="pt-1.5 text-zinc-600 group-hover/task:text-zinc-400 cursor-grab active:cursor-grabbing transition-colors shrink-0">
-                                        <GripVertical className="w-4 h-4" />
-                                    </div>
-                                )}
-                                <div className="flex-1 min-w-0">
+                            {/* Top row: drag + title + actions */}
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="flex items-center gap-2">
+                                    {isAdmin && (
+                                        <div className="text-zinc-700 group-hover/task:text-zinc-500 cursor-grab active:cursor-grabbing transition-colors shrink-0">
+                                            <GripVertical className="w-3.5 h-3.5" />
+                                        </div>
+                                    )}
                                     <h4 className={cn(
-                                        "text-[13px] font-black tracking-tight transition-all duration-500 truncate mb-1", 
-                                        task.status === "done" ? "text-zinc-600 line-through" : "text-white group-hover/task:text-[white]"
+                                        "text-[13px] font-bold tracking-tight text-white",
+                                        task.status === "done" && "text-zinc-500 line-through"
                                     )}>
                                         {task.title}
                                     </h4>
-                                    {task.description && (
-                                        <p className="text-[11px] text-zinc-500 line-clamp-2">{task.description}</p>
-                                    )}
                                 </div>
 
-                                {canEdit && (
-                                    <div className="flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-all shrink-0">
-                                        <Tooltip content="Edit objective">
-                                            <button 
-                                                onClick={() => startEditing(task)} 
-                                                className="flex items-center justify-center p-1 text-zinc-400 hover:text-white hover:bg-white/5 rounded-md transition-all cursor-pointer" 
-                                            >
-                                                <Edit2 className="w-4 h-4" />
-                                            </button>
-                                        </Tooltip>
-                                        {isAdmin && (
-                                            <>
-                                                <Tooltip content="Move Up">
-                                                    <button 
-                                                        disabled={i === 0}
-                                                        onClick={() => handleMoveCompleted(task, 'up')}
-                                                        className="flex items-center justify-center p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all cursor-pointer"
-                                                    >
-                                                        <ChevronUp className="w-4 h-4" />
-                                                    </button>
-                                                </Tooltip>
-                                                <Tooltip content="Move Down">
-                                                    <button 
-                                                        disabled={i === completedTasks.length - 1}
-                                                        onClick={() => handleMoveCompleted(task, 'down')}
-                                                        className="flex items-center justify-center p-1 text-zinc-400 hover:text-white hover:bg-white/5 disabled:text-zinc-800/40 disabled:hover:text-zinc-800/40 disabled:hover:bg-transparent rounded-md transition-all cursor-pointer"
-                                                    >
-                                                        <ChevronDown className="w-4 h-4" />
-                                                    </button>
-                                                </Tooltip>
-                                            </>
-                                        )}
-                                        <Tooltip content="Delete objective">
-                                            <button
-                                                onClick={() => onDelete(task.id)}
-                                                className="flex items-center justify-center p-1 text-zinc-700 hover:bg-red-500/10 hover:text-red-500 rounded-md transition-all cursor-pointer"
-                                            >
-                                                <X className="w-4 h-4" />
-                                            </button>
-                                        </Tooltip>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-white/5">
-                                <div className="flex items-center gap-2">
-                                    {["todo", "in-progress", "in-review", "done"].map((status) => {
-                                        const cfg = TASK_STATUS_CONFIG[status];
-                                        const isActive = task.status === status;
-                                        const Icon = cfg.icon;
-                                        
-                                        return (
-                                            <Tooltip
-                                                key={status}
-                                                content={canEdit ? `Mark as ${cfg.label}` : "Only assignee or admins can change status"}
-                                            >
+                                {/* Actions */}
+                                <div className="flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-all shrink-0">
+                                    {canEdit && (
+                                        <>
+                                            <Tooltip content="Edit objective">
                                                 <button
-                                                    disabled={!canEdit}
-                                                    onClick={() => onUpdate(task.id, { status })}
-                                                    className={cn(
-                                                        "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border",
-                                                        isActive 
-                                                            ? cfg.color 
-                                                            : "bg-white/5 border-transparent text-zinc-600 hover:bg-white/10 hover:text-zinc-400 disabled:hover:bg-white/5 disabled:hover:text-zinc-600"
-                                                    )}
+                                                    onClick={() => startEditing(task)}
+                                                    className="p-1 text-zinc-500 hover:text-white hover:bg-white/5 rounded-lg transition-all cursor-pointer"
                                                 >
-                                                    <Icon className="w-2.5 h-2.5" />
-                                                    <span className={cn(isActive ? "inline" : "hidden sm:inline")}>{cfg.label}</span>
+                                                    <Edit2 className="w-3.5 h-3.5" />
                                                 </button>
                                             </Tooltip>
-                                        );
-                                    })}
-                                </div>
-
-                                <div className="flex items-center gap-3">
-                                    <div className={cn(
-                                        "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest",
-                                        task.priority === "high" ? "bg-red-500/10 text-red-500 border border-red-500/20" : 
-                                        task.priority === "medium" ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : 
-                                        "bg-sky-500/10 text-sky-500 border border-sky-500/20"
-                                    )}>
-                                        {task.priority}
-                                    </div>
-                                    <div className="flex items-center gap-1.5 text-[8px] font-bold text-zinc-600 uppercase tracking-widest">
-                                        <div className="w-1 h-1 rounded-full bg-zinc-800" />
-                                        {task.assignedTo === "all" ? "All" : assigneeNameById[task.assignedTo] || "Member"}
-                                    </div>
+                                            {isAdmin && (
+                                                <>
+                                                    <Tooltip content="Move Up">
+                                                        <button
+                                                            disabled={i === 0}
+                                                            onClick={() => handleMoveCompleted(task, 'up')}
+                                                            className="p-1 text-zinc-500 hover:text-white hover:bg-white/5 disabled:opacity-20 disabled:hover:bg-transparent rounded-lg transition-all cursor-pointer"
+                                                        >
+                                                            <ChevronUp className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </Tooltip>
+                                                    <Tooltip content="Move Down">
+                                                        <button
+                                                            disabled={i === completedTasks.length - 1}
+                                                            onClick={() => handleMoveCompleted(task, 'down')}
+                                                            className="p-1 text-zinc-500 hover:text-white hover:bg-white/5 disabled:opacity-20 disabled:hover:bg-transparent rounded-lg transition-all cursor-pointer"
+                                                        >
+                                                            <ChevronDown className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </Tooltip>
+                                                </>
+                                            )}
+                                            <Tooltip content="Delete objective">
+                                                <button
+                                                    onClick={() => onDelete(task.id)}
+                                                    className="p-1 text-zinc-700 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            </Tooltip>
+                                        </>
+                                    )}
                                 </div>
                             </div>
+
+                            {/* Description if present */}
+                            {task.description && (
+                                <p className="text-[11px] text-zinc-500 leading-relaxed -mt-1.5">
+                                    {task.description}
+                                </p>
+                            )}
+
+                            {/* Middle row: Stages bar */}
+                            <div className="flex items-center gap-1 my-1 select-none flex-wrap">
+                                {STATUS_CYCLE.map((statusId, idx) => {
+                                    const currentIdx = STATUS_CYCLE.indexOf(task.status as any);
+                                    const isCompleted = idx < currentIdx;
+                                    const isActive = idx === currentIdx;
+
+                                    let dotColor = "";
+                                    if (isCompleted) {
+                                        dotColor = "bg-emerald-500";
+                                    } else if (isActive) {
+                                        dotColor = statusId === "todo" ? "bg-emerald-500" :
+                                                   statusId === "in-progress" ? "bg-emerald-500" :
+                                                   statusId === "in-review" ? "bg-indigo-500" :
+                                                   "bg-emerald-500";
+                                    } else {
+                                        dotColor = "bg-zinc-950 border border-zinc-800";
+                                    }
+
+                                    const label = TASK_STATUS_CONFIG[statusId]?.label.toUpperCase();
+
+                                    return (
+                                        <div key={statusId} className="flex items-center">
+                                            {idx > 0 && (
+                                                <div className={cn(
+                                                    "w-6 h-[1px] mx-1.5",
+                                                    idx <= currentIdx ? "bg-zinc-700" : "bg-zinc-800/60"
+                                                )} />
+                                            )}
+                                            <button
+                                                disabled={!canEdit}
+                                                onClick={() => canEdit && onUpdate(task.id, {
+                                                    status: statusId,
+                                                    ...(statusId === "done" ? { completedAt: new Date().toISOString() } : {})
+                                                })}
+                                                className={cn(
+                                                    "flex items-center gap-1.5 text-[9px] font-black tracking-widest transition-all",
+                                                    isActive ? "text-zinc-200" : "text-zinc-600 hover:text-zinc-400"
+                                                )}
+                                            >
+                                                <div className={cn("w-2.5 h-2.5 rounded-full transition-all shrink-0", dotColor)} />
+                                                <span>{label}</span>
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Bottom row: assignees & priority */}
+                            <div className="flex items-center justify-between pt-3.5 border-t border-white/[0.04] mt-1">
+                                {task.assignedTo === "all" ? (
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex -space-x-1.5">
+                                            {(groupMembers || []).slice(0, 4).map((m: any) => (
+                                                <Tooltip key={m.uid} content={m.displayName || "Member"}>
+                                                    <Avatar className="w-5 h-5 rounded-full ring-1 ring-zinc-950">
+                                                        <AvatarImage src={m.photoURL} className="rounded-full" />
+                                                        <AvatarFallback className="bg-zinc-800 text-[8px] font-bold text-zinc-400 rounded-full">
+                                                            {(m.displayName || "?")[0].toUpperCase()}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                </Tooltip>
+                                            ))}
+                                            {(groupMembers || []).length > 4 && (
+                                                <div className="w-5 h-5 rounded-full bg-zinc-800 ring-1 ring-zinc-950 flex items-center justify-center text-[8px] font-bold text-zinc-400">
+                                                    +{(groupMembers || []).length - 4}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-wider">Entire Unit</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <Avatar className="w-5 h-5 rounded-full">
+                                            <AvatarImage src={assignee?.photoURL} className="rounded-full" />
+                                            <AvatarFallback className="bg-zinc-800 text-[8px] font-bold text-zinc-400 rounded-full">
+                                                {assignee?.displayName?.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() || "?"}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <span className="text-[9px] font-bold text-zinc-500">
+                                            {assignee?.displayName || assigneeNameById[task.assignedTo] || "Member"}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {/* Priority badge */}
+                                <span className={cn(
+                                    "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border",
+                                    prioCfg.color
+                                )}>
+                                    {task.priority === "high" && <span className="w-1 h-1 rounded-full bg-red-400" />}
+                                    {task.priority}
+                                </span>
+                            </div>
                         </TaskWrapper>
-                    );
+                        );
+                    }
                 })}
             </TasksListWrapper>
                 {tasks.length > 0 && visibleTasks.length === 0 && (
