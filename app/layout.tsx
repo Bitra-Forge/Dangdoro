@@ -15,6 +15,7 @@ import { GroupSessionSync } from "@/components/group-session-sync";
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import GlobalChatNotificationListener from "@/components/GlobalChatNotificationListener";
+import { Suspense } from "react";
 
 
 
@@ -90,7 +91,9 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-zinc-950 text-white" suppressHydrationWarning>
         <AuthProvider>
           <NotificationsDock />
-          <GlobalChatNotificationListener />
+          <Suspense fallback={null}>
+            <GlobalChatNotificationListener />
+          </Suspense>
 
           {children}
           
