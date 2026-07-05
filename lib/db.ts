@@ -1655,3 +1655,18 @@ export const updateLastActive = async (userId: string) => {
         return false;
     }
 };
+
+/**
+ * Fetches the archived weekly leaderboard history documents.
+ */
+export const getLeaderboardHistoryDocs = async () => {
+    try {
+        const historySnap = await getDocs(
+            query(collection(db, "leaderboard_history"), orderBy("weekId", "desc"), limit(50))
+        );
+        return historySnap.docs.map(doc => doc.data());
+    } catch (error) {
+        console.error("Error fetching leaderboard history:", error);
+        return [];
+    }
+};

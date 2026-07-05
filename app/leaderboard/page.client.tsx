@@ -5,7 +5,7 @@ import {
     Trophy, Zap, Clock, Medal, Sprout, Leaf, Flower2, ChevronRight, 
     TrendingUp, Search, Info, Users, Briefcase, ChevronLeft, HelpCircle
 } from "lucide-react";
-import { getLeaderboard, getGroupLeaderboard, fetchUserProfiles } from "@/lib/db";
+import { getLeaderboard, getGroupLeaderboard, fetchUserProfiles, getLeaderboardHistoryDocs } from "@/lib/db";
 import { getFriendsLeaderboard } from "@/lib/friendship";
 import { useTour, type TourStep } from "@/lib/use-tour";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -19,7 +19,61 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
 
-type LeaderboardTab = "global" | "friends" | "groups";
+type LeaderboardTab = "alltime" | "weekly" | "friends";
+
+function ResetCountdown() {
+    const [timeLeft, setTimeLeft] = useState("");
+
+    useEffect(() => {
+        const updateCountdown = () => {
+            const now = new Date();
+            const nextFriday = new Date();
+            nextFriday.setUTCHours(0, 0, 0, 0);
+            
+            const currentDay = now.getUTCDay();
+            let daysUntilFriday = (5 - currentDay + 7) % 7;
+            
+            // If it is Friday and already past midnight UTC, wait until next week's Friday
+            if (daysUntilFriday === 0 && (now.getUTCHours() > 0 || now.getUTCMinutes() > 0 || now.getUTCSeconds() > 0)) {
+                daysUntilFriday = 7;
+            }
+            
+            nextFriday.setUTCDate(now.getUTCDate() + daysUntilFriday);
+            
+            const diffMs = nextFriday.getTime() - now.getTime();
+            if (diffMs <= 0) {
+                setTimeLeft("Resetting...");
+                return;
+            }
+
+            const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+
+            const parts = [];
+            if (days > 0) parts.push(`${days}d`);
+            if (hours > 0 || days > 0) parts.push(`${hours}h`);
+            parts.push(`${minutes}m`);
+            parts.push(`${seconds}s`);
+
+            setTimeLeft(parts.join(" "));
+        };
+
+        updateCountdown();
+        const interval = setInterval(updateCountdown, 1000);
+        return () => clearInterval(interval);
+    }, []);
+
+    if (!timeLeft) return null;
+
+    return (
+        <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-400 bg-zinc-900 border border-white/10 rounded-full px-4 h-8 select-none">
+            <Clock className="w-3.5 h-3.5 text-[#C9B037]/80 animate-pulse" />
+            <span className="tracking-wide">Resets in: <strong className="text-zinc-200 font-sans font-extrabold">{timeLeft}</strong></span>
+        </div>
+    );
+}
 
 function LeaderboardContent() {
     const tourSteps: TourStep[] = [
@@ -67,20 +121,36 @@ function LeaderboardContent() {
     const searchParams = useSearchParams();
     
     // Initial tab based on URL or default
-    const [activeTab, setActiveTab] = useState<LeaderboardTab>(
-        (searchParams.get("tab") as LeaderboardTab) || "global"
-    );
+    const [activeTab, setActiveTab] = useState<LeaderboardTab>(() => {
+        const tab = searchParams.get("tab") as any;
+        if (tab === "weekly" || tab === "friends") return tab;
+        return "alltime";
+    });
     
     // Group drill-down state
     const [selectedGroup, setSelectedGroup] = useState<any | null>(null);
 
+    // History weeks state
+    const [historyWeeks, setHistoryWeeks] = useState<any[]>([]);
+    const [selectedWeekId, setSelectedWeekId] = useState<string>("current");
+
     // Clear selected group when tab changes
     useEffect(() => {
         setSelectedGroup(null);
-        if (activeTab === "groups") {
-            router.replace("/leaderboard?tab=groups");
+        if (activeTab !== "weekly") {
+            setSelectedWeekId("current");
         }
-    }, [activeTab, router]);
+    }, [activeTab]);
+
+    // Load leaderboard history weeks list
+    useEffect(() => {
+        getLeaderboardHistoryDocs().then((docs) => {
+            setHistoryWeeks(docs || []);
+        }).catch((err) => console.error("Error loading week history list:", err));
+    }, []);
+
+    const tabParam = searchParams.get("tab");
+    const groupIdFromUrl = searchParams.get("groupId");
 
     useEffect(() => {
         let isMounted = true;
@@ -95,9 +165,7 @@ function LeaderboardContent() {
                 await syncUserProfile(user);
             }
 
-            const groupIdFromUrl = searchParams.get("groupId");
-
-            if (selectedGroup || (groupIdFromUrl && activeTab === "groups")) {
+            if (selectedGroup || (groupIdFromUrl && activeTab === ("groups" as any))) {
                 let groupToLoad = selectedGroup;
                 
                 if (!groupToLoad && groupIdFromUrl) {
@@ -124,25 +192,45 @@ function LeaderboardContent() {
 
                     setPlayers(rankedMembers);
                 }
-            } else if (activeTab === "global") {
-                const tops = await getLeaderboard(150);
+            } else if (activeTab === "alltime" || activeTab === "weekly") {
+                let tops: any[] = [];
+                if (activeTab === "weekly" && selectedWeekId !== "current") {
+                    const weekDoc = historyWeeks.find(w => w.weekId === selectedWeekId);
+                    tops = weekDoc ? (weekDoc.players || []) : [];
+                } else {
+                    tops = await getLeaderboard(150, activeTab);
+                }
                 if (isMounted) {
                     const nonGuests = tops.filter(
                         (player: any) => !player.isAnonymous
                     );
                     setPlayers(nonGuests);
+
+                    // Background profile picture fetch to load actual profile photos (including base64)
+                    const uids = nonGuests.map((p: any) => p.uid).filter(Boolean);
+                    if (uids.length > 0) {
+                        fetchUserProfiles(uids).then((freshProfiles) => {
+                            if (isMounted) {
+                                setPlayers(prevPlayers => {
+                                    return prevPlayers.map(p => {
+                                        const fresh = freshProfiles.find(fp => fp.uid === p.uid);
+                                        if (fresh) {
+                                            return {
+                                                ...p,
+                                                displayName: fresh.displayName || p.displayName,
+                                                photoURL: fresh.photoURL || p.photoURL
+                                            };
+                                        }
+                                        return p;
+                                    });
+                                });
+                            }
+                        }).catch(err => console.error("Error fetching fresh profiles in bg:", err));
+                    }
                 }
             } else if (activeTab === "friends") {
                 const friendsTops = await getFriendsLeaderboard(user!.uid, 200);
                 if (isMounted) setPlayers(friendsTops);
-            } else if (activeTab === "groups") {
-                const groups = await getGroupLeaderboard({
-                    userId: user!.uid,
-                    filter: "joined",
-                    sortBy: "minutes",
-                    limitCount: 200
-                });
-                if (isMounted) setPlayers(groups);
             }
             if (isMounted) setLoading(false);
         };
@@ -151,7 +239,7 @@ function LeaderboardContent() {
         return () => {
             isMounted = false;
         };
-    }, [user, authLoading, activeTab, selectedGroup, searchParams]);
+    }, [user, authLoading, activeTab, selectedGroup, tabParam, groupIdFromUrl, selectedWeekId, historyWeeks]);
 
     const handleSeeMore = () => {
         setVisibleCount(prev => prev + 20);
@@ -184,7 +272,7 @@ function LeaderboardContent() {
 
                 <main className="relative z-10 flex flex-col items-center pb-48 px-4 w-full flex-1 max-w-6xl mx-auto">
                     {/* Fixed Personal Stat Card (Most Left) */}
-                    {currentUserData && activeTab !== "groups" && !selectedGroup && (
+                    {currentUserData && !selectedGroup && (
                         <button 
                             onClick={() => {
                                 if (userRank + 1 > visibleCount) {
@@ -215,7 +303,7 @@ function LeaderboardContent() {
                         <div className="flex items-center gap-8 w-full justify-center">
                             <div className="h-[1px] flex-1 max-w-[100px] bg-gradient-to-r from-transparent via-zinc-800 to-transparent shadow-[0_0_15px_rgba(255,255,255,0.1)]" />
                             <h1 className="text-3xl md:text-5xl font-bold text-white text-center font-sans drop-shadow-[0_0_25px_rgba(255,255,255,0.15)]">
-                                {selectedGroup ? selectedGroup.name : activeTab === "groups" ? "Top Productivity Units" : "Hall of the Dangos"}
+                                {selectedGroup ? selectedGroup.name : "Hall of the Dangos"}
                             </h1>
                             <div className="h-[1px] flex-1 max-w-[100px] bg-gradient-to-l from-transparent via-zinc-800 to-transparent shadow-[0_0_15px_rgba(255,255,255,0.1)]" />
                         </div>
@@ -223,9 +311,9 @@ function LeaderboardContent() {
                         {selectedGroup && (
                             <button onClick={() => {
                                 setSelectedGroup(null);
-                                router.replace("/leaderboard?tab=groups");
+                                router.replace("/leaderboard?tab=alltime");
                             }} className="mt-8 flex items-center gap-2 text-[#C9B037] font-bold text-xs hover:opacity-80 transition-all group">
-                                <ChevronLeft className="w-4 h-4 group-hover:-translate-x-1 transition-all" /> Back to Units
+                                <ChevronLeft className="w-4 h-4 group-hover:-translate-x-1 transition-all" /> Back to Leaderboard
                             </button>
                         )}
                     </header>
@@ -235,9 +323,9 @@ function LeaderboardContent() {
                         <div className="flex flex-col items-center gap-6 mb-12 w-full max-w-2xl">
                             <div id="leaderboard-tabs" className="flex items-center gap-2 p-1.5 bg-zinc-950/90 sm:bg-zinc-900/40 backdrop-blur-none sm:backdrop-blur-2xl border border-white/10 rounded-full w-full">
                                 {[
-                                    { id: "global", icon: Trophy, label: "Global" },
-                                    { id: "friends", icon: Users, label: "Friends" },
-                                    { id: "groups", icon: Briefcase, label: "Groups" }
+                                    { id: "alltime", icon: Trophy, label: "All Time" },
+                                    { id: "weekly", icon: TrendingUp, label: "Weekly" },
+                                    { id: "friends", icon: Users, label: "Friends" }
                                 ].map(tab => (
                                     <button 
                                         key={tab.id} 
@@ -261,6 +349,32 @@ function LeaderboardContent() {
                                     </button>
                                 ))}
                             </div>
+
+                            {activeTab === "weekly" && (
+                                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-in fade-in slide-in-from-top-4 duration-300 w-full">
+                                    {historyWeeks.length > 0 && (
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider">Week:</span>
+                                            <div className="relative flex items-center">
+                                            <select
+                                                value={selectedWeekId}
+                                                onChange={(e) => setSelectedWeekId(e.target.value)}
+                                                className="appearance-none bg-zinc-900 border border-white/10 rounded-full pl-4 pr-8 h-8 text-xs font-bold text-zinc-300 hover:border-white/20 transition-all outline-none cursor-pointer focus:ring-1 focus:ring-[#C9B037]/50"
+                                            >
+                                                <option value="current">Current Week</option>
+                                                {historyWeeks.map((week) => (
+                                                    <option key={week.weekId} value={week.weekId}>
+                                                        {week.weekId}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <ChevronRight className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-400 rotate-90 pointer-events-none" />
+                                            </div>
+                                        </div>
+                                    )}
+                                    {selectedWeekId === "current" && <ResetCountdown />}
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -278,115 +392,6 @@ function LeaderboardContent() {
                             <div className="w-16 h-16 border-4 border-[#C9B037]/10 border-t-[#C9B037] rounded-full animate-spin" />
                             <p className="text-xs font-black uppercase text-zinc-600 tracking-widest animate-pulse">Syncing Growth...</p>
                         </div>
-                    ) : activeTab === "groups" && !selectedGroup ? (
-                        <div className="w-full space-y-8">
-                            {players.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center p-20 bg-zinc-900/20 border border-white/5 border-dashed rounded-[3rem] text-center space-y-4">
-                                    <div className="w-20 h-20 rounded-full bg-zinc-800/50 flex items-center justify-center mx-auto text-zinc-700">
-                                        <Briefcase className="w-10 h-10" />
-                                    </div>
-                                    <h3 className="text-xl font-bold text-zinc-400">No joined groups found</h3>
-                                    <p className="text-sm text-zinc-600 max-w-xs">You haven't joined any focus groups yet.</p>
-                                </div>
-                            ) : (
-                                <>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
-                                        {players.slice(0, visibleCount).map((group, idx) => {
-                                            const memberCount = group.members?.length ?? group.memberCount ?? 0;
-                                            const totalMinutes = group.totalMinutes || 0;
-                                            const hours = Math.floor(totalMinutes / 60);
-                                            const minutes = totalMinutes % 60;
-                                            
-                                            return (
-                                                <motion.div 
-                                                    key={group.id || `group-${idx}`} 
-                                                    onClick={() => setSelectedGroup(group)} 
-                                                    initial={{ opacity: 0, y: 20 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    transition={{ delay: idx * 0.1, duration: 0.4 }}
-                                                    className="relative group cursor-pointer"
-                                                >
-                                                    {/* Card Container */}
-                                                    <div className="relative overflow-hidden rounded-[5px] bg-gradient-to-br from-zinc-900/80 to-zinc-950/80 border border-[#C9B037]/30 hover:border-[#C9B037]/60 transition-all duration-500 hover:shadow-[0_0_40px_rgba(201,176,55,0.15)] hover:-translate-y-1">
-                                                        
-                                                        {/* Glow Effect */}
-                                                        <div className="absolute top-0 right-0 w-32 h-32 bg-[#C9B037]/10 blur-[60px] -mr-8 -mt-8 group-hover:bg-[#C9B037]/20 transition-all duration-500 hidden sm:block" />
-                                                        
-                                                        {/* Content */}
-                                                        <div className="relative p-6">
-                                                            {/* Group Name */}
-                                                            <h3 className="text-xl font-bold text-white mb-1 group-hover:text-[#C9B037] transition-colors duration-300">
-                                                                {group.name}
-                                                            </h3>
-                                                            
-                                                            {/* Description */}
-                                                            {group.description && (
-                                                                <p className="text-xs text-zinc-500 mb-6 line-clamp-2">{group.description}</p>
-                                                            )}
-                                                            
-                                                            {/* Stats Grid */}
-                                                            <div className="grid grid-cols-2 gap-4 mb-6">
-                                                                {/* Members */}
-                                                                <div className="flex flex-col gap-1">
-                                                                    <div className="flex items-center gap-2 text-zinc-500">
-                                                                        <Users className="w-3.5 h-3.5" />
-                                                                        <span className="text-[10px] font-black uppercase tracking-wider">Members</span>
-                                                                    </div>
-                                                                    <span className="text-lg font-bold text-white">{memberCount}</span>
-                                                                </div>
-                                                                
-                                                                {/* Focus Time */}
-                                                                <div className="flex flex-col gap-1">
-                                                                    <div className="flex items-center gap-2 text-zinc-500">
-                                                                        <Clock className="w-3.5 h-3.5 text-[#C9B037]/60" />
-                                                                        <span className="text-[10px] font-black uppercase tracking-wider">Focus</span>
-                                                                    </div>
-                                                                    <div className="flex items-baseline gap-1">
-                                                                        {hours > 0 && <span className="text-lg font-bold text-white">{hours}h</span>}
-                                                                        <span className="text-lg font-bold text-[#C9B037]">{minutes}m</span>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            
-                                                            {/* Progress Bar */}
-                                                            <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden mb-4">
-                                                                <motion.div 
-                                                                    initial={{ width: 0 }}
-                                                                    animate={{ width: `${Math.min(100, (totalMinutes / 1000) * 100)}%` }}
-                                                                    transition={{ delay: idx * 0.1 + 0.3, duration: 0.8 }}
-                                                                    className="h-full bg-gradient-to-r from-[#C9B037]/60 to-[#C9B037] rounded-full"
-                                                                />
-                                                            </div>
-                                                            
-                                                            {/* Bottom Action */}
-                                                            <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                                                                <span className="text-[10px] font-black uppercase tracking-wider text-zinc-600">
-                                                                    {group.type && group.type !== "friends" ? group.type : "Focus Group"}
-                                                                </span>
-                                                                <div className="flex items-center gap-2 text-zinc-600 group-hover:text-[#C9B037] transition-all duration-300">
-                                                                    <span className="text-xs font-bold">View</span>
-                                                                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </motion.div>
-                                            );
-                                        })}
-                                    </div>
-                                    {players.length > visibleCount && (
-                                        <div className="flex justify-center w-full pt-6">
-                                            <button
-                                                onClick={handleSeeMore}
-                                                className="px-8 py-3 rounded-full border border-white/10 hover:border-[#C9B037]/40 bg-zinc-900/50 hover:bg-zinc-900/80 text-xs font-black uppercase tracking-widest text-zinc-400 hover:text-[#C9B037] transition-all duration-300 shadow-sm hover:shadow-[0_0_25px_rgba(201,176,55,0.1)] active:scale-95 cursor-pointer"
-                                            >
-                                                See More
-                                            </button>
-                                        </div>
-                                    )}
-                                </>
-                            )}
-                        </div>
                     ) : activeTab === "friends" && players.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-96 gap-6">
                             <Users className="w-20 h-20 text-zinc-700" />
@@ -400,7 +405,7 @@ function LeaderboardContent() {
                     ) : (
                         <div className="w-full flex flex-col items-center gap-16">
                             {/* THE PODIUM (Top 3 Cards) - 100% VISUAL RESTORATION */}
-                            <div id="leaderboard-podium" className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl items-end relative">
+                            <div id="leaderboard-podium" className="flex flex-col md:flex-row items-center md:items-end justify-center gap-6 w-full max-w-5xl relative">
                                 {podiumOrder.map((player, idx) => {
                                     const rank = player === topThree[0] ? 1 : player === topThree[1] ? 2 : 3;
                                     const totalMinutes = player.totalMinutes || 0;
@@ -412,9 +417,9 @@ function LeaderboardContent() {
                                     const isBronze = rank === 3;
 
                                     return (
-                                        <div id={`player-${player.uid}`} key={player.uid || player.id || `podium-${idx}`} className={cn("relative group transition-all duration-700 animate-in fade-in slide-in-from-bottom-12", isGold ? "order-1 md:order-2 z-20" : isSilver ? "order-2 md:order-1" : "order-3 md:order-3")} style={{ animationDelay: `${rank * 150}ms` }}>
+                                        <div id={`player-${player.uid}`} key={player.uid || player.id || `podium-${idx}`} className={cn("w-full md:w-[32%] max-w-[360px] relative group transition-all duration-700 animate-in fade-in slide-in-from-bottom-12", isGold ? "order-1 md:order-2 z-20" : isSilver ? "order-2 md:order-1" : "order-3 md:order-3")} style={{ animationDelay: `${rank * 150}ms` }}>
                                             <div className={cn(
-                                                "relative group flex flex-col items-center rounded-[1rem] border transition-all duration-500 overflow-hidden w-full max-w-[320px] sm:max-w-[360px] md:max-w-none mx-auto",
+                                                "relative group flex flex-col items-center rounded-[1rem] border transition-all duration-500 overflow-hidden w-full mx-auto",
                                                 isGold
                                                     ? "bg-gradient-to-br from-zinc-800 via-zinc-800/80 to-yellow-900/40 border-yellow-500/60 shadow-[0_0_70px_rgba(255,215,0,0.25)] z-10 py-8 sm:py-12 scale-95 sm:scale-105"
                                                     : isSilver
