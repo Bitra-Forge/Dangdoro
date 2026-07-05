@@ -24,6 +24,13 @@ export interface UserProfileData {
     lastActive?: Timestamp | FirebaseTimestampLike | null;
 }
 
+export interface SharedSubtask {
+    id: string;
+    title: string;
+    completed: boolean;
+    position?: number;
+}
+
 export interface SharedTask {
     id: string;
     title: string;
@@ -35,6 +42,10 @@ export interface SharedTask {
     createdAt: Timestamp | FirebaseTimestampLike;
     updatedAt?: Timestamp | FirebaseTimestampLike;
     position?: number;
+    subtasks?: SharedSubtask[];
+    subtaskCount?: number;
+    completedSubtaskCount?: number;
+    progress?: number;
 }
 
 export interface ObjectiveTemplateDraft {
@@ -281,6 +292,50 @@ export function computeNextResetAt(
         next.setDate(next.getDate() + 7);
     }
     return next;
+}
+
+export interface TaskProgressDerivationResult {
+    subtasks: SharedSubtask[];
+    subtaskCount: number;
+    completedSubtaskCount: number;
+    progress: number;
+    status: "todo" | "in-progress" | "in-review" | "done";
+}
+
+export function deriveTaskProgressAndStatus(
+    subtasks: SharedSubtask[] | undefined,
+    currentStatus: "todo" | "in-progress" | "in-review" | "done"
+): TaskProgressDerivationResult {
+    if (!subtasks || subtasks.length === 0) {
+        return {
+            subtasks: [],
+            subtaskCount: 0,
+            completedSubtaskCount: 0,
+            progress: 0,
+            status: currentStatus,
+        };
+    }
+
+    const subtaskCount = subtasks.length;
+    const completedSubtaskCount = subtasks.filter(s => s.completed).length;
+    const progress = Math.round((completedSubtaskCount / subtaskCount) * 100);
+
+    let status = currentStatus;
+    if (completedSubtaskCount === subtaskCount) {
+        status = "done";
+    } else if (completedSubtaskCount > 0 && currentStatus === "todo") {
+        status = "in-progress";
+    } else if (completedSubtaskCount < subtaskCount && currentStatus === "done") {
+        status = "in-progress";
+    }
+
+    return {
+        subtasks,
+        subtaskCount,
+        completedSubtaskCount,
+        progress,
+        status,
+    };
 }
 
 

@@ -98,23 +98,40 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
     const [editPrio, setEditPrio] = useState<any>("medium");
     const [editAssign, setEditAssign] = useState("all");
 
+    const [subtasks, setSubtasks] = useState<{ id: string; title: string; completed: boolean }[]>([]);
+    const [editSubtasks, setEditSubtasks] = useState<{ id: string; title: string; completed: boolean }[]>([]);
+    const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
+
+    const toggleTaskExpanded = (taskId: string) => {
+        setExpandedTasks(prev => ({
+            ...prev,
+            [taskId]: !prev[taskId]
+        }));
+    };
+
     const startEditing = (task: SharedTask) => {
         setEditingTaskId(task.id);
         setEditTitle(task.title);
         setEditDesc(task.description);
         setEditPrio(task.priority);
         setEditAssign(task.assignedTo || "all");
+        setEditSubtasks(task.subtasks || []);
     };
 
     const handleSaveEdit = () => {
         if (!editingTaskId || !editTitle.trim()) return;
+        const validSubtasks = editSubtasks
+            .map(s => ({ ...s, title: s.title.trim() }))
+            .filter(s => s.title.length > 0);
         onUpdate(editingTaskId, {
             title: editTitle,
             description: editDesc,
             priority: editPrio,
-            assignedTo: editAssign
+            assignedTo: editAssign,
+            subtasks: validSubtasks
         });
         setEditingTaskId(null);
+        setEditSubtasks([]);
     };
 
     const assigneeNameById = useMemo(() => {
@@ -137,10 +154,147 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
 
     const handleAdd = () => {
         if (!title.trim()) return;
-        onAdd(title, prio, assign, false, description);
+        const validSubtasks = subtasks
+            .map(s => ({ ...s, title: s.title.trim() }))
+            .filter(s => s.title.length > 0);
+        onAdd(title, prio, assign, false, description, validSubtasks);
         setTitle("");
         setDescription("");
+        setSubtasks([]);
         setOpenAdd(false);
+    };
+
+    const renderSubtasksEditor = (isEdit: boolean) => {
+        const currentSubtasks = isEdit ? editSubtasks : subtasks;
+        const setCurrentSubtasks = isEdit ? setEditSubtasks : setSubtasks;
+
+        return (
+            <div className="space-y-2.5 pt-2 border-t border-white/[0.04]">
+                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
+                    Subtasks Checklist
+                </p>
+                <div className="space-y-2">
+                    {currentSubtasks.map((st, sIdx) => (
+                        <div key={st.id} className="flex items-center gap-2">
+                            <input
+                                type="text"
+                                value={st.title}
+                                onChange={(e) => {
+                                    const next = [...currentSubtasks];
+                                    next[sIdx].title = e.target.value;
+                                    setCurrentSubtasks(next);
+                                }}
+                                placeholder={`Subtask #${sIdx + 1}`}
+                                className="flex-1 bg-zinc-950/60 border border-white/5 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-white/20 focus:bg-zinc-950 transition-all"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setCurrentSubtasks(currentSubtasks.filter((_, idx) => idx !== sIdx));
+                                }}
+                                className="p-2 text-zinc-500 hover:text-red-400 bg-white/5 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    ))}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const newId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11);
+                            setCurrentSubtasks([...currentSubtasks, { id: newId, title: "", completed: false }]);
+                        }}
+                        className="w-full py-2 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white border border-dashed border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                        <Plus className="w-3.5 h-3.5" /> Add Subtask
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
+    const renderSubtasksProgressAndList = (task: any, canEdit: boolean) => {
+        if (!task.subtasks || task.subtasks.length === 0) return null;
+
+        const isExpanded = !!expandedTasks[task.id];
+
+        return (
+            <div className="space-y-2 mt-2">
+                <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
+                        <span className="flex items-center gap-1.5">
+                            Subtasks Progress
+                        </span>
+                        <span>{task.completedSubtaskCount || 0}/{task.subtaskCount || 0} Done</span>
+                    </div>
+                    <div className="w-full h-1 bg-zinc-950 rounded-full overflow-hidden relative">
+                        <div
+                            className="h-full bg-emerald-500 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
+                            style={{ width: `${task.progress || 0}%` }}
+                        />
+                    </div>
+                </div>
+
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        toggleTaskExpanded(task.id);
+                    }}
+                    className="text-[9px] font-black uppercase tracking-wider text-zinc-500 hover:text-zinc-300 flex items-center gap-1 transition-colors cursor-pointer select-none"
+                >
+                    {isExpanded ? (
+                        <>Hide Subtasks <ChevronUp className="w-3.5 h-3.5" /></>
+                    ) : (
+                        <>Show Subtasks ({task.subtaskCount - (task.completedSubtaskCount || 0)} left) <ChevronDown className="w-3.5 h-3.5" /></>
+                    )}
+                </button>
+
+                <AnimatePresence initial={false}>
+                    {isExpanded && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.15, ease: "easeInOut" }}
+                            className="overflow-hidden"
+                        >
+                            <div className="flex flex-col gap-2 pt-2 border-t border-white/[0.04] mt-2">
+                                {task.subtasks.map((st: any) => (
+                                    <label
+                                        key={st.id}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className={cn(
+                                            "flex items-center gap-2.5 px-3 py-2 rounded-xl bg-zinc-950/40 border border-white/5 hover:border-white/10 transition-all cursor-pointer group/subtask select-none",
+                                            st.completed && "opacity-60"
+                                        )}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={st.completed}
+                                            onChange={() => {
+                                                if (!canEdit) return;
+                                                const newSubtasks = task.subtasks.map((s: any) =>
+                                                    s.id === st.id ? { ...s, completed: !s.completed } : s
+                                                );
+                                                onUpdate(task.id, { subtasks: newSubtasks });
+                                            }}
+                                            disabled={!canEdit}
+                                            className="w-3.5 h-3.5 rounded border-zinc-700 bg-zinc-900 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-zinc-900 accent-emerald-500 cursor-pointer"
+                                        />
+                                        <span className={cn(
+                                            "text-[11px] text-zinc-300 transition-all",
+                                            st.completed && "line-through text-zinc-500"
+                                        )}>
+                                            {st.title}
+                                        </span>
+                                    </label>
+                                ))}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+        );
     };
 
     const visibleTasks = useMemo(() => {
@@ -295,6 +449,7 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                             </select>
                         </div>
                     </div>
+                    {renderSubtasksEditor(false)}
                     <div className="flex gap-3">
                         <button 
                             onClick={handleAdd} 
@@ -612,7 +767,7 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                         </select>
                                     </div>
                                 </div>
-
+                                {renderSubtasksEditor(true)}
                                 <div className="flex gap-3 pt-1">
                                     <button onClick={handleSaveEdit} className="flex-1 py-3 bg-white text-black font-black rounded-[10px] text-xs relative overflow-hidden hover:bg-zinc-100 transition-all cursor-pointer">
                                         {/* Curved Light Effect for solid button */}
@@ -723,6 +878,8 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                     {task.description}
                                 </p>
                             )}
+
+                            {renderSubtasksProgressAndList(task, canEdit)}
 
                             {/* Middle row: Stages bar */}
                             <div className="flex items-center gap-1 my-1 select-none flex-wrap">
@@ -888,7 +1045,7 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                         </select>
                                     </div>
                                 </div>
-
+                                {renderSubtasksEditor(true)}
                                 <div className="flex gap-3 pt-1">
                                     <button onClick={handleSaveEdit} className="flex-1 py-3 bg-white text-black font-black rounded-[10px] text-xs relative overflow-hidden hover:bg-zinc-100 transition-all cursor-pointer">
                                         {/* Curved Light Effect for solid button */}
@@ -1000,6 +1157,8 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                                     {task.description}
                                 </p>
                             )}
+
+                            {renderSubtasksProgressAndList(task, canEdit)}
 
                             {/* Middle row: Stages bar */}
                             <div className="flex items-center gap-1 my-1 select-none flex-wrap">

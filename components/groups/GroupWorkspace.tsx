@@ -27,7 +27,8 @@ import {
     FocusGroup, SharedTask, ObjectiveTemplateDraft, 
     fmtMinutes, resolveLiveSessionsForGroup, toMillis, 
     getEarliestActiveStart, normalizeLiveSessions,
-    getGoalTypeLabel, GoalType, LiveSession, computeNextResetAt
+    getGoalTypeLabel, GoalType, LiveSession, computeNextResetAt,
+    deriveTaskProgressAndStatus
 } from "@/lib/groups";
 import { fetchUserProfiles, toggleMuteGroup } from "@/lib/db";
 import { accumulateFocusTime } from "@/lib/focus-accumulator";
@@ -369,13 +370,20 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     ]);
 
     // Handlers
-    const handleAddTask = async (title: string, priority: string = "medium", assignedTo: string = "all", silent: boolean = false, description: string = "") => {
+    const handleAddTask = async (title: string, priority: string = "medium", assignedTo: string = "all", silent: boolean = false, description: string = "", subtasks: any[] = []) => {
         if (!isMember || !user) return;
         const maxPos = tasks.length > 0 ? Math.max(...tasks.map(t => t.position ?? 0)) : 0;
+        
+        const derivation = deriveTaskProgressAndStatus(subtasks, "todo");
+
         await addDoc(collection(db, `focusGroups/${groupId}/tasks`), {
-            title, priority, assignedTo, description, status: "todo",
+            title, priority, assignedTo, description, status: derivation.status,
             createdBy: user.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-            position: maxPos + 1000
+            position: maxPos + 1000,
+            subtasks: derivation.subtasks,
+            subtaskCount: derivation.subtaskCount,
+            completedSubtaskCount: derivation.completedSubtaskCount,
+            progress: derivation.progress
         });
         if (assignedTo !== "all" && assignedTo !== user.uid) {
             await addDoc(collection(db, "notifications"), {
@@ -396,7 +404,30 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         const task = tasks.find(t => t.id === taskId);
         const canUpdate = isAdmin || (task && (task.assignedTo === user?.uid || task.assignedTo === "all"));
         if (!canUpdate || !user) return;
-        await updateDoc(doc(db, `focusGroups/${groupId}/tasks`, taskId), { ...updates, updatedAt: serverTimestamp() });
+
+        const nextUpdates = { ...updates };
+
+        if (updates.subtasks !== undefined) {
+            const currentStatus = updates.status !== undefined ? updates.status : (task?.status || "todo");
+            const derivation = deriveTaskProgressAndStatus(updates.subtasks, currentStatus);
+
+            nextUpdates.subtasks = derivation.subtasks;
+            nextUpdates.subtaskCount = derivation.subtaskCount;
+            nextUpdates.completedSubtaskCount = derivation.completedSubtaskCount;
+            nextUpdates.progress = derivation.progress;
+            nextUpdates.status = derivation.status;
+        } else if (updates.status === "done" && task && task.subtasks && task.subtasks.length > 0) {
+            const completedSubtasks = task.subtasks.map((s: any) => ({ ...s, completed: true }));
+            const derivation = deriveTaskProgressAndStatus(completedSubtasks, "done");
+
+            nextUpdates.subtasks = derivation.subtasks;
+            nextUpdates.subtaskCount = derivation.subtaskCount;
+            nextUpdates.completedSubtaskCount = derivation.completedSubtaskCount;
+            nextUpdates.progress = derivation.progress;
+            nextUpdates.status = derivation.status;
+        }
+
+        await updateDoc(doc(db, `focusGroups/${groupId}/tasks`, taskId), { ...nextUpdates, updatedAt: serverTimestamp() });
     };
 
     const handleReorderTasks = async (newOrderedTasks: SharedTask[]) => {
