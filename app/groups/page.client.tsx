@@ -197,6 +197,10 @@ export default function GroupsPage() {
         }
     }, [focusGroups, user]);
 
+    const groupIdsKey = useMemo(() => {
+        return focusGroups.map(g => g.id).sort().join(",");
+    }, [focusGroups]);
+
     useEffect(() => {
         if (!user || user.isAnonymous) return;
 
@@ -255,41 +259,84 @@ export default function GroupsPage() {
             }
         );
 
-        const unsubLive = onSnapshot(
-            collection(db, "liveSessions"),
-            (snapshot) => {
-                const raw = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as LiveSession));
-                setLiveSessions(normalizeLiveSessions(raw));
-            }
-        );
-
         return () => {
             unsubFriends();
             unsubMember();
             unsubPublic();
-            unsubLive();
         };
     }, [user?.uid, user?.isAnonymous]);
 
+    // Scoped liveSessions listener based on groups currently displayed on the page
     useEffect(() => {
+        if (!user || user.isAnonymous || !groupIdsKey) {
+            setLiveSessions([]);
+            return;
+        }
+
+        const groupIds = groupIdsKey.split(",");
+        const unsubs: (() => void)[] = [];
+        const chunkedSessions: Record<number, LiveSession[]> = {};
+
+        const updateSessions = () => {
+            const combined = Object.values(chunkedSessions).flat();
+            setLiveSessions(normalizeLiveSessions(combined));
+        };
+
+        const chunkSize = 30;
+        for (let i = 0; i < groupIds.length; i += chunkSize) {
+            const chunk = groupIds.slice(i, i + chunkSize);
+            const chunkIdx = i / chunkSize;
+
+            const q = query(
+                collection(db, "liveSessions"),
+                where("groupId", "in", chunk)
+            );
+
+            const unsub = onSnapshot(
+                q,
+                (snapshot) => {
+                    chunkedSessions[chunkIdx] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as LiveSession));
+                    updateSessions();
+                },
+                (error) => {
+                    console.error("liveSessions chunk listener error:", error);
+                }
+            );
+            unsubs.push(unsub);
+        }
+
+        return () => {
+            unsubs.forEach(unsub => unsub());
+        };
+    }, [user, groupIdsKey]);
+
+    const fetchedUidsRef = useRef<Set<string>>(new Set());
+
+    useEffect(() => {
+        if (!user || user.isAnonymous) return;
+
         const missingUids = new Set<string>();
         focusGroups.forEach(group => {
             group.members.forEach(uid => {
-                if (!friends.find(f => f.friendId === uid) && !hydratedProfiles[uid]) {
+                if (uid !== user.uid && !friends.find(f => f.friendId === uid) && !fetchedUidsRef.current.has(uid)) {
                     missingUids.add(uid);
                 }
             });
         });
 
         if (missingUids.size > 0) {
+            missingUids.forEach(uid => fetchedUidsRef.current.add(uid));
+
             fetchUserProfiles(Array.from(missingUids)).then(profiles => {
-                const newProfiles: any = { ...hydratedProfiles };
-                profiles.forEach((p: any) => { newProfiles[p.uid] = p; });
-                missingUids.forEach(uid => { if (!newProfiles[uid]) newProfiles[uid] = { uid, notFound: true }; });
-                setHydratedProfiles(newProfiles);
+                setHydratedProfiles(prev => {
+                    const next = { ...prev };
+                    profiles.forEach((p: any) => { next[p.uid] = p; });
+                    missingUids.forEach(uid => { if (!next[uid]) next[uid] = { uid, notFound: true }; });
+                    return next;
+                });
             });
         }
-    }, [focusGroups, friends, user?.uid, hydratedProfiles]);
+    }, [focusGroups, friends, user]);
 
     const activeFocusers = useMemo(() => {
         if (!user) return [];

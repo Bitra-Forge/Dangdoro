@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useMemo, useEffect, memo } from "react";
+import { useState, useMemo, useEffect, useRef, memo, createContext, useContext } from "react";
 import { useSearchParams } from "next/navigation";
-import { motion, AnimatePresence, Reorder } from "framer-motion";
+import { motion, AnimatePresence, Reorder, useDragControls } from "framer-motion";
 import { 
     Plus, Sparkles, Mail, Target, Users,
     Play, Search, Check, Edit2, X, Save, Trash2, Filter,
-    ChevronUp, ChevronDown, GripVertical
+    ChevronUp, ChevronDown, GripVertical,
+    Circle, Loader2, CheckCircle2, CircleDot
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SharedTask } from "@/lib/groups";
+import { SharedTask, SharedSubtask } from "@/lib/groups";
 import { Tooltip } from "@/components/ui/tooltip";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
@@ -48,6 +49,23 @@ const PROGRESS_BY_STATUS: Record<string, number> = {
     "done":        100,
 };
 
+export const DragControlsContext = createContext<any>(null);
+
+const DragHandle = () => {
+    const dragControls = useContext(DragControlsContext);
+    return (
+        <div 
+            className="text-zinc-700 hover:text-zinc-500 cursor-grab active:cursor-grabbing transition-colors shrink-0 pt-1" 
+            onPointerDown={(e) => {
+                dragControls?.start(e);
+            }}
+            style={{ touchAction: "none" }}
+        >
+            <GripVertical className="w-3.5 h-3.5" />
+        </div>
+    );
+};
+
 const TasksListWrapper = ({ children, isAdmin, values, onReorder, className }: any) => {
     if (isAdmin) {
         return (
@@ -64,11 +82,15 @@ const TasksListWrapper = ({ children, isAdmin, values, onReorder, className }: a
 };
 
 const TaskWrapper = ({ children, task, isAdmin, ...props }: any) => {
+    const dragControls = useDragControls();
+
     if (isAdmin) {
         return (
-            <Reorder.Item value={task} id={task.id} {...props}>
-                {children}
-            </Reorder.Item>
+            <DragControlsContext.Provider value={dragControls}>
+                <Reorder.Item value={task} id={task.id} dragListener={false} dragControls={dragControls} {...props}>
+                    {children}
+                </Reorder.Item>
+            </DragControlsContext.Provider>
         );
     }
     return (
@@ -77,6 +99,258 @@ const TaskWrapper = ({ children, task, isAdmin, ...props }: any) => {
         </motion.div>
     );
 };
+
+
+const TaskCard = memo(function TaskCard({
+    task,
+    i,
+    sectionLength,
+    isAdmin,
+    canEdit,
+    currentUserId,
+    groupMembers,
+    assigneeNameById,
+    isExpanded,
+    onToggleExpand,
+    onStartEditing,
+    onUpdate,
+    onDelete,
+    onMoveUp,
+    onMoveDown,
+    renderSubtasksProgressAndList,
+}: {
+    task: any;
+    i: number;
+    sectionLength: number;
+    isAdmin: boolean;
+    canEdit: boolean;
+    currentUserId: string;
+    groupMembers: any[];
+    assigneeNameById: Record<string, string>;
+    isExpanded: boolean;
+    onToggleExpand: () => void;
+    onStartEditing: () => void;
+    onUpdate: (id: string, updates: any) => void;
+    onDelete: (id: string) => void;
+    onMoveUp?: () => void;
+    onMoveDown?: () => void;
+    renderSubtasksProgressAndList: (task: any, canEdit: boolean) => React.ReactNode;
+}) {
+    const assignee = task.assignedTo !== "all" ? groupMembers?.find((m: any) => m.uid === task.assignedTo) : null;
+
+    return (
+        <TaskWrapper
+            task={task}
+            isAdmin={isAdmin}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.5 }}
+            className={cn(
+                "flex flex-col gap-4 p-6 rounded-2xl border relative group/task transition-all duration-200 text-left",
+                task.status === "done"
+                    ? "bg-zinc-900/20 border-white/5 opacity-60"
+                    : "bg-zinc-900/60 border-white/10 hover:border-white/20 active:scale-[0.99]"
+            )}
+        >
+            {/* Top row: checkbox + drag + title + priority + chevron */}
+            <div 
+                onClick={() => {
+                    if (task.subtasks && task.subtasks.length > 0) {
+                        onToggleExpand();
+                    }
+                }}
+                className={cn(
+                    "flex items-start justify-between gap-4",
+                    task.subtasks && task.subtasks.length > 0 && "cursor-pointer select-none"
+                )}
+            >
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                    {isAdmin && (
+                        <DragHandle />
+                    )}
+
+
+                    <div className="flex-1 min-w-0 space-y-1">
+                        <h4 className={cn(
+                            "text-[15px] font-bold tracking-tight text-white transition-colors",
+                            task.status === "done" && "text-zinc-500 line-through"
+                        )}>
+                            {task.title}
+                        </h4>
+                        {task.description && (
+                            <p className="text-[12px] text-zinc-500 leading-relaxed">
+                                {task.description}
+                            </p>
+                        )}
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0 pt-0.5" onClick={(e) => e.stopPropagation()}>
+                    <span className={cn(
+                        "inline-flex items-center px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border",
+                        task.priority === "high" ? "bg-red-500/10 text-red-500 border-red-500/20" :
+                        task.priority === "medium" ? "bg-amber-500/10 text-amber-500 border-amber-500/20" :
+                        "bg-sky-500/10 text-sky-500 border-sky-500/20"
+                    )}>
+                        {task.priority}
+                    </span>
+
+                    {task.subtasks && task.subtasks.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onToggleExpand();
+                            }}
+                            className="p-1 text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
+                        >
+                            <motion.div
+                                animate={{ rotate: isExpanded ? 180 : 0 }}
+                                transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                            >
+                                <ChevronDown className="w-4 h-4" />
+                            </motion.div>
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {renderSubtasksProgressAndList(task, canEdit)}
+
+            {/* Middle row: Stages bar */}
+            <div className="flex items-center gap-1 my-1 select-none flex-wrap" onClick={(e) => e.stopPropagation()}>
+                {STATUS_CYCLE.map((statusId, idx) => {
+                    const currentIdx = STATUS_CYCLE.indexOf(task.status as any);
+                    const isCompleted = idx < currentIdx;
+                    const isActive = idx === currentIdx;
+
+                    let dotColor = "";
+                    if (isCompleted) {
+                        dotColor = "bg-emerald-500";
+                    } else if (isActive) {
+                        dotColor = statusId === "todo" ? "bg-emerald-500" :
+                                   statusId === "in-progress" ? "bg-emerald-500" :
+                                   statusId === "in-review" ? "bg-indigo-500" :
+                                   "bg-emerald-500";
+                    } else {
+                        dotColor = "bg-zinc-950 border border-zinc-800";
+                    }
+
+                    const label = TASK_STATUS_CONFIG[statusId]?.label.toUpperCase();
+
+                    return (
+                        <div key={statusId} className="flex items-center">
+                            {idx > 0 && (
+                                <div className={cn(
+                                    "w-6 h-[1px] mx-1.5",
+                                    idx <= currentIdx ? "bg-zinc-700" : "bg-zinc-800/60"
+                                )} />
+                            )}
+                            <button
+                                disabled={!canEdit}
+                                onClick={() => canEdit && onUpdate(task.id, {
+                                    status: statusId,
+                                    ...(statusId === "done" ? { completedAt: new Date().toISOString() } : {})
+                                })}
+                                className={cn(
+                                    "flex items-center gap-1.5 text-[9px] font-black tracking-widest transition-all",
+                                    isActive ? "text-zinc-200" : "text-zinc-600 hover:text-zinc-400"
+                                )}
+                            >
+                                <div className={cn("w-2.5 h-2.5 rounded-full transition-all shrink-0", dotColor)} />
+                                <span>{label}</span>
+                            </button>
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* Bottom row: assignees & actions */}
+            <div className="flex items-center justify-between pt-3.5 border-t border-white/[0.04] mt-1" onClick={(e) => e.stopPropagation()}>
+                {task.assignedTo === "all" ? (
+                    <div className="flex items-center gap-2">
+                        <div className="flex -space-x-1.5">
+                            {(groupMembers || []).slice(0, 4).map((m: any) => (
+                                <Tooltip key={m.uid} content={m.displayName || "Member"}>
+                                    <Avatar className="w-5 h-5 rounded-full ring-1 ring-zinc-950">
+                                        <AvatarImage src={m.photoURL} className="rounded-full" />
+                                        <AvatarFallback className="bg-zinc-800 text-[8px] font-bold text-zinc-400 rounded-full">
+                                            {(m.displayName || "?")[0].toUpperCase()}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                </Tooltip>
+                            ))}
+                            {(groupMembers || []).length > 4 && (
+                                <div className="w-5 h-5 rounded-full bg-zinc-800 ring-1 ring-zinc-950 flex items-center justify-center text-[8px] font-bold text-zinc-400">
+                                    +{(groupMembers || []).length - 4}
+                                </div>
+                            )}
+                        </div>
+                        <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-wider">Entire Unit</span>
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-2">
+                        <Avatar className="w-5 h-5 rounded-full">
+                            <AvatarImage src={assignee?.photoURL} className="rounded-full" />
+                            <AvatarFallback className="bg-zinc-800 text-[8px] font-bold text-zinc-400 rounded-full">
+                                {assignee?.displayName?.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() || "?"}
+                            </AvatarFallback>
+                        </Avatar>
+                        <span className="text-[9px] font-bold text-zinc-500">
+                            {assignee?.displayName || assigneeNameById[task.assignedTo] || "Member"}
+                        </span>
+                    </div>
+                )}
+
+                {/* Actions on bottom right */}
+                <div className="flex items-center gap-1">
+                    {canEdit && (
+                        <>
+                            <Tooltip content="Edit objective">
+                                <button
+                                    onClick={onStartEditing}
+                                    className="p-1.5 text-zinc-500 hover:text-white hover:bg-white/5 rounded-lg transition-all cursor-pointer"
+                                >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                            </Tooltip>
+                            {isAdmin && (
+                                <>
+                                    <Tooltip content="Move Up">
+                                        <button
+                                            disabled={i === 0}
+                                            onClick={onMoveUp}
+                                            className="p-1.5 text-zinc-500 hover:text-white hover:bg-white/5 disabled:opacity-20 disabled:hover:bg-transparent rounded-lg transition-all cursor-pointer"
+                                        >
+                                            <ChevronUp className="w-3.5 h-3.5" />
+                                        </button>
+                                    </Tooltip>
+                                    <Tooltip content="Move Down">
+                                        <button
+                                            disabled={i === sectionLength - 1}
+                                            onClick={onMoveDown}
+                                            className="p-1.5 text-zinc-500 hover:text-white hover:bg-white/5 disabled:opacity-20 disabled:hover:bg-transparent rounded-lg transition-all cursor-pointer"
+                                        >
+                                            <ChevronDown className="w-3.5 h-3.5" />
+                                        </button>
+                                    </Tooltip>
+                                </>
+                            )}
+                            <Tooltip content="Delete objective">
+                                <button
+                                    onClick={() => onDelete(task.id)}
+                                    className="p-1.5 text-zinc-700 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            </Tooltip>
+                        </>
+                    )}
+                </div>
+            </div>
+        </TaskWrapper>
+    );
+});
 
 export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, onUpdate, onDelete, isAdmin, groupMembers, currentUserId, prefillTemplate, onPrefillHandled, onTemplateSelect, onReorder }: any) {
     const searchParams = useSearchParams();
@@ -98,9 +372,10 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
     const [editPrio, setEditPrio] = useState<any>("medium");
     const [editAssign, setEditAssign] = useState("all");
 
-    const [subtasks, setSubtasks] = useState<{ id: string; title: string; completed: boolean }[]>([]);
-    const [editSubtasks, setEditSubtasks] = useState<{ id: string; title: string; completed: boolean }[]>([]);
+    const [subtasks, setSubtasks] = useState<SharedSubtask[]>([]);
+    const [editSubtasks, setEditSubtasks] = useState<SharedSubtask[]>([]);
     const [expandedTasks, setExpandedTasks] = useState<Record<string, boolean>>({});
+    const [isCompletedExpanded, setIsCompletedExpanded] = useState(false);
 
     const toggleTaskExpanded = (taskId: string) => {
         setExpandedTasks(prev => ({
@@ -121,7 +396,7 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
     const handleSaveEdit = () => {
         if (!editingTaskId || !editTitle.trim()) return;
         const validSubtasks = editSubtasks
-            .map(s => ({ ...s, title: s.title.trim() }))
+            .map(s => ({ ...s, title: s.title.trim(), status: s.status || (s.completed ? "done" : "todo") }))
             .filter(s => s.title.length > 0);
         onUpdate(editingTaskId, {
             title: editTitle,
@@ -142,6 +417,11 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
         return map;
     }, [groupMembers]);
 
+    const onPrefillHandledRef = useRef(onPrefillHandled);
+    useEffect(() => {
+        onPrefillHandledRef.current = onPrefillHandled;
+    }, [onPrefillHandled]);
+
     useEffect(() => {
         if (!prefillTemplate) return;
         setTitle(prefillTemplate.title || "");
@@ -149,13 +429,13 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
         setPrio(prefillTemplate.priority || "medium");
         setAssign("all");
         setOpenAdd(true);
-        if (onPrefillHandled) onPrefillHandled();
-    }, [prefillTemplate, onPrefillHandled]);
+        if (onPrefillHandledRef.current) onPrefillHandledRef.current();
+    }, [prefillTemplate]);
 
     const handleAdd = () => {
         if (!title.trim()) return;
         const validSubtasks = subtasks
-            .map(s => ({ ...s, title: s.title.trim() }))
+            .map(s => ({ ...s, title: s.title.trim(), status: s.status || (s.completed ? "done" : "todo") }))
             .filter(s => s.title.length > 0);
         onAdd(title, prio, assign, false, description, validSubtasks);
         setTitle("");
@@ -202,7 +482,7 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                         type="button"
                         onClick={() => {
                             const newId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11);
-                            setCurrentSubtasks([...currentSubtasks, { id: newId, title: "", completed: false }]);
+                            setCurrentSubtasks([...currentSubtasks, { id: newId, title: "", completed: false, status: "todo" }]);
                         }}
                         className="w-full py-2 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white border border-dashed border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                     >
@@ -218,36 +498,23 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
 
         const isExpanded = !!expandedTasks[task.id];
 
+        const getSubtaskStatus = (st: any): "todo" | "in-progress" | "done" => {
+            if (st.status) return st.status;
+            return st.completed ? "done" : "todo";
+        };
+
         return (
             <div className="space-y-2 mt-2">
-                <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
-                        <span className="flex items-center gap-1.5">
-                            Subtasks Progress
-                        </span>
-                        <span>{task.completedSubtaskCount || 0}/{task.subtaskCount || 0} Done</span>
-                    </div>
-                    <div className="w-full h-1 bg-zinc-950 rounded-full overflow-hidden relative">
+                {/* Progress bar row */}
+                <div className="flex items-center gap-4 text-[10px] text-zinc-500 font-black uppercase tracking-wider select-none my-2">
+                    <div className="w-[180px] h-1.5 bg-zinc-950 rounded-full overflow-hidden relative shrink-0">
                         <div
                             className="h-full bg-emerald-500 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
                             style={{ width: `${task.progress || 0}%` }}
                         />
                     </div>
+                    <span>{task.completedSubtaskCount || 0} / {task.subtaskCount || 0} subtasks completed</span>
                 </div>
-
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        toggleTaskExpanded(task.id);
-                    }}
-                    className="text-[9px] font-black uppercase tracking-wider text-zinc-500 hover:text-zinc-300 flex items-center gap-1 transition-colors cursor-pointer select-none"
-                >
-                    {isExpanded ? (
-                        <>Hide Subtasks <ChevronUp className="w-3.5 h-3.5" /></>
-                    ) : (
-                        <>Show Subtasks ({task.subtaskCount - (task.completedSubtaskCount || 0)} left) <ChevronDown className="w-3.5 h-3.5" /></>
-                    )}
-                </button>
 
                 <AnimatePresence initial={false}>
                     {isExpanded && (
@@ -258,37 +525,70 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                             transition={{ duration: 0.15, ease: "easeInOut" }}
                             className="overflow-hidden"
                         >
-                            <div className="flex flex-col gap-2 pt-2 border-t border-white/[0.04] mt-2">
-                                {task.subtasks.map((st: any) => (
-                                    <label
-                                        key={st.id}
-                                        onClick={(e) => e.stopPropagation()}
-                                        className={cn(
-                                            "flex items-center gap-2.5 px-3 py-2 rounded-xl bg-zinc-950/40 border border-white/5 hover:border-white/10 transition-all cursor-pointer group/subtask select-none",
-                                            st.completed && "opacity-60"
-                                        )}
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={st.completed}
-                                            onChange={() => {
-                                                if (!canEdit) return;
-                                                const newSubtasks = task.subtasks.map((s: any) =>
-                                                    s.id === st.id ? { ...s, completed: !s.completed } : s
-                                                );
-                                                onUpdate(task.id, { subtasks: newSubtasks });
-                                            }}
-                                            disabled={!canEdit}
-                                            className="w-3.5 h-3.5 rounded border-zinc-700 bg-zinc-900 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-zinc-900 accent-emerald-500 cursor-pointer"
-                                        />
-                                        <span className={cn(
-                                            "text-[11px] text-zinc-300 transition-all",
-                                            st.completed && "line-through text-zinc-500"
-                                        )}>
-                                            {st.title}
-                                        </span>
-                                    </label>
-                                ))}
+                            <div className="flex flex-col gap-0 pt-2 mt-1 relative">
+                                {/* Vertical connector line */}
+                                <div className="absolute left-[11px] top-5 bottom-4 w-px bg-zinc-800/80 pointer-events-none" />
+
+                                {task.subtasks.map((st: any) => {
+                                    const status = getSubtaskStatus(st);
+                                    const isDone = status === "done";
+                                    const isInProgress = status === "in-progress";
+
+                                    let StatusIconComponent = Circle;
+                                    let iconClass = "text-zinc-600";
+                                    let textClass = "text-zinc-400";
+
+                                    if (isInProgress) {
+                                        StatusIconComponent = CircleDot;
+                                        iconClass = "text-emerald-400";
+                                        textClass = "text-zinc-300 font-medium";
+                                    } else if (isDone) {
+                                        StatusIconComponent = CheckCircle2;
+                                        iconClass = "text-emerald-400";
+                                        textClass = "text-zinc-500 line-through decoration-zinc-600";
+                                    }
+
+                                    return (
+                                        <div
+                                            key={st.id}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="flex items-center gap-3 py-[9px] select-none relative z-10"
+                                        >
+                                            {/* Status button */}
+                                            <Tooltip content={isDone ? "Done – click to undo" : "Click to mark done"}>
+                                                <button
+                                                    type="button"
+                                                    disabled={!canEdit}
+                                                    onClick={() => {
+                                                        if (!canEdit) return;
+                                                        const nextStatus = isDone ? "todo" : "done";
+                                                        const newSubtasks = task.subtasks.map((s: any) => {
+                                                            if (s.id !== st.id) return s;
+                                                            // Omit completedBy when undoing — never write undefined to Firestore
+                                                            const { completedBy: _dropped, ...rest } = s;
+                                                            if (nextStatus === "done") {
+                                                                return { ...rest, status: "done", completed: true, completedBy: currentUserId };
+                                                            }
+                                                            return { ...rest, status: "todo", completed: false };
+                                                        });
+                                                        onUpdate(task.id, { subtasks: newSubtasks });
+                                                    }}
+                                                    className="w-[23px] h-[23px] flex items-center justify-center bg-zinc-950 rounded-full shrink-0 border border-zinc-800 hover:border-zinc-600 transition-all cursor-pointer focus:outline-none active:scale-90"
+                                                >
+                                                    <StatusIconComponent className={cn("w-[14px] h-[14px]", iconClass)} />
+                                                </button>
+                                            </Tooltip>
+
+                                            {/* Title */}
+                                            <span className={cn(
+                                                "text-[13px] font-medium leading-none transition-colors duration-200 truncate",
+                                                textClass
+                                            )}>
+                                                {st.title}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </motion.div>
                     )}
@@ -685,30 +985,48 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
             </div>
 
             {tasks.length === 0 && !openAdd && (
-                <div className="p-8 border-2 border-dashed border-white/5 rounded-3xl space-y-6">
-                    <div className="text-center space-y-2">
-                        <p className="text-xs font-bold text-zinc-500">No active objectives for this unit.</p>
-                        <p className="text-[10px] text-zinc-600">Pick a template to prefill the objective form:</p>
+                <div className="p-8 md:p-12 border border-dashed border-white/10 rounded-3xl bg-zinc-900/10 flex flex-col items-center justify-center text-center space-y-6 max-w-2xl mx-auto">
+                    <div className="w-16 h-16 rounded-full bg-zinc-900 border border-white/5 flex items-center justify-center text-zinc-500 shadow-inner">
+                        <Target className="w-7 h-7 text-zinc-400 animate-pulse" />
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        {[
-                            { id: "deep-work", title: "Deep Work Session", icon: Sparkles },
-                            { id: "review-respond", title: "Review & Respond", icon: Mail },
-                            { id: "learning-sprint", title: "Learning Sprint", icon: Target }
-                        ].map((tpl) => (
-                            <Tooltip
-                                key={tpl.id}
-                                content={`Use "${tpl.title}" template`}
-                            >
-                                <button
-                                    onClick={() => onTemplateSelect?.(tpl.id)}
-                                    className="flex flex-col items-center gap-2 p-4 bg-zinc-900/60 border border-white/5 rounded-2xl transition-all group hover:border-[white]/40 cursor-pointer w-full justify-center"
-                                >
-                                    <tpl.icon className="w-4 h-4 text-zinc-600 group-hover:text-[white]" />
-                                    <span className="text-[9px] font-black uppercase text-zinc-500 tracking-wider text-center">{tpl.title}</span>
-                                </button>
-                            </Tooltip>
-                        ))}
+                    <div className="space-y-2">
+                        <h3 className="text-lg font-black text-white tracking-tight">No objectives yet</h3>
+                        <p className="text-xs text-zinc-500 max-w-sm">Create the first task for your unit to keep everyone aligned and track focus goals.</p>
+                    </div>
+                    <button
+                        onClick={() => setOpenAdd(true)}
+                        className="px-6 py-3 bg-white text-black font-black rounded-[10px] text-xs relative overflow-hidden hover:bg-zinc-100 transition-all flex items-center gap-2 cursor-pointer shadow-lg"
+                    >
+                        <Plus className="w-4 h-4" /> Create First Objective
+                    </button>
+                    
+                    <div className="w-full pt-4 border-t border-white/[0.04]">
+                        <details className="group/details">
+                            <summary className="text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer select-none list-none flex items-center justify-center gap-1.5">
+                                Or use a template
+                                <ChevronDown className="w-3.5 h-3.5 transition-transform group-open/details:rotate-180" />
+                            </summary>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+                                {[
+                                    { id: "deep-work", title: "Deep Work Session", icon: Sparkles },
+                                    { id: "review-respond", title: "Review & Respond", icon: Mail },
+                                    { id: "learning-sprint", title: "Learning Sprint", icon: Target }
+                                ].map((tpl) => (
+                                    <Tooltip
+                                        key={tpl.id}
+                                        content={`Use "${tpl.title}" template`}
+                                    >
+                                        <button
+                                            onClick={() => onTemplateSelect?.(tpl.id)}
+                                            className="flex flex-col items-center gap-2.5 p-4 bg-zinc-900/60 border border-white/5 hover:border-white/10 rounded-2xl transition-all group hover:bg-zinc-900 cursor-pointer w-full justify-center"
+                                        >
+                                            <tpl.icon className="w-4 h-4 text-zinc-600 group-hover:text-white transition-colors" />
+                                            <span className="text-[9px] font-black uppercase text-zinc-500 tracking-wider text-center">{tpl.title}</span>
+                                        </button>
+                                    </Tooltip>
+                                ))}
+                            </div>
+                        </details>
                     </div>
                 </div>
             )}
@@ -722,8 +1040,6 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                 {incompleteTasks.map((task: any, i: number) => {
                     const isEditing = editingTaskId === task.id;
                     const canEdit = isAdmin || task.assignedTo === "all" || task.assignedTo === currentUserId;
-                    const statusConfig = TASK_STATUS_CONFIG[task.status] || TASK_STATUS_CONFIG.todo;
-                    const StatusIcon = statusConfig.icon;
 
                     if (isEditing) {
                         return (
@@ -787,492 +1103,173 @@ export const SharedTasksPanel = memo(function SharedTasksPanel({ tasks, onAdd, o
                         );
                     }
 
-                    {
-                        const prioCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
-                        const assignee = task.assignedTo !== "all" ? groupMembers?.find((m: any) => m.uid === task.assignedTo) : null;
-
-                        return (
-                        <TaskWrapper
+                    return (
+                        <TaskCard
                             key={task.id}
                             task={task}
+                            i={i}
+                            sectionLength={incompleteTasks.length}
                             isAdmin={isAdmin}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.5 }}
-                            className={cn(
-                                "flex flex-col gap-3.5 p-5 rounded-2xl border relative group/task transition-all duration-200",
-                                task.status === "done"
-                                    ? "bg-zinc-900/20 border-white/5 opacity-60"
-                                    : "bg-zinc-900/60 border-white/10 hover:border-white/20 active:scale-[0.99]",
-                                task.priority === "high" ? "border-l-[3px] border-l-red-500" :
-                                task.priority === "medium" ? "border-l-[3px] border-l-amber-500" :
-                                "border-l-[3px] border-l-sky-500"
-                            )}
-                        >
-                            {/* Top row: drag + title + actions */}
-                            <div className="flex items-start justify-between gap-4">
-                                <div className="flex items-center gap-2">
-                                    {isAdmin && (
-                                        <div className="text-zinc-700 group-hover/task:text-zinc-500 cursor-grab active:cursor-grabbing transition-colors shrink-0">
-                                            <GripVertical className="w-3.5 h-3.5" />
-                                        </div>
-                                    )}
-                                    <h4 className={cn(
-                                        "text-[13px] font-bold tracking-tight text-white",
-                                        task.status === "done" && "text-zinc-500 line-through"
-                                    )}>
-                                        {task.title}
-                                    </h4>
-                                </div>
-
-                                {/* Actions */}
-                                <div className="flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-all shrink-0">
-                                    {canEdit && (
-                                        <>
-                                            <Tooltip content="Edit objective">
-                                                <button
-                                                    onClick={() => startEditing(task)}
-                                                    className="p-1 text-zinc-500 hover:text-white hover:bg-white/5 rounded-lg transition-all cursor-pointer"
-                                                >
-                                                    <Edit2 className="w-3.5 h-3.5" />
-                                                </button>
-                                            </Tooltip>
-                                            {isAdmin && (
-                                                <>
-                                                    <Tooltip content="Move Up">
-                                                        <button
-                                                            disabled={i === 0}
-                                                            onClick={() => handleMoveIncomplete(task, 'up')}
-                                                            className="p-1 text-zinc-500 hover:text-white hover:bg-white/5 disabled:opacity-20 disabled:hover:bg-transparent rounded-lg transition-all cursor-pointer"
-                                                        >
-                                                            <ChevronUp className="w-3.5 h-3.5" />
-                                                        </button>
-                                                    </Tooltip>
-                                                    <Tooltip content="Move Down">
-                                                        <button
-                                                            disabled={i === incompleteTasks.length - 1}
-                                                            onClick={() => handleMoveIncomplete(task, 'down')}
-                                                            className="p-1 text-zinc-500 hover:text-white hover:bg-white/5 disabled:opacity-20 disabled:hover:bg-transparent rounded-lg transition-all cursor-pointer"
-                                                        >
-                                                            <ChevronDown className="w-3.5 h-3.5" />
-                                                        </button>
-                                                    </Tooltip>
-                                                </>
-                                            )}
-                                            <Tooltip content="Delete objective">
-                                                <button
-                                                    onClick={() => onDelete(task.id)}
-                                                    className="p-1 text-zinc-700 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
-                                                >
-                                                    <X className="w-3.5 h-3.5" />
-                                                </button>
-                                            </Tooltip>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Description if present */}
-                            {task.description && (
-                                <p className="text-[11px] text-zinc-500 leading-relaxed -mt-1.5">
-                                    {task.description}
-                                </p>
-                            )}
-
-                            {renderSubtasksProgressAndList(task, canEdit)}
-
-                            {/* Middle row: Stages bar */}
-                            <div className="flex items-center gap-1 my-1 select-none flex-wrap">
-                                {STATUS_CYCLE.map((statusId, idx) => {
-                                    const currentIdx = STATUS_CYCLE.indexOf(task.status as any);
-                                    const isCompleted = idx < currentIdx;
-                                    const isActive = idx === currentIdx;
-
-                                    let dotColor = "";
-                                    if (isCompleted) {
-                                        dotColor = "bg-emerald-500";
-                                    } else if (isActive) {
-                                        dotColor = statusId === "todo" ? "bg-emerald-500" :
-                                                   statusId === "in-progress" ? "bg-emerald-500" :
-                                                   statusId === "in-review" ? "bg-indigo-500" :
-                                                   "bg-emerald-500";
-                                    } else {
-                                        dotColor = "bg-zinc-950 border border-zinc-800";
-                                    }
-
-                                    const label = TASK_STATUS_CONFIG[statusId]?.label.toUpperCase();
-
-                                    return (
-                                        <div key={statusId} className="flex items-center">
-                                            {idx > 0 && (
-                                                <div className={cn(
-                                                    "w-6 h-[1px] mx-1.5",
-                                                    idx <= currentIdx ? "bg-zinc-700" : "bg-zinc-800/60"
-                                                )} />
-                                            )}
-                                            <button
-                                                disabled={!canEdit}
-                                                onClick={() => canEdit && onUpdate(task.id, {
-                                                    status: statusId,
-                                                    ...(statusId === "done" ? { completedAt: new Date().toISOString() } : {})
-                                                })}
-                                                className={cn(
-                                                    "flex items-center gap-1.5 text-[9px] font-black tracking-widest transition-all",
-                                                    isActive ? "text-zinc-200" : "text-zinc-600 hover:text-zinc-400"
-                                                )}
-                                            >
-                                                <div className={cn("w-2.5 h-2.5 rounded-full transition-all shrink-0", dotColor)} />
-                                                <span>{label}</span>
-                                            </button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            {/* Bottom row: assignees & priority */}
-                            <div className="flex items-center justify-between pt-3.5 border-t border-white/[0.04] mt-1">
-                                {task.assignedTo === "all" ? (
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex -space-x-1.5">
-                                            {(groupMembers || []).slice(0, 4).map((m: any) => (
-                                                <Tooltip key={m.uid} content={m.displayName || "Member"}>
-                                                    <Avatar className="w-5 h-5 rounded-full ring-1 ring-zinc-950">
-                                                        <AvatarImage src={m.photoURL} className="rounded-full" />
-                                                        <AvatarFallback className="bg-zinc-800 text-[8px] font-bold text-zinc-400 rounded-full">
-                                                            {(m.displayName || "?")[0].toUpperCase()}
-                                                        </AvatarFallback>
-                                                    </Avatar>
-                                                </Tooltip>
-                                            ))}
-                                            {(groupMembers || []).length > 4 && (
-                                                <div className="w-5 h-5 rounded-full bg-zinc-800 ring-1 ring-zinc-950 flex items-center justify-center text-[8px] font-bold text-zinc-400">
-                                                    +{(groupMembers || []).length - 4}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-wider">Entire Unit</span>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center gap-2">
-                                        <Avatar className="w-5 h-5 rounded-full">
-                                            <AvatarImage src={assignee?.photoURL} className="rounded-full" />
-                                            <AvatarFallback className="bg-zinc-800 text-[8px] font-bold text-zinc-400 rounded-full">
-                                                {assignee?.displayName?.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() || "?"}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                        <span className="text-[9px] font-bold text-zinc-500">
-                                            {assignee?.displayName || assigneeNameById[task.assignedTo] || "Member"}
-                                        </span>
-                                    </div>
-                                )}
-
-                                {/* Priority badge */}
-                                <span className={cn(
-                                    "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border",
-                                    prioCfg.color
-                                )}>
-                                    {task.priority === "high" && <span className="w-1 h-1 rounded-full bg-red-400" />}
-                                    {task.priority}
-                                </span>
-                            </div>
-                        </TaskWrapper>
-                        );
-                    }
+                            canEdit={canEdit}
+                            currentUserId={currentUserId}
+                            groupMembers={groupMembers}
+                            assigneeNameById={assigneeNameById}
+                            isExpanded={!!expandedTasks[task.id]}
+                            onToggleExpand={() => toggleTaskExpanded(task.id)}
+                            onStartEditing={() => startEditing(task)}
+                            onUpdate={onUpdate}
+                            onDelete={onDelete}
+                            onMoveUp={() => handleMoveIncomplete(task, 'up')}
+                            onMoveDown={() => handleMoveIncomplete(task, 'down')}
+                            renderSubtasksProgressAndList={renderSubtasksProgressAndList}
+                        />
+                    );
                 })}
             </TasksListWrapper>
 
-            {incompleteTasks.length > 0 && completedTasks.length > 0 && (
-                <div className="py-2">
-                    <div className="flex items-center gap-3">
-                        <div className="h-px flex-1 bg-white/5" />
-                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600">Completed</span>
-                        <div className="h-px flex-1 bg-white/5" />
+            {completedTasks.length > 0 && (
+                <button
+                    onClick={() => setIsCompletedExpanded(!isCompletedExpanded)}
+                    className="w-full py-4 flex items-center justify-center gap-3 hover:text-zinc-300 text-zinc-500 transition-colors group cursor-pointer focus:outline-none"
+                >
+                    <div className="h-px flex-1 bg-white/5" />
+                    <div className="flex items-center gap-2 select-none">
+                        <span className="text-[9px] font-black uppercase tracking-[0.2em] transition-colors">
+                            Completed ({completedTasks.length})
+                        </span>
+                        <motion.div
+                            animate={{ rotate: isCompletedExpanded ? 180 : 0 }}
+                            transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                        >
+                            <ChevronDown className="w-3.5 h-3.5" />
+                        </motion.div>
                     </div>
-                </div>
+                    <div className="h-px flex-1 bg-white/5" />
+                </button>
             )}
 
-            <TasksListWrapper 
-                isAdmin={isAdmin} 
-                values={completedTasks} 
-                onReorder={handleReorderCompleted} 
-                className="grid grid-cols-1 gap-3"
-            >
-                {completedTasks.map((task: any, i: number) => {
-                    const isEditing = editingTaskId === task.id;
-                    const canEdit = isAdmin || task.assignedTo === "all" || task.assignedTo === currentUserId;
-                    const statusConfig = TASK_STATUS_CONFIG[task.status] || TASK_STATUS_CONFIG.todo;
-                    const StatusIcon = statusConfig.icon;
-
-                    if (isEditing) {
-                        return (
-                            <motion.div 
-                                key={task.id}
-                                initial={{ opacity: 0, scale: 0.98 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                className="p-5 bg-zinc-900 border border-[white]/30 rounded-2xl space-y-4 shadow-2xl z-10"
-                            >
-                                <input autoFocus value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="w-full bg-zinc-950 border border-white/5 rounded-xl px-4 py-2 text-white text-sm outline-none focus:border-[white]/40" />
-                                <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={2} className="w-full bg-zinc-950 border border-white/5 rounded-xl px-4 py-2 text-white text-xs outline-none focus:border-[white]/40 resize-none" />
-                                
-                                <div className="flex flex-wrap gap-4">
-                                    <div className="flex-1 min-w-[120px]">
-                                        <p className="text-[9px] font-black text-zinc-600 uppercase mb-1.5">Priority</p>
-                                        <div className="flex gap-1.5">
-                                            {["low", "medium", "high"].map(p => (
-                                                <button key={p} onClick={() => setEditPrio(p)} className={cn(
-                                                    "flex-1 py-2 rounded-[10px] border text-[10px] font-black uppercase transition-all relative overflow-hidden cursor-pointer",
-                                                    editPrio === p 
-                                                        ? "bg-white/10 text-white border-white/20" 
-                                                        : "text-zinc-600 border-white/5 hover:text-zinc-400"
-                                                )}>
-                                                    {editPrio === p && (
-                                                        <>
-                                                            <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none z-10" />
-                                                            <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
-                                                            <div className="absolute top-0 inset-x-0 h-[4px] bg-gradient-to-b from-white/5 to-transparent z-10" />
-                                                        </>
-                                                    )}
-                                                    <span className="relative z-10">{p}</span>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div className="flex-1 min-w-[120px]">
-                                        <p className="text-[9px] font-black text-zinc-600 uppercase mb-1.5">Assignment</p>
-                                        <select value={editAssign} onChange={(e) => setEditAssign(e.target.value)} className="w-full bg-zinc-950 border border-white/5 rounded-md px-2 py-1 text-[10px] text-zinc-400 outline-none">
-                                            <option value="all">Entire Unit</option>
-                                            {groupMembers?.map((m: any) => <option key={m.uid} value={m.uid}>{m.displayName}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-                                {renderSubtasksEditor(true)}
-                                <div className="flex gap-3 pt-1">
-                                    <button onClick={handleSaveEdit} className="flex-1 py-3 bg-white text-black font-black rounded-[10px] text-xs relative overflow-hidden hover:bg-zinc-100 transition-all cursor-pointer">
-                                        {/* Curved Light Effect for solid button */}
-                                        <div className="absolute inset-x-0 top-0 h-[1px] bg-white/60 z-10" />
-                                        <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/40 pointer-events-none z-10" />
-                                        <div className="absolute inset-x-0 bottom-0 h-[2.5px] bg-black/[0.04] z-10" />
-                                        <span className="relative z-10 flex items-center justify-center gap-2"><Save className="w-3 h-3" /> Save Changes</span>
-                                    </button>
-                                    <button onClick={() => setEditingTaskId(null)} className="px-8 py-3 bg-white/5 text-zinc-400 font-black rounded-[10px] text-xs relative overflow-hidden hover:bg-white/10 hover:text-white transition-all cursor-pointer">
-                                        {/* Curved Glass Edge Lights */}
-                                        <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none z-10" />
-                                        <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
-                                        <div className="absolute top-0 inset-x-0 h-[4px] bg-gradient-to-b from-white/5 to-transparent z-10" />
-                                        <span className="relative z-10">Cancel</span>
-                                    </button>
-                                </div>
-                            </motion.div>
-                        );
-                    }
-
-                    {
-                        const prioCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
-                        const assignee = task.assignedTo !== "all" ? groupMembers?.find((m: any) => m.uid === task.assignedTo) : null;
-
-                        return (
-                        <TaskWrapper
-                            key={task.id}
-                            task={task}
-                            isAdmin={isAdmin}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.5 }}
-                            className={cn(
-                                "flex flex-col gap-3.5 p-5 rounded-2xl border relative group/task transition-all duration-200",
-                                task.status === "done"
-                                    ? "bg-zinc-900/20 border-white/5 opacity-60"
-                                    : "bg-zinc-900/60 border-white/10 hover:border-white/20 active:scale-[0.99]",
-                                task.priority === "high" ? "border-l-[3px] border-l-red-500" :
-                                task.priority === "medium" ? "border-l-[3px] border-l-amber-500" :
-                                "border-l-[3px] border-l-sky-500"
-                            )}
+            <AnimatePresence initial={false}>
+                {isCompletedExpanded && completedTasks.length > 0 && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                    >
+                        <TasksListWrapper 
+                            isAdmin={isAdmin} 
+                            values={completedTasks} 
+                            onReorder={handleReorderCompleted} 
+                            className="grid grid-cols-1 gap-3 pt-1 pb-4"
                         >
-                            {/* Top row: drag + title + actions */}
-                            <div className="flex items-start justify-between gap-4">
-                                <div className="flex items-center gap-2">
-                                    {isAdmin && (
-                                        <div className="text-zinc-700 group-hover/task:text-zinc-500 cursor-grab active:cursor-grabbing transition-colors shrink-0">
-                                            <GripVertical className="w-3.5 h-3.5" />
-                                        </div>
-                                    )}
-                                    <h4 className={cn(
-                                        "text-[13px] font-bold tracking-tight text-white",
-                                        task.status === "done" && "text-zinc-500 line-through"
-                                    )}>
-                                        {task.title}
-                                    </h4>
-                                </div>
+                            {completedTasks.map((task: any, i: number) => {
+                                const isEditing = editingTaskId === task.id;
+                                const canEdit = isAdmin || task.assignedTo === "all" || task.assignedTo === currentUserId;
 
-                                {/* Actions */}
-                                <div className="flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-all shrink-0">
-                                    {canEdit && (
-                                        <>
-                                            <Tooltip content="Edit objective">
-                                                <button
-                                                    onClick={() => startEditing(task)}
-                                                    className="p-1 text-zinc-500 hover:text-white hover:bg-white/5 rounded-lg transition-all cursor-pointer"
-                                                >
-                                                    <Edit2 className="w-3.5 h-3.5" />
-                                                </button>
-                                            </Tooltip>
-                                            {isAdmin && (
-                                                <>
-                                                    <Tooltip content="Move Up">
-                                                        <button
-                                                            disabled={i === 0}
-                                                            onClick={() => handleMoveCompleted(task, 'up')}
-                                                            className="p-1 text-zinc-500 hover:text-white hover:bg-white/5 disabled:opacity-20 disabled:hover:bg-transparent rounded-lg transition-all cursor-pointer"
-                                                        >
-                                                            <ChevronUp className="w-3.5 h-3.5" />
-                                                        </button>
-                                                    </Tooltip>
-                                                    <Tooltip content="Move Down">
-                                                        <button
-                                                            disabled={i === completedTasks.length - 1}
-                                                            onClick={() => handleMoveCompleted(task, 'down')}
-                                                            className="p-1 text-zinc-500 hover:text-white hover:bg-white/5 disabled:opacity-20 disabled:hover:bg-transparent rounded-lg transition-all cursor-pointer"
-                                                        >
-                                                            <ChevronDown className="w-3.5 h-3.5" />
-                                                        </button>
-                                                    </Tooltip>
-                                                </>
-                                            )}
-                                            <Tooltip content="Delete objective">
-                                                <button
-                                                    onClick={() => onDelete(task.id)}
-                                                    className="p-1 text-zinc-700 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
-                                                >
-                                                    <X className="w-3.5 h-3.5" />
-                                                </button>
-                                            </Tooltip>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Description if present */}
-                            {task.description && (
-                                <p className="text-[11px] text-zinc-500 leading-relaxed -mt-1.5">
-                                    {task.description}
-                                </p>
-                            )}
-
-                            {renderSubtasksProgressAndList(task, canEdit)}
-
-                            {/* Middle row: Stages bar */}
-                            <div className="flex items-center gap-1 my-1 select-none flex-wrap">
-                                {STATUS_CYCLE.map((statusId, idx) => {
-                                    const currentIdx = STATUS_CYCLE.indexOf(task.status as any);
-                                    const isCompleted = idx < currentIdx;
-                                    const isActive = idx === currentIdx;
-
-                                    let dotColor = "";
-                                    if (isCompleted) {
-                                        dotColor = "bg-emerald-500";
-                                    } else if (isActive) {
-                                        dotColor = statusId === "todo" ? "bg-emerald-500" :
-                                                   statusId === "in-progress" ? "bg-emerald-500" :
-                                                   statusId === "in-review" ? "bg-indigo-500" :
-                                                   "bg-emerald-500";
-                                    } else {
-                                        dotColor = "bg-zinc-950 border border-zinc-800";
-                                    }
-
-                                    const label = TASK_STATUS_CONFIG[statusId]?.label.toUpperCase();
-
+                                if (isEditing) {
                                     return (
-                                        <div key={statusId} className="flex items-center">
-                                            {idx > 0 && (
-                                                <div className={cn(
-                                                    "w-6 h-[1px] mx-1.5",
-                                                    idx <= currentIdx ? "bg-zinc-700" : "bg-zinc-800/60"
-                                                )} />
-                                            )}
-                                            <button
-                                                disabled={!canEdit}
-                                                onClick={() => canEdit && onUpdate(task.id, {
-                                                    status: statusId,
-                                                    ...(statusId === "done" ? { completedAt: new Date().toISOString() } : {})
-                                                })}
-                                                className={cn(
-                                                    "flex items-center gap-1.5 text-[9px] font-black tracking-widest transition-all",
-                                                    isActive ? "text-zinc-200" : "text-zinc-600 hover:text-zinc-400"
-                                                )}
-                                            >
-                                                <div className={cn("w-2.5 h-2.5 rounded-full transition-all shrink-0", dotColor)} />
-                                                <span>{label}</span>
-                                            </button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            {/* Bottom row: assignees & priority */}
-                            <div className="flex items-center justify-between pt-3.5 border-t border-white/[0.04] mt-1">
-                                {task.assignedTo === "all" ? (
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex -space-x-1.5">
-                                            {(groupMembers || []).slice(0, 4).map((m: any) => (
-                                                <Tooltip key={m.uid} content={m.displayName || "Member"}>
-                                                    <Avatar className="w-5 h-5 rounded-full ring-1 ring-zinc-950">
-                                                        <AvatarImage src={m.photoURL} className="rounded-full" />
-                                                        <AvatarFallback className="bg-zinc-800 text-[8px] font-bold text-zinc-400 rounded-full">
-                                                            {(m.displayName || "?")[0].toUpperCase()}
-                                                        </AvatarFallback>
-                                                    </Avatar>
-                                                </Tooltip>
-                                            ))}
-                                            {(groupMembers || []).length > 4 && (
-                                                <div className="w-5 h-5 rounded-full bg-zinc-800 ring-1 ring-zinc-950 flex items-center justify-center text-[8px] font-bold text-zinc-400">
-                                                    +{(groupMembers || []).length - 4}
+                                        <motion.div 
+                                            key={task.id}
+                                            initial={{ opacity: 0, scale: 0.98 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            className="p-5 bg-zinc-900 border border-[white]/30 rounded-2xl space-y-4 shadow-2xl z-10"
+                                        >
+                                            <input autoFocus value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="w-full bg-zinc-950 border border-white/5 rounded-xl px-4 py-2 text-white text-sm outline-none focus:border-[white]/40" />
+                                            <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={2} className="w-full bg-zinc-950 border border-white/5 rounded-xl px-4 py-2 text-white text-xs outline-none focus:border-[white]/40 resize-none" />
+                                            
+                                            <div className="flex flex-wrap gap-4">
+                                                <div className="flex-1 min-w-[120px]">
+                                                    <p className="text-[9px] font-black text-zinc-600 uppercase mb-1.5">Priority</p>
+                                                    <div className="flex gap-1.5">
+                                                        {["low", "medium", "high"].map(p => (
+                                                            <button key={p} onClick={() => setEditPrio(p)} className={cn(
+                                                                "flex-1 py-2 rounded-[10px] border text-[10px] font-black uppercase transition-all relative overflow-hidden cursor-pointer",
+                                                                editPrio === p 
+                                                                    ? "bg-white/10 text-white border-white/20" 
+                                                                    : "text-zinc-600 border-white/5 hover:text-zinc-400"
+                                                            )}>
+                                                                {editPrio === p && (
+                                                                    <>
+                                                                        <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none z-10" />
+                                                                        <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
+                                                                        <div className="absolute top-0 inset-x-0 h-[4px] bg-gradient-to-b from-white/5 to-transparent z-10" />
+                                                                    </>
+                                                                )}
+                                                                <span className="relative z-10">{p}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
                                                 </div>
-                                            )}
-                                        </div>
-                                        <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-wider">Entire Unit</span>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center gap-2">
-                                        <Avatar className="w-5 h-5 rounded-full">
-                                            <AvatarImage src={assignee?.photoURL} className="rounded-full" />
-                                            <AvatarFallback className="bg-zinc-800 text-[8px] font-bold text-zinc-400 rounded-full">
-                                                {assignee?.displayName?.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() || "?"}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                        <span className="text-[9px] font-bold text-zinc-500">
-                                            {assignee?.displayName || assigneeNameById[task.assignedTo] || "Member"}
-                                        </span>
-                                    </div>
-                                )}
+                                                <div className="flex-1 min-w-[120px]">
+                                                    <p className="text-[9px] font-black text-zinc-600 uppercase mb-1.5">Assignment</p>
+                                                    <select value={editAssign} onChange={(e) => setEditAssign(e.target.value)} className="w-full bg-zinc-950 border border-white/5 rounded-md px-2 py-1 text-[10px] text-zinc-400 outline-none">
+                                                        <option value="all">Entire Unit</option>
+                                                        {groupMembers?.map((m: any) => <option key={m.uid} value={m.uid}>{m.displayName}</option>)}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            {renderSubtasksEditor(true)}
+                                            <div className="flex gap-3 pt-1">
+                                                <button onClick={handleSaveEdit} className="flex-1 py-3 bg-white text-black font-black rounded-[10px] text-xs relative overflow-hidden hover:bg-zinc-100 transition-all cursor-pointer">
+                                                    {/* Curved Light Effect for solid button */}
+                                                    <div className="absolute inset-x-0 top-0 h-[1px] bg-white/60 z-10" />
+                                                    <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/40 pointer-events-none z-10" />
+                                                    <div className="absolute inset-x-0 bottom-0 h-[2.5px] bg-black/[0.04] z-10" />
+                                                    <span className="relative z-10 flex items-center justify-center gap-2"><Save className="w-3 h-3" /> Save Changes</span>
+                                                </button>
+                                                <button onClick={() => setEditingTaskId(null)} className="px-8 py-3 bg-white/5 text-zinc-400 font-black rounded-[10px] text-xs relative overflow-hidden hover:bg-white/10 hover:text-white transition-all cursor-pointer">
+                                                    {/* Curved Glass Edge Lights */}
+                                                    <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none z-10" />
+                                                    <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
+                                                    <div className="absolute top-0 inset-x-0 h-[4px] bg-gradient-to-b from-white/5 to-transparent z-10" />
+                                                    <span className="relative z-10">Cancel</span>
+                                                </button>
+                                            </div>
+                                        </motion.div>
+                                    );
+                                }
 
-                                {/* Priority badge */}
-                                <span className={cn(
-                                    "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border",
-                                    prioCfg.color
-                                )}>
-                                    {task.priority === "high" && <span className="w-1 h-1 rounded-full bg-red-400" />}
-                                    {task.priority}
-                                </span>
-                            </div>
-                        </TaskWrapper>
-                        );
-                    }
-                })}
-            </TasksListWrapper>
-                {tasks.length > 0 && visibleTasks.length === 0 && (
-                    <div className="py-12 flex flex-col items-center justify-center border border-white/5 rounded-2xl bg-zinc-900/20 space-y-3">
-                        <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-500">
-                            <Search className="w-5 h-5" />
-                        </div>
-                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.16em]">No objectives match your filters</p>
-                        <button 
-                            onClick={clearFilters}
-                            className="text-[10px] font-black text-white bg-white/5 hover:bg-white/10 px-4 py-2 rounded-xl transition-all"
-                        >
-                            Reset Filters
-                        </button>
-                    </div>
+                                return (
+                                    <TaskCard
+                                        key={task.id}
+                                        task={task}
+                                        i={i}
+                                        sectionLength={completedTasks.length}
+                                        isAdmin={isAdmin}
+                                        canEdit={canEdit}
+                                        currentUserId={currentUserId}
+                                        groupMembers={groupMembers}
+                                        assigneeNameById={assigneeNameById}
+                                        isExpanded={!!expandedTasks[task.id]}
+                                        onToggleExpand={() => toggleTaskExpanded(task.id)}
+                                        onStartEditing={() => startEditing(task)}
+                                        onUpdate={onUpdate}
+                                        onDelete={onDelete}
+                                        onMoveUp={() => handleMoveCompleted(task, 'up')}
+                                        onMoveDown={() => handleMoveCompleted(task, 'down')}
+                                        renderSubtasksProgressAndList={renderSubtasksProgressAndList}
+                                    />
+                                );
+                            })}
+                        </TasksListWrapper>
+                    </motion.div>
                 )}
+            </AnimatePresence>
+
+            {tasks.length > 0 && visibleTasks.length === 0 && (
+                <div className="py-12 flex flex-col items-center justify-center border border-white/5 rounded-2xl bg-zinc-900/20 space-y-3 text-center">
+                    <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-500 mx-auto">
+                        <Search className="w-5 h-5" />
+                    </div>
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.16em]">No objectives match your filters</p>
+                    <button 
+                        onClick={clearFilters}
+                        className="text-[10px] font-black text-white bg-white/5 hover:bg-white/10 px-4 py-2 rounded-xl transition-all"
+                    >
+                        Reset Filters
+                    </button>
+                </div>
+            )}
         </div>
     );
 });

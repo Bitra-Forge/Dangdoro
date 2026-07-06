@@ -58,6 +58,8 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const [group, setGroup] = useState<FocusGroup | null>(null);
     const [liveSessions, setLiveSessions] = useState<any[]>([]);
     const [tasks, setTasks] = useState<SharedTask[]>([]);
+    const reorderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const latestOrderedTasksRef = useRef<SharedTask[] | null>(null);
     const [hydratedProfiles, setHydratedProfiles] = useState<Record<string, any>>({});
     const [loading, setLoading] = useState(true);
     
@@ -109,6 +111,15 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         router.push("/groups");
     }, [router]);
 
+    // Cleanup reorder timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (reorderTimeoutRef.current) {
+                clearTimeout(reorderTimeoutRef.current);
+            }
+        };
+    }, []);
+
     // 1. Subscribe to group data
     useEffect(() => {
         if (!groupId || !user || user.isAnonymous) return;
@@ -154,6 +165,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         const unsub = onSnapshot(
             q,
             (snap) => {
+                if (reorderTimeoutRef.current !== null) return;
                 setTasks(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as SharedTask)));
             },
             (error) => {
@@ -417,7 +429,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
             nextUpdates.progress = derivation.progress;
             nextUpdates.status = derivation.status;
         } else if (updates.status === "done" && task && task.subtasks && task.subtasks.length > 0) {
-            const completedSubtasks = task.subtasks.map((s: any) => ({ ...s, completed: true }));
+            const completedSubtasks = task.subtasks.map((s: any) => ({ ...s, completed: true, status: "done" }));
             const derivation = deriveTaskProgressAndStatus(completedSubtasks, "done");
 
             nextUpdates.subtasks = derivation.subtasks;
@@ -430,7 +442,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         await updateDoc(doc(db, `focusGroups/${groupId}/tasks`, taskId), { ...nextUpdates, updatedAt: serverTimestamp() });
     };
 
-    const handleReorderTasks = async (newOrderedTasks: SharedTask[]) => {
+    const handleReorderTasks = (newOrderedTasks: SharedTask[]) => {
         if (!isAdmin) return;
 
         // Optimistically update local tasks state immediately for instant feedback
@@ -440,20 +452,35 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         });
         setTasks(prev => prev.map(t => updatedTasksMap.get(t.id) || t));
 
-        const batch = writeBatch(db);
-        newOrderedTasks.forEach((task, idx) => {
-            const newPos = (idx + 1) * 1000;
-            if (task.position !== newPos) {
-                const taskRef = doc(db, `focusGroups/${groupId}/tasks`, task.id);
-                batch.update(taskRef, { position: newPos, updatedAt: serverTimestamp() });
-            }
-        });
-        try {
-            await batch.commit();
-        } catch (error) {
-            console.error("Failed to commit reorder batch:", error);
-            toast.error("Failed to save new order.");
+        latestOrderedTasksRef.current = newOrderedTasks;
+
+        if (reorderTimeoutRef.current) {
+            clearTimeout(reorderTimeoutRef.current);
         }
+
+        reorderTimeoutRef.current = setTimeout(async () => {
+            const tasksToWrite = latestOrderedTasksRef.current;
+            if (!tasksToWrite) return;
+
+            const batch = writeBatch(db);
+            tasksToWrite.forEach((task, idx) => {
+                const newPos = (idx + 1) * 1000;
+                if (task.position !== newPos) {
+                    const taskRef = doc(db, `focusGroups/${groupId}/tasks`, task.id);
+                    batch.update(taskRef, { position: newPos, updatedAt: serverTimestamp() });
+                }
+            });
+
+            try {
+                await batch.commit();
+            } catch (error) {
+                console.error("Failed to commit reorder batch:", error);
+                toast.error("Failed to save new order.");
+            } finally {
+                reorderTimeoutRef.current = null;
+                latestOrderedTasksRef.current = null;
+            }
+        }, 1000);
     };
 
     const handleDeleteTask = async (taskId: string) => {

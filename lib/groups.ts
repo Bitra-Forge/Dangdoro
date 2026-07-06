@@ -29,6 +29,8 @@ export interface SharedSubtask {
     title: string;
     completed: boolean;
     position?: number;
+    status?: "todo" | "in-progress" | "done";
+    completedBy?: string; // uid of who marked it done
 }
 
 export interface SharedTask {
