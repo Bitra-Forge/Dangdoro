@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, createContext, useContext } from "react";
+import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pan-pinch";
 import { useRouter } from "next/navigation";
 import {
     ClipboardList, Plus, Trash2, CheckCircle2, Circle,
@@ -103,7 +104,67 @@ function TaskRow({ task, onDragStart }: { task: any; onDragStart: (e: React.Poin
     const [editTitle, setEditTitle] = useState(task.title);
     const [editDur, setEditDur] = useState(task.durationMinutes?.toString() ?? "");
     const [editNotes, setEditNotes] = useState(task.notes ?? "");
+    const [isLongPressing, setIsLongPressing] = useState(false);
     const p = getPriority(task.priority ?? "natural");
+    const { onTouchDragStart, onTouchDragMove, onTouchDragEnd } = useContext(TouchDragContext);
+    const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+    const dragStartPos = useRef<{ x: number; y: number } | null>(null);
+    const isLongPressDragging = useRef(false);
+    const LONG_PRESS_DURATION = 500;
+    const LONG_PRESS_MOVE_THRESHOLD = 10;
+
+    const clearLongPress = () => {
+        if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current);
+            longPressTimer.current = null;
+        }
+    };
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        if (task.completed || isEditing) return;
+        // Don't stop propagation for multi-touch (pinch-to-zoom must reach canvas handlers)
+        if (e.touches.length >= 2) return;
+        e.stopPropagation();
+        dragStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        isLongPressDragging.current = false;
+        longPressTimer.current = setTimeout(() => {
+            isLongPressDragging.current = true;
+            setIsLongPressing(true);
+            onTouchDragStart?.(task, e.touches[0].clientX, e.touches[0].clientY);
+        }, LONG_PRESS_DURATION);
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        // Don't interfere with pinch-to-zoom
+        if (e.touches.length >= 2) return;
+        if (!dragStartPos.current) return;
+        e.stopPropagation();
+        const dx = e.touches[0].clientX - dragStartPos.current.x;
+        const dy = e.touches[0].clientY - dragStartPos.current.y;
+        if (!isLongPressDragging.current) {
+            if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_THRESHOLD) {
+                clearLongPress();
+                dragStartPos.current = null;
+            }
+        } else {
+            e.preventDefault();
+            onTouchDragMove?.(e.touches[0].clientX, e.touches[0].clientY);
+        }
+    };
+
+    const handleTouchEnd = (e: React.TouchEvent) => {
+        // Don't interfere with pinch-to-zoom release
+        if (e.touches.length >= 2) return;
+        e.stopPropagation();
+        clearLongPress();
+        if (isLongPressDragging.current) {
+            e.preventDefault();
+            onTouchDragEnd?.();
+        }
+        isLongPressDragging.current = false;
+        setIsLongPressing(false);
+        dragStartPos.current = null;
+    };
 
     const handleStart = () => {
         const duration = task.durationMinutes ? task.durationMinutes * 60 : 25 * 60;
@@ -154,11 +215,15 @@ function TaskRow({ task, onDragStart }: { task: any; onDragStart: (e: React.Poin
     return (
         <div
             onDoubleClick={() => !task.completed && setIsEditing(true)}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
             className={cn(
                 "group/row flex flex-col gap-0.5 rounded-r-xl px-2 py-2 transition-all duration-200 select-none border-l-2",
                 p.border,
                 "hover:bg-white/[0.03]",
-                !task.completed && "cursor-pointer"
+                !task.completed && "cursor-pointer",
+                isLongPressing && "scale-[1.05] opacity-90"
             )}
         >
             <div className="flex items-center gap-2">
@@ -383,15 +448,15 @@ function GroupCard({
 
     // Draggable header logic
     const onHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (isMobileMode) return;
         if ((e.target as HTMLElement).closest("button, input")) return;
+        e.stopPropagation(); // Stop propagation to prevent TransformWrapper panning
         e.currentTarget.setPointerCapture(e.pointerId);
         startPointer.current = { x: e.clientX, y: e.clientY };
         startPos.current = { x: posRef.current.x, y: posRef.current.y };
         setIsDraggingCard(true);
     };
     const onHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (isMobileMode || !isDraggingCard) return;
+        if (!isDraggingCard) return;
         const deltaX = (e.clientX - startPointer.current.x) / zoomRef.current;
         const deltaY = (e.clientY - startPointer.current.y) / zoomRef.current;
         const x = startPos.current.x + deltaX;
@@ -400,7 +465,7 @@ function GroupCard({
         if (cardEl.current) { cardEl.current.style.left = `${x}px`; cardEl.current.style.top = `${y}px`; }
     };
     const onHeaderPointerUp = () => {
-        if (isMobileMode || !isDraggingCard) return;
+        if (!isDraggingCard) return;
         setIsDraggingCard(false);
         if (saveTimer.current) clearTimeout(saveTimer.current);
         saveTimer.current = setTimeout(() => {
@@ -500,10 +565,8 @@ function GroupCard({
                 onPointerDown={onHeaderPointerDown}
                 onPointerMove={onHeaderPointerMove}
                 onPointerUp={onHeaderPointerUp}
-                className={cn(
-                    "flex items-center gap-2 px-3 py-2.5 border-b border-white/5 select-none flex-shrink-0",
-                    isMobileMode ? "" : "cursor-grab active:cursor-grabbing"
-                )}
+                style={{ touchAction: "none" }}
+                className="flex items-center gap-2 px-3 py-2.5 border-b border-white/5 select-none flex-shrink-0 cursor-grab active:cursor-grabbing"
             >
                 <button onClick={() => setCollapsed(v => !v)} className="text-zinc-600 hover:text-white transition-colors">
                     {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -649,7 +712,7 @@ function GroupCard({
 
             {/* Scrollable Body */}
             {!collapsed && (
-                <div data-scroll-container className="flex-1 min-h-0 overflow-y-auto p-2.5" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                <div data-scroll-container className="flex-1 min-h-0 overflow-y-auto p-2.5 data-scroll-container" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                     <form onSubmit={handleAddTask} className="flex flex-col gap-2 mb-4 bg-white/5 p-2 rounded-xl border border-white/5">
                         <div className="flex items-center gap-1.5">
                             <input value={newTask} onChange={e => setNewTask(e.target.value)} placeholder="Task title…"
@@ -924,15 +987,15 @@ function AssignedTasksCard({
     };
 
     const onHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (isMobileMode) return;
         if ((e.target as HTMLElement).closest("button")) return;
+        e.stopPropagation(); // Stop propagation to prevent TransformWrapper panning
         e.currentTarget.setPointerCapture(e.pointerId);
         startPointer.current = { x: e.clientX, y: e.clientY };
         startPos.current = { x: posRef.current.x, y: posRef.current.y };
         setIsDraggingCard(true);
     };
     const onHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (isMobileMode || !isDraggingCard) return;
+        if (!isDraggingCard) return;
         const deltaX = (e.clientX - startPointer.current.x) / zoom;
         const deltaY = (e.clientY - startPointer.current.y) / zoom;
         const x = startPos.current.x + deltaX;
@@ -941,7 +1004,7 @@ function AssignedTasksCard({
         if (cardEl.current) { cardEl.current.style.left = `${x}px`; cardEl.current.style.top = `${y}px`; }
     };
     const onHeaderPointerUp = () => {
-        if (isMobileMode || !isDraggingCard) return;
+        if (!isDraggingCard) return;
         setIsDraggingCard(false);
         savePosition();
     };
@@ -1001,10 +1064,8 @@ function AssignedTasksCard({
                 onPointerDown={onHeaderPointerDown}
                 onPointerMove={onHeaderPointerMove}
                 onPointerUp={onHeaderPointerUp}
-                className={cn(
-                    "flex items-center gap-2 px-3 py-2.5 border-b border-white/5 select-none flex-shrink-0",
-                    isMobileMode ? "" : "cursor-grab active:cursor-grabbing"
-                )}
+                style={{ touchAction: "none" }}
+                className="flex items-center gap-2 px-3 py-2.5 border-b border-white/5 select-none flex-shrink-0 cursor-grab active:cursor-grabbing"
             >
                 <button onClick={() => setCollapsed(v => !v)} className="text-zinc-600 hover:text-white transition-colors">
                     {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -1120,7 +1181,7 @@ function AssignedTasksCard({
 
             {/* Scrollable Body */}
             {!collapsed && (
-                <div data-scroll-container className="flex-1 min-h-0 overflow-y-auto p-2.5 rounded-b-2xl" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                <div data-scroll-container className="flex-1 min-h-0 overflow-y-auto p-2.5 rounded-b-2xl data-scroll-container" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                     <div className="space-y-0.5">
                         {tasks.length === 0 ? (
                             <p className="text-[10px] text-zinc-700 uppercase tracking-widest font-bold text-center py-8">No assigned tasks</p>
@@ -1292,6 +1353,91 @@ function AssignedTaskRow({
     );
 }
 
+
+// ─── Touch Drag Context (for mobile long-press drag) ─────────────────────
+type TouchDragContextType = {
+    onTouchDragStart?: (task: any, clientX: number, clientY: number) => void;
+    onTouchDragMove?: (clientX: number, clientY: number) => void;
+    onTouchDragEnd?: () => void;
+};
+const TouchDragContext = createContext<TouchDragContextType>({});
+
+// ─── CanvasControls ────────────────────────────────────────────────────────────
+// Must be a child of TransformWrapper so it can call useControls()
+function CanvasControls({
+    isMobileMode,
+    toolMode,
+    setToolMode,
+    zoom,
+}: {
+    isMobileMode: boolean;
+    toolMode: "default" | "hand";
+    setToolMode: (m: "default" | "hand" | ((prev: "default" | "hand") => "default" | "hand")) => void;
+    zoom: number;
+}) {
+    const { zoomIn, zoomOut, resetTransform } = useControls();
+
+    return (
+        <>
+            {/* Desktop toolbar: top-right vertical stack */}
+            {!isMobileMode && (
+                <div id="canvas-controls" className="fixed z-50 flex flex-col items-center gap-2 top-24 right-4 sm:right-8">
+                    <div className="flex items-center gap-1">
+                        <Tooltip content="Select tool" side="left">
+                            <button onClick={() => setToolMode("default")}
+                                className={cn("p-1.5 rounded-lg transition-colors", toolMode === "default" ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>
+                                <MousePointer className="w-4 h-4" />
+                            </button>
+                        </Tooltip>
+                        <Tooltip content="Hand tool (H or hold Space)" side="left">
+                            <button onClick={() => setToolMode(t => t === "hand" ? "default" : "hand")}
+                                className={cn("p-1.5 rounded-lg transition-colors", toolMode === "hand" ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>
+                                <Hand className="w-4 h-4" />
+                            </button>
+                        </Tooltip>
+                    </div>
+                    <button onClick={() => zoomOut(0.1)} className="text-zinc-400 hover:text-white transition-colors p-1">
+                        <ZoomOut className="w-5 h-5" />
+                    </button>
+                    <Tooltip content="Reset zoom (Ctrl+0)" side="left">
+                        <span onClick={() => resetTransform()}
+                            className="text-xs font-black text-zinc-400 min-w-[3.5rem] text-center select-none cursor-pointer hover:text-white transition-colors">
+                            {Math.round(zoom * 100)}%
+                        </span>
+                    </Tooltip>
+                    <button onClick={() => zoomIn(0.1)} className="text-zinc-400 hover:text-white transition-colors p-1">
+                        <ZoomIn className="w-5 h-5" />
+                    </button>
+                </div>
+            )}
+
+            {/* Mobile zoom controls: top-left pill (notification dock is at top-right) */}
+            {isMobileMode && (
+                <div id="canvas-controls" className="fixed z-50 top-4 left-4 flex items-center gap-1 bg-zinc-900/80 backdrop-blur-md border border-white/10 rounded-2xl px-2 py-1.5 shadow-xl">
+                    <Tooltip content="Zoom out" side="bottom">
+                        <button onClick={() => zoomOut(0.1)}
+                            className="p-1.5 text-zinc-400 hover:text-white transition-colors rounded-xl hover:bg-white/10 active:scale-90">
+                            <ZoomOut className="w-4 h-4" />
+                        </button>
+                    </Tooltip>
+                    <Tooltip content="Reset zoom" side="bottom">
+                        <span onClick={() => resetTransform()}
+                            className="text-[11px] font-black text-zinc-400 min-w-[2.75rem] text-center select-none cursor-pointer hover:text-white transition-colors">
+                            {Math.round(zoom * 100)}%
+                        </span>
+                    </Tooltip>
+                    <Tooltip content="Zoom in" side="bottom">
+                        <button onClick={() => zoomIn(0.1)}
+                            className="p-1.5 text-zinc-400 hover:text-white transition-colors rounded-xl hover:bg-white/10 active:scale-90">
+                            <ZoomIn className="w-4 h-4" />
+                        </button>
+                    </Tooltip>
+                </div>
+            )}
+        </>
+    );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function TasksPage() {
     const tourSteps: TourStep[] = [
@@ -1358,86 +1504,40 @@ export default function TasksPage() {
         return () => window.removeEventListener("resize", checkMobile);
     }, []);
 
-    const [zoom, setZoom] = useState(() => {
-        try { return +(localStorage.getItem("tasks-zoom") ?? "1"); } catch { return 1; }
-    });
-    const viewportRef = useRef<HTMLDivElement>(null);
-    const canvasRef = useRef<HTMLDivElement>(null);
-    const [viewportSize, setViewportSize] = useState({ w: 1200, h: 800 });
-    const [pan, setPan] = useState(() => {
-        try {
-            const saved = localStorage.getItem("tasks-pan");
-            return saved ? JSON.parse(saved) : { x: 0, y: 0 };
-        } catch { return { x: 0, y: 0 }; }
-    });
+    // ─── react-zoom-pan-pinch state ───────────────────────────────────────────
+    // Persisted zoom/pan used as initialState for TransformWrapper
+    const savedZoom = (() => {
+        try { const s = localStorage.getItem("tasks-zoom"); if (s) return +s; } catch {}
+        return typeof window !== 'undefined' && window.innerWidth < 768 ? 0.5 : 1;
+    })();
+    const savedPan = (() => {
+        try { const s = localStorage.getItem("tasks-pan"); if (s) return JSON.parse(s); } catch {}
+        return typeof window !== 'undefined' && window.innerWidth < 768
+            ? { x: 16, y: 80 } : { x: 0, y: 0 };
+    })();
+
+    // Current zoom mirrored from library state (used for GroupCard drag math)
+    const [zoom, setZoom] = useState(savedZoom);
+
     type ToolMode = "default" | "hand"
     const [toolMode, setToolMode] = useState<ToolMode>("default")
-    const [isPanning, setIsPanning] = useState(false)
-    const panStartRef = useRef<{ x: number, y: number } | null>(null)
-    const panOriginRef = useRef<{ x: number, y: number }>({ x: 0, y: 0 })
 
-    useEffect(() => {
-        const el = viewportRef.current;
-        if (!el || isMobileMode) return;
-        const observer = new ResizeObserver(entries => {
-            const { width, height } = entries[0].contentRect;
-            setViewportSize({ w: width || 1200, h: height || 800 });
-        });
-        observer.observe(el);
-        return () => observer.disconnect();
-    }, [isMobileMode]);
+    // Simple ref to capture the library's resetTransform method (set via onInit)
+    const resetTransformRef = useRef<(() => void) | null>(null);
 
-    const handleWheel = (e: WheelEvent) => {
-        const target = e.target as HTMLElement | null
-        if (target?.closest('[data-scroll-container]')) return
-
-        e.preventDefault()
-
-        if (!viewportRef.current) return
-        const rect = viewportRef.current.getBoundingClientRect()
-
-        const cursorX = e.clientX - rect.left
-        const cursorY = e.clientY - rect.top
-
-        const canvasX = (cursorX - pan.x) / zoom
-        const canvasY = (cursorY - pan.y) / zoom
-
-        const delta = e.deltaY < 0 ? 1.1 : 0.909
-        const newZoom = Math.min(Math.max(zoom * delta, 0.1), 5)
-
-        const newPanX = cursorX - canvasX * newZoom
-        const newPanY = cursorY - canvasY * newZoom
-
-        setPan({ x: newPanX, y: newPanY })
-        setZoom(newZoom)
-    }
-
-    useEffect(() => {
-        window.addEventListener("wheel", handleWheel, { passive: false })
-        return () => window.removeEventListener("wheel", handleWheel)
-    }, [zoom, pan])
-
-    useEffect(() => {
-        localStorage.setItem("tasks-zoom", String(zoom))
-    }, [zoom])
-
-    useEffect(() => {
-        localStorage.setItem("tasks-pan", JSON.stringify(pan))
-    }, [pan])
-
+    // Keyboard: Space/H for tool mode, Ctrl+0 to reset via transformRef
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
-            if (e.code === "Space" && e.target instanceof HTMLElement) {
-                if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable) return
+            if (e.target instanceof HTMLElement && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) return
+            if (e.code === "Space") { e.preventDefault(); setToolMode("hand") }
+            if (e.code === "KeyH") setToolMode(t => t === "hand" ? "default" : "hand")
+            if (e.code === "Digit0" && e.ctrlKey) {
                 e.preventDefault()
-                setToolMode("hand")
+                resetTransformRef.current?.()
             }
         }
         const onKeyUp = (e: KeyboardEvent) => {
-            if (e.code === "Space") {
-                setToolMode("default")
-                setIsPanning(false)
-            }
+            if (e.code === "Space") setToolMode("default")
         }
         window.addEventListener("keydown", onKeyDown)
         window.addEventListener("keyup", onKeyUp)
@@ -1445,23 +1545,6 @@ export default function TasksPage() {
             window.removeEventListener("keydown", onKeyDown)
             window.removeEventListener("keyup", onKeyUp)
         }
-    }, [])
-
-    useEffect(() => {
-        const onKeyDown = (e: KeyboardEvent) => {
-            if (e.target instanceof HTMLElement && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) return
-
-            if (e.code === "KeyH") {
-                setToolMode(t => t === "hand" ? "default" : "hand")
-            }
-            if (e.code === "Digit0" && e.ctrlKey) {
-                e.preventDefault()
-                setPan({ x: 0, y: 0 })
-                setZoom(1)
-            }
-        }
-        window.addEventListener("keydown", onKeyDown)
-        return () => window.removeEventListener("keydown", onKeyDown)
     }, [])
 
     // Use the custom hook for background theme
@@ -1517,30 +1600,7 @@ export default function TasksPage() {
         };
     }, [user, authLoading]);
 
-    const handleViewportMouseDown = useCallback((e: React.MouseEvent) => {
-        if (toolMode !== "hand") return
-        setIsPanning(true)
-        panStartRef.current = { x: e.clientX, y: e.clientY }
-        panOriginRef.current = { x: pan.x, y: pan.y }
-        e.preventDefault()
-    }, [toolMode, pan])
-
-    const handleViewportMouseMove = useCallback((e: React.MouseEvent) => {
-        if (!isPanning || !panStartRef.current) return
-        const dx = e.clientX - panStartRef.current.x
-        const dy = e.clientY - panStartRef.current.y
-        setPan({ x: panOriginRef.current.x + dx, y: panOriginRef.current.y + dy })
-    }, [isPanning])
-
-    const handleViewportMouseUp = useCallback(() => {
-        setIsPanning(false)
-        panStartRef.current = null
-    }, [])
-
-    const handleViewportMouseLeave = useCallback(() => {
-        setIsPanning(false)
-        panStartRef.current = null
-    }, [])
+    // mouse pan is now handled by TransformWrapper (panning.disabled based on toolMode)
 
     // Helper to get task's group color
     const getTaskGroupColor = useCallback((task: any) => {
@@ -1554,6 +1614,39 @@ export default function TasksPage() {
         setDragTaskColor(getTaskGroupColor(task));
         setClonePos({ x: e.clientX, y: e.clientY });
     }, [getTaskGroupColor]);
+
+    const handleTouchDragStart = useCallback((task: any, clientX: number, clientY: number) => {
+        setDraggingTask(task);
+        setDragTaskColor(getTaskGroupColor(task));
+        setClonePos({ x: clientX, y: clientY });
+    }, [getTaskGroupColor]);
+
+    const handleTouchDragMove = useCallback((clientX: number, clientY: number) => {
+        if (!draggingTask) return;
+        setClonePos({ x: clientX, y: clientY });
+        const el = document.elementFromPoint(clientX, clientY);
+        const groupCardEl = el?.closest("[data-group-id]");
+        const foundGroupId = groupCardEl?.getAttribute("data-group-id") || null;
+        setOverGroupId(foundGroupId);
+        const taskRowEl = el?.closest("[data-task-id]");
+        const foundTaskId = taskRowEl?.getAttribute("data-task-id") || null;
+        setOverTaskId(foundTaskId);
+        if (taskRowEl && foundTaskId) {
+            const rect = taskRowEl.getBoundingClientRect();
+            const relativeY = clientY - rect.top;
+            setOverTaskPosition(relativeY < rect.height / 2 ? "before" : "after");
+        } else {
+            setOverTaskPosition(null);
+        }
+        const isOverEmpty = !foundGroupId;
+        setOverTrash(isOverEmpty);
+        if (isOverEmpty && !deleteTimerRef.current) {
+            deleteTimerRef.current = setTimeout(() => { setDeleteReady(true); }, 600);
+        } else if (!isOverEmpty) {
+            if (deleteTimerRef.current) { clearTimeout(deleteTimerRef.current); deleteTimerRef.current = null; }
+            setDeleteReady(false);
+        }
+    }, [draggingTask]);
 
     const onCanvasPointerMove = useCallback((e: React.PointerEvent) => {
         if (!draggingTask) return;
@@ -1754,7 +1847,6 @@ export default function TasksPage() {
                     onTaskDragStart={onTaskDragStart} cardRef={el => { groupRefs.current[g.id] = el; }}
                     overTaskId={overTaskId}
                     overTaskPosition={overTaskPosition}
-                    isMobileMode={isMobileMode}
                     zoom={zoom}
                 />
             ))}
@@ -1766,7 +1858,6 @@ export default function TasksPage() {
                     userId={user.uid}
                     isDragOver={false}
                     onTaskDragStart={onTaskDragStart}
-                    isMobileMode={isMobileMode}
                     zoom={zoom}
                 />
             )}
@@ -1775,68 +1866,72 @@ export default function TasksPage() {
 
     return (
         <BackgroundTheme showSettings={true}>
-            {/* Canvas area */}
-            {isMobileMode ? (
-                // MOBILE — simple scrollable layout, no canvas
-                <div className="flex flex-col gap-4 p-4 pt-24 pb-32 overflow-y-auto min-h-screen w-full">
-                    {groups.map(g => (
-                        <GroupCard
-                            key={g.id}
-                            group={g}
-                            tasks={tasksByGroup(g.id)}
-                            userId={user.uid}
-                            isDragOver={false}
-                            onTaskDragStart={() => { }}
-                            cardRef={el => { groupRefs.current[g.id] = el }}
-                            overTaskId={null}
-                            overTaskPosition={null}
-                            isMobileMode={true}
-                            zoom={1}
-                        />
-                    ))}
-                    {assignedTasks.length > 0 && (
-                        <AssignedTasksCard
-                            tasks={assignedTasks}
-                            userId={user.uid}
-                            isDragOver={false}
-                            onTaskDragStart={() => { }}
-                            isMobileMode={true}
-                            zoom={1}
-                        />
-                    )}
-                </div>
-            ) : (
-                // DESKTOP — infinite canvas with pan/zoom
-                <div
-                    ref={viewportRef}
-                    className={cn(
-                        "min-h-screen w-full overflow-hidden select-none",
-                        toolMode === "hand"
-                            ? isPanning ? "cursor-grabbing" : "cursor-grab"
-                            : "cursor-default"
-                    )}
-                    style={{ height: '100dvh', touchAction: 'none', position: 'relative' }}
-                    onMouseDown={handleViewportMouseDown}
-                    onMouseMove={handleViewportMouseMove}
-                    onMouseUp={handleViewportMouseUp}
-                    onMouseLeave={handleViewportMouseLeave}
+            {/* Canvas area – pan/pinch/zoom managed by react-zoom-pan-pinch */}
+            <TouchDragContext.Provider value={{
+                onTouchDragStart: handleTouchDragStart,
+                onTouchDragMove: handleTouchDragMove,
+                onTouchDragEnd: onCanvasPointerUp,
+            }}>
+                <TransformWrapper
+                    initialScale={savedZoom}
+                    initialPositionX={savedPan.x}
+                    initialPositionY={savedPan.y}
+                    minScale={0.1}
+                    maxScale={5}
+                    limitToBounds={false}
+                    centerZoomedOut={false}
+                    panning={{
+                        disabled: !isMobileMode && toolMode !== "hand",
+                        velocityDisabled: true,
+                        excluded: ["data-scroll-container"]
+                    }}
+                    pinch={{ step: 5 }}
+                    wheel={{
+                        step: 0.1,
+                        excluded: ["data-scroll-container"]
+                    }}
+                    doubleClick={{ disabled: true }}
+                    onInit={(ref) => { resetTransformRef.current = () => ref.resetTransform(); }}
+                    onTransform={(ref) => {
+                        setZoom(ref.state.scale);
+                        try {
+                            localStorage.setItem("tasks-zoom", String(ref.state.scale));
+                            localStorage.setItem("tasks-pan", JSON.stringify({ x: ref.state.positionX, y: ref.state.positionY }));
+                        } catch {}
+                    }}
                 >
-                    <div
-                        ref={canvasRef}
-                        style={{
-                            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                            transformOrigin: '0 0',
+                    {/* CanvasControls gets access to useControls() for keyboard shortcuts & zoom buttons */}
+                    <CanvasControls
+                        isMobileMode={isMobileMode}
+                        toolMode={toolMode}
+                        setToolMode={setToolMode}
+                        zoom={zoom}
+                    />
+                    <TransformComponent
+                        wrapperStyle={{
+                            width: '100%',
+                            height: '100dvh',
+                            overflow: 'hidden',
+                            cursor: !isMobileMode
+                                ? toolMode === "hand" ? 'grab' : 'default'
+                                : 'default',
+                        }}
+                        contentStyle={{
                             position: 'absolute',
                             inset: 0,
-                            pointerEvents: toolMode === "hand" ? 'none' : undefined,
+                            pointerEvents: (toolMode === "hand" && !isMobileMode) ? 'none' : undefined,
                         }}
-                        onPointerMove={draggingTask ? onCanvasPointerMove : undefined}
-                        onPointerUp={draggingTask ? onCanvasPointerUp : undefined}
                     >
-                        {canvasContent}
-                    </div>
-                </div>
-            )}
+                        <div
+                            style={{ position: 'absolute', inset: 0 }}
+                            onPointerMove={draggingTask ? onCanvasPointerMove : undefined}
+                            onPointerUp={draggingTask ? onCanvasPointerUp : undefined}
+                        >
+                            {canvasContent}
+                        </div>
+                    </TransformComponent>
+                </TransformWrapper>
+            </TouchDragContext.Provider>
 
             {/* FAB */}
             <div className="fixed bottom-24 right-4 md:bottom-8 md:right-8 z-30 flex flex-col items-end gap-3">
@@ -1993,61 +2088,7 @@ export default function TasksPage() {
                 </button>
             </div>
 
-            {/* Toolbar */}
-            {!isMobileMode && (
-                <div id="canvas-controls" className="fixed top-24 right-4 sm:right-8 z-50 flex flex-col items-center gap-2">
-                    {/* Tool buttons */}
-                    <div className="flex items-center gap-1">
-                        <Tooltip content="Select tool" side="left">
-                            <button onClick={() => setToolMode("default")}
-                                className={cn("p-1.5 rounded-lg transition-colors", toolMode === "default" ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>
-                                <MousePointer className="w-4 h-4" />
-                            </button>
-                        </Tooltip>
-                        <Tooltip content="Hand tool (H or hold Space)" side="left">
-                            <button onClick={() => setToolMode(t => t === "hand" ? "default" : "hand")}
-                                className={cn("p-1.5 rounded-lg transition-colors", toolMode === "hand" ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>
-                                <Hand className="w-4 h-4" />
-                            </button>
-                        </Tooltip>
-                    </div>
-                    {/* Zoom controls */}
-                    <button
-                        onClick={() => {
-                            const newZoom = Math.max(0.25, +(zoom - 0.1).toFixed(2))
-                            const cx = viewportSize.w / 2
-                            const cy = viewportSize.h / 2
-                            const canvasX = (cx - pan.x) / zoom
-                            const canvasY = (cy - pan.y) / zoom
-                            setPan({ x: cx - canvasX * newZoom, y: cy - canvasY * newZoom })
-                            setZoom(newZoom)
-                        }}
-                        className="text-zinc-400 hover:text-white transition-colors p-1"
-                    >
-                        <ZoomOut className="w-5 h-5" />
-                    </button>
-                    <Tooltip content="Reset zoom (Ctrl+0)" side="left">
-                        <span onClick={() => { setPan({ x: 0, y: 0 }); setZoom(1) }}
-                            className="text-xs font-black text-zinc-400 min-w-[3.5rem] text-center select-none cursor-pointer hover:text-white transition-colors">
-                            {Math.round(zoom * 100)}%
-                        </span>
-                    </Tooltip>
-                    <button
-                        onClick={() => {
-                            const newZoom = Math.min(2, +(zoom + 0.1).toFixed(2))
-                            const cx = viewportSize.w / 2
-                            const cy = viewportSize.h / 2
-                            const canvasX = (cx - pan.x) / zoom
-                            const canvasY = (cy - pan.y) / zoom
-                            setPan({ x: cx - canvasX * newZoom, y: cy - canvasY * newZoom })
-                            setZoom(newZoom)
-                        }}
-                        className="text-zinc-400 hover:text-white transition-colors p-1"
-                    >
-                        <ZoomIn className="w-5 h-5" />
-                    </button>
-                </div>
-            )}
+            {/* Toolbar is now rendered inside CanvasControls (child of TransformWrapper) */}
         </BackgroundTheme>
     );
 }
