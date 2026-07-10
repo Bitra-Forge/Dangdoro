@@ -1,14 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
 import { Timer, Music, Trophy, Sparkles, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import pixelForestBg from "@/components/ui/Pixel-bg/pixel art golden forest GIF.gif";
 import owlSleepy from "@/components/ui/Pixel-bg/Idle-owl-sleepy.gif";
 import owlAware from "@/components/ui/Pixel-bg/Idle-owl-aware.gif";
 import owlQuite from "@/components/ui/Pixel-bg/Idle-owl-quite.gif";
 import { useAuth } from "@/components/AuthProvider";
+import homeScreenshot from "@/components/ui/screens/2-home.png";
+import tasksScreenshot from "@/components/ui/screens/3-tasks.png";
+import groupsScreenshot from "@/components/ui/screens/4-groups.png";
 
 function useLiveCounter(target: number, duration = 3000, start = true) {
   const [value, setValue] = useState(0);
@@ -488,6 +493,8 @@ export default function WelcomePage() {
         </div>
       </section>
 
+
+
       {/* ─── SECTION 2: CORE QUICK INFORMATION ─── */}
       <section
         ref={section2Ref}
@@ -545,7 +552,7 @@ export default function WelcomePage() {
               <div className="space-y-2 pr-4">
                 <h3 className="text-base font-bold text-[#F0EDCC] tracking-tight">Real-Time Collaborative Timer</h3>
                 <p className="text-[#F0EDCC]/60 text-xs leading-relaxed font-sans">
-                  Focus synchronously with study circles and workspaces. Experience real-time shared ticking that keeps everyone accountable.
+                  Focus together in real-time with study circles and workspaces. Experience shared ticking that keeps everyone accountable.
                 </p>
               </div>
             </div>
@@ -688,20 +695,81 @@ export default function WelcomePage() {
 
         </div>
 
+      </section>
 
-        {/* Enter Action Button */}
-        <div className="flex justify-center mt-4">
-          <Link
-            href="/"
-            onClick={handleEnterWorkspace}
-            className="group relative inline-flex items-center gap-3 px-8 py-4 bg-[#02343F] border border-[#F0EDCC]/30 hover:border-[#F0EDCC] rounded-2xl text-sm font-bold uppercase tracking-wider text-[#F0EDCC] hover:text-[#02343F] transition-all duration-500 shadow-[0_0_20px_rgba(240,237,204,0.02)] hover:shadow-[0_0_35px_rgba(240,237,204,0.2)] overflow-hidden"
-          >
-            {/* Smooth background fill color transition */}
-            <div className="absolute inset-0 bg-[#F0EDCC] opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10" />
+      {/* ─── WORKSPACE PREVIEWS ─── */}
+      <section className="relative w-full py-24 px-6 z-10">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16 max-w-xl mx-auto">
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4 text-[#F0EDCC]">
+              Workspace Previews
+            </h2>
+            <p className="text-[#F0EDCC]/60 text-sm leading-relaxed font-sans">
+              Take a look inside the interfaces built to keep you focused.
+            </p>
+          </div>
 
-            <span>Enter Focus Cockpit</span>
-            <ArrowRight className="w-4.5 h-4.5 group-hover:translate-x-1 transition-transform duration-300" />
-          </Link>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Screen 1: Timer */}
+            <motion.div
+              whileHover={{ y: -5 }}
+              className="border-4 border-[#F0EDCC]/20 bg-[#02343F]/60 backdrop-blur-sm p-4 hover:border-[#F0EDCC]/40 transition-all duration-300 shadow-[8px_8px_0_0_rgba(240,237,204,0.1)] flex flex-col h-full"
+            >
+              <div className="border-4 border-[#02343F] overflow-hidden bg-zinc-950 mb-4 aspect-[16/9] relative">
+                <Image
+                  src={homeScreenshot}
+                  alt="Timer Workspace"
+                  className="w-full h-full object-cover select-none pointer-events-none"
+                  unoptimized
+                  style={{ backfaceVisibility: "hidden", transform: "translate3d(0,0,0)" }}
+                />
+              </div>
+              <h3 className="font-pixelify text-lg font-bold text-[#F0EDCC] mb-2">Focus Timer</h3>
+              <p className="text-[#F0EDCC]/60 text-xs leading-relaxed font-sans flex-1">
+                Your central focus dashboard. Customize Pomodoro and Rest intervals, play ambient background audio, and start shared focus sessions.
+              </p>
+            </motion.div>
+
+            {/* Screen 2: Tasks */}
+            <motion.div
+              whileHover={{ y: -5 }}
+              className="border-4 border-[#F0EDCC]/20 bg-[#02343F]/60 backdrop-blur-sm p-4 hover:border-[#F0EDCC]/40 transition-all duration-300 shadow-[8px_8px_0_0_rgba(240,237,204,0.1)] flex flex-col h-full"
+            >
+              <div className="border-4 border-[#02343F] overflow-hidden bg-zinc-950 mb-4 aspect-[16/9] relative">
+                <Image
+                  src={tasksScreenshot}
+                  alt="Tasks List"
+                  className="w-full h-full object-cover select-none pointer-events-none"
+                  unoptimized
+                  style={{ backfaceVisibility: "hidden", transform: "translate3d(0,0,0)" }}
+                />
+              </div>
+              <h3 className="font-pixelify text-lg font-bold text-[#F0EDCC] mb-2">Task Board</h3>
+              <p className="text-[#F0EDCC]/60 text-xs leading-relaxed font-sans flex-1">
+                Manage your daily productivity. Break down massive goals into nested sub-tasks, prioritize checklist items, toggle progress states, and utilize AI planning to manage your work.
+              </p>
+            </motion.div>
+
+            {/* Screen 3: Groups */}
+            <motion.div
+              whileHover={{ y: -5 }}
+              className="border-4 border-[#F0EDCC]/20 bg-[#02343F]/60 backdrop-blur-sm p-4 hover:border-[#F0EDCC]/40 transition-all duration-300 shadow-[8px_8px_0_0_rgba(240,237,204,0.1)] flex flex-col h-full"
+            >
+              <div className="border-4 border-[#02343F] overflow-hidden bg-zinc-950 mb-4 aspect-[16/9] relative">
+                <Image
+                  src={groupsScreenshot}
+                  alt="Groups Directory"
+                  className="w-full h-full object-cover select-none pointer-events-none"
+                  unoptimized
+                  style={{ backfaceVisibility: "hidden", transform: "translate3d(0,0,0)" }}
+                />
+              </div>
+              <h3 className="font-pixelify text-lg font-bold text-[#F0EDCC] mb-2">Focus Groups</h3>
+              <p className="text-[#F0EDCC]/60 text-xs leading-relaxed font-sans flex-1">
+                Focus side-by-side with others. Create public or private focus rooms, invite friends, check online status, track group goal hours, share materials, and chat in real-time.
+              </p>
+            </motion.div>
+          </div>
         </div>
       </section>
     </div>
