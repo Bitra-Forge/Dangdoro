@@ -4,7 +4,7 @@ import {
 import { db } from "@/lib/firebase";
 import { Material } from "@/lib/groups";
 
-export const MAX_MATERIALS = 20;
+export const MAX_MATERIALS = 10;
 
 export async function addMaterial(
     groupId: string,
