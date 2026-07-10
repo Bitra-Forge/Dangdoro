@@ -21,7 +21,38 @@ export function NavigationHub() {
   const isFocusMode = useTimerStore((state) => state.isNavFocusMode);
   const setIsNavFocusMode = useTimerStore((state) => state.setIsNavFocusMode);
   const [isNavVisible, setIsNavVisible] = useState(true);
+  const [isInputFocused, setIsInputFocused] = useState(false);
   const hideNavTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const handleFocusIn = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
+        setIsInputFocused(true);
+        document.body.classList.add("input-focused");
+      }
+    };
+    const handleFocusOut = () => {
+      setTimeout(() => {
+        const active = document.activeElement;
+        if (!active || (active.tagName !== "INPUT" && active.tagName !== "TEXTAREA")) {
+          setIsInputFocused(false);
+          document.body.classList.remove("input-focused");
+        }
+      }, 50);
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("focusin", handleFocusIn);
+      document.addEventListener("focusout", handleFocusOut);
+    }
+    return () => {
+      if (typeof document !== "undefined") {
+        document.removeEventListener("focusin", handleFocusIn);
+        document.removeEventListener("focusout", handleFocusOut);
+        document.body.classList.remove("input-focused");
+      }
+    };
+  }, []);
 
   const clearHideNavTimeout = useCallback(() => {
     if (hideNavTimeoutRef.current) {
@@ -118,6 +149,8 @@ export function NavigationHub() {
 
   if (isAdminPage || pathname?.startsWith("/welcome")) return null;
 
+  const forceHide = isInputFocused || (typeof document !== "undefined" && document.body.classList.contains("hide-navigation-bar"));
+
   return (
     <>
       {isHomePage && (
@@ -142,7 +175,7 @@ export function NavigationHub() {
           onTouchStart={handleNavTouchStart}
           className={cn(
             "flex flex-col sm:flex-row items-center gap-2.5 sm:gap-4 relative px-1 transition-all duration-500",
-            isNavVisible
+            isNavVisible && !forceHide
               ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
               : "opacity-0 translate-y-5 scale-95 pointer-events-none"
           )}

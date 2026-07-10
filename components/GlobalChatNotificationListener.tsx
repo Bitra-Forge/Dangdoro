@@ -12,12 +12,10 @@ export default function GlobalChatNotificationListener() {
     const pathname = usePathname();
     const searchParams = useSearchParams();
 
-    const {
-        notification,
-        setChatNotification,
-        clearChatNotification,
-        setGroupUnread
-    } = useChatNotificationStore();
+    const notification = useChatNotificationStore(s => s.notification);
+    const setChatNotification = useChatNotificationStore(s => s.setChatNotification);
+    const clearChatNotification = useChatNotificationStore(s => s.clearChatNotification);
+    const setGroupUnread = useChatNotificationStore(s => s.setGroupUnread);
 
     const [groupIds, setGroupIds] = useState<string[]>([]);
     const [groupNames, setGroupNames] = useState<Record<string, string>>({});

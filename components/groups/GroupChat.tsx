@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, memo, type TouchEvent, type KeyboardEvent, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { ChatMessage } from "@/lib/groups";
 import { sendMessage, subscribeToMessages, replyToMessage, editMessage, softDeleteMessage, toggleReaction, togglePin, subscribeToPinnedMessages, setTyping, clearTyping, subscribeToTypingPresence } from "@/lib/chat";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useChatNotificationStore } from "@/lib/stores/chat-notification-store";
-import { Send, Reply, PencilLine, Trash2, X, Pin, ChevronDown, ChevronUp, BookmarkPlus } from "lucide-react";
+import { Send, Reply, PencilLine, Trash2, X, Pin, ChevronDown, ChevronUp, BookmarkPlus, Copy } from "lucide-react";
 import { cn, extractFirstUrl } from "@/lib/utils";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import { addMaterial } from "@/lib/materials";
@@ -57,31 +57,73 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
     const [materialUrl, setMaterialUrl] = useState("");
     const [materialTitle, setMaterialTitle] = useState("");
     const [materialTags, setMaterialTags] = useState("");
+    const [longPressMsgId, setLongPressMsgId] = useState<string | null>(null);
+    useEffect(() => {
+        if (longPressMsgId) {
+            document.body.classList.add("hide-navigation-bar");
+        } else {
+            document.body.classList.remove("hide-navigation-bar");
+        }
+        return () => {
+            document.body.classList.remove("hide-navigation-bar");
+        };
+    }, [longPressMsgId]);
+    const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+    const longPressStartPos = useRef<{ x: number; y: number } | null>(null);
+    const longPressTargetId = useRef<string | null>(null);
+    const LONG_PRESS_DURATION = 500;
+    const LONG_PRESS_MOVE_THRESHOLD = 10;
+
+    const clearLongPress = useCallback(() => {
+        if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+        longPressStartPos.current = null;
+        longPressTargetId.current = null;
+    }, []);
+
     const [showTips, setShowTips] = useState(() => {
         if (typeof window === "undefined") return true;
         return !localStorage.getItem("dangdoro_markdown_tips_dismissed");
     });
     const bottomRef = useRef<HTMLDivElement>(null);
-    const editInputRef = useRef<HTMLInputElement>(null);
     const lastTypingRef = useRef(0);
     const silenceTimer = useRef<any>(null);
-    const { setDraft, clearDraft } = useChatNotificationStore();
+    const setDraft = useChatNotificationStore(s => s.setDraft);
+    const clearDraft = useChatNotificationStore(s => s.clearDraft);
     const containerRef = useRef<HTMLDivElement>(null);
     const isFirstLoadRef = useRef(true);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     useEffect(() => {
-        const unsub = subscribeToMessages(groupId, (newMessages) => {
+        if (!user) return;
+        const unsub = subscribeToMessages(groupId, (incoming) => {
             setMessages(prev => {
+                const hasRealId = (m: ChatMessage) => !m.id.startsWith("temp_");
                 const tempMsgs = prev.filter(m => 
                     m.id.startsWith("temp_") && 
-                    !newMessages.some(nm => nm.content === m.content && nm.senderId === m.senderId)
+                    !incoming.some(nm => nm.content === m.content && nm.senderId === m.senderId)
                 );
-                return [...tempMsgs, ...newMessages];
+                const existing = prev.filter(hasRealId);
+                const existingMap = new Map(existing.map(m => [m.id, m]));
+                const hasChanged = (a: ChatMessage, b: ChatMessage) =>
+                    a.content !== b.content || a.edited !== b.edited ||
+                    a.deletedAt !== b.deletedAt || a.pinned !== b.pinned ||
+                    JSON.stringify(a.reactions) !== JSON.stringify(b.reactions);
+
+                let changed = false;
+                const merged = incoming.map(msg => {
+                    const old = existingMap.get(msg.id);
+                    if (!old) { changed = true; return msg; }
+                    if (hasChanged(old, msg)) { changed = true; return msg; }
+                    return old;
+                });
+                if (!changed && merged.length === existing.length) {
+                    return prev;
+                }
+                return [...tempMsgs, ...merged];
             });
         });
         return unsub;
-    }, [groupId]);
+    }, [groupId, user?.uid]);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -91,7 +133,9 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
         const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
 
         if (isNearBottom || isFirstLoadRef.current) {
-            bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+            requestAnimationFrame(() => {
+                    bottomRef.current?.scrollIntoView({ behavior: "auto" });
+            });
             if (messages.length > 0) {
                 isFirstLoadRef.current = false;
             }
@@ -102,7 +146,9 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
         const textarea = textareaRef.current;
         if (textarea) {
             textarea.style.height = "auto";
-            textarea.style.height = `${textarea.scrollHeight}px`;
+            if (input) {
+                textarea.style.height = `${textarea.scrollHeight}px`;
+            }
         }
     }, [input]);
 
@@ -110,12 +156,6 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
         const currentDraft = useChatNotificationStore.getState().drafts[groupId] || "";
         setInput(currentDraft);
     }, [groupId]);
-
-    useEffect(() => {
-        if (editingId && editInputRef.current) {
-            editInputRef.current.focus();
-        }
-    }, [editingId]);
 
     useEffect(() => {
         if (!user) return;
@@ -132,12 +172,13 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
                 clearTimeout(silenceTimer.current);
             }
         };
-    }, [groupId, user]);
+    }, [groupId, user?.uid]);
 
     useEffect(() => {
+        if (!user) return;
         const unsub = subscribeToPinnedMessages(groupId, setPinnedMessages);
         return unsub;
-    }, [groupId]);
+    }, [groupId, user?.uid]);
 
     useEffect(() => {
         if (!user) return;
@@ -146,9 +187,14 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
             setTypingUsers(typers.filter(t => t.userId !== uid));
         });
         return unsub;
-    }, [groupId, user]);
+    }, [groupId, user?.uid]);
 
-    const findMessage = (messageId: string) => messages.find(m => m.id === messageId);
+    const messagesMap = useMemo(() => {
+        const map = new Map<string, ChatMessage>();
+        messages.forEach(m => map.set(m.id, m));
+        return map;
+    }, [messages]);
+    const findMessage = useCallback((messageId: string) => messagesMap.get(messageId) || null, [messagesMap]);
 
     const handleSend = async () => {
         const textToSend = input.trim();
@@ -191,12 +237,12 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
             if (replyToMsg) {
                 const original = findMessage(replyToMsg.messageId);
                 if (original && !original.deletedAt) {
-                    await replyToMessage(groupId, original, textToSend, user.uid, user.displayName || "Anonymous", user.photoURL || "");
+                    await replyToMessage(groupId, original, textToSend, user.uid, user.displayName || "Anonymous", user.photoURL || "", isHost);
                 } else {
-                    await sendMessage(groupId, user.uid, user.displayName || "Anonymous", user.photoURL || "", textToSend, replyToMsg);
+                    await sendMessage(groupId, user.uid, user.displayName || "Anonymous", user.photoURL || "", textToSend, replyToMsg, isHost);
                 }
             } else {
-                await sendMessage(groupId, user.uid, user.displayName || "Anonymous", user.photoURL || "", textToSend, null);
+                await sendMessage(groupId, user.uid, user.displayName || "Anonymous", user.photoURL || "", textToSend, null, isHost);
             }
         } catch (err) {
             console.error("Failed to send message:", err);
@@ -206,7 +252,7 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
         }
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === "Enter" && e.shiftKey) {
             return; // allow default textarea behavior (new line)
         }
@@ -216,7 +262,7 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
         }
     };
 
-    const handleEditKeyDown = (e: React.KeyboardEvent, messageId: string) => {
+    const handleEditKeyDown = (e: KeyboardEvent, messageId: string) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             saveEdit(messageId);
@@ -311,7 +357,7 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
         }
     };
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
         const val = e.target.value;
         setInput(val);
         setDraft(groupId, val);
@@ -330,11 +376,45 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
         }, 5000);
     };
 
+    const handleMsgTouchStart = useCallback((e: TouchEvent) => {
+        const msgId = (e.currentTarget as HTMLElement).getAttribute('data-msg-id');
+        if (!msgId) return;
+        longPressStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        longPressTargetId.current = msgId;
+        longPressTimer.current = setTimeout(() => {
+            setLongPressMsgId(longPressTargetId.current);
+        }, LONG_PRESS_DURATION);
+    }, []);
+
+    const handleMsgTouchMove = useCallback((e: TouchEvent) => {
+        if (!longPressStartPos.current) return;
+        const dx = e.touches[0].clientX - longPressStartPos.current.x;
+        const dy = e.touches[0].clientY - longPressStartPos.current.y;
+        if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_THRESHOLD) {
+            clearLongPress();
+        }
+    }, [clearLongPress]);
+
+    const handleMsgTouchEnd = useCallback(() => {
+        clearLongPress();
+    }, [clearLongPress]);
+
     const displayMessages = [...messages].reverse();
 
     return (
-        <div className="flex flex-col border border-border bg-card rounded-xl overflow-hidden">
-            <div ref={containerRef} className="h-[calc(100vh-460px)] min-h-[300px] overflow-y-auto space-y-3 p-4 chat-scroll">
+        <>
+        <style>{`
+            .chat-bottom-sheet {
+                animation: slideUp 0.3s ease-out;
+                will-change: transform;
+            }
+            @keyframes slideUp {
+                from { transform: translateY(100%); }
+                to { transform: translateY(0); }
+            }
+        `}</style>
+        <div className="flex-1 min-h-0 group-chat-container flex flex-col border-y border-x-0 sm:border border-border bg-card sm:rounded-xl rounded-none overflow-hidden">
+            <div ref={containerRef} className="flex-1 overflow-y-auto space-y-3 p-4 chat-scroll">
                 {pinnedMessages.length > 0 && (
                     <div className="mb-3 bg-zinc-900/60 border border-zinc-800 rounded-xl overflow-hidden">
                         <button
@@ -374,194 +454,46 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
                         <p className="text-zinc-600 text-sm font-medium">No messages yet. Start the conversation!</p>
                     </div>
                 ) : (
-                    displayMessages.map((msg) => {
-                        const isOwn = user?.uid === msg.senderId;
-                        const canDelete = isOwn || isHost;
-                        const isDeleted = !!msg.deletedAt;
-                        const originalMsg = msg.replyTo ? findMessage(msg.replyTo.messageId) : null;
-                        const originalUnavailable = msg.replyTo && (!originalMsg || !!originalMsg.deletedAt);
-
-                        return (
-                            <div key={msg.id} className="flex items-start gap-3 group relative py-1.5 px-3 -mx-3 rounded-xl hover:bg-white/[0.02] transition-colors">
-                                <Avatar
-                                    onClick={() => router.push(`/profile?user=${msg.senderId}`)}
-                                    className="w-8 h-8 rounded-full shrink-0 border border-white/10 cursor-pointer hover:opacity-80 transition-opacity"
-                                >
-                                    <AvatarImage src={memberPhotoMap[msg.senderId] || msg.senderPhoto} />
-                                    <AvatarFallback className="text-xs bg-zinc-800">{msg.senderName?.[0]}</AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                        <span
-                                            onClick={() => router.push(`/profile?user=${msg.senderId}`)}
-                                            className="text-xs font-bold text-white cursor-pointer hover:underline"
-                                        >
-                                            {msg.senderName}
-                                        </span>
-                                        <span className="text-[10px] text-zinc-600">
-                                            {msg.createdAt?.toDate?.().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                        {msg.edited && <span className="text-[10px] text-zinc-600">(edited)</span>}
-                                        {msg.pinned && <Pin className="w-3 h-3 text-zinc-500" />}
-                                    </div>
-
-                                    {msg.replyTo && (
-                                        <div className="flex items-center gap-1.5 mt-1.5 pl-2 border-l-2 border-zinc-700">
-                                            <Reply className="w-3 h-3 text-zinc-600 shrink-0" />
-                                            <div className="text-[11px] text-zinc-500 truncate">
-                                                {originalUnavailable ? (
-                                                    <span className="italic">Original message no longer available</span>
-                                                ) : (
-                                                    <>
-                                                        <span className="text-zinc-400 font-medium">{msg.replyTo.senderName}</span>: {msg.replyTo.preview}
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {isDeleted ? (
-                                        <p className="text-sm text-zinc-600 italic mt-0.5">This message was deleted</p>
-                                    ) : editingId === msg.id ? (
-                                        <div className="flex items-center gap-2 mt-1.5">
-                                            <input
-                                                ref={editInputRef}
-                                                value={editContent}
-                                                onChange={(e) => setEditContent(e.target.value)}
-                                                onKeyDown={(e) => handleEditKeyDown(e, msg.id)}
-                                                className="flex-1 bg-zinc-900 border border-white/20 rounded-lg px-3 py-1.5 text-sm text-white outline-none"
-                                            />
-                                            <button onClick={() => saveEdit(msg.id)} className="p-1.5 text-xs font-bold text-white bg-white/10 rounded-lg hover:bg-white/20 transition-colors cursor-pointer">Save</button>
-                                            <button onClick={cancelEdit} className="p-1.5 text-xs font-bold text-zinc-400 hover:text-white transition-colors cursor-pointer">
-                                                <X className="w-3.5 h-3.5" />
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <div className="mt-0.5">
-                                            <MarkdownRenderer content={msg.content} />
-                                            {/* Active reaction badges immediately below the text */}
-                                            {Object.keys(msg.reactions || {}).length > 0 && (
-                                                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                                                    {Object.entries(msg.reactions || {}).map(([emoji, userIds]) => (
-                                                        <button
-                                                            key={emoji}
-                                                            onClick={() => handleToggleReaction(msg.id, emoji)}
-                                                            className={cn(
-                                                                "group/reaction relative flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] border transition-colors cursor-pointer",
-                                                                userIds.includes(user?.uid || "")
-                                                                    ? "bg-white/10 text-white border-white/20"
-                                                                    : "bg-white/5 text-zinc-400 border-transparent hover:border-white/10"
-                                                            )}
-                                                        >
-                                                            <span>{emoji}</span>
-                                                            <span className="font-bold">{userIds.length}</span>
-
-                                                            {/* Tooltip on hover */}
-                                                            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/reaction:block bg-zinc-950/90 border border-white/15 px-2 py-1 rounded-md text-[9px] font-bold text-zinc-200 whitespace-nowrap shadow-xl z-20 backdrop-blur-md animate-in fade-in slide-in-from-bottom-1 duration-150">
-                                                                {userIds.map(uid => getUserName(uid)).join(", ")}
-                                                            </span>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {materialFormMsgId === msg.id && !isDeleted && (
-                                        <div
-                                            ref={(el) => {
-                                                if (el && !el.dataset.scrolled) {
-                                                    el.dataset.scrolled = "true";
-                                                    el.scrollIntoView({ behavior: "smooth", block: "nearest" });
-                                                    const input = el.querySelector("input[placeholder='Title *']") as HTMLInputElement;
-                                                    if (input) {
-                                                        setTimeout(() => input.focus(), 150);
-                                                    }
-                                                }
-                                            }}
-                                            className="mt-2 p-3 bg-zinc-900/80 border border-white/10 rounded-xl space-y-2"
-                                        >
-                                            <input value={materialUrl} onChange={(e) => setMaterialUrl(e.target.value)} className="w-full bg-zinc-950 border border-white/5 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-white/20" placeholder="URL *" />
-                                            <input value={materialTitle} onChange={(e) => setMaterialTitle(e.target.value)} className="w-full bg-zinc-950 border border-white/5 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-white/20" placeholder="Title *" />
-                                            <input value={materialTags} onChange={(e) => setMaterialTags(e.target.value)} className="w-full bg-zinc-950 border border-white/5 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-white/20" placeholder="Tags (comma separated, optional)" />
-                                            <div className="flex gap-2">
-                                                <button onClick={() => handleSaveMaterial(msg)} disabled={!materialTitle.trim() || materialTitle === "Loading title..." || !materialUrl.trim()} className="flex-1 py-2 bg-white text-black font-bold rounded-lg text-[10px] uppercase tracking-wider hover:bg-zinc-100 transition-colors cursor-pointer disabled:opacity-50">Save</button>
-                                                <button onClick={() => setMaterialFormMsgId(null)} className="px-4 py-2 bg-white/5 text-zinc-400 font-bold rounded-lg text-[10px] uppercase tracking-wider hover:text-white transition-colors cursor-pointer">Cancel</button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Combined Hover Toolbar (Actions + Emoji Reactions) */}
-                                {!isDeleted && editingId !== msg.id && (
-                                    <div className="absolute right-3 -top-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 bg-zinc-900 border border-white/10 rounded-lg p-0.5 shadow-lg z-10">
-                                        {/* Quick Reactions */}
-                                        <div className="flex items-center gap-0.5 pr-1.5 mr-1.5 border-r border-white/10">
-                                            {["👍", "❤️", "😂", "🎯", "🔥"].map(emoji => (
-                                                <button
-                                                    key={emoji}
-                                                    onClick={() => handleToggleReaction(msg.id, emoji)}
-                                                    className="p-1 hover:bg-white/10 rounded text-sm leading-none transition-colors cursor-pointer"
-                                                    title={emoji}
-                                                >
-                                                    {emoji}
-                                                </button>
-                                            ))}
-                                        </div>
-                                        {/* Actions */}
-                                        <button onClick={() => startReply(msg)} className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer" title="Reply">
-                                            <Reply className="w-3.5 h-3.5" />
-                                        </button>
-                                        {isOwn && (
-                                            <button onClick={() => startEdit(msg)} className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer" title="Edit">
-                                                <PencilLine className="w-3.5 h-3.5" />
-                                            </button>
-                                        )}
-                                        {canDelete && (
-                                            <button onClick={() => handleDelete(msg.id)} className="p-1 text-zinc-400 hover:text-red-400 transition-colors cursor-pointer" title="Delete">
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
-                                        )}
-                                        <button onClick={() => handleTogglePin(msg)} className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer" title={msg.pinned ? "Unpin" : "Pin"}>
-                                            <Pin className={cn("w-3.5 h-3.5", msg.pinned && "fill-white")} />
-                                        </button>
-                                        {extractFirstUrl(msg.content) && (
-                                            <button onClick={async () => {
-                                                const url = extractFirstUrl(msg.content) || "";
-                                                const alreadyOpen = materialFormMsgId === msg.id;
-                                                setMaterialFormMsgId(alreadyOpen ? null : msg.id);
-                                                setMaterialUrl(url);
-                                                setMaterialTags("");
-                                                if (!alreadyOpen) {
-                                                    setMaterialTitle("Loading title...");
-                                                    try {
-                                                        const res = await fetch(`/api/og-preview?url=${encodeURIComponent(url)}`);
-                                                        const data = await res.json();
-                                                        if (data.title) {
-                                                            setMaterialTitle(data.title);
-                                                        } else {
-                                                            setMaterialTitle("");
-                                                        }
-                                                    } catch (err) {
-                                                        setMaterialTitle("");
-                                                    }
-                                                } else {
-                                                    setMaterialTitle("");
-                                                }
-                                            }} className="p-1 text-zinc-400 hover:text-cyan-400 transition-colors cursor-pointer" title="Save to Materials">
-                                                <BookmarkPlus className="w-3.5 h-3.5" />
-                                            </button>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })
+                    displayMessages.map((msg) => (
+                        <MessageItem
+                            key={msg.id}
+                            msg={msg}
+                            user={user}
+                            isHost={isHost}
+                            memberPhotoMap={memberPhotoMap}
+                            getUserName={getUserName}
+                            messagesMap={messagesMap}
+                            editingId={editingId}
+                            editContent={editContent}
+                            materialFormMsgId={materialFormMsgId}
+                            materialUrl={materialUrl}
+                            materialTitle={materialTitle}
+                            materialTags={materialTags}
+                            onTouchStart={handleMsgTouchStart}
+                            onTouchMove={handleMsgTouchMove}
+                            onTouchEnd={handleMsgTouchEnd}
+                            onToggleReaction={handleToggleReaction}
+                            onTogglePin={handleTogglePin}
+                            onReply={startReply}
+                            onDelete={handleDelete}
+                            onStartEdit={setEditingId}
+                            onSaveEdit={saveEdit}
+                            onCancelEdit={cancelEdit}
+                            onEditContentChange={setEditContent}
+                            onEditKeyDown={handleEditKeyDown}
+                            onSaveMaterial={handleSaveMaterial}
+                            onMaterialFormMsgIdChange={setMaterialFormMsgId}
+                            onMaterialUrlChange={setMaterialUrl}
+                            onMaterialTitleChange={setMaterialTitle}
+                            onMaterialTagsChange={setMaterialTags}
+                            router={router}
+                        />
+                    ))
                 )}
                 <div ref={bottomRef} />
             </div>
 
-            <div className="p-4 border-t border-white/5 space-y-2">
+            <div className="flex-shrink-0 p-4 border-t border-white/5 space-y-2">
                 {showTips && (
                     <div className="px-3 py-2 bg-zinc-900/80 rounded-xl border border-white/10 text-[11px] text-zinc-500">
                         <div className="flex items-center justify-between mb-1">
@@ -629,7 +561,7 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
                             }
                         }}
                         placeholder="Type a message..."
-                        className="flex-1 bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-white/20 transition-all resize-none max-h-32 overflow-y-auto chat-scroll"
+                        className="flex-1 bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-white/20 transition-all resize-none max-h-32 overflow-y-auto chat-scroll"
                     />
                     <button
                         onClick={handleSend}
@@ -646,5 +578,360 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
                 </div>
             </div>
         </div>
+
+            {/* Mobile Action Sheet — long press */}
+            {longPressMsgId && (() => {
+                const msg = messagesMap.get(longPressMsgId) || null;
+                if (!msg || msg.deletedAt) return null;
+                const isOwn = user?.uid === msg.senderId;
+                const canDelete = isOwn || isHost;
+                const msgHasUrl = extractFirstUrl(msg.content);
+                return (
+                    <>
+                        {/* Backdrop */}
+                        <div
+                            className="fixed inset-0 z-50 bg-black/60"
+                            onClick={() => setLongPressMsgId(null)}
+                            onTouchEnd={(e) => { e.preventDefault(); setLongPressMsgId(null); }}
+                        />
+                        {/* Sheet */}
+                        <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 border-t border-white/10 rounded-t-2xl shadow-2xl chat-bottom-sheet" style={{ touchAction: "manipulation" }}>
+                            {/* Message preview */}
+                            <div className="flex items-start gap-3 p-4 border-b border-white/10">
+                                <Avatar className="w-8 h-8 rounded-full shrink-0 border border-white/10">
+                                    <AvatarImage src={memberPhotoMap[msg.senderId] || msg.senderPhoto} />
+                                    <AvatarFallback className="text-xs bg-zinc-800">{msg.senderName?.[0]}</AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold text-white">{msg.senderName}</p>
+                                    <p className="text-xs text-zinc-400 truncate">{msg.content}</p>
+                                </div>
+                            </div>
+                            {/* Quick reactions */}
+                            <div className="flex items-center justify-center gap-4 py-4 border-b border-white/10">
+                                {["👍", "❤️", "😂", "🎯", "🔥"].map(emoji => (
+                                    <button
+                                        key={emoji}
+                                        onClick={() => { handleToggleReaction(msg.id, emoji); setLongPressMsgId(null); }}
+                                        className="text-2xl hover:scale-125 transition-transform active:scale-90"
+                                    >
+                                        {emoji}
+                                    </button>
+                                ))}
+                            </div>
+                            {/* Action buttons */}
+                            <div className="grid grid-cols-4 gap-2 p-4">
+                                <button
+                                    onClick={() => { startReply(msg); setLongPressMsgId(null); }}
+                                    className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors active:scale-95"
+                                >
+                                    <Reply className="w-5 h-5 text-zinc-300" />
+                                    <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Reply</span>
+                                </button>
+                                <button
+                                    onClick={() => { setLongPressMsgId(null); navigator.clipboard.writeText(msg.content); toast.success("Copied!"); }}
+                                    className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors active:scale-95"
+                                >
+                                    <Copy className="w-5 h-5 text-zinc-300" />
+                                    <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Copy</span>
+                                </button>
+                                <button
+                                    onClick={() => { handleTogglePin(msg); setLongPressMsgId(null); }}
+                                    className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors active:scale-95"
+                                >
+                                    <Pin className={cn("w-5 h-5", msg.pinned ? "fill-white text-white" : "text-zinc-300")} />
+                                    <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">{msg.pinned ? "Unpin" : "Pin"}</span>
+                                </button>
+                                {isOwn && (
+                                    <button
+                                        onClick={() => { startEdit(msg); setLongPressMsgId(null); }}
+                                        className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors active:scale-95"
+                                    >
+                                        <PencilLine className="w-5 h-5 text-zinc-300" />
+                                        <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Edit</span>
+                                    </button>
+                                )}
+                                {canDelete && (
+                                    <button
+                                        onClick={() => { handleDelete(msg.id); setLongPressMsgId(null); }}
+                                        className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/5 hover:bg-red-500/10 transition-colors active:scale-95"
+                                    >
+                                        <Trash2 className="w-5 h-5 text-red-400" />
+                                        <span className="text-[9px] font-bold text-red-400 uppercase tracking-wider">Delete</span>
+                                    </button>
+                                )}
+                                {msgHasUrl && (
+                                    <button
+                                        onClick={async () => {
+                                            const url = extractFirstUrl(msg.content) || "";
+                                            setMaterialFormMsgId(msg.id);
+                                            setMaterialUrl(url);
+                                            setMaterialTags("");
+                                            setMaterialTitle("Loading title...");
+                                            try {
+                                                const res = await fetch(`/api/og-preview?url=${encodeURIComponent(url)}`);
+                                                const data = await res.json();
+                                                setMaterialTitle(data.title || "");
+                                            } catch { setMaterialTitle(""); }
+                                            setLongPressMsgId(null);
+                                        }}
+                                        className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors active:scale-95"
+                                    >
+                                        <BookmarkPlus className="w-5 h-5 text-cyan-400" />
+                                        <span className="text-[9px] font-bold text-cyan-400 uppercase tracking-wider">Save</span>
+                                    </button>
+                                )}
+                            </div>
+                            {/* Swipe down hint */}
+                            <div className="flex justify-center pb-4">
+                                <div className="w-10 h-1 rounded-full bg-zinc-700" />
+                            </div>
+                        </div>
+                    </>
+                );
+            })()}
+        </>
     );
 }
+
+interface MessageItemProps {
+    msg: ChatMessage;
+    user: { uid: string } | null;
+    isHost?: boolean;
+    memberPhotoMap: Record<string, string>;
+    getUserName: (uid: string) => string;
+    messagesMap: Map<string, ChatMessage>;
+    editingId: string | null;
+    editContent: string;
+    materialFormMsgId: string | null;
+    materialUrl: string;
+    materialTitle: string;
+    materialTags: string;
+    onTouchStart: (e: TouchEvent) => void;
+    onTouchMove: (e: TouchEvent) => void;
+    onTouchEnd: () => void;
+    onToggleReaction: (messageId: string, emoji: string) => void;
+    onTogglePin: (msg: ChatMessage) => void;
+    onReply: (msg: ChatMessage) => void;
+    onDelete: (messageId: string) => void;
+    onStartEdit: (messageId: string) => void;
+    onSaveEdit: (messageId: string) => void;
+    onCancelEdit: () => void;
+    onEditContentChange: (content: string) => void;
+    onEditKeyDown: (e: KeyboardEvent, messageId: string) => void;
+    onSaveMaterial: (msg: ChatMessage) => void;
+    onMaterialFormMsgIdChange: (id: string | null) => void;
+    onMaterialUrlChange: (url: string) => void;
+    onMaterialTitleChange: (title: string) => void;
+    onMaterialTagsChange: (tags: string) => void;
+    router: ReturnType<typeof import("next/navigation").useRouter>;
+}
+
+const MessageItem = memo(function MessageItem({
+    msg, user, isHost, memberPhotoMap, getUserName, messagesMap,
+    editingId, editContent, materialFormMsgId, materialUrl, materialTitle, materialTags,
+    onTouchStart, onTouchMove, onTouchEnd,
+    onToggleReaction, onTogglePin, onReply, onDelete,
+    onStartEdit, onSaveEdit, onCancelEdit, onEditContentChange, onEditKeyDown,
+    onSaveMaterial, onMaterialFormMsgIdChange, onMaterialUrlChange, onMaterialTitleChange, onMaterialTagsChange,
+    router
+}: MessageItemProps) {
+    const isOwn = user?.uid === msg.senderId;
+    const canDelete = isOwn || isHost;
+    const isDeleted = !!msg.deletedAt;
+    const originalMsg = msg.replyTo ? messagesMap.get(msg.replyTo.messageId) || null : null;
+    const originalUnavailable = msg.replyTo && (!originalMsg || !!originalMsg.deletedAt);
+    const editInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (editingId === msg.id && editInputRef.current) {
+            editInputRef.current.focus();
+        }
+    }, [editingId, msg.id]);
+
+    return (
+        <div data-msg-id={msg.id}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            className="flex items-start gap-3 group relative py-1.5 px-3 -mx-3 rounded-xl hover:bg-white/[0.02] transition-colors">
+            <Avatar
+                onClick={() => router.push(`/profile?user=${msg.senderId}`)}
+                className="w-8 h-8 rounded-full shrink-0 border border-white/10 cursor-pointer hover:opacity-80 transition-opacity"
+            >
+                <AvatarImage src={memberPhotoMap[msg.senderId] || msg.senderPhoto} />
+                <AvatarFallback className="text-xs bg-zinc-800">{msg.senderName?.[0]}</AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                    <span
+                        onClick={() => router.push(`/profile?user=${msg.senderId}`)}
+                        className="text-xs font-bold text-white cursor-pointer hover:underline"
+                    >
+                        {msg.senderName}
+                    </span>
+                    <span className="text-[10px] text-zinc-600">
+                        {msg.createdAt?.toDate?.().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    {msg.edited && <span className="text-[10px] text-zinc-600">(edited)</span>}
+                    {msg.pinned && <Pin className="w-3 h-3 text-zinc-500" />}
+                </div>
+
+                {msg.replyTo && (
+                    <div className="flex items-center gap-1.5 mt-1.5 pl-2 border-l-2 border-zinc-700">
+                        <Reply className="w-3 h-3 text-zinc-600 shrink-0" />
+                        <div className="text-[11px] text-zinc-500 truncate">
+                            {originalUnavailable ? (
+                                <span className="italic">Original message no longer available</span>
+                            ) : (
+                                <>
+                                    <span className="text-zinc-400 font-medium">{msg.replyTo.senderName}</span>: {msg.replyTo.preview}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {isDeleted ? (
+                    <p className="text-sm text-zinc-600 italic mt-0.5">This message was deleted</p>
+                ) : editingId === msg.id ? (
+                    <div className="flex items-center gap-2 mt-1.5">
+                        <input
+                            ref={editInputRef}
+                            value={editContent}
+                            onChange={(e) => onEditContentChange(e.target.value)}
+                            onKeyDown={(e) => onEditKeyDown(e, msg.id)}
+                            className="flex-1 bg-zinc-900 border border-white/20 rounded-lg px-3 py-1.5 text-sm text-white outline-none"
+                        />
+                        <button onClick={() => onSaveEdit(msg.id)} className="p-1.5 text-xs font-bold text-white bg-white/10 rounded-lg hover:bg-white/20 transition-colors cursor-pointer">Save</button>
+                        <button onClick={onCancelEdit} className="p-1.5 text-xs font-bold text-zinc-400 hover:text-white transition-colors cursor-pointer">
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                ) : (
+                    <div className="mt-0.5">
+                        <MarkdownRenderer content={msg.content} />
+                        {Object.keys(msg.reactions || {}).length > 0 && (
+                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                {Object.entries(msg.reactions || {}).map(([emoji, userIds]) => (
+                                    <button
+                                        key={emoji}
+                                        onClick={() => onToggleReaction(msg.id, emoji)}
+                                        className={cn(
+                                            "group/reaction relative flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] border transition-colors cursor-pointer",
+                                            userIds.includes(user?.uid || "")
+                                                ? "bg-white/10 text-white border-white/20"
+                                                : "bg-white/5 text-zinc-400 border-transparent hover:border-white/10"
+                                        )}
+                                    >
+                                        <span>{emoji}</span>
+                                        <span className="font-bold">{userIds.length}</span>
+                                        <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/reaction:block bg-zinc-950/90 border border-white/15 px-2 py-1 rounded-md text-[9px] font-bold text-zinc-200 whitespace-nowrap shadow-xl z-20 backdrop-blur-md animate-in fade-in slide-in-from-bottom-1 duration-150">
+                                            {userIds.map(uid => getUserName(uid)).join(", ")}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {materialFormMsgId === msg.id && !isDeleted && (
+                    <div
+                        ref={(el) => {
+                            if (el && !el.dataset.scrolled) {
+                                el.dataset.scrolled = "true";
+                                el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                                const input = el.querySelector("input[placeholder='Title *']") as HTMLInputElement;
+                                if (input) {
+                                    setTimeout(() => input.focus(), 150);
+                                }
+                            }
+                        }}
+                        className="mt-2 p-3 bg-zinc-900/80 border border-white/10 rounded-xl space-y-2"
+                    >
+                        <input value={materialUrl} onChange={(e) => onMaterialUrlChange(e.target.value)} className="w-full bg-zinc-950 border border-white/5 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-white/20" placeholder="URL *" />
+                        <input value={materialTitle} onChange={(e) => onMaterialTitleChange(e.target.value)} className="w-full bg-zinc-950 border border-white/5 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-white/20" placeholder="Title *" />
+                        <input value={materialTags} onChange={(e) => onMaterialTagsChange(e.target.value)} className="w-full bg-zinc-950 border border-white/5 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-white/20" placeholder="Tags (comma separated, optional)" />
+                        <div className="flex gap-2">
+                            <button onClick={() => onSaveMaterial(msg)} disabled={!materialTitle.trim() || materialTitle === "Loading title..." || !materialUrl.trim()} className="flex-1 py-2 bg-white text-black font-bold rounded-lg text-[10px] uppercase tracking-wider hover:bg-zinc-100 transition-colors cursor-pointer disabled:opacity-50">Save</button>
+                            <button onClick={() => onMaterialFormMsgIdChange(null)} className="px-4 py-2 bg-white/5 text-zinc-400 font-bold rounded-lg text-[10px] uppercase tracking-wider hover:text-white transition-colors cursor-pointer">Cancel</button>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {!isDeleted && editingId !== msg.id && (
+                <div className="absolute right-3 -top-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 bg-zinc-900 border border-white/10 rounded-lg p-0.5 shadow-lg z-10">
+                    <div className="flex items-center gap-0.5 pr-1.5 mr-1.5 border-r border-white/10">
+                        {["👍", "❤️", "😂", "🎯", "🔥"].map(emoji => (
+                            <button
+                                key={emoji}
+                                onClick={() => onToggleReaction(msg.id, emoji)}
+                                className="p-1 hover:bg-white/10 rounded text-sm leading-none transition-colors cursor-pointer"
+                                title={emoji}
+                            >
+                                {emoji}
+                            </button>
+                        ))}
+                    </div>
+                    <button onClick={() => onReply(msg)} className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer" title="Reply">
+                        <Reply className="w-3.5 h-3.5" />
+                    </button>
+                    {isOwn && (
+                        <button onClick={() => { onStartEdit(msg.id); onEditContentChange(msg.content); }} className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer" title="Edit">
+                            <PencilLine className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                    {canDelete && (
+                        <button onClick={() => onDelete(msg.id)} className="p-1 text-zinc-400 hover:text-red-400 transition-colors cursor-pointer" title="Delete">
+                            <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                    <button onClick={() => onTogglePin(msg)} className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer" title={msg.pinned ? "Unpin" : "Pin"}>
+                        <Pin className={cn("w-3.5 h-3.5", msg.pinned && "fill-white")} />
+                    </button>
+                    {extractFirstUrl(msg.content) && (
+                        <button onClick={async () => {
+                            const url = extractFirstUrl(msg.content) || "";
+                            const alreadyOpen = materialFormMsgId === msg.id;
+                            onMaterialFormMsgIdChange(alreadyOpen ? null : msg.id);
+                            onMaterialUrlChange(url);
+                            onMaterialTagsChange("");
+                            if (!alreadyOpen) {
+                                onMaterialTitleChange("Loading title...");
+                                try {
+                                    const res = await fetch(`/api/og-preview?url=${encodeURIComponent(url)}`);
+                                    const data = await res.json();
+                                    if (data.title) {
+                                        onMaterialTitleChange(data.title);
+                                    } else {
+                                        onMaterialTitleChange("");
+                                    }
+                                } catch (err) {
+                                    onMaterialTitleChange("");
+                                }
+                            } else {
+                                onMaterialTitleChange("");
+                            }
+                        }} className="p-1 text-zinc-400 hover:text-cyan-400 transition-colors cursor-pointer" title="Save to Materials">
+                            <BookmarkPlus className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}, (prev, next) => {
+    return prev.msg.id === next.msg.id
+        && prev.msg.content === next.msg.content
+        && prev.msg.edited === next.msg.edited
+        && prev.msg.deletedAt === next.msg.deletedAt
+        && prev.msg.pinned === next.msg.pinned
+        && JSON.stringify(prev.msg.reactions) === JSON.stringify(next.msg.reactions)
+        && prev.editingId === next.editingId
+        && prev.materialFormMsgId === next.materialFormMsgId
+        && prev.editContent === next.editContent
+        && prev.isHost === next.isHost
+        && prev.user?.uid === next.user?.uid;
+});

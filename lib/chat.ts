@@ -12,7 +12,8 @@ export async function sendMessage(
     senderName: string,
     senderPhoto: string,
     content: string,
-    replyTo: { messageId: string; senderName: string; preview: string } | null = null
+    replyTo: { messageId: string; senderName: string; preview: string } | null = null,
+    isHost: boolean = false
 ) {
     const messagesRef = collection(db, `focusGroups/${groupId}/messages`);
 
@@ -32,16 +33,24 @@ export async function sendMessage(
         createdAt: serverTimestamp(),
     });
 
-    const countSnap = await getDocs(messagesRef);
-    if (countSnap.size > 30) {
-        const oldestQuery = query(
-            messagesRef,
-            where("pinned", "==", false),
-            orderBy("createdAt", "asc"),
-            limit(1)
-        );
-        const oldestSnap = await getDocs(oldestQuery);
-        oldestSnap.forEach(doc => deleteDoc(doc.ref));
+    if (isHost) {
+        try {
+            const countSnap = await getDocs(query(messagesRef, limit(31)));
+            if (countSnap.size > 30) {
+                const oldestQuery = query(
+                    messagesRef,
+                    where("pinned", "==", false),
+                    orderBy("createdAt", "asc"),
+                    limit(1)
+                );
+                const oldestSnap = await getDocs(oldestQuery);
+                for (const doc of oldestSnap.docs) {
+                    await deleteDoc(doc.ref);
+                }
+            }
+        } catch (err) {
+            console.warn("Failed to prune old messages:", err);
+        }
     }
 }
 
@@ -52,12 +61,32 @@ export function subscribeToMessages(
     const messagesRef = collection(db, `focusGroups/${groupId}/messages`);
     const q = query(messagesRef, orderBy("createdAt", "desc"), limit(30));
 
+    let isFirstSnapshot = true;
+
     const unsub = onSnapshot(q, (snapshot) => {
-        const messages = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-        } as ChatMessage));
-        callback(messages);
+        const changes = snapshot.docChanges();
+
+        if (isFirstSnapshot) {
+            isFirstSnapshot = false;
+            const messages = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data({ serverTimestamps: "estimate" }),
+            } as ChatMessage));
+            callback(messages);
+            return;
+        }
+
+        const hasAdditions = changes.some(c => c.type === "added");
+        const hasModifications = changes.some(c => c.type === "modified");
+        const hasRemovals = changes.some(c => c.type === "removed");
+
+        if (hasAdditions || hasModifications || hasRemovals) {
+            const messages = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data({ serverTimestamps: "estimate" }),
+            } as ChatMessage));
+            callback(messages);
+        }
     });
 
     return unsub;
@@ -69,7 +98,8 @@ export async function replyToMessage(
     content: string,
     senderId: string,
     senderName: string,
-    senderPhoto: string
+    senderPhoto: string,
+    isHost: boolean = false
 ) {
     const messagesRef = collection(db, `focusGroups/${groupId}/messages`);
 
@@ -93,16 +123,24 @@ export async function replyToMessage(
         createdAt: serverTimestamp(),
     });
 
-    const countSnap = await getDocs(messagesRef);
-    if (countSnap.size > 30) {
-        const oldestQuery = query(
-            messagesRef,
-            where("pinned", "==", false),
-            orderBy("createdAt", "asc"),
-            limit(1)
-        );
-        const oldestSnap = await getDocs(oldestQuery);
-        oldestSnap.forEach(doc => deleteDoc(doc.ref));
+    if (isHost) {
+        try {
+            const countSnap = await getDocs(query(messagesRef, limit(31)));
+            if (countSnap.size > 30) {
+                const oldestQuery = query(
+                    messagesRef,
+                    where("pinned", "==", false),
+                    orderBy("createdAt", "asc"),
+                    limit(1)
+                );
+                const oldestSnap = await getDocs(oldestQuery);
+                for (const doc of oldestSnap.docs) {
+                    await deleteDoc(doc.ref);
+                }
+            }
+        } catch (err) {
+            console.warn("Failed to prune old messages:", err);
+        }
     }
 }
 

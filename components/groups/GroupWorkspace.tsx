@@ -745,7 +745,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const adminCount = sortedMembers.filter((m: any) => m.role === "host" || m.role === "admin").length;
 
     return (
-        <div className="flex flex-col min-h-screen overflow-hidden">
+        <div className="flex flex-col h-[100dvh] overflow-hidden">
             {/* Top accent bar */}
             {!isManagingRoles && (
                 <div className={cn(
@@ -929,11 +929,11 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                     </div>
 
                     {!isManagingRoles && isMember && (
-                        <div className="mt-8 flex items-center justify-between">
-                            <div id="group-tabs" className="flex gap-1 p-1 bg-zinc-950/40 rounded-xl w-fit border border-white/5 relative">
+                        <div className="mt-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div id="group-tabs" className="w-full md:w-auto flex gap-1 p-1 bg-zinc-950/40 rounded-xl border border-white/5 relative sticky top-0 z-10">
                                 {[
                                     { id: "workspace", icon: LayoutGrid, label: "Overview" },
-                                    { id: "members", icon: Users, label: "Participants" },
+                                    { id: "members", icon: Users, label: "Members" },
                                     { id: "chat", icon: MessageCircle, label: "Chat" },
                                     { id: "materials", icon: LinkIcon, label: "Materials" }
                                 ].map(t => (
@@ -941,7 +941,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                         key={t.id}
                                         onClick={() => setActiveTab(t.id as any)}
                                         className={cn(
-                                            "relative px-6 py-2 rounded-lg text-xs font-black transition-colors duration-200",
+                                            "relative flex-1 md:flex-none px-2 sm:px-6 py-2 rounded-lg text-[10px] sm:text-xs font-black transition-colors duration-200 text-center flex items-center justify-center gap-1.5",
                                             activeTab === t.id ? "text-white" : "text-zinc-500 hover:text-zinc-300"
                                         )}
                                     >
@@ -952,9 +952,9 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                                 transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.8 }}
                                             />
                                         )}
-                                        <span className="relative z-10 flex items-center gap-2">
+                                        <span className="relative z-10 flex items-center justify-center gap-1.5 sm:gap-2">
                                             <span className="relative inline-flex">
-                                                <t.icon className="w-4 h-4" />
+                                                <t.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                                 {t.id === "chat" && isGroupUnread && activeTab !== "chat" && (
                                                     <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500 ring-1 ring-zinc-950 animate-pulse" />
                                                 )}
@@ -1002,7 +1002,12 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
             )}
 
             {/* Body */}
-            <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
+            <div className={cn(
+                "flex-1 min-h-0",
+                activeTab === "chat"
+                    ? "flex flex-col overflow-hidden p-0 sm:p-4 md:p-6"
+                    : "overflow-y-auto p-4 sm:p-10 custom-scrollbar"
+            )}>
                 {isManagingRoles ? (
                     <div className="max-w-5xl mx-auto">
                         <GroupManagementView
@@ -1014,7 +1019,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                         />
                     </div>
                 ) : (
-                    <div className="max-w-7xl mx-auto">
+                    <div className={cn("max-w-7xl mx-auto w-full", activeTab === "chat" ? "h-full flex flex-col" : "")}>
                         {activeTab === "workspace" ? (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                                 <div className="lg:col-span-2 space-y-8">

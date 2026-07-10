@@ -219,7 +219,7 @@ function TaskRow({ task, onDragStart }: { task: any; onDragStart: (e: React.Poin
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
             className={cn(
-                "group/row flex flex-col gap-0.5 rounded-r-xl px-2 py-2 transition-all duration-200 select-none border-l-2",
+                "task-row group/row flex flex-col gap-0.5 rounded-r-xl px-2 py-2 transition-all duration-200 select-none border-l-2",
                 p.border,
                 "hover:bg-white/[0.03]",
                 !task.completed && "cursor-pointer",
@@ -398,19 +398,12 @@ function GroupCard({
         posRef.current = { x: group.positionX, y: group.positionY };
         dimRef.current = { w: clampW(group.width ?? 300), h: clampH(group.height ?? 400) };
         if (cardEl.current) {
-            if (isMobileMode) {
-                cardEl.current.style.left = "";
-                cardEl.current.style.top = "";
-                cardEl.current.style.width = "";
-                cardEl.current.style.height = "";
-            } else {
-                cardEl.current.style.left = `${group.positionX}px`;
-                cardEl.current.style.top = `${group.positionY}px`;
-                cardEl.current.style.width = `${dimRef.current.w}px`;
-                cardEl.current.style.height = collapsed ? "auto" : `${dimRef.current.h}px`;
-            }
+            cardEl.current.style.left = `${group.positionX}px`;
+            cardEl.current.style.top = `${group.positionY}px`;
+            cardEl.current.style.width = `${dimRef.current.w}px`;
+            cardEl.current.style.height = collapsed ? "auto" : `${dimRef.current.h}px`;
         }
-    }, [group.positionX, group.positionY, group.width, group.height, collapsed, isMobileMode]);
+    }, [group.positionX, group.positionY, group.width, group.height, collapsed]);
 
     const sortBy = group.sortBy || "priority";
 
@@ -539,10 +532,7 @@ function GroupCard({
             data-group-card="true"
             data-group-id={group.id}
             data-group-color={group.color ?? "zinc"}
-            style={isMobileMode ? {
-                position: "relative",
-                willChange: "auto"
-            } : {
+            style={{
                 position: "absolute",
                 left: group.positionX,
                 top: group.positionY,
@@ -552,8 +542,7 @@ function GroupCard({
             }}
             className={cn(
                 "task-group-card bg-zinc-900/95 border rounded-2xl shadow-2xl transition-[box-shadow,border-color,transform] duration-200 flex flex-col",
-                isMobileMode ? "w-full md:w-[320px] md:h-[500px] flex-shrink-0" : "",
-                !isMobileMode && (isDraggingCard || isResizing)
+                (isDraggingCard || isResizing)
                     ? cn(groupColor.border, groupColor.glow, "scale-[1.01] z-50")
                     : isDragOver
                         ? cn(groupColor.border, groupColor.glow, "scale-[1.005] z-30")
@@ -566,7 +555,7 @@ function GroupCard({
                 onPointerMove={onHeaderPointerMove}
                 onPointerUp={onHeaderPointerUp}
                 style={{ touchAction: "none" }}
-                className="flex items-center gap-2 px-3 py-2.5 border-b border-white/5 select-none flex-shrink-0 cursor-grab active:cursor-grabbing"
+                className="drag-header flex items-center gap-2 px-3 py-2.5 border-b border-white/5 select-none flex-shrink-0 cursor-grab active:cursor-grabbing"
             >
                 <button onClick={() => setCollapsed(v => !v)} className="text-zinc-600 hover:text-white transition-colors">
                     {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -885,19 +874,12 @@ function AssignedTasksCard({
 
     useEffect(() => {
         if (cardEl.current) {
-            if (isMobileMode) {
-                cardEl.current.style.left = "";
-                cardEl.current.style.top = "";
-                cardEl.current.style.width = "";
-                cardEl.current.style.height = "";
-            } else {
-                cardEl.current.style.left = `${posRef.current.x}px`;
-                cardEl.current.style.top = `${posRef.current.y}px`;
-                cardEl.current.style.width = `${dimRef.current.w}px`;
-                cardEl.current.style.height = collapsed ? "auto" : `${dimRef.current.h}px`;
-            }
+            cardEl.current.style.left = `${posRef.current.x}px`;
+            cardEl.current.style.top = `${posRef.current.y}px`;
+            cardEl.current.style.width = `${dimRef.current.w}px`;
+            cardEl.current.style.height = collapsed ? "auto" : `${dimRef.current.h}px`;
         }
-    }, [collapsed, isMobileMode]);
+    }, [collapsed]);
 
     const saveDimensions = () => {
         if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -1037,10 +1019,7 @@ function AssignedTasksCard({
         <div
             ref={cardEl}
             data-group-id="assigned-tasks"
-            style={isMobileMode ? {
-                position: "relative",
-                willChange: "auto"
-            } : {
+            style={{
                 position: "absolute",
                 left: posRef.current.x,
                 top: posRef.current.y,
@@ -1051,8 +1030,7 @@ function AssignedTasksCard({
             }}
             className={cn(
                 "bg-zinc-900/95 border rounded-2xl shadow-2xl flex flex-col transition-[box-shadow,border-color] duration-200",
-                isMobileMode ? "w-full md:w-[320px] md:h-[500px] flex-shrink-0" : "",
-                !isMobileMode && (isDraggingCard || isResizing)
+                (isDraggingCard || isResizing)
                     ? cn(assignedGroupColor.border, assignedGroupColor.glow, "scale-[1.01]")
                     : isDragOver
                         ? cn(assignedGroupColor.border, assignedGroupColor.glow)
@@ -1065,7 +1043,7 @@ function AssignedTasksCard({
                 onPointerMove={onHeaderPointerMove}
                 onPointerUp={onHeaderPointerUp}
                 style={{ touchAction: "none" }}
-                className="flex items-center gap-2 px-3 py-2.5 border-b border-white/5 select-none flex-shrink-0 cursor-grab active:cursor-grabbing"
+                className="drag-header flex items-center gap-2 px-3 py-2.5 border-b border-white/5 select-none flex-shrink-0 cursor-grab active:cursor-grabbing"
             >
                 <button onClick={() => setCollapsed(v => !v)} className="text-zinc-600 hover:text-white transition-colors">
                     {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -1372,16 +1350,24 @@ function CanvasControls({
 }: {
     isMobileMode: boolean;
     toolMode: "default" | "hand";
-    setToolMode: (m: "default" | "hand" | ((prev: "default" | "hand") => "default" | "hand")) => void;
+    setToolMode: React.Dispatch<React.SetStateAction<"default" | "hand">>;
     zoom: number;
 }) {
-    const { zoomIn, zoomOut, resetTransform } = useControls();
+    const { zoomIn, zoomOut, setTransform } = useControls();
+
+    const handleResetZoom = () => {
+        const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+        const defaultScale = isMobile ? 0.5 : 1;
+        const defaultX = isMobile ? 16 : 0;
+        const defaultY = isMobile ? 80 : 0;
+        setTransform(defaultX, defaultY, defaultScale, 200, "easeOut");
+    };
 
     return (
         <>
             {/* Desktop toolbar: top-right vertical stack */}
             {!isMobileMode && (
-                <div id="canvas-controls" className="fixed z-50 flex flex-col items-center gap-2 top-24 right-4 sm:right-8">
+                <div id="canvas-controls" className="canvas-controls fixed z-50 flex flex-col items-center gap-2 top-24 right-4 sm:right-8">
                     <div className="flex items-center gap-1">
                         <Tooltip content="Select tool" side="left">
                             <button onClick={() => setToolMode("default")}
@@ -1400,10 +1386,10 @@ function CanvasControls({
                         <ZoomOut className="w-5 h-5" />
                     </button>
                     <Tooltip content="Reset zoom (Ctrl+0)" side="left">
-                        <span onClick={() => resetTransform()}
-                            className="text-xs font-black text-zinc-400 min-w-[3.5rem] text-center select-none cursor-pointer hover:text-white transition-colors">
+                        <button onClick={handleResetZoom}
+                            className="text-xs font-black text-zinc-400 min-w-[3.5rem] text-center select-none hover:text-white transition-colors py-1">
                             {Math.round(zoom * 100)}%
-                        </span>
+                        </button>
                     </Tooltip>
                     <button onClick={() => zoomIn(0.1)} className="text-zinc-400 hover:text-white transition-colors p-1">
                         <ZoomIn className="w-5 h-5" />
@@ -1413,7 +1399,7 @@ function CanvasControls({
 
             {/* Mobile zoom controls: top-left pill (notification dock is at top-right) */}
             {isMobileMode && (
-                <div id="canvas-controls" className="fixed z-50 top-4 left-4 flex items-center gap-1 bg-zinc-900/80 backdrop-blur-md border border-white/10 rounded-2xl px-2 py-1.5 shadow-xl">
+                <div id="canvas-controls" className="canvas-controls fixed z-50 top-4 left-4 flex items-center gap-1 bg-zinc-900/80 backdrop-blur-md border border-white/10 rounded-2xl px-2 py-1.5 shadow-xl">
                     <Tooltip content="Zoom out" side="bottom">
                         <button onClick={() => zoomOut(0.1)}
                             className="p-1.5 text-zinc-400 hover:text-white transition-colors rounded-xl hover:bg-white/10 active:scale-90">
@@ -1421,10 +1407,10 @@ function CanvasControls({
                         </button>
                     </Tooltip>
                     <Tooltip content="Reset zoom" side="bottom">
-                        <span onClick={() => resetTransform()}
-                            className="text-[11px] font-black text-zinc-400 min-w-[2.75rem] text-center select-none cursor-pointer hover:text-white transition-colors">
+                        <button onClick={handleResetZoom}
+                            className="text-[11px] font-black text-zinc-400 min-w-[2.75rem] text-center select-none hover:text-white transition-colors py-1 hover:bg-white/10 rounded-xl">
                             {Math.round(zoom * 100)}%
-                        </span>
+                        </button>
                     </Tooltip>
                     <Tooltip content="Zoom in" side="bottom">
                         <button onClick={() => zoomIn(0.1)}
@@ -1796,9 +1782,12 @@ export default function TasksPage() {
 
     const handleApplyAgentGroups = async (agentGroups: { name: string; color: string; tasks: { title: string; priority: "urgent" | "high" | "normal" | "natural"; durationMinutes: number | null; notes: string }[] }[]) => {
         if (!user) return;
-        for (const g of agentGroups) {
-            const offset = (groups.length + 1) * 28;
-            const gid = await addGroup(user.uid, g.name, 360 + offset, 120 + offset, 300, 400, g.color);
+        const baseOffset = groups.length;
+        for (let i = 0; i < agentGroups.length; i++) {
+            const g = agentGroups[i];
+            const x = 360 + (baseOffset + i) * 340;
+            const y = 120;
+            const gid = await addGroup(user.uid, g.name, x, y, 300, 400, g.color);
             if (gid) {
                 for (const t of g.tasks) {
                     await addTask(user.uid, t.title, gid, t.priority, 1, t.durationMinutes, t.notes);
@@ -1883,15 +1872,23 @@ export default function TasksPage() {
                     panning={{
                         disabled: !isMobileMode && toolMode !== "hand",
                         velocityDisabled: true,
-                        excluded: ["data-scroll-container"]
+                        excluded: ["data-scroll-container", "drag-header", "resize-handle", "task-row", "canvas-controls"]
                     }}
                     pinch={{ step: 5 }}
                     wheel={{
-                        step: 0.1,
-                        excluded: ["data-scroll-container"]
+                        step: 0.0001,
+                        excluded: ["data-scroll-container", "drag-header", "resize-handle", "task-row", "canvas-controls"]
                     }}
                     doubleClick={{ disabled: true }}
-                    onInit={(ref) => { resetTransformRef.current = () => ref.resetTransform(); }}
+                    onInit={(ref) => {
+                        resetTransformRef.current = () => {
+                            const isMobile = window.innerWidth < 768;
+                            const defaultScale = isMobile ? 0.5 : 1;
+                            const defaultX = isMobile ? 16 : 0;
+                            const defaultY = isMobile ? 80 : 0;
+                            ref.setTransform(defaultX, defaultY, defaultScale, 200, "easeOut");
+                        };
+                    }}
                     onTransform={(ref) => {
                         setZoom(ref.state.scale);
                         try {

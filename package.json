@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "cross-env NODE_OPTIONS=\"--max-old-space-size=4096\" next dev",
+    "dev": "cross-env NODE_OPTIONS=\"--max-old-space-size=4096\" next dev --webpack",
     "emulators": "firebase emulators:start --project=demo-dangdoro --import=./.firebase-emulator-data --export-on-exit",
-    "dev:emulator": "cross-env NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true concurrently -k -n \"next,firebase\" -c \"blue,green\" \"cross-env NODE_OPTIONS='--max-old-space-size=4096' next dev\" \"npm run emulators\"",
+    "dev:emulator": "cross-env NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true concurrently -k -n \"next,firebase\" -c \"blue,green\" \"cross-env NODE_OPTIONS='--max-old-space-size=4096' next dev --webpack\" \"npm run emulators\"",
     "seed:emulator": "cross-env NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true tsx scripts/seed-emulator.ts",
     "build": "next build",
     "start": "next start",

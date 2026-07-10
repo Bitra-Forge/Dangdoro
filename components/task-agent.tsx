@@ -173,7 +173,10 @@ export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
     };
 
     return (
-        <div data-scroll-container className="fixed inset-x-4 sm:right-4 sm:left-auto top-4 bottom-24 sm:bottom-20 z-[101] sm:w-[400px] animate-in slide-in-from-right-6 fade-in duration-300">
+        <div data-scroll-container className={cn(
+            "fixed inset-x-4 sm:right-4 sm:left-auto top-4 bottom-24 sm:bottom-20 z-[101] animate-in slide-in-from-right-6 fade-in duration-300 transition-all duration-300",
+            pendingGroups && pendingGroups.length > 1 ? "sm:w-[720px]" : "sm:w-[400px]"
+        )}>
             <div className="flex flex-col h-full bg-zinc-950/90 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-[0_25px_60px_rgba(0,0,0,0.8)] overflow-hidden">
 
                 {/* Header */}
@@ -282,36 +285,38 @@ export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
                                     <Sparkles className="w-3 h-3 text-white/40" />
                                     <span className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500">Generated Plan</span>
                                 </div>
-                                <div className="space-y-3 max-h-48 overflow-y-auto mb-3" style={{ scrollbarWidth: "none" }}>
+                                <div className="flex gap-3 overflow-x-auto pb-3 mb-3 custom-scrollbar snap-x snap-mandatory" style={{ scrollbarWidth: "none" }}>
                                     {pendingGroups.map((group, gi) => (
                                         <motion.div
                                             key={gi}
                                             initial={{ opacity: 0, x: -8 }}
                                             animate={{ opacity: 1, x: 0 }}
                                             transition={{ delay: gi * 0.08 }}
-                                            className="bg-zinc-900/40 border border-white/5 rounded-xl p-3"
+                                            className="bg-zinc-900/40 border border-white/5 rounded-xl p-3 w-[260px] flex-shrink-0 snap-align-start flex flex-col justify-between"
                                         >
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <span className={cn("w-2.5 h-2.5 rounded-full", groupColorDot[group.color] ?? "bg-zinc-500")} />
-                                                <span className="text-[10px] font-black uppercase tracking-wider text-white/70">{group.name}</span>
-                                                <span className="text-[9px] text-zinc-600 font-bold ml-auto">{group.tasks.length} tasks</span>
-                                            </div>
-                                            <div className="space-y-1">
-                                                {group.tasks.map((task, ti) => {
-                                                    const p = priorityConfig[task.priority] ?? priorityConfig.natural;
-                                                    return (
-                                                        <div key={ti} className="flex items-center gap-2 py-0.5">
-                                                            <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", p.dot)} />
-                                                            <span className="text-[11px] text-zinc-400 truncate flex-1">{task.title}</span>
-                                                            {task.durationMinutes && (
-                                                                <span className="flex items-center gap-0.5 text-[9px] text-zinc-600 flex-shrink-0">
-                                                                    <Clock className="w-2.5 h-2.5" />
-                                                                    {task.durationMinutes}m
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className={cn("w-2.5 h-2.5 rounded-full", groupColorDot[group.color] ?? "bg-zinc-500")} />
+                                                    <span className="text-[10px] font-black uppercase tracking-wider text-white/70 truncate max-w-[140px]">{group.name}</span>
+                                                    <span className="text-[9px] text-zinc-600 font-bold ml-auto flex-shrink-0">{group.tasks.length} tasks</span>
+                                                </div>
+                                                <div className="space-y-1 max-h-36 overflow-y-auto pr-1 custom-scrollbar" style={{ scrollbarWidth: "none" }}>
+                                                    {group.tasks.map((task, ti) => {
+                                                        const p = priorityConfig[task.priority] ?? priorityConfig.natural;
+                                                        return (
+                                                            <div key={ti} className="flex items-center gap-2 py-0.5">
+                                                                <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", p.dot)} />
+                                                                <span className="text-[11px] text-zinc-400 truncate flex-1">{task.title}</span>
+                                                                {task.durationMinutes && (
+                                                                    <span className="flex items-center gap-0.5 text-[9px] text-zinc-600 flex-shrink-0">
+                                                                        <Clock className="w-2.5 h-2.5" />
+                                                                        {task.durationMinutes}m
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
                                         </motion.div>
                                     ))}
@@ -347,7 +352,7 @@ export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
                                 onKeyDown={handleKeyDown}
                                 placeholder="Describe what you need to accomplish…"
                                 rows={1}
-                                className="task-agent-input w-full rounded-xl border border-white/10 bg-zinc-900/70 px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-white/25 transition-colors resize-none leading-tight"
+                                className="task-agent-input w-full rounded-xl border border-white/10 bg-zinc-900/70 px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-500 outline-none focus:border-white/25 transition-colors resize-none leading-tight"
                                 style={{ overflow: "hidden" }}
                             />
                         </div>
