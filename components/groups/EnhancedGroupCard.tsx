@@ -121,7 +121,7 @@ export const EnhancedGroupCard = memo(function EnhancedGroupCard({ group, isMemb
                             {/* Group Name */}
                             <div className="flex items-center gap-2 mb-4">
                                 <span className={cn(
-                                    "shrink-0",
+                                    "shrink-0 inline-flex items-center justify-center",
                                     group.privacy === "public" ? "text-emerald-400" :
                                     group.privacy === "private-code" ? "text-amber-400" :
                                     group.privacy === "private-invite" ? "text-violet-400" :
@@ -129,7 +129,7 @@ export const EnhancedGroupCard = memo(function EnhancedGroupCard({ group, isMemb
                                 )}>
                                     <PrivacyIcon className="w-4 h-4" />
                                 </span>
-                                <h4 className="text-xl font-bold text-white group-hover:text-blue-400 transition-colors duration-300 truncate">
+                                <h4 className="text-xl font-bold text-white group-hover:text-blue-400 transition-colors duration-300 truncate leading-none">
                                     {group.name}
                                 </h4>
                             </div>
@@ -171,9 +171,9 @@ export const EnhancedGroupCard = memo(function EnhancedGroupCard({ group, isMemb
                                                         e.stopPropagation();
                                                         router.push(`/groups/${group.id}?tab=chat`);
                                                     }}
-                                                    className="relative p-1.5 rounded-lg hover:bg-white/5 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                                    className="relative p-1.5 rounded-lg hover:bg-white/5 text-zinc-400 hover:text-white transition-colors cursor-pointer inline-flex items-center justify-center"
                                                 >
-                                                    <span className="relative inline-flex">
+                                                    <span className="relative inline-flex items-center justify-center">
                                                         <MessageSquare className="w-4 h-4" />
                                                         {isUnread && (
                                                             <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500 ring-1 ring-zinc-950 animate-pulse" />
@@ -188,7 +188,7 @@ export const EnhancedGroupCard = memo(function EnhancedGroupCard({ group, isMemb
                                                         e.stopPropagation();
                                                         router.push(`/groups/${group.id}?tab=materials`);
                                                     }}
-                                                    className="relative p-1.5 rounded-lg hover:bg-white/5 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                                    className="relative p-1.5 rounded-lg hover:bg-white/5 text-zinc-400 hover:text-white transition-colors cursor-pointer inline-flex items-center justify-center"
                                                 >
                                                     <BookOpen className="w-4 h-4" />
                                                 </button>
