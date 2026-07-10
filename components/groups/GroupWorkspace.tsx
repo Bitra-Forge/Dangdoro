@@ -13,19 +13,20 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { 
-    Users, Briefcase, ChevronRight, Play, Pause, 
-    StopCircle, MoreVertical, UserPlus, LogOut, X, 
-    LayoutGrid, Target, Crown, Zap, User, Trash2, MessageCircle, Bell, BellOff
+import {
+    Users, Briefcase, ChevronRight, Play, Pause,
+    StopCircle, MoreVertical, UserPlus, LogOut, X,
+    LayoutGrid, Target, Crown, Zap, User, Trash2, MessageCircle, Bell, BellOff,
+    HelpCircle
 } from "lucide-react";
 import { LinkIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip } from "@/components/ui/tooltip";
 
-import { 
-    FocusGroup, SharedTask, ObjectiveTemplateDraft, 
-    fmtMinutes, resolveLiveSessionsForGroup, toMillis, 
+import {
+    FocusGroup, SharedTask, ObjectiveTemplateDraft,
+    fmtMinutes, resolveLiveSessionsForGroup, toMillis,
     getEarliestActiveStart, normalizeLiveSessions,
     getGoalTypeLabel, GoalType, LiveSession, computeNextResetAt,
     deriveTaskProgressAndStatus
@@ -34,6 +35,8 @@ import { fetchUserProfiles, toggleMuteGroup } from "@/lib/db";
 import { accumulateFocusTime } from "@/lib/focus-accumulator";
 import { applyGroupSessionAction } from "@/lib/group-session";
 import { getFriendsList } from "@/lib/friendship";
+
+import { useTour, type TourStep } from "@/lib/use-tour";
 
 // Sub-components
 import { LiveElapsedTimer } from "./LiveElapsedTimer";
@@ -62,10 +65,10 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const latestOrderedTasksRef = useRef<SharedTask[] | null>(null);
     const [hydratedProfiles, setHydratedProfiles] = useState<Record<string, any>>({});
     const [loading, setLoading] = useState(true);
-    
+
     const searchParams = useSearchParams();
     const tabParam = searchParams.get("tab");
-    
+
     // UI State (moved from GroupDetailModal)
     const [activeTab, setActiveTab] = useState<"workspace" | "members" | "chat" | "materials">(() => {
         if (tabParam === "workspace" || tabParam === "members" || tabParam === "chat" || tabParam === "materials") {
@@ -91,6 +94,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const [friends, setFriends] = useState<any[]>([]);
     const [isMuted, setIsMuted] = useState(false);
     const clearChatNotification = useChatNotificationStore(s => s.clearChatNotification);
+
     const setGroupUnread = useChatNotificationStore(s => s.setGroupUnread);
     const isGroupUnread = useChatNotificationStore(s => !!s.unreadGroups[groupId]);
 
@@ -273,6 +277,8 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     }, [group, user, hydratedProfiles, liveSessions, now]);
 
     const isMember = enrichedGroup?.members.includes(user?.uid || "");
+
+    // Tour steps are defined below after all dependencies (isMember, isAdmin, sortedMembers) are initialized.
     const isInGroupSession = activeGroupId === groupId && (timerIsActive || isPaused);
     const isHost = enrichedGroup?.hostId === user?.uid;
     const userRole = enrichedGroup?.memberStats?.[user?.uid || ""]?.role || (isHost ? "host" : "member");
@@ -286,6 +292,80 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         if (!enrichedGroup) return [];
         return [...(enrichedGroup.memberDetails || [])].sort((a, b) => (b.totalMinutes || 0) - (a.totalMinutes || 0));
     }, [enrichedGroup]);
+
+    const tourSteps: TourStep[] = useMemo(() => {
+        const steps: TourStep[] = [
+            {
+                popover: {
+                    title: "Welcome to your Focus Room!",
+                    description: "This is your shared workspace. It's built for getting things done together, syncing timers, sharing objectives, and working side-by-side.",
+                },
+            },
+            {
+                element: "#btn-start-focus",
+                popover: {
+                    title: "Start a group session",
+                    description: "Ready to focus? Click this to start or join a live Pomodoro block. Anyone in the group can jump in and work alongside you!",
+                    side: "bottom",
+                    align: "center",
+                },
+            },
+            {
+                element: "#group-tabs",
+                popover: {
+                    title: "Explore the workspace",
+                    description: "Switch views to check shared objectives, see who is active, chat with the group, or share useful files and links.",
+                    side: "bottom",
+                    align: "center",
+                },
+            },
+        ];
+
+        if (isAdmin) {
+            steps.push({
+                element: "#group-admin-actions",
+                popover: {
+                    title: "Host Actions",
+                    description: "Manage group settings, configure permissions, and invite new members to join your workspace.",
+                    side: "left",
+                    align: "center",
+                },
+            });
+        }
+
+        steps.push({
+            element: "#group-goal-progress",
+            popover: {
+                title: "Stats & Goals",
+                description: "Keep tabs on the group's collective progress toward your hour goal.",
+                side: "left",
+                align: "center",
+            },
+        });
+
+        steps.push({
+            element: "#group-members-list",
+            popover: {
+                title: "Members",
+                description: "See who is online right now, track individual focus contributions, and view live elapsed timers.",
+                side: "left",
+                align: "center",
+            },
+        });
+
+        return steps;
+    }, [isAdmin]);
+
+    const { resetTour, startTour } = useTour({
+        pageName: "group-workspace",
+        steps: tourSteps,
+        disabled: loading || !group || !user || !isMember || isManagingRoles
+    });
+
+    const handleRestartTour = () => {
+        resetTour();
+        startTour();
+    };
 
     // Keep track of host presence to stop timer when host ends the session
     const hostId = enrichedGroup?.hostId;
@@ -304,7 +384,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
             wasHostActiveRef.current = true;
         } else if (wasHostActiveRef.current) {
             wasHostActiveRef.current = false;
-            
+
             const stopSession = async () => {
                 const timerSnapshot = useTimerStore.getState();
                 if (timerSnapshot.mode === "focus" && timerSnapshot.timeLeft > 0) {
@@ -385,7 +465,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const handleAddTask = async (title: string, priority: string = "medium", assignedTo: string = "all", silent: boolean = false, description: string = "", subtasks: any[] = []) => {
         if (!isMember || !user) return;
         const maxPos = tasks.length > 0 ? Math.max(...tasks.map(t => t.position ?? 0)) : 0;
-        
+
         const derivation = deriveTaskProgressAndStatus(subtasks, "todo");
 
         await addDoc(collection(db, `focusGroups/${groupId}/tasks`), {
@@ -515,7 +595,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
             if (result.shouldStartTimer && !timerIsActive) timerStart();
             if (result.shouldPauseTimer && willBePaused) timerPause();
             if (action === "pause" && !willBePaused && !timerIsActive) timerStart();
-             if (result.shouldStopTimer) {
+            if (result.shouldStopTimer) {
                 const timerSnapshot = useTimerStore.getState();
                 if (timerSnapshot.mode === "focus" && timerSnapshot.timeLeft > 0) {
                     const elapsedSeconds = Math.max(0, timerSnapshot.initialFocusTime - timerSnapshot.timeLeft);
@@ -594,7 +674,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
 
     const handleDeleteGroup = async () => {
         if (!user || !enrichedGroup || userRole !== "host") return;
-        
+
         const deleteDocsInBatches = async (docs: Array<{ ref: any }>) => {
             let batch = writeBatch(db);
             let opCount = 0;
@@ -668,263 +748,264 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
         <div className="flex flex-col min-h-screen overflow-hidden">
             {/* Top accent bar */}
             {!isManagingRoles && (
-            <div className={cn(
-                "h-[2px] bg-gradient-to-r from-transparent to-transparent shrink-0",
-                isOrg ? "via-[white]/70" : "via-indigo-400/40"
-            )} />
+                <div className={cn(
+                    "h-[2px] bg-gradient-to-r from-transparent to-transparent shrink-0",
+                    isOrg ? "via-[white]/70" : "via-indigo-400/40"
+                )} />
             )}
 
             {/* Header */}
             {!isManagingRoles && (
-            <div className="p-8 border-b border-white/5 bg-gradient-to-br from-[white]/5 to-transparent">
-                <div className="flex justify-between items-start mb-6">
-                    <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                            <Link href="/groups" className="p-2 hover:bg-white/10 rounded-xl text-zinc-500 hover:text-white transition-all mr-2">
-                                <ChevronRight className="w-5 h-5 rotate-180" />
-                            </Link>
-                            <h2 className="text-3xl font-black text-white tracking-tighter flex items-center gap-3">
-                                {isManagingRoles ? "Settings" : enrichedGroup.name}
-                                {!isManagingRoles && isActive && (
-                                    <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
-                                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                        <span className="text-[10px] font-black uppercase text-emerald-400 tracking-widest leading-none mt-[1px]">Live</span>
-                                    </div>
-                                )}
-                        </h2>
-                        </div>
-                        <div className="flex items-center gap-3 ml-12">
-                            <p className="text-zinc-500 text-sm max-w-xl line-clamp-1">{isManagingRoles ? `Manage settings and members for ${enrichedGroup.name}` : enrichedGroup.description}</p>
-                        </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-3">
-                        {isMember ? (
-                            <>
-                                <div className="flex items-center gap-2">
-                                    {!isInGroupSession ? (
-                                        <button
-                                            disabled={!!sessionActionPending}
-                                            onClick={() => handleSessionAction("start")}
-                                            className={cn(
-                                                "p-2.5 sm:px-7 sm:py-2.5 rounded-[10px] font-black text-xs transition-all duration-300 ease-out flex items-center gap-2 relative overflow-hidden group/btn",
-                                                sessionActionPending
-                                                    ? "bg-white/60 text-black/50 cursor-not-allowed"
-                                                    : "bg-white text-black hover:shadow-[0_8px_30px_rgba(255,255,255,0.4)] cursor-pointer"
-                                            )}
-                                        >
-                                            <div className="absolute inset-0 bg-gradient-to-tr from-black/5 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300 pointer-events-none" />
-                                            <Play className="w-4 h-4 relative z-10 fill-current" />
-                                            <span className="relative z-10 hidden sm:inline">{sessionActionPending === "start" ? "Starting..." : "Start Focus"}</span>
-                                        </button>
-                                    ) : (
-                                        <div className="flex items-center gap-2">
-                                             <button
-                                                 disabled={!!sessionActionPending}
-                                                 onClick={() => handleSessionAction("pause")}
-                                                 className={cn(
-                                                     "p-2.5 sm:px-6 sm:py-2.5 rounded-[10px] font-black text-xs transition-all duration-300 flex items-center gap-2 group/btn relative overflow-hidden border-none",
-                                                     isPaused
-                                                         ? "bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 cursor-pointer"
-                                                         : sessionActionPending 
-                                                             ? "bg-amber-500/20 text-amber-200/50 cursor-not-allowed" 
-                                                             : "bg-amber-500/5 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 hover:shadow-[0_8px_25px_rgba(245,158,11,0.15)] cursor-pointer"
-                                                 )}
-                                             >
-                                                 {/* Curved Glass Edge Lights */}
-                                                 <div className={cn("absolute inset-0 rounded-[10px] border-t-[0.5px] pointer-events-none z-10", isPaused ? "border-cyan-500/30" : "border-amber-500/30")} />
-                                                 <div className={cn("absolute inset-0 rounded-[10px] border-b-[0.5px] pointer-events-none z-10", isPaused ? "border-cyan-500/10" : "border-amber-500/10")} />
-                                                 
-                                                 {/* Internal Soft Glow */}
-                                                 <div className={cn("absolute top-0 inset-x-0 h-[8px] bg-gradient-to-b to-transparent z-10", isPaused ? "from-cyan-500/10" : "from-amber-500/10")} />
-                                                 
-                                                 <div className={cn("absolute inset-0 bg-gradient-to-tr to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300 pointer-events-none", isPaused ? "from-cyan-500/5" : "from-amber-500/5")} />
-                                                 {isPaused ? <Play className="w-4 h-4 relative z-10 fill-current" /> : <Pause className="w-4 h-4 relative z-10" />}
-                                                 <span className="relative z-10 hidden sm:inline">{isPaused ? "Resume" : sessionActionPending === "pause" ? "Pausing..." : "Pause"}</span>
-                                             </button>
-                                            <button
-                                                disabled={!!sessionActionPending}
-                                                onClick={() => handleSessionAction("stop")}
-                                                className={cn(
-                                                    "p-2.5 sm:px-6 sm:py-2.5 rounded-[10px] font-black text-xs transition-all duration-300 flex items-center gap-2 group/btn relative overflow-hidden border-none",
-                                                    sessionActionPending 
-                                                        ? "bg-red-500/20 text-red-200/50 cursor-not-allowed" 
-                                                        : "bg-red-500/5 text-red-400 hover:bg-red-500/10 hover:text-red-300 hover:shadow-[0_8px_25px_rgba(239,68,68,0.15)] cursor-pointer"
-                                                )}
-                                            >
-                                                {/* Curved Glass Edge Lights for Stop */}
-                                                <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-red-500/30 pointer-events-none z-10" />
-                                                <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-red-500/10 pointer-events-none z-10" />
-                                                
-                                                {/* Internal Soft Red Glow */}
-                                                <div className="absolute top-0 inset-x-0 h-[8px] bg-gradient-to-b from-red-500/10 to-transparent z-10" />
-                                                
-                                                <div className="absolute inset-0 bg-gradient-to-tr from-red-500/5 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300 pointer-events-none" />
-                                                <StopCircle className="w-4 h-4 relative z-10" />
-                                                <span className="relative z-10 hidden sm:inline">{sessionActionPending === "stop" ? "Stopping..." : "Stop"}</span>
-                                            </button>
+                <div className="p-8 border-b border-white/5 bg-gradient-to-br from-[white]/5 to-transparent">
+                    <div className="flex justify-between items-start mb-6">
+                        <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                                <Link href="/groups" className="p-2 hover:bg-white/10 rounded-xl text-zinc-500 hover:text-white transition-all mr-2">
+                                    <ChevronRight className="w-5 h-5 rotate-180" />
+                                </Link>
+                                <h2 className="text-3xl font-black text-white tracking-tighter flex items-center gap-3">
+                                    {isManagingRoles ? "Settings" : enrichedGroup.name}
+                                    {!isManagingRoles && isActive && (
+                                        <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+                                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                            <span className="text-[10px] font-black uppercase text-emerald-400 tracking-widest leading-none mt-[1px]">Live</span>
                                         </div>
                                     )}
-                                </div>
-
-                                <div className="relative">
-                                    <Tooltip content="More actions">
-                                        <button
-                                            onClick={() => setIsHeaderMenuOpen((prev) => !prev)}
-                                            className={cn(
-                                                "h-10 w-10 rounded-[10px] transition-all inline-flex items-center justify-center relative overflow-hidden group/opt cursor-pointer",
-                                                isHeaderMenuOpen 
-                                                    ? "bg-white/20 text-white shadow-[inset_0_0_10px_rgba(255,255,255,0.1)]" 
-                                                    : "bg-white/5 text-zinc-300 hover:bg-white/10"
-                                            )}
-                                        >
-                                            {/* Glass highlights */}
-                                            <div className={cn(
-                                                "absolute inset-0 rounded-[10px] border-t-[0.5px] pointer-events-none transition-colors duration-300",
-                                                isHeaderMenuOpen ? "border-white/40" : "border-white/20"
-                                            )} />
-                                            <div className="absolute inset-x-0 bottom-0 h-px border-b-[0.5px] border-white/5 pointer-events-none" />
-                                            
-                                            <MoreVertical className={cn(
-                                                "w-4 h-4 transition-colors duration-300",
-                                                isHeaderMenuOpen ? "text-white scale-110" : "group-hover/opt:text-white"
-                                            )} />
-                                        </button>
-                                    </Tooltip>
-                                    {isHeaderMenuOpen && (
-                                        <div className="absolute right-0 top-full mt-2 min-w-[170px] rounded-xl border border-white/10 bg-zinc-900/95 backdrop-blur-xl shadow-2xl z-20 p-1.5 space-y-1">
-                                            {isAdmin && (enrichedGroup.privacy === "private-invite" || enrichedGroup.privacy === "public") && (
-                                                <button
-                                                    onClick={() => {
-                                                        setShowInviteModal(true);
-                                                        setIsHeaderMenuOpen(false);
-                                                    }}
-                                                    className="w-full px-3 py-2 rounded-lg text-left text-[11px] font-bold text-violet-300 hover:bg-violet-500/10 inline-flex items-center gap-2"
-                                                >
-                                                    <UserPlus className="w-3.5 h-3.5" />
-                                                    Invite members
-                                                </button>
-                                            )}
-                                            <button
-                                                onClick={() => {
-                                                    handleToggleMute();
-                                                    setIsHeaderMenuOpen(false);
-                                                }}
-                                                className="w-full px-3 py-2 rounded-lg text-left text-[11px] font-bold text-zinc-300 hover:bg-white/10 inline-flex items-center gap-2"
-                                            >
-                                                {isMuted ? <BellOff className="w-3.5 h-3.5" /> : <Bell className="w-3.5 h-3.5" />}
-                                                {isMuted ? "Unmute notifications" : "Mute notifications"}
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    handleLeaveGroup();
-                                                    setIsHeaderMenuOpen(false);
-                                                }}
-                                                className="w-full px-3 py-2 rounded-lg text-left text-[11px] font-bold text-red-300 hover:bg-red-500/10 inline-flex items-center gap-2"
-                                            >
-                                                <LogOut className="w-3.5 h-3.5" />
-                                                Leave group
-                                            </button>
-                                            {userRole === "host" && (
-                                                <button
-                                                    onClick={() => {
-                                                        setIsHeaderMenuOpen(false);
-                                                        setShowDeleteConfirm(true);
-                                                    }}
-                                                    className="w-full px-3 py-2 rounded-lg text-left text-[11px] font-bold text-red-400 hover:bg-red-500/10 inline-flex items-center gap-2"
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                    Delete group
-                                                </button>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            </>
-                        ) : (
-                            <button onClick={handleJoinGroup} className="px-6 py-3 bg-[white] text-black font-black rounded-xl hover:scale-105 active:scale-95 transition-all">Request Access</button>
-                        )}
-                    </div>
-                </div>
-
-                {!isManagingRoles && isMember && (
-                    <div className="mt-8 flex items-center justify-between">
-                        <div className="flex gap-1 p-1 bg-zinc-950/40 rounded-xl w-fit border border-white/5 relative">
-                            {[
-                                { id: "workspace", icon: LayoutGrid, label: "Overview" },
-                                { id: "members",   icon: Users, label: "Participants" },
-                                { id: "chat",      icon: MessageCircle, label: "Chat" },
-                                { id: "materials", icon: LinkIcon, label: "Materials" }
-                            ].map(t => (
-                                <button
-                                    key={t.id}
-                                    onClick={() => setActiveTab(t.id as any)}
-                                    className={cn(
-                                        "relative px-6 py-2 rounded-lg text-xs font-black transition-colors duration-200",
-                                        activeTab === t.id ? "text-white" : "text-zinc-500 hover:text-zinc-300"
-                                    )}
-                                >
-                                    {activeTab === t.id && (
-                                        <motion.div
-                                            layoutId={`group-workspace-tabs-indicator-${groupId}`}
-                                            className="absolute inset-0 bg-white/10 rounded-lg border border-white/10"
-                                            transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.8 }}
-                                        />
-                                    )}
-                                    <span className="relative z-10 flex items-center gap-2">
-                                        <span className="relative inline-flex">
-                                            <t.icon className="w-4 h-4" />
-                                            {t.id === "chat" && isGroupUnread && activeTab !== "chat" && (
-                                                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500 ring-1 ring-zinc-950 animate-pulse" />
-                                            )}
-                                        </span>
-                                        <span>{t.label}</span>
-                                    </span>
-                                </button>
-                            ))}
-                        </div>
-                        
-                        <div className="hidden lg:flex items-center gap-4">
-                            <div className="h-4 w-[1px] bg-white/10 mr-2" />
-                            <div className="flex -space-x-2">
-                                {enrichedGroup.memberDetails?.filter((m: any) => m.isFocusing || (m.uid === user?.uid && (optimisticFocusing || isInGroupSession))).slice(0, 8).map((m: any, i: number) => {
-                                    const isCurrentUser = m.uid === user?.uid;
-                                    const isActuallyFocusing = m.isFocusing && m.sessionStatus !== "paused" && !(isCurrentUser && isPaused);
-                                    const isPausedState = (isCurrentUser && isPaused) || (!isCurrentUser && m.sessionStatus === "paused");
-                                    
-                                    return (
-                                        <div key={i} className="relative group/avatar">
-                                            <Avatar className={cn(
-                                                "w-9 h-9 rounded-xl overflow-hidden border-[0.5px] border-white/10 transition-all duration-300 bg-zinc-900 z-10 scale-105",
-                                                isActuallyFocusing ? "ring-2 ring-cyan-500 ring-offset-2 ring-offset-zinc-950 hover:scale-110" : isPausedState ? "ring-2 ring-amber-500 ring-offset-2 ring-offset-zinc-950" : "ring-2 ring-amber-500/50 ring-offset-2 ring-offset-zinc-950"
-                                            )}>
-                                                <AvatarImage src={m.photoURL} className="object-cover w-full h-full rounded-xl scale-[1.01]" />
-                                                <AvatarFallback className="text-[10px] bg-zinc-800 text-white rounded-xl flex items-center justify-center">{m.displayName?.[0]}</AvatarFallback>
-                                            </Avatar>
-                                            <div className={cn(
-                                                "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-zinc-950 z-20",
-                                                isActuallyFocusing ? "bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.6)]" : "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.4)]"
-                                            )} />
-                                        </div>
-                                    );
-                                })}
-                                {activeOrPausedCount > 8 && (
-                                    <div className="w-9 h-9 rounded-full bg-zinc-800 border-2 border-zinc-950 flex items-center justify-center text-[10px] font-black text-zinc-400 z-0">
-                                        +{activeOrPausedCount - 8}
-                                    </div>
-                                )}
+                                </h2>
+                            </div>
+                            <div className="flex items-center gap-3 ml-12">
+                                <p className="text-zinc-500 text-sm max-w-xl line-clamp-1">{isManagingRoles ? `Manage settings and members for ${enrichedGroup.name}` : enrichedGroup.description}</p>
                             </div>
                         </div>
+
+                        <div className="flex items-center gap-3">
+                            {isMember ? (
+                                <>
+                                    <div className="flex items-center gap-2">
+                                        {!isInGroupSession ? (
+                                            <button
+                                                id="btn-start-focus"
+                                                disabled={!!sessionActionPending}
+                                                onClick={() => handleSessionAction("start")}
+                                                className={cn(
+                                                    "p-2.5 sm:px-7 sm:py-2.5 rounded-[10px] font-black text-xs transition-all duration-300 ease-out flex items-center gap-2 relative overflow-hidden group/btn",
+                                                    sessionActionPending
+                                                        ? "bg-white/60 text-black/50 cursor-not-allowed"
+                                                        : "bg-white text-black hover:shadow-[0_8px_30px_rgba(255,255,255,0.4)] cursor-pointer"
+                                                )}
+                                            >
+                                                <div className="absolute inset-0 bg-gradient-to-tr from-black/5 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                                                <Play className="w-4 h-4 relative z-10 fill-current" />
+                                                <span className="relative z-10 hidden sm:inline">{sessionActionPending === "start" ? "Starting..." : "Start Focus"}</span>
+                                            </button>
+                                        ) : (
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    disabled={!!sessionActionPending}
+                                                    onClick={() => handleSessionAction("pause")}
+                                                    className={cn(
+                                                        "p-2.5 sm:px-6 sm:py-2.5 rounded-[10px] font-black text-xs transition-all duration-300 flex items-center gap-2 group/btn relative overflow-hidden border-none",
+                                                        isPaused
+                                                            ? "bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 cursor-pointer"
+                                                            : sessionActionPending
+                                                                ? "bg-amber-500/20 text-amber-200/50 cursor-not-allowed"
+                                                                : "bg-amber-500/5 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 hover:shadow-[0_8px_25px_rgba(245,158,11,0.15)] cursor-pointer"
+                                                    )}
+                                                >
+                                                    {/* Curved Glass Edge Lights */}
+                                                    <div className={cn("absolute inset-0 rounded-[10px] border-t-[0.5px] pointer-events-none z-10", isPaused ? "border-cyan-500/30" : "border-amber-500/30")} />
+                                                    <div className={cn("absolute inset-0 rounded-[10px] border-b-[0.5px] pointer-events-none z-10", isPaused ? "border-cyan-500/10" : "border-amber-500/10")} />
+
+                                                    {/* Internal Soft Glow */}
+                                                    <div className={cn("absolute top-0 inset-x-0 h-[8px] bg-gradient-to-b to-transparent z-10", isPaused ? "from-cyan-500/10" : "from-amber-500/10")} />
+
+                                                    <div className={cn("absolute inset-0 bg-gradient-to-tr to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300 pointer-events-none", isPaused ? "from-cyan-500/5" : "from-amber-500/5")} />
+                                                    {isPaused ? <Play className="w-4 h-4 relative z-10 fill-current" /> : <Pause className="w-4 h-4 relative z-10" />}
+                                                    <span className="relative z-10 hidden sm:inline">{isPaused ? "Resume" : sessionActionPending === "pause" ? "Pausing..." : "Pause"}</span>
+                                                </button>
+                                                <button
+                                                    disabled={!!sessionActionPending}
+                                                    onClick={() => handleSessionAction("stop")}
+                                                    className={cn(
+                                                        "p-2.5 sm:px-6 sm:py-2.5 rounded-[10px] font-black text-xs transition-all duration-300 flex items-center gap-2 group/btn relative overflow-hidden border-none",
+                                                        sessionActionPending
+                                                            ? "bg-red-500/20 text-red-200/50 cursor-not-allowed"
+                                                            : "bg-red-500/5 text-red-400 hover:bg-red-500/10 hover:text-red-300 hover:shadow-[0_8px_25px_rgba(239,68,68,0.15)] cursor-pointer"
+                                                    )}
+                                                >
+                                                    {/* Curved Glass Edge Lights for Stop */}
+                                                    <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-red-500/30 pointer-events-none z-10" />
+                                                    <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-red-500/10 pointer-events-none z-10" />
+
+                                                    {/* Internal Soft Red Glow */}
+                                                    <div className="absolute top-0 inset-x-0 h-[8px] bg-gradient-to-b from-red-500/10 to-transparent z-10" />
+
+                                                    <div className="absolute inset-0 bg-gradient-to-tr from-red-500/5 to-transparent opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                                                    <StopCircle className="w-4 h-4 relative z-10" />
+                                                    <span className="relative z-10 hidden sm:inline">{sessionActionPending === "stop" ? "Stopping..." : "Stop"}</span>
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="relative">
+                                        <Tooltip content="More actions">
+                                            <button
+                                                onClick={() => setIsHeaderMenuOpen((prev) => !prev)}
+                                                className={cn(
+                                                    "h-10 w-10 rounded-[10px] transition-all inline-flex items-center justify-center relative overflow-hidden group/opt cursor-pointer",
+                                                    isHeaderMenuOpen
+                                                        ? "bg-white/20 text-white shadow-[inset_0_0_10px_rgba(255,255,255,0.1)]"
+                                                        : "bg-white/5 text-zinc-300 hover:bg-white/10"
+                                                )}
+                                            >
+                                                {/* Glass highlights */}
+                                                <div className={cn(
+                                                    "absolute inset-0 rounded-[10px] border-t-[0.5px] pointer-events-none transition-colors duration-300",
+                                                    isHeaderMenuOpen ? "border-white/40" : "border-white/20"
+                                                )} />
+                                                <div className="absolute inset-x-0 bottom-0 h-px border-b-[0.5px] border-white/5 pointer-events-none" />
+
+                                                <MoreVertical className={cn(
+                                                    "w-4 h-4 transition-colors duration-300",
+                                                    isHeaderMenuOpen ? "text-white scale-110" : "group-hover/opt:text-white"
+                                                )} />
+                                            </button>
+                                        </Tooltip>
+                                        {isHeaderMenuOpen && (
+                                            <div className="absolute right-0 top-full mt-2 min-w-[170px] rounded-xl border border-white/10 bg-zinc-900/95 backdrop-blur-xl shadow-2xl z-20 p-1.5 space-y-1">
+                                                {isAdmin && (enrichedGroup.privacy === "private-invite" || enrichedGroup.privacy === "public") && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setShowInviteModal(true);
+                                                            setIsHeaderMenuOpen(false);
+                                                        }}
+                                                        className="w-full px-3 py-2 rounded-lg text-left text-[11px] font-bold text-violet-300 hover:bg-violet-500/10 inline-flex items-center gap-2"
+                                                    >
+                                                        <UserPlus className="w-3.5 h-3.5" />
+                                                        Invite members
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={() => {
+                                                        handleToggleMute();
+                                                        setIsHeaderMenuOpen(false);
+                                                    }}
+                                                    className="w-full px-3 py-2 rounded-lg text-left text-[11px] font-bold text-zinc-300 hover:bg-white/10 inline-flex items-center gap-2"
+                                                >
+                                                    {isMuted ? <BellOff className="w-3.5 h-3.5" /> : <Bell className="w-3.5 h-3.5" />}
+                                                    {isMuted ? "Unmute notifications" : "Mute notifications"}
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        handleLeaveGroup();
+                                                        setIsHeaderMenuOpen(false);
+                                                    }}
+                                                    className="w-full px-3 py-2 rounded-lg text-left text-[11px] font-bold text-red-300 hover:bg-red-500/10 inline-flex items-center gap-2"
+                                                >
+                                                    <LogOut className="w-3.5 h-3.5" />
+                                                    Leave group
+                                                </button>
+                                                {userRole === "host" && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setIsHeaderMenuOpen(false);
+                                                            setShowDeleteConfirm(true);
+                                                        }}
+                                                        className="w-full px-3 py-2 rounded-lg text-left text-[11px] font-bold text-red-400 hover:bg-red-500/10 inline-flex items-center gap-2"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                        Delete group
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            ) : (
+                                <button onClick={handleJoinGroup} className="px-6 py-3 bg-[white] text-black font-black rounded-xl hover:scale-105 active:scale-95 transition-all">Request Access</button>
+                            )}
+                        </div>
                     </div>
-                )}
-            </div>
+
+                    {!isManagingRoles && isMember && (
+                        <div className="mt-8 flex items-center justify-between">
+                            <div id="group-tabs" className="flex gap-1 p-1 bg-zinc-950/40 rounded-xl w-fit border border-white/5 relative">
+                                {[
+                                    { id: "workspace", icon: LayoutGrid, label: "Overview" },
+                                    { id: "members", icon: Users, label: "Participants" },
+                                    { id: "chat", icon: MessageCircle, label: "Chat" },
+                                    { id: "materials", icon: LinkIcon, label: "Materials" }
+                                ].map(t => (
+                                    <button
+                                        key={t.id}
+                                        onClick={() => setActiveTab(t.id as any)}
+                                        className={cn(
+                                            "relative px-6 py-2 rounded-lg text-xs font-black transition-colors duration-200",
+                                            activeTab === t.id ? "text-white" : "text-zinc-500 hover:text-zinc-300"
+                                        )}
+                                    >
+                                        {activeTab === t.id && (
+                                            <motion.div
+                                                layoutId={`group-workspace-tabs-indicator-${groupId}`}
+                                                className="absolute inset-0 bg-white/10 rounded-lg border border-white/10"
+                                                transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.8 }}
+                                            />
+                                        )}
+                                        <span className="relative z-10 flex items-center gap-2">
+                                            <span className="relative inline-flex">
+                                                <t.icon className="w-4 h-4" />
+                                                {t.id === "chat" && isGroupUnread && activeTab !== "chat" && (
+                                                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500 ring-1 ring-zinc-950 animate-pulse" />
+                                                )}
+                                            </span>
+                                            <span>{t.label}</span>
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="hidden lg:flex items-center gap-4">
+                                <div className="h-4 w-[1px] bg-white/10 mr-2" />
+                                <div className="flex -space-x-2">
+                                    {enrichedGroup.memberDetails?.filter((m: any) => m.isFocusing || (m.uid === user?.uid && (optimisticFocusing || isInGroupSession))).slice(0, 8).map((m: any, i: number) => {
+                                        const isCurrentUser = m.uid === user?.uid;
+                                        const isActuallyFocusing = m.isFocusing && m.sessionStatus !== "paused" && !(isCurrentUser && isPaused);
+                                        const isPausedState = (isCurrentUser && isPaused) || (!isCurrentUser && m.sessionStatus === "paused");
+
+                                        return (
+                                            <div key={i} className="relative group/avatar">
+                                                <Avatar className={cn(
+                                                    "w-9 h-9 rounded-xl overflow-hidden border-[0.5px] border-white/10 transition-all duration-300 bg-zinc-900 z-10 scale-105",
+                                                    isActuallyFocusing ? "ring-2 ring-cyan-500 ring-offset-2 ring-offset-zinc-950 hover:scale-110" : isPausedState ? "ring-2 ring-amber-500 ring-offset-2 ring-offset-zinc-950" : "ring-2 ring-amber-500/50 ring-offset-2 ring-offset-zinc-950"
+                                                )}>
+                                                    <AvatarImage src={m.photoURL} className="object-cover w-full h-full rounded-xl scale-[1.01]" />
+                                                    <AvatarFallback className="text-[10px] bg-zinc-800 text-white rounded-xl flex items-center justify-center">{m.displayName?.[0]}</AvatarFallback>
+                                                </Avatar>
+                                                <div className={cn(
+                                                    "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-zinc-950 z-20",
+                                                    isActuallyFocusing ? "bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.6)]" : "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.4)]"
+                                                )} />
+                                            </div>
+                                        );
+                                    })}
+                                    {activeOrPausedCount > 8 && (
+                                        <div className="w-9 h-9 rounded-full bg-zinc-800 border-2 border-zinc-950 flex items-center justify-center text-[10px] font-black text-zinc-400 z-0">
+                                            +{activeOrPausedCount - 8}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
             )}
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
                 {isManagingRoles ? (
                     <div className="max-w-5xl mx-auto">
-                        <GroupManagementView 
+                        <GroupManagementView
                             group={enrichedGroup} user={user} userRole={userRole}
                             onUpdateRole={handleUpdateMemberRole} onRemove={handleRemoveMember}
                             roleActionPendingId={roleActionPendingId}
@@ -944,66 +1025,66 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                             </h3>
                                         </div>
 
-                                            <SharedTasksPanel
-                                                tasks={tasks}
-                                                onAdd={handleAddTask}
-                                                onUpdate={handleUpdateTask}
-                                                onDelete={handleDeleteTask}
-                                                onReorder={handleReorderTasks}
-                                                isAdmin={isAdmin}
-                                                groupMembers={enrichedGroup.memberDetails}
-                                                currentUserId={user.uid}
-                                                prefillTemplate={objectiveTemplateDraft}
-                                                onPrefillHandled={() => setObjectiveTemplateDraft(null)}
-                                                onTemplateSelect={(templateId: "deep-work" | "review-respond" | "learning-sprint") => {
-                                                    if (!isMember) return;
-                                                    const dateLabel = new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" });
-                                                    if (templateId === "deep-work") {
-                                                        setObjectiveTemplateDraft({
-                                                            title: `Deep work block - ${dateLabel}`,
-                                                            priority: "high",
-                                                            description: "Define one clear output and stay focused for one uninterrupted block.",
-                                                        });
-                                                    } else if (templateId === "review-respond") {
-                                                        setObjectiveTemplateDraft({
-                                                            title: `Review and respond - ${dateLabel}`,
-                                                            priority: "medium",
-                                                            description: "Process inbox/queue items and close urgent follow-ups.",
-                                                        });
-                                                    } else {
-                                                        setObjectiveTemplateDraft({
-                                                            title: `Learning sprint - ${dateLabel}`,
-                                                            priority: "medium",
-                                                            description: "Learn one concept and produce a concrete takeaway.",
-                                                        });
-                                                    }
-                                                }}
-                                            />
+                                        <SharedTasksPanel
+                                            tasks={tasks}
+                                            onAdd={handleAddTask}
+                                            onUpdate={handleUpdateTask}
+                                            onDelete={handleDeleteTask}
+                                            onReorder={handleReorderTasks}
+                                            isAdmin={isAdmin}
+                                            groupMembers={enrichedGroup.memberDetails}
+                                            currentUserId={user.uid}
+                                            prefillTemplate={objectiveTemplateDraft}
+                                            onPrefillHandled={() => setObjectiveTemplateDraft(null)}
+                                            onTemplateSelect={(templateId: "deep-work" | "review-respond" | "learning-sprint") => {
+                                                if (!isMember) return;
+                                                const dateLabel = new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" });
+                                                if (templateId === "deep-work") {
+                                                    setObjectiveTemplateDraft({
+                                                        title: `Deep work block - ${dateLabel}`,
+                                                        priority: "high",
+                                                        description: "Define one clear output and stay focused for one uninterrupted block.",
+                                                    });
+                                                } else if (templateId === "review-respond") {
+                                                    setObjectiveTemplateDraft({
+                                                        title: `Review and respond - ${dateLabel}`,
+                                                        priority: "medium",
+                                                        description: "Process inbox/queue items and close urgent follow-ups.",
+                                                    });
+                                                } else {
+                                                    setObjectiveTemplateDraft({
+                                                        title: `Learning sprint - ${dateLabel}`,
+                                                        priority: "medium",
+                                                        description: "Learn one concept and produce a concrete takeaway.",
+                                                    });
+                                                }
+                                            }}
+                                        />
                                     </div>
                                 </div>
 
-                                <div className="space-y-4">
+                                <div id="group-sidebar" className="space-y-4">
                                     {isAdmin && (
-                                        <div className="p-4 bg-zinc-900 border border-white/10 rounded-[10px] space-y-4">
+                                        <div id="group-admin-actions" className="p-4 bg-zinc-900 border border-white/10 rounded-[10px] space-y-4">
                                             <div className="flex items-center justify-between">
                                                 <p className="text-[10px] font-black uppercase text-zinc-500 tracking-[0.18em]">Management</p>
                                                 <Crown className="w-3.5 h-3.5 text-amber-500/70" />
                                             </div>
                                             <div className="grid grid-cols-2 gap-2">
-                                                <button 
+                                                <button
                                                     onClick={() => setIsManagingRoles(true)}
                                                     className="px-3 py-2.5 rounded-[10px] border-none bg-white/5 text-[9px] font-black uppercase tracking-widest hover:bg-white/10 transition-all text-white flex items-center justify-center gap-2 cursor-pointer relative overflow-hidden group/mgt"
                                                 >
                                                     {/* Curved Glass Edge Lights */}
                                                     <div className="absolute inset-0 rounded-[10px] border-t-[0.5px] border-white/20 pointer-events-none z-10" />
                                                     <div className="absolute inset-0 rounded-[10px] border-b-[0.5px] border-white/5 pointer-events-none z-10" />
-                                                    
+
                                                     {/* Internal Depth Glow */}
                                                     <div className="absolute top-0 inset-x-0 h-[4px] bg-gradient-to-b from-white/5 to-transparent z-10" />
-                                                    
+
                                                     <span className="relative z-10 text-zinc-400 group-hover/mgt:text-white transition-colors">Settings</span>
                                                 </button>
-                                                <button 
+                                                <button
                                                     onClick={() => setShowInviteModal(true)}
                                                     className="px-3 py-2.5 rounded-[10px] border-none bg-white text-[9px] font-black uppercase tracking-widest hover:bg-zinc-100 transition-all text-black flex items-center justify-center gap-2 cursor-pointer relative overflow-hidden group/mgt"
                                                 >
@@ -1017,7 +1098,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                         </div>
                                     )}
 
-                                    <div className="p-4 bg-zinc-900/40 border border-white/10 rounded-xl space-y-3">
+                                    <div id="group-goal-progress" className="p-4 bg-zinc-900/40 border border-white/10 rounded-xl space-y-3">
                                         <div className="flex items-center justify-between">
                                             <p className="text-[10px] font-black uppercase text-zinc-500 tracking-[0.18em]">{getGoalTypeLabel(enrichedGroup.settings?.goalType)} Goal</p>
                                             <Target className="w-3.5 h-3.5 text-[white]/70" />
@@ -1064,7 +1145,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                         </div>
                                     )}
 
-                                    <div className="p-4 bg-zinc-950/40 border border-white/10 rounded-xl">
+                                    <div id="group-members-list" className="p-4 bg-zinc-950/40 border border-white/10 rounded-xl">
                                         <div className="flex items-center justify-between mb-4">
                                             <p className="text-[10px] font-black uppercase text-zinc-500 tracking-[0.18em]">Members</p>
                                             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/25">
@@ -1093,13 +1174,13 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                                                     <p className={cn(
                                                                         "text-[10px] font-bold",
                                                                         isPausedMember ? "text-amber-300/80" : "text-indigo-300/80"
-                                                                    )}>Session: <LiveElapsedTimer 
-                                                                        startTime={m.liveSessionStartedAt} 
-                                                                        isActive={m.isFocusing} 
-                                                                        isPaused={isPausedMember}
-                                                                        pausedAt={m.liveSessionPausedAt}
-                                                                        lastHeartbeat={m.liveSessionLastHeartbeat}
-                                                                    /></p>
+                                                                    )}>Session: <LiveElapsedTimer
+                                                                            startTime={m.liveSessionStartedAt}
+                                                                            isActive={m.isFocusing}
+                                                                            isPaused={isPausedMember}
+                                                                            pausedAt={m.liveSessionPausedAt}
+                                                                            lastHeartbeat={m.liveSessionLastHeartbeat}
+                                                                        /></p>
                                                                 )}
                                                             </div>
                                                             {m.isFocusing && <span className={cn("text-[9px] font-black uppercase", isPausedMember ? "text-amber-400" : "text-indigo-400")}>{isPausedMember ? "Paused" : "Live"}</span>}
@@ -1116,22 +1197,22 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                 </div>
                             </div>
                         ) : activeTab === "members" ? (
-                            <ParticipantsTab 
-                                group={enrichedGroup} 
-                                sortedMembers={sortedMembers} 
-                                user={user} 
+                            <ParticipantsTab
+                                group={enrichedGroup}
+                                sortedMembers={sortedMembers}
+                                user={user}
                                 isAdmin={isAdmin}
                                 onManageRoles={() => setIsManagingRoles(true)}
                                 onInvite={() => setShowInviteModal(true)}
                                 goalHours={enrichedGroup.settings?.goalHours || 0}
                                 goalType={enrichedGroup.settings?.goalType || "weekly"}
                             />
-                         ) : activeTab === "chat" ? (
+                        ) : activeTab === "chat" ? (
                             <GroupChat groupId={groupId} isHost={isHost} groupMembers={enrichedGroup.memberDetails} />
-                         ) : (
+                        ) : (
                             <GroupMaterials groupId={groupId} isHost={isHost} groupName={enrichedGroup.name} groupMembers={enrichedGroup.memberDetails} />
-                         )}
-                      </div>
+                        )}
+                    </div>
                 )}
             </div>
 
@@ -1146,13 +1227,13 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
 
             <AnimatePresence>
                 {showDeleteConfirm && enrichedGroup && (
-                    <motion.div 
-                        initial={{ opacity: 0 }} 
-                        animate={{ opacity: 1 }} 
-                        exit={{ opacity: 0 }} 
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
                         className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-zinc-950/90 backdrop-blur-sm"
                     >
-                        <motion.div 
+                        <motion.div
                             initial={{ scale: 0.95, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.95, opacity: 0 }}
@@ -1166,13 +1247,13 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                                 <p className="text-zinc-500 text-xs">This action is permanent and will remove all tasks and member data for <span className="text-white font-bold">{enrichedGroup.name}</span>.</p>
                             </div>
                             <div className="flex flex-col gap-2">
-                                <button 
+                                <button
                                     onClick={handleDeleteGroup}
                                     className="w-full py-3 bg-red-500 hover:bg-red-600 text-white font-black rounded-[10px] text-xs uppercase tracking-widest transition-colors cursor-pointer"
                                 >
                                     Delete Forever
                                 </button>
-                                <button 
+                                <button
                                     onClick={() => setShowDeleteConfirm(false)}
                                     className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-black rounded-[10px] text-xs uppercase tracking-widest transition-colors cursor-pointer"
                                 >
@@ -1183,6 +1264,19 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Floating Help/Tour Button */}
+            {isMember && activeTab === "workspace" && (
+                <div className="fixed bottom-6 left-6 z-50">
+                    <button
+                        onClick={handleRestartTour}
+                        className="p-3 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
+                        title="Restart Page Tour"
+                    >
+                        <HelpCircle className="w-5 h-5" />
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

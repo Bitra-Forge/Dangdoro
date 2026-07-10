@@ -638,7 +638,7 @@ function GroupCard({
                             <Pencil className="w-3.5 h-3.5" />
                         </button>
                     </Tooltip>
-                    
+
                     <Tooltip content="Delete group">
                         <button onClick={handleDelete} className="text-zinc-500 hover:text-red-400 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center flex-shrink-0">
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1297,15 +1297,15 @@ export default function TasksPage() {
     const tourSteps: TourStep[] = [
         {
             popover: {
-                title: "Welcome to Tasks",
-                description: "Organize tasks into customizable group boards with drag-and-drop, priorities, and AI planning.",
+                title: "Hey there! Welcome to Tasks",
+                description: "This is your workspace board. Think of it as your command center where you can organize tasks, prioritize what matters, and lay out your boards.",
             },
         },
         {
             element: "#btn-new-group",
             popover: {
-                title: "New Custom Group",
-                description: "Create a new board to organize your focus items by project, category, or workflow status.",
+                title: "Create a new board",
+                description: "Click here to add a new custom group. You can use boards to group tasks by project, category, or whatever workflow works best for you.",
                 side: "left",
                 align: "center",
             },
@@ -1313,8 +1313,17 @@ export default function TasksPage() {
         {
             element: "#btn-planner",
             popover: {
-                title: "AI Daily Planner",
-                description: "Stuck on planning? Ask the AI Task Planner Agent to automatically outline, structure, and generate task lists for you.",
+                title: "Meet your AI Planner",
+                description: "Not sure where to start? Let the AI Task Agent draft your checklist, break down big tasks, and structure your day in seconds.",
+                side: "left",
+                align: "center",
+            },
+        },
+        {
+            element: "#canvas-controls",
+            popover: {
+                title: "Canvas & Shortcuts",
+                description: "Pan around the board using the Hand tool, and zoom with +/- or your mouse wheel.<br/><br/><b>Shortcuts:</b><br/>• Hold <b>Space</b> to pan/drag the canvas<br/>• Press <b>H</b> to toggle tools<br/>• Press <b>Ctrl + 0</b> to reset zoom",
                 side: "left",
                 align: "center",
             },
@@ -1777,7 +1786,7 @@ export default function TasksPage() {
                             tasks={tasksByGroup(g.id)}
                             userId={user.uid}
                             isDragOver={false}
-                            onTaskDragStart={() => {}}
+                            onTaskDragStart={() => { }}
                             cardRef={el => { groupRefs.current[g.id] = el }}
                             overTaskId={null}
                             overTaskPosition={null}
@@ -1790,7 +1799,7 @@ export default function TasksPage() {
                             tasks={assignedTasks}
                             userId={user.uid}
                             isDragOver={false}
-                            onTaskDragStart={() => {}}
+                            onTaskDragStart={() => { }}
                             isMobileMode={true}
                             zoom={1}
                         />
@@ -1829,114 +1838,114 @@ export default function TasksPage() {
                 </div>
             )}
 
-                {/* FAB */}
-                <div className="fixed bottom-24 right-4 md:bottom-8 md:right-8 z-30 flex flex-col items-end gap-3">
-                    {isCreatingGroup && (
-                        <form onSubmit={handleCreateGroup} className="flex items-center gap-2 animate-in slide-in-from-bottom-4 fade-in duration-200 max-w-[100vw]">
-                            <input autoFocus value={newGroupName} onChange={e => setNewGroupName(e.target.value)}
-                                onKeyDown={e => e.key === "Escape" && setIsCreatingGroup(false)} placeholder="Group name…"
-                                className="bg-zinc-900/90 backdrop-blur-xl border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white font-bold outline-none focus:border-emerald-500/40 transition-colors w-40 xs:w-48" />
-                            <button type="submit" className="p-2.5 rounded-xl bg-emerald-500 text-black hover:bg-emerald-400 transition-colors"><Check className="w-4 h-4" /></button>
-                            <button type="button" onClick={() => setIsCreatingGroup(false)} className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-400 hover:text-white transition-colors"><X className="w-4 h-4" /></button>
-                        </form>
-                    )}
-                    <button id="btn-planner" onClick={() => setShowAgent(v => !v)}
-                        className="flex items-center gap-2 px-5 py-3 bg-white/5 border border-white/10 text-zinc-400 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all backdrop-blur-xl shadow-lg">
-                        <Sparkles className="w-4 h-4" /> Planner
-                    </button>
-                    <button id="btn-new-group" onClick={() => setIsCreatingGroup(v => !v)}
-                        className="flex items-center gap-2 px-5 py-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-emerald-500/20 transition-all backdrop-blur-xl shadow-lg">
-                        <Plus className="w-4 h-4" /> New Group
-                    </button>
-                </div>
+            {/* FAB */}
+            <div className="fixed bottom-24 right-4 md:bottom-8 md:right-8 z-30 flex flex-col items-end gap-3">
+                {isCreatingGroup && (
+                    <form onSubmit={handleCreateGroup} className="flex items-center gap-2 animate-in slide-in-from-bottom-4 fade-in duration-200 max-w-[100vw]">
+                        <input autoFocus value={newGroupName} onChange={e => setNewGroupName(e.target.value)}
+                            onKeyDown={e => e.key === "Escape" && setIsCreatingGroup(false)} placeholder="Group name…"
+                            className="bg-zinc-900/90 backdrop-blur-xl border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white font-bold outline-none focus:border-emerald-500/40 transition-colors w-40 xs:w-48" />
+                        <button type="submit" className="p-2.5 rounded-xl bg-emerald-500 text-black hover:bg-emerald-400 transition-colors"><Check className="w-4 h-4" /></button>
+                        <button type="button" onClick={() => setIsCreatingGroup(false)} className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-400 hover:text-white transition-colors"><X className="w-4 h-4" /></button>
+                    </form>
+                )}
+                <button id="btn-planner" onClick={() => setShowAgent(v => !v)}
+                    className="flex items-center gap-2 px-5 py-3 bg-white/5 border border-white/10 text-zinc-400 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all backdrop-blur-xl shadow-lg">
+                    <Sparkles className="w-4 h-4" /> Planner
+                </button>
+                <button id="btn-new-group" onClick={() => setIsCreatingGroup(v => !v)}
+                    className="flex items-center gap-2 px-5 py-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-emerald-500/20 transition-all backdrop-blur-xl shadow-lg">
+                    <Plus className="w-4 h-4" /> New Group
+                </button>
+            </div>
 
-                {/* AI Task Agent */}
-                {showAgent && <TaskAgent onApply={handleApplyAgentGroups} onClose={() => setShowAgent(false)} />}
+            {/* AI Task Agent */}
+            {showAgent && <TaskAgent onApply={handleApplyAgentGroups} onClose={() => setShowAgent(false)} />}
 
-                {/* Drag clone */}
-                {draggingTask && (() => {
-                    const colorConfig = getGroupColor(dragTaskColor);
-                    const showDeleteWarning = overTrash && !overGroupId;
-                    return (
-                        <div
-                            style={{
-                                position: "fixed",
-                                left: clonePos.x + 12,
-                                top: clonePos.y + 12,
-                                pointerEvents: "none",
-                                zIndex: 99,
-                                animation: showDeleteWarning ? "shake 0.3s ease-in-out infinite" : undefined,
-                                boxShadow: deleteReady
-                                    ? "0 0 22px 5px rgba(239,68,68,0.55), 0 12px 28px rgba(0,0,0,0.5)"
-                                    : `0 0 18px 3px ${colorConfig.shadow}, 0 12px 28px rgba(0,0,0,0.5)`,
-                                transform: "rotate(3.5deg) scale(1.04)",
-                                transformOrigin: "top left",
-                                transition: "transform 0.15s ease-out"
-                            }}
-                            className={cn(
-                                "rounded-xl px-3.5 py-2.5 backdrop-blur-xl border transition-colors flex flex-col gap-1 min-w-[200px] max-w-[285px]",
-                                deleteReady ? "border-red-500/60 bg-red-950/80" : colorConfig.border,
-                                !deleteReady && "bg-zinc-900/95"
+            {/* Drag clone */}
+            {draggingTask && (() => {
+                const colorConfig = getGroupColor(dragTaskColor);
+                const showDeleteWarning = overTrash && !overGroupId;
+                return (
+                    <div
+                        style={{
+                            position: "fixed",
+                            left: clonePos.x + 12,
+                            top: clonePos.y + 12,
+                            pointerEvents: "none",
+                            zIndex: 99,
+                            animation: showDeleteWarning ? "shake 0.3s ease-in-out infinite" : undefined,
+                            boxShadow: deleteReady
+                                ? "0 0 22px 5px rgba(239,68,68,0.55), 0 12px 28px rgba(0,0,0,0.5)"
+                                : `0 0 18px 3px ${colorConfig.shadow}, 0 12px 28px rgba(0,0,0,0.5)`,
+                            transform: "rotate(3.5deg) scale(1.04)",
+                            transformOrigin: "top left",
+                            transition: "transform 0.15s ease-out"
+                        }}
+                        className={cn(
+                            "rounded-xl px-3.5 py-2.5 backdrop-blur-xl border transition-colors flex flex-col gap-1 min-w-[200px] max-w-[285px]",
+                            deleteReady ? "border-red-500/60 bg-red-950/80" : colorConfig.border,
+                            !deleteReady && "bg-zinc-900/95"
+                        )}
+                    >
+                        <div className="flex items-center gap-2">
+                            {deleteReady ? (
+                                <Trash2 className="w-3.5 h-3.5 text-red-400 animate-bounce" />
+                            ) : (
+                                <span className={cn("w-2 h-2 rounded-full", getPriority(draggingTask.priority).dot)} />
                             )}
-                        >
-                            <div className="flex items-center gap-2">
-                                {deleteReady ? (
-                                    <Trash2 className="w-3.5 h-3.5 text-red-400 animate-bounce" />
-                                ) : (
-                                    <span className={cn("w-2 h-2 rounded-full", getPriority(draggingTask.priority).dot)} />
+                            <span className={cn("text-xs font-bold truncate", deleteReady ? "text-red-300" : "text-white")}>
+                                {deleteReady ? "Release to delete" : draggingTask.title}
+                            </span>
+                        </div>
+                        {!deleteReady && (draggingTask.durationMinutes || draggingTask.notes) && (
+                            <div className="flex items-center gap-2 mt-0.5 text-[9px] text-zinc-400 font-semibold uppercase tracking-wider">
+                                {draggingTask.durationMinutes && (
+                                    <span className="flex items-center gap-1 bg-white/5 rounded px-1 py-0.5">
+                                        <Clock className="w-2.5 h-2.5" />{draggingTask.durationMinutes}m
+                                    </span>
                                 )}
-                                <span className={cn("text-xs font-bold truncate", deleteReady ? "text-red-300" : "text-white")}>
-                                    {deleteReady ? "Release to delete" : draggingTask.title}
-                                </span>
+                                {draggingTask.notes && (
+                                    <span className="flex items-center gap-1 bg-white/5 rounded px-1 py-0.5 max-w-[120px] truncate">
+                                        {draggingTask.notes}
+                                    </span>
+                                )}
                             </div>
-                            {!deleteReady && (draggingTask.durationMinutes || draggingTask.notes) && (
-                                <div className="flex items-center gap-2 mt-0.5 text-[9px] text-zinc-400 font-semibold uppercase tracking-wider">
-                                    {draggingTask.durationMinutes && (
-                                        <span className="flex items-center gap-1 bg-white/5 rounded px-1 py-0.5">
-                                            <Clock className="w-2.5 h-2.5" />{draggingTask.durationMinutes}m
-                                        </span>
-                                    )}
-                                    {draggingTask.notes && (
-                                        <span className="flex items-center gap-1 bg-white/5 rounded px-1 py-0.5 max-w-[120px] truncate">
-                                            {draggingTask.notes}
-                                        </span>
-                                    )}
-                                </div>
-                            )}
-                            {showDeleteWarning && !deleteReady && (
-                                <div className="text-[9px] text-red-400/80 font-bold mt-1 uppercase tracking-widest animate-pulse">Hold to delete...</div>
-                            )}
-                        </div>
-                    );
-                })()}
+                        )}
+                        {showDeleteWarning && !deleteReady && (
+                            <div className="text-[9px] text-red-400/80 font-bold mt-1 uppercase tracking-widest animate-pulse">Hold to delete...</div>
+                        )}
+                    </div>
+                );
+            })()}
 
-                {/* Delete animation */}
-                {deletingTask && (() => {
-                    const colorConfig = getGroupColor(deletingTask.color);
-                    return (
-                        <div
-                            style={{
-                                position: "fixed",
-                                left: deletingTask.pos.x + 10,
-                                top: deletingTask.pos.y + 10,
-                                pointerEvents: "none",
-                                zIndex: 99,
-                                animation: "deleteTask 0.4s ease-out forwards",
-                                boxShadow: `0 0 30px ${colorConfig.shadow}`
-                            }}
-                            className={cn(
-                                "rounded-xl px-3 py-2 backdrop-blur-xl border",
-                                colorConfig.border,
-                                "bg-zinc-800/90"
-                            )}
-                        >
-                            <span className="text-xs font-bold text-white">{deletingTask.title}</span>
-                        </div>
-                    );
-                })()}
+            {/* Delete animation */}
+            {deletingTask && (() => {
+                const colorConfig = getGroupColor(deletingTask.color);
+                return (
+                    <div
+                        style={{
+                            position: "fixed",
+                            left: deletingTask.pos.x + 10,
+                            top: deletingTask.pos.y + 10,
+                            pointerEvents: "none",
+                            zIndex: 99,
+                            animation: "deleteTask 0.4s ease-out forwards",
+                            boxShadow: `0 0 30px ${colorConfig.shadow}`
+                        }}
+                        className={cn(
+                            "rounded-xl px-3 py-2 backdrop-blur-xl border",
+                            colorConfig.border,
+                            "bg-zinc-800/90"
+                        )}
+                    >
+                        <span className="text-xs font-bold text-white">{deletingTask.title}</span>
+                    </div>
+                );
+            })()}
 
-                {/* CSS Animations & Hide Scrollbar */}
-                <style jsx global>{`
+            {/* CSS Animations & Hide Scrollbar */}
+            <style jsx global>{`
                 /* Hide scrollbar for all group card scrollable areas */
                 .overflow-y-auto::-webkit-scrollbar {
                     display: none;
@@ -1962,83 +1971,83 @@ export default function TasksPage() {
                 }
             `}</style>
 
-                {/* Guest nudge */}
-                {user.isAnonymous && (
-                    <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2.5 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-700 whitespace-normal sm:whitespace-nowrap max-w-[calc(100vw-2rem)] sm:max-w-none flex-wrap sm:flex-nowrap justify-center">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest text-center sm:text-left">Your tasks are saved on this device. Sign in or register to keep them everywhere.</p>
-                        <Button variant="ghost" onClick={() => window.location.href = "/profile"}
-                            className="text-emerald-500 hover:text-emerald-400 font-black uppercase tracking-widest text-[10px] h-auto p-0 flex-shrink-0">
-                            Sign In | Register
-                        </Button>
+            {/* Guest nudge */}
+            {user.isAnonymous && (
+                <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2.5 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-700 whitespace-normal sm:whitespace-nowrap max-w-[calc(100vw-2rem)] sm:max-w-none flex-wrap sm:flex-nowrap justify-center">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest text-center sm:text-left">Your tasks are saved on this device. Sign in or register to keep them everywhere.</p>
+                    <Button variant="ghost" onClick={() => window.location.href = "/profile"}
+                        className="text-emerald-500 hover:text-emerald-400 font-black uppercase tracking-widest text-[10px] h-auto p-0 flex-shrink-0">
+                        Sign In | Register
+                    </Button>
+                </div>
+            )}
+            {/* Floating Help/Tour Button */}
+            <div className="fixed bottom-6 left-6 z-50">
+                <button
+                    onClick={handleRestartTour}
+                    className="p-3 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
+                    title="Restart Page Tour"
+                >
+                    <HelpCircle className="w-5 h-5" />
+                </button>
+            </div>
+
+            {/* Toolbar */}
+            {!isMobileMode && (
+                <div id="canvas-controls" className="fixed top-24 right-4 sm:right-8 z-50 flex flex-col items-center gap-2">
+                    {/* Tool buttons */}
+                    <div className="flex items-center gap-1">
+                        <Tooltip content="Select tool" side="left">
+                            <button onClick={() => setToolMode("default")}
+                                className={cn("p-1.5 rounded-lg transition-colors", toolMode === "default" ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>
+                                <MousePointer className="w-4 h-4" />
+                            </button>
+                        </Tooltip>
+                        <Tooltip content="Hand tool (H or hold Space)" side="left">
+                            <button onClick={() => setToolMode(t => t === "hand" ? "default" : "hand")}
+                                className={cn("p-1.5 rounded-lg transition-colors", toolMode === "hand" ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>
+                                <Hand className="w-4 h-4" />
+                            </button>
+                        </Tooltip>
                     </div>
-                )}
-                {/* Floating Help/Tour Button */}
-                <div className="fixed bottom-6 left-6 z-50">
+                    {/* Zoom controls */}
                     <button
-                        onClick={handleRestartTour}
-                        className="p-3 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
-                        title="Restart Page Tour"
+                        onClick={() => {
+                            const newZoom = Math.max(0.25, +(zoom - 0.1).toFixed(2))
+                            const cx = viewportSize.w / 2
+                            const cy = viewportSize.h / 2
+                            const canvasX = (cx - pan.x) / zoom
+                            const canvasY = (cy - pan.y) / zoom
+                            setPan({ x: cx - canvasX * newZoom, y: cy - canvasY * newZoom })
+                            setZoom(newZoom)
+                        }}
+                        className="text-zinc-400 hover:text-white transition-colors p-1"
                     >
-                        <HelpCircle className="w-5 h-5" />
+                        <ZoomOut className="w-5 h-5" />
+                    </button>
+                    <Tooltip content="Reset zoom (Ctrl+0)" side="left">
+                        <span onClick={() => { setPan({ x: 0, y: 0 }); setZoom(1) }}
+                            className="text-xs font-black text-zinc-400 min-w-[3.5rem] text-center select-none cursor-pointer hover:text-white transition-colors">
+                            {Math.round(zoom * 100)}%
+                        </span>
+                    </Tooltip>
+                    <button
+                        onClick={() => {
+                            const newZoom = Math.min(2, +(zoom + 0.1).toFixed(2))
+                            const cx = viewportSize.w / 2
+                            const cy = viewportSize.h / 2
+                            const canvasX = (cx - pan.x) / zoom
+                            const canvasY = (cy - pan.y) / zoom
+                            setPan({ x: cx - canvasX * newZoom, y: cy - canvasY * newZoom })
+                            setZoom(newZoom)
+                        }}
+                        className="text-zinc-400 hover:text-white transition-colors p-1"
+                    >
+                        <ZoomIn className="w-5 h-5" />
                     </button>
                 </div>
-
-                {/* Toolbar */}
-                {!isMobileMode && (
-                    <div className="fixed top-24 right-4 sm:right-8 z-50 flex flex-col items-center gap-2">
-                        {/* Tool buttons */}
-                        <div className="flex items-center gap-1">
-                            <Tooltip content="Select tool" side="left">
-                                <button onClick={() => setToolMode("default")}
-                                    className={cn("p-1.5 rounded-lg transition-colors", toolMode === "default" ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>
-                                    <MousePointer className="w-4 h-4" />
-                                </button>
-                            </Tooltip>
-                            <Tooltip content="Hand tool (H or hold Space)" side="left">
-                                <button onClick={() => setToolMode(t => t === "hand" ? "default" : "hand")}
-                                    className={cn("p-1.5 rounded-lg transition-colors", toolMode === "hand" ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>
-                                    <Hand className="w-4 h-4" />
-                                </button>
-                            </Tooltip>
-                        </div>
-                        {/* Zoom controls */}
-                        <button
-                            onClick={() => {
-                                const newZoom = Math.max(0.25, +(zoom - 0.1).toFixed(2))
-                                const cx = viewportSize.w / 2
-                                const cy = viewportSize.h / 2
-                                const canvasX = (cx - pan.x) / zoom
-                                const canvasY = (cy - pan.y) / zoom
-                                setPan({ x: cx - canvasX * newZoom, y: cy - canvasY * newZoom })
-                                setZoom(newZoom)
-                            }}
-                            className="text-zinc-400 hover:text-white transition-colors p-1"
-                        >
-                            <ZoomOut className="w-5 h-5" />
-                        </button>
-                        <Tooltip content="Reset zoom (Ctrl+0)" side="left">
-                            <span onClick={() => { setPan({ x: 0, y: 0 }); setZoom(1) }}
-                                className="text-xs font-black text-zinc-400 min-w-[3.5rem] text-center select-none cursor-pointer hover:text-white transition-colors">
-                                {Math.round(zoom * 100)}%
-                            </span>
-                        </Tooltip>
-                        <button
-                            onClick={() => {
-                                const newZoom = Math.min(2, +(zoom + 0.1).toFixed(2))
-                                const cx = viewportSize.w / 2
-                                const cy = viewportSize.h / 2
-                                const canvasX = (cx - pan.x) / zoom
-                                const canvasY = (cy - pan.y) / zoom
-                                setPan({ x: cx - canvasX * newZoom, y: cy - canvasY * newZoom })
-                                setZoom(newZoom)
-                            }}
-                            className="text-zinc-400 hover:text-white transition-colors p-1"
-                        >
-                            <ZoomIn className="w-5 h-5" />
-                        </button>
-                    </div>
-                )}
+            )}
         </BackgroundTheme>
     );
 }

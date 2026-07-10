@@ -332,6 +332,11 @@ input[type="number"] {
     box-shadow: 0 0 20px rgba(255, 255, 255, 0.15) !important;
 }
 
+#canvas-controls.driver-active-element,
+#canvas-controls.driver-highlighted-element {
+    position: fixed !important;
+}
+
 /* Temporarily disable backdrop-filters inside active elements during
    tours to prevent browser rendering bugs */
 .driver-active-element .backdrop-blur-none,

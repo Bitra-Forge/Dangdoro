@@ -4,13 +4,15 @@ import { memo, useState, useEffect, useMemo } from "react";
 import { useTimerStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { 
-    Target, Copy, Crown, Zap, UserX, RotateCcw, Tag, AlignLeft, Clock, ChevronLeft, MoreHorizontal, Plus
+    Target, Copy, Crown, Zap, UserX, RotateCcw, Tag, AlignLeft, Clock, ChevronLeft, MoreHorizontal, Plus,
+    HelpCircle
 } from "lucide-react";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { fmtMinutes, getManagementGroupKey, computeNextResetAt, toMillis } from "@/lib/groups";
+import { useTour, type TourStep } from "@/lib/use-tour";
 
 export const GroupManagementView = memo(function GroupManagementView({ 
     group, 
@@ -25,6 +27,80 @@ export const GroupManagementView = memo(function GroupManagementView({
     const isHost = userRole === "host";
     const isAdmin = userRole === "admin";
     const isHostOrAdmin = isHost || isAdmin;
+
+    const tourSteps: TourStep[] = [
+        {
+            popover: {
+                title: "Welcome to Settings",
+                description: "This is where you customize your group's details, weekly goals, auto-resets, and membership roles.",
+            },
+        },
+        {
+            element: "#btn-settings-back",
+            popover: {
+                title: "Back to Workspace",
+                description: "Click here to exit settings and return to the main group workspace at any time.",
+                side: "bottom",
+                align: "center",
+            },
+        },
+        {
+            element: "#btn-settings-save",
+            popover: {
+                title: "Save Changes",
+                description: "Apply any configuration edits you've made to the group.",
+                side: "bottom",
+                align: "center",
+            },
+        },
+        {
+            element: "#settings-about",
+            popover: {
+                title: "About the Group",
+                description: "Update the group's name and general description here.",
+                side: "bottom",
+                align: "center",
+            },
+        },
+        {
+            element: "#settings-goal-config",
+            popover: {
+                title: "Goals & Resets",
+                description: "Configure target weekly hours or perform manual resets on member progress.",
+                side: "top",
+                align: "center",
+            },
+        },
+        {
+            element: "#settings-auto-reset",
+            popover: {
+                title: "Automatic Resets",
+                description: "Schedule automated progress resets (e.g. daily or weekly) to automatically start a new goal cycle.",
+                side: "top",
+                align: "center",
+            },
+        },
+        {
+            element: "#settings-members",
+            popover: {
+                title: "Members & Roles",
+                description: "Manage roles, adjust permissions, or remove members from the group.",
+                side: "top",
+                align: "center",
+            },
+        },
+    ];
+
+    const { resetTour, startTour } = useTour({
+        pageName: "group-settings",
+        steps: tourSteps,
+        disabled: !isHostOrAdmin
+    });
+
+    const handleRestartTour = () => {
+        resetTour();
+        startTour();
+    };
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
@@ -168,6 +244,7 @@ export const GroupManagementView = memo(function GroupManagementView({
             {/* Top Header bar matching Mockup */}
             <div className="flex items-center justify-between border-b border-white/5 pb-6">
                 <button
+                    id="btn-settings-back"
                     onClick={onClose}
                     className="flex items-center gap-2 text-zinc-400 hover:text-white transition-all text-xs font-black uppercase tracking-widest cursor-pointer"
                 >
@@ -176,6 +253,7 @@ export const GroupManagementView = memo(function GroupManagementView({
                 </button>
                 
                 <button
+                    id="btn-settings-save"
                     onClick={handleSave}
                     disabled={!hasChanges || isSaving}
                     className={cn(
@@ -198,7 +276,7 @@ export const GroupManagementView = memo(function GroupManagementView({
             {isHostOrAdmin && (
                 <div className="space-y-6">
                     {/* Basic Information Card */}
-                    <div className="p-6 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-6">
+                    <div id="settings-about" className="p-6 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-6">
                         <div>
                             <h4 className="text-base font-bold text-white">About the group</h4>
                         </div>
@@ -227,7 +305,7 @@ export const GroupManagementView = memo(function GroupManagementView({
                     </div>
 
                     {/* Focus Goal & Reset Progress Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div id="settings-goal-config" className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="p-6 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-6 flex flex-col justify-between">
                             <div className="space-y-2">
                                 <h4 className="text-base font-bold text-white">Weekly goal</h4>
@@ -281,7 +359,7 @@ export const GroupManagementView = memo(function GroupManagementView({
                     </div>
 
                     {/* Auto Reset Goal */}
-                    <div className="p-6 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-6">
+                    <div id="settings-auto-reset" className="p-6 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-6">
                         <div className="flex items-center justify-between">
                             <div className="space-y-2">
                                 <h4 className="text-base font-bold text-white">Automatic resets</h4>
@@ -364,7 +442,7 @@ export const GroupManagementView = memo(function GroupManagementView({
             )}
 
             {/* Redesigned Hierarchy Table */}
-            <div className="p-6 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-6">
+            <div id="settings-members" className="p-6 rounded-3xl bg-zinc-950/40 border border-white/5 space-y-6">
                 <div className="flex items-center justify-between">
                     <div className="space-y-1">
                         <h4 className="text-base font-bold text-white">Members & roles</h4>
@@ -527,6 +605,18 @@ export const GroupManagementView = memo(function GroupManagementView({
                 </div>
             )}
 
+            {/* Floating Help/Tour Button */}
+            {isHostOrAdmin && (
+                <div className="fixed bottom-6 left-6 z-50">
+                    <button
+                        onClick={handleRestartTour}
+                        className="p-3 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
+                        title="Restart Settings Tour"
+                    >
+                        <HelpCircle className="w-5 h-5" />
+                    </button>
+                </div>
+            )}
         </div>
     );
 }, (prevProps, nextProps) => {

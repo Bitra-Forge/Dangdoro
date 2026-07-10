@@ -190,7 +190,7 @@ export function useTour({ pageName, steps, onComplete, onDismiss, isGuest = fals
             }
             driverObj.destroy();
         };
-    }, [isHydrated, hasSeenTour, stepsString, storageKey, disabled]);
+    }, [isHydrated, hasSeenTour, stepsString, storageKey, disabled, isGuest]);
 
     const startTour = () => {
         if (driverRef.current) {
