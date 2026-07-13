@@ -273,6 +273,15 @@ html::-webkit-scrollbar {
     display: none;
 }
 
+.scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+    display: none;
+}
+
 /* Thin themed scrollbar for fixed-size scrolling lists (e.g. focus context menu) */
 .group-list-scroll {
     scrollbar-width: thin;
