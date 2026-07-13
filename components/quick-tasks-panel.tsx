@@ -192,7 +192,7 @@ export function QuickTasksPanel() {
             </div>
 
             {/* Task List */}
-            <div className="flex-1 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden flex flex-col gap-3 py-1 min-h-0">
+            <div className="flex-1 overflow-y-auto scrollbar-none flex flex-col gap-3 py-1 min-h-0">
               {tasks.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full py-8 text-zinc-600 bg-white/[0.01] border border-white/[0.03] rounded-xl p-4">
                   <ListTodo className="w-8 h-8 mb-2 opacity-20" />

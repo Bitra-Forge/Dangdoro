@@ -299,7 +299,7 @@ export const GroupManagementView = memo(function GroupManagementView({
                                 onChange={(e) => setDraftDescription(e.target.value)}
                                 placeholder="Enter a brief description for this group..." 
                                 rows={3}
-                                className="w-full bg-zinc-900/55 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-[white]/40 outline-none resize-none scrollbar-none [ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" 
+                                className="w-full bg-zinc-900/55 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-[white]/40 outline-none resize-none scrollbar-none" 
                             />
                         </div>
                     </div>

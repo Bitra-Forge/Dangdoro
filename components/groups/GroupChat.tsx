@@ -399,9 +399,8 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
 
     return (
         <>
-
         <div className="flex-1 min-h-0 group-chat-container flex flex-col border-y border-x-0 sm:border border-border bg-card sm:rounded-xl rounded-none overflow-hidden">
-            <div ref={containerRef} className="flex-1 overflow-y-auto space-y-3 p-4 chat-scroll">
+            <div ref={containerRef} className="flex-1 overflow-y-auto space-y-3 p-4">
                 {pinnedMessages.length > 0 && (
                     <div className="mb-3 bg-zinc-900/60 border border-zinc-800 rounded-xl overflow-hidden">
                         <button
@@ -549,7 +548,7 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
                         }}
                         placeholder="Type a message..."
                         style={{ fieldSizing: "content" } as any}
-                        className="flex-1 bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-white/20 transition-all resize-none max-h-32 overflow-y-auto chat-scroll"
+                        className="flex-1 bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-white/20 transition-all resize-none max-h-32 overflow-y-auto scrollbar-none"
                     />
                     <button
                         onClick={handleSend}

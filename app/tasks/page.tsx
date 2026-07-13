@@ -2036,12 +2036,9 @@ export default function TasksPage() {
                 );
             })()}
 
-            {/* CSS Animations & Hide Scrollbar */}
+            {/* CSS Animations */}
             <style jsx global>{`
-                /* Hide scrollbar for all group card scrollable areas */
-                .overflow-y-auto::-webkit-scrollbar {
-                    display: none;
-                }
+                
                 @keyframes shake {
                     0%, 100% { transform: translateX(0); }
                     25% { transform: translateX(-2px) rotate(-1deg); }

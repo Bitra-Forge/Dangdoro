@@ -268,7 +268,7 @@ export function NotesPanel() {
                 onInput={handleEditorInput}
                 onMouseUp={saveSelection}
                 onKeyUp={saveSelection}
-                className="w-full h-full bg-transparent border-none outline-none text-zinc-200 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden font-[family-name:var(--font-jetbrains)] text-sm leading-relaxed"
+                className="w-full h-full bg-transparent border-none outline-none text-zinc-200 overflow-y-auto scrollbar-none font-[family-name:var(--font-jetbrains)] text-sm leading-relaxed"
               />
             </div>
 

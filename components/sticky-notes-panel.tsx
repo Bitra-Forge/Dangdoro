@@ -402,7 +402,7 @@ export function StickyNotesPanel() {
             </div>
 
             {/* ── Notes list ─────────────────────────────────────────────── */}
-            <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden min-h-0">
+            <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-2 scrollbar-none min-h-0">
               {filteredNotes.length === 0 ? (
                 <div className="text-center py-8">
                   <StickyNote className="w-8 h-8 mx-auto opacity-20 text-zinc-500 mb-2" />

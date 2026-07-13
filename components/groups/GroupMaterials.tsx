@@ -67,7 +67,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
     const [filter, setFilter] = useState<MaterialFilter>("all");
     const [showModal, setShowModal] = useState(false);
     const [modalType, setModalType] = useState<"link" | "image" | "file">("link");
-    
+
     // Form fields
     const [linkUrl, setLinkUrl] = useState("");
     const [title, setTitle] = useState("");
@@ -75,7 +75,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
     const [tags, setTags] = useState("");
     const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
     const [fetchingOg, setFetchingOg] = useState(false);
-    
+
     // File upload details
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -83,7 +83,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
 
     // Edit material state
     const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
-    
+
     // Downloading ID state
     const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
@@ -506,176 +506,176 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                     style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}
                 >
                     <AnimatePresence mode="popLayout">
-                    {filtered.map(m => {
-                        const canDelete = user?.uid === m.addedBy || isHost;
-                        const canEdit = user?.uid === m.addedBy || isHost;
-                        return (
-                            <motion.div
-                                key={m.id}
-                                layout="position"
-                                layoutId={m.id}
-                                initial={{ opacity: 0, scale: 0.94, y: 12 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.92, y: -8, transition: { duration: 0.18, ease: "easeIn" } }}
-                                transition={{
-                                    layout: { type: "spring", stiffness: 300, damping: 30 },
-                                    opacity: { duration: 0.22, ease: "easeOut" },
-                                    scale: { duration: 0.22, ease: "easeOut" },
-                                    y: { duration: 0.22, ease: "easeOut" },
-                                }}
-                                onClick={() => handleCardClick(m)}
-                                className="group bg-zinc-900/60 border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition-colors relative flex flex-col h-[360px] max-h-[360px] w-full cursor-pointer"
-                            >
-                                {/* Media / Thumbnail area */}
-                                {m.type === "image" && (
-                                    <div className="w-full aspect-video bg-zinc-950 overflow-hidden shrink-0 relative border-b border-white/5">
-                                        <img
-                                            src={m.thumbnailUrl || m.url}
-                                            alt={m.title}
-                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                        />
-                                    </div>
-                                )}
-                                {m.type === "file" && (
-                                    <div className="w-full aspect-video bg-zinc-950 flex items-center justify-center shrink-0 border-b border-white/5">
-                                        <div className="flex flex-col items-center gap-2 text-zinc-600">
-                                            <FileText className="w-10 h-10" />
-                                            <span className="text-[10px] font-black uppercase tracking-wider">{getFileExtension(m.url, m.fileName)}</span>
-                                        </div>
-                                    </div>
-                                )}
-                                {m.type === "link" && (
-                                    <div className="w-full aspect-video bg-gradient-to-br from-zinc-950 to-zinc-900 overflow-hidden shrink-0 relative border-b border-white/5 flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
-                                        {m.thumbnailUrl ? (
+                        {filtered.map(m => {
+                            const canDelete = user?.uid === m.addedBy || isHost;
+                            const canEdit = user?.uid === m.addedBy || isHost;
+                            return (
+                                <motion.div
+                                    key={m.id}
+                                    layout="position"
+                                    layoutId={m.id}
+                                    initial={{ opacity: 0, scale: 0.94, y: 12 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.92, y: -8, transition: { duration: 0.18, ease: "easeIn" } }}
+                                    transition={{
+                                        layout: { type: "spring", stiffness: 300, damping: 30 },
+                                        opacity: { duration: 0.22, ease: "easeOut" },
+                                        scale: { duration: 0.22, ease: "easeOut" },
+                                        y: { duration: 0.22, ease: "easeOut" },
+                                    }}
+                                    onClick={() => handleCardClick(m)}
+                                    className="group bg-zinc-900/60 border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition-colors relative flex flex-col h-[360px] max-h-[360px] w-full cursor-pointer"
+                                >
+                                    {/* Media / Thumbnail area */}
+                                    {m.type === "image" && (
+                                        <div className="w-full aspect-video bg-zinc-950 overflow-hidden shrink-0 relative border-b border-white/5">
                                             <img
-                                                src={m.thumbnailUrl}
+                                                src={m.thumbnailUrl || m.url}
                                                 alt={m.title}
-                                                className="w-full h-full object-cover"
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                             />
-                                        ) : (
-                                            <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-zinc-950/40 backdrop-blur-[2px]">
-                                                <div className="w-10 h-10 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mb-2 shadow-[0_0_15px_rgba(6,182,212,0.15)]">
-                                                    <Link className="w-4 h-4 text-cyan-400" />
-                                                </div>
-                                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center truncate max-w-full">
-                                                    {(() => {
-                                                        try {
-                                                            return new URL(m.url).hostname.replace("www.", "");
-                                                        } catch {
-                                                            return "LINK";
-                                                        }
-                                                    })()}
-                                                </span>
+                                        </div>
+                                    )}
+                                    {m.type === "file" && (
+                                        <div className="w-full aspect-video bg-zinc-950 flex items-center justify-center shrink-0 border-b border-white/5">
+                                            <div className="flex flex-col items-center gap-2 text-zinc-600">
+                                                <FileText className="w-10 h-10" />
+                                                <span className="text-[10px] font-black uppercase tracking-wider">{getFileExtension(m.url, m.fileName)}</span>
                                             </div>
-                                        )}
-                                        {/* Subtle overlay grid lines */}
-                                        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />
-                                    </div>
-                                )}
-
-                                {/* Action Buttons overlay */}
-                                <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-zinc-950/80 backdrop-blur-sm p-1 rounded-lg border border-white/10">
+                                        </div>
+                                    )}
                                     {m.type === "link" && (
-                                        <a
-                                            href={m.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            onClick={(e) => e.stopPropagation()}
-                                            className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
-                                            title="Open Link"
-                                        >
-                                            <ExternalLink className="w-3.5 h-3.5" />
-                                        </a>
-                                    )}
-                                    {(m.type === "image" || m.type === "file") && (
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleDownload(m); }}
-                                            className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                                            title="Download"
-                                            disabled={downloadingId === m.id}
-                                        >
-                                            {downloadingId === m.id ? (
-                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        <div className="w-full aspect-video bg-gradient-to-br from-zinc-950 to-zinc-900 overflow-hidden shrink-0 relative border-b border-white/5 flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
+                                            {m.thumbnailUrl ? (
+                                                <img
+                                                    src={m.thumbnailUrl}
+                                                    alt={m.title}
+                                                    className="w-full h-full object-cover"
+                                                />
                                             ) : (
-                                                <Download className="w-3.5 h-3.5" />
-                                            )}
-                                        </button>
-                                    )}
-                                    {canEdit && (
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleEditClick(m); }}
-                                            className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                                            title="Edit"
-                                        >
-                                            <Pencil className="w-3.5 h-3.5" />
-                                        </button>
-                                    )}
-                                    {canDelete && (
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}
-                                            className="p-1 text-zinc-400 hover:text-red-400 transition-colors cursor-pointer"
-                                            title="Delete"
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                    )}
-                                </div>
-
-                                {/* Card Body */}
-                                <div className="p-4 flex flex-col flex-1 min-h-0 justify-between">
-                                    <div className="space-y-1.5 min-h-0 flex-1 flex flex-col justify-start">
-                                        <div className="flex items-center gap-1.5 shrink-0">
-                                            {m.type === "link" && <Link className="w-3 h-3 text-cyan-400 shrink-0" />}
-                                            {m.type === "image" && <Image className="w-3 h-3 text-purple-400 shrink-0" />}
-                                            {m.type === "file" && <FileText className="w-3 h-3 text-amber-400 shrink-0" />}
-                                            <span className="text-[9px] font-black uppercase tracking-wider text-zinc-600">{m.type}</span>
-                                        </div>
-                                        
-                                        <div className="text-sm font-bold text-white group-hover:text-cyan-400 transition-colors truncate shrink-0">
-                                            {m.title}
-                                        </div>
-
-                                        {m.description ? (
-                                            <div className="text-xs text-zinc-500 line-clamp-2 overflow-hidden flex-1 leading-normal">
-                                                <MarkdownRenderer content={m.description} />
-                                            </div>
-                                        ) : (
-                                            <div className="text-xs text-zinc-600 italic line-clamp-2 overflow-hidden flex-1">
-                                                No description provided.
-                                            </div>
-                                        )}
-                                        
-                                        {m.type === "file" && (m.fileName || m.fileSize) && (
-                                            <div className="flex items-center gap-2 text-[10px] text-zinc-600 shrink-0 pt-0.5">
-                                                {m.fileName && <span className="truncate flex-1 min-w-0">{m.fileName}</span>}
-                                                {m.fileSize && <span className="shrink-0">{formatFileSize(m.fileSize)}</span>}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Footer */}
-                                    <div className="flex items-center justify-between pt-2 border-t border-white/5 shrink-0 mt-2">
-                                        <div className="flex items-center gap-1.5 min-w-0">
-                                            <Avatar className="w-4 h-4 rounded-full border border-white/10 shrink-0">
-                                                <AvatarImage src={memberPhotoMap[m.addedBy]} />
-                                                <AvatarFallback className="text-[6px] bg-zinc-800">{m.addedByName?.[0]}</AvatarFallback>
-                                            </Avatar>
-                                            <span className="text-[10px] text-zinc-600 truncate max-w-[80px]">{m.addedByName}</span>
-                                        </div>
-                                        {m.tags && m.tags.length > 0 && (
-                                            <div className="flex gap-1 shrink-0">
-                                                {m.tags.slice(0, 2).map(tag => (
-                                                    <span key={tag} className="px-1.5 py-0.5 rounded-full bg-white/5 text-[8px] font-bold text-zinc-500 uppercase tracking-wider">
-                                                        {tag}
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-zinc-950/40 backdrop-blur-[2px]">
+                                                    <div className="w-10 h-10 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mb-2 shadow-[0_0_15px_rgba(6,182,212,0.15)]">
+                                                        <Link className="w-4 h-4 text-cyan-400" />
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center truncate max-w-full">
+                                                        {(() => {
+                                                            try {
+                                                                return new URL(m.url).hostname.replace("www.", "");
+                                                            } catch {
+                                                                return "LINK";
+                                                            }
+                                                        })()}
                                                     </span>
-                                                ))}
-                                            </div>
+                                                </div>
+                                            )}
+                                            {/* Subtle overlay grid lines */}
+                                            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />
+                                        </div>
+                                    )}
+
+                                    {/* Action Buttons overlay */}
+                                    <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-zinc-950/80 backdrop-blur-sm p-1 rounded-lg border border-white/10">
+                                        {m.type === "link" && (
+                                            <a
+                                                href={m.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
+                                                title="Open Link"
+                                            >
+                                                <ExternalLink className="w-3.5 h-3.5" />
+                                            </a>
+                                        )}
+                                        {(m.type === "image" || m.type === "file") && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDownload(m); }}
+                                                className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                                title="Download"
+                                                disabled={downloadingId === m.id}
+                                            >
+                                                {downloadingId === m.id ? (
+                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                ) : (
+                                                    <Download className="w-3.5 h-3.5" />
+                                                )}
+                                            </button>
+                                        )}
+                                        {canEdit && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleEditClick(m); }}
+                                                className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                                title="Edit"
+                                            >
+                                                <Pencil className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
+                                        {canDelete && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}
+                                                className="p-1 text-zinc-400 hover:text-red-400 transition-colors cursor-pointer"
+                                                title="Delete"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
                                         )}
                                     </div>
-                                </div>
-                            </motion.div>
-                        );
-                    })}
+
+                                    {/* Card Body */}
+                                    <div className="p-4 flex flex-col flex-1 min-h-0 justify-between">
+                                        <div className="space-y-1.5 min-h-0 flex-1 flex flex-col justify-start">
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                {m.type === "link" && <Link className="w-3 h-3 text-cyan-400 shrink-0" />}
+                                                {m.type === "image" && <Image className="w-3 h-3 text-purple-400 shrink-0" />}
+                                                {m.type === "file" && <FileText className="w-3 h-3 text-amber-400 shrink-0" />}
+                                                <span className="text-[9px] font-black uppercase tracking-wider text-zinc-600">{m.type}</span>
+                                            </div>
+
+                                            <div className="text-sm font-bold text-white group-hover:text-cyan-400 transition-colors truncate shrink-0">
+                                                {m.title}
+                                            </div>
+
+                                            {m.description ? (
+                                                <div className="text-xs text-zinc-500 line-clamp-2 overflow-hidden flex-1 leading-normal">
+                                                    <MarkdownRenderer content={m.description} />
+                                                </div>
+                                            ) : (
+                                                <div className="text-xs text-zinc-600 italic line-clamp-2 overflow-hidden flex-1">
+                                                    No description provided.
+                                                </div>
+                                            )}
+
+                                            {m.type === "file" && (m.fileName || m.fileSize) && (
+                                                <div className="flex items-center gap-2 text-[10px] text-zinc-600 shrink-0 pt-0.5">
+                                                    {m.fileName && <span className="truncate flex-1 min-w-0">{m.fileName}</span>}
+                                                    {m.fileSize && <span className="shrink-0">{formatFileSize(m.fileSize)}</span>}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Footer */}
+                                        <div className="flex items-center justify-between pt-2 border-t border-white/5 shrink-0 mt-2">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <Avatar className="w-4 h-4 rounded-full border border-white/10 shrink-0">
+                                                    <AvatarImage src={memberPhotoMap[m.addedBy]} />
+                                                    <AvatarFallback className="text-[6px] bg-zinc-800">{m.addedByName?.[0]}</AvatarFallback>
+                                                </Avatar>
+                                                <span className="text-[10px] text-zinc-600 truncate max-w-[80px]">{m.addedByName}</span>
+                                            </div>
+                                            {m.tags && m.tags.length > 0 && (
+                                                <div className="flex gap-1 shrink-0">
+                                                    {m.tags.slice(0, 2).map(tag => (
+                                                        <span key={tag} className="px-1.5 py-0.5 rounded-full bg-white/5 text-[8px] font-bold text-zinc-500 uppercase tracking-wider">
+                                                            {tag}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            );
+                        })}
                     </AnimatePresence>
                 </motion.div>
             )}
@@ -738,11 +738,11 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                                             </div>
                                         )}
                                     </div>
-                                    
+
                                     {thumbnailUrl && (
                                         <div className="w-full h-32 rounded-lg overflow-hidden border border-white/10 bg-zinc-950 relative group">
                                             <img src={thumbnailUrl} alt="Link cover" className="w-full h-full object-cover" />
-                                            <button 
+                                            <button
                                                 onClick={() => setThumbnailUrl(null)}
                                                 className="absolute top-2 right-2 p-1 bg-black/60 hover:bg-black rounded-full text-zinc-400 hover:text-white transition-colors cursor-pointer"
                                             >
@@ -922,7 +922,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                         <button onClick={() => setPreviewMaterial(null)} className="absolute top-4 right-4 p-2 bg-zinc-900/80 rounded-xl text-zinc-400 hover:text-white transition-colors cursor-pointer z-10">
                             <X className="w-5 h-5" />
                         </button>
-                        
+
                         <motion.div
                             initial={{ scale: 0.95 }}
                             animate={{ scale: 1 }}
@@ -1078,8 +1078,8 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                                             <span className={cn(
                                                 "text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border w-fit block",
                                                 previewMaterial.type === "link" ? "text-cyan-400 bg-cyan-950/30 border-cyan-900/30" :
-                                                previewMaterial.type === "image" ? "text-purple-400 bg-purple-950/30 border-purple-900/30" :
-                                                "text-amber-400 bg-amber-950/30 border-amber-900/30"
+                                                    previewMaterial.type === "image" ? "text-purple-400 bg-purple-950/30 border-purple-900/30" :
+                                                        "text-amber-400 bg-amber-950/30 border-amber-900/30"
                                             )}>
                                                 {previewMaterial.type}
                                             </span>
@@ -1219,8 +1219,8 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
 
 
 
-                                </div>
-                            </motion.div>
+                            </div>
+                        </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>

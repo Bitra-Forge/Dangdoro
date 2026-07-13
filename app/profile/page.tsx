@@ -1133,7 +1133,7 @@ function ProfileContent() {
                                                     onChange={e => setEditBio(e.target.value)}
                                                     placeholder="Write your bio..."
                                                     rows={2}
-                                                    className="bg-transparent border-b border-white/5 text-sm font-medium text-zinc-400 leading-relaxed focus:outline-none focus:border-white/20 transition-all w-full py-2 resize-none scrollbar-none [ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                                                    className="bg-transparent border-b border-white/5 text-sm font-medium text-zinc-400 leading-relaxed focus:outline-none focus:border-white/20 transition-all w-full py-2 resize-none scrollbar-none"
                                                 />
 
                                                 <div className="flex items-center gap-4 mt-4">
@@ -1386,7 +1386,7 @@ function ProfileContent() {
                                         </div>
                                     </div>
 
-                                    <div className="w-full overflow-x-auto scrollbar-none [ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-2 select-none -webkit-overflow-scrolling-touch">
+                                    <div className="w-full overflow-x-auto scrollbar-none pb-2 select-none -webkit-overflow-scrolling-touch">
                                         <div className="relative min-w-[560px] h-[130px] sm:h-[180px] mt-8">
                                             {/* Months row */}
                                             <div className="text-[10px] font-bold text-zinc-600 mb-3 whitespace-nowrap absolute top-0 w-full flex">

@@ -39,7 +39,7 @@ export function ChangelogTabs({
     <div className={cn("flex justify-center w-full", className)}>
       <div
         className={cn(
-          "bg-[#121110] border border-white/[0.08] shadow-[0_10px_30px_rgba(0,0,0,0.5)] inline-flex items-center justify-center max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          "bg-[#121110] border border-white/[0.08] shadow-[0_10px_30px_rgba(0,0,0,0.5)] inline-flex items-center justify-center max-w-full overflow-x-auto scrollbar-none",
           compact
             ? "p-1 sm:p-1.5 rounded-xl gap-1.5 sm:gap-2"
             : "p-1.5 sm:p-2.5 rounded-2xl gap-2 sm:gap-3"

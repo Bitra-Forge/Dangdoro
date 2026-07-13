@@ -267,7 +267,7 @@ export function ServiceLedger({
           <div className="mx-auto max-w-3xl">
             <div
               ref={tabsRef}
-              className="flex items-center gap-0 overflow-x-auto [mask-image:linear-gradient(to_right,transparent,black_2%,black_98%,transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="flex items-center gap-0 overflow-x-auto [mask-image:linear-gradient(to_right,transparent,black_2%,black_98%,transparent)] scrollbar-none"
             >
               {entries.map((entry, i) => {
                 const isActive = activeIndex === i;

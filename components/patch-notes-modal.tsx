@@ -179,7 +179,7 @@ export function PatchNotesModal({ isOpen, onClose }: PatchNotesModalProps) {
         </div>
 
         {/* Content */}
-        <div className="px-6 pb-5 min-h-[200px] flex-1 md:min-h-[320px] md:flex-none md:max-h-[420px] overflow-y-auto custom-scrollbar">
+        <div className="px-6 pb-5 min-h-[200px] flex-1 md:min-h-[320px] md:flex-none md:max-h-[420px] overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

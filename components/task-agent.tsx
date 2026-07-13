@@ -352,7 +352,7 @@ export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
                                 onKeyDown={handleKeyDown}
                                 placeholder="Describe what you need to accomplish…"
                                 rows={1}
-                                className="task-agent-input w-full rounded-xl border border-white/10 bg-zinc-900/70 px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-500 outline-none focus:border-white/25 transition-colors resize-none leading-tight"
+                                className="task-agent-input w-full rounded-xl border border-white/10 bg-zinc-900/70 px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-500 outline-none focus:border-white/25 transition-colors resize-none leading-tight scrollbar-none"
                                 style={{ overflow: "hidden" }}
                             />
                         </div>
@@ -371,7 +371,7 @@ export function TaskAgent({ onApply, onClose }: TaskAgentProps) {
                     </div>
                 </div>
             </div>
-            <style>{`.task-agent-input::-webkit-scrollbar { display: none; }`}</style>
+
         </div>
     );
 }
