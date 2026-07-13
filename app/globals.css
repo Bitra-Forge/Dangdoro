@@ -782,7 +782,6 @@ input[type="number"] {
 @media (max-width: 768px) {
     .group-chat-container {
         padding-bottom: 80px;
-        transition: padding-bottom 0.2s ease-in-out;
     }
     body.input-focused .group-chat-container,
     body.hide-navigation-bar .group-chat-container {

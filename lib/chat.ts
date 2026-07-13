@@ -269,12 +269,12 @@ export function subscribeToTypingPresence(
     callback: (typers: { userId: string; displayName: string }[]) => void
 ): () => void {
     const presenceRef = collection(db, `focusGroups/${groupId}/presence`);
-    const unsub = onSnapshot(presenceRef, (snapshot) => {
+    const q = query(presenceRef, where("typing", "==", true));
+    const unsub = onSnapshot(q, (snapshot) => {
         const now = Date.now();
         const typers: { userId: string; displayName: string }[] = [];
         snapshot.forEach(doc => {
             const data = doc.data();
-            if (!data.typing) return;
             const typingAt = data.typingAt;
             let ts: number | null = null;
             if (typingAt?.toMillis) ts = typingAt.toMillis();

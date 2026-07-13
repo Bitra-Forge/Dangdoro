@@ -58,20 +58,11 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
     const [materialTitle, setMaterialTitle] = useState("");
     const [materialTags, setMaterialTags] = useState("");
     const [longPressMsgId, setLongPressMsgId] = useState<string | null>(null);
-    useEffect(() => {
-        if (longPressMsgId) {
-            document.body.classList.add("hide-navigation-bar");
-        } else {
-            document.body.classList.remove("hide-navigation-bar");
-        }
-        return () => {
-            document.body.classList.remove("hide-navigation-bar");
-        };
-    }, [longPressMsgId]);
+
     const longPressTimer = useRef<NodeJS.Timeout | null>(null);
     const longPressStartPos = useRef<{ x: number; y: number } | null>(null);
     const longPressTargetId = useRef<string | null>(null);
-    const LONG_PRESS_DURATION = 500;
+    const LONG_PRESS_DURATION = 280;
     const LONG_PRESS_MOVE_THRESHOLD = 10;
 
     const clearLongPress = useCallback(() => {
@@ -144,11 +135,16 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
 
     useEffect(() => {
         const textarea = textareaRef.current;
-        if (textarea) {
-            textarea.style.height = "auto";
-            if (input) {
-                textarea.style.height = `${textarea.scrollHeight}px`;
-            }
+        if (!textarea) return;
+
+        // Skip manual resize if modern CSS field-sizing is supported natively by the browser
+        if ('fieldSizing' in document.documentElement.style || 'field-sizing' in document.documentElement.style) {
+            return;
+        }
+
+        textarea.style.height = "auto";
+        if (input) {
+            textarea.style.height = `${textarea.scrollHeight}px`;
         }
     }, [input]);
 
@@ -390,7 +386,7 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
         if (!longPressStartPos.current) return;
         const dx = e.touches[0].clientX - longPressStartPos.current.x;
         const dy = e.touches[0].clientY - longPressStartPos.current.y;
-        if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_THRESHOLD) {
+        if ((dx * dx + dy * dy) > LONG_PRESS_MOVE_THRESHOLD * LONG_PRESS_MOVE_THRESHOLD) {
             clearLongPress();
         }
     }, [clearLongPress]);
@@ -399,20 +395,11 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
         clearLongPress();
     }, [clearLongPress]);
 
-    const displayMessages = [...messages].reverse();
+    const displayMessages = useMemo(() => [...messages].reverse(), [messages]);
 
     return (
         <>
-        <style>{`
-            .chat-bottom-sheet {
-                animation: slideUp 0.3s ease-out;
-                will-change: transform;
-            }
-            @keyframes slideUp {
-                from { transform: translateY(100%); }
-                to { transform: translateY(0); }
-            }
-        `}</style>
+
         <div className="flex-1 min-h-0 group-chat-container flex flex-col border-y border-x-0 sm:border border-border bg-card sm:rounded-xl rounded-none overflow-hidden">
             <div ref={containerRef} className="flex-1 overflow-y-auto space-y-3 p-4 chat-scroll">
                 {pinnedMessages.length > 0 && (
@@ -561,6 +548,7 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
                             }
                         }}
                         placeholder="Type a message..."
+                        style={{ fieldSizing: "content" } as any}
                         className="flex-1 bg-zinc-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-zinc-500 outline-none focus:border-white/20 transition-all resize-none max-h-32 overflow-y-auto chat-scroll"
                     />
                     <button
@@ -579,7 +567,7 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
             </div>
         </div>
 
-            {/* Mobile Action Sheet — long press */}
+            {/* Mobile Context Menu — long press */}
             {longPressMsgId && (() => {
                 const msg = messagesMap.get(longPressMsgId) || null;
                 if (!msg || msg.deletedAt) return null;
@@ -592,99 +580,88 @@ export function GroupChat({ groupId, isHost, groupMembers = [] }: GroupChatProps
                         <div
                             className="fixed inset-0 z-50 bg-black/60"
                             onClick={() => setLongPressMsgId(null)}
-                            onTouchEnd={(e) => { e.preventDefault(); setLongPressMsgId(null); }}
                         />
-                        {/* Sheet */}
-                        <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 border-t border-white/10 rounded-t-2xl shadow-2xl chat-bottom-sheet" style={{ touchAction: "manipulation" }}>
-                            {/* Message preview */}
-                            <div className="flex items-start gap-3 p-4 border-b border-white/10">
-                                <Avatar className="w-8 h-8 rounded-full shrink-0 border border-white/10">
-                                    <AvatarImage src={memberPhotoMap[msg.senderId] || msg.senderPhoto} />
-                                    <AvatarFallback className="text-xs bg-zinc-800">{msg.senderName?.[0]}</AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-xs font-bold text-white">{msg.senderName}</p>
-                                    <p className="text-xs text-zinc-400 truncate">{msg.content}</p>
+                        {/* Compact Floating Menu */}
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+                            <div 
+                                className="w-full max-w-[270px] bg-zinc-950/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-2 pointer-events-auto animate-in fade-in zoom-in-95 duration-150"
+                                style={{ touchAction: "manipulation" }}
+                            >
+                                {/* Quick reactions */}
+                                <div className="flex items-center justify-between gap-1 px-1 py-1 border-b border-white/5 mb-1">
+                                    {["👍", "❤️", "😂", "🎯", "🔥"].map(emoji => (
+                                        <button
+                                            key={emoji}
+                                            onClick={() => { handleToggleReaction(msg.id, emoji); setLongPressMsgId(null); }}
+                                            className="text-xl hover:scale-125 transition-transform active:scale-90 p-1.5 rounded-lg hover:bg-white/5 cursor-pointer"
+                                        >
+                                            {emoji}
+                                        </button>
+                                    ))}
                                 </div>
-                            </div>
-                            {/* Quick reactions */}
-                            <div className="flex items-center justify-center gap-4 py-4 border-b border-white/10">
-                                {["👍", "❤️", "😂", "🎯", "🔥"].map(emoji => (
+                                {/* Action buttons */}
+                                <div className="space-y-0.5">
                                     <button
-                                        key={emoji}
-                                        onClick={() => { handleToggleReaction(msg.id, emoji); setLongPressMsgId(null); }}
-                                        className="text-2xl hover:scale-125 transition-transform active:scale-90"
+                                        onClick={() => { startReply(msg); setLongPressMsgId(null); }}
+                                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left text-xs font-bold text-zinc-300 hover:text-white hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
                                     >
-                                        {emoji}
+                                        <Reply className="w-4 h-4 text-zinc-400 shrink-0" />
+                                        <span>Reply</span>
                                     </button>
-                                ))}
-                            </div>
-                            {/* Action buttons */}
-                            <div className="grid grid-cols-4 gap-2 p-4">
-                                <button
-                                    onClick={() => { startReply(msg); setLongPressMsgId(null); }}
-                                    className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors active:scale-95"
-                                >
-                                    <Reply className="w-5 h-5 text-zinc-300" />
-                                    <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Reply</span>
-                                </button>
-                                <button
-                                    onClick={() => { setLongPressMsgId(null); navigator.clipboard.writeText(msg.content); toast.success("Copied!"); }}
-                                    className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors active:scale-95"
-                                >
-                                    <Copy className="w-5 h-5 text-zinc-300" />
-                                    <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Copy</span>
-                                </button>
-                                <button
-                                    onClick={() => { handleTogglePin(msg); setLongPressMsgId(null); }}
-                                    className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors active:scale-95"
-                                >
-                                    <Pin className={cn("w-5 h-5", msg.pinned ? "fill-white text-white" : "text-zinc-300")} />
-                                    <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">{msg.pinned ? "Unpin" : "Pin"}</span>
-                                </button>
-                                {isOwn && (
                                     <button
-                                        onClick={() => { startEdit(msg); setLongPressMsgId(null); }}
-                                        className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors active:scale-95"
+                                        onClick={() => { setLongPressMsgId(null); navigator.clipboard.writeText(msg.content); toast.success("Copied!"); }}
+                                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left text-xs font-bold text-zinc-300 hover:text-white hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
                                     >
-                                        <PencilLine className="w-5 h-5 text-zinc-300" />
-                                        <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider">Edit</span>
+                                        <Copy className="w-4 h-4 text-zinc-400 shrink-0" />
+                                        <span>Copy Text</span>
                                     </button>
-                                )}
-                                {canDelete && (
                                     <button
-                                        onClick={() => { handleDelete(msg.id); setLongPressMsgId(null); }}
-                                        className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/5 hover:bg-red-500/10 transition-colors active:scale-95"
+                                        onClick={() => { handleTogglePin(msg); setLongPressMsgId(null); }}
+                                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left text-xs font-bold text-zinc-300 hover:text-white hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
                                     >
-                                        <Trash2 className="w-5 h-5 text-red-400" />
-                                        <span className="text-[9px] font-bold text-red-400 uppercase tracking-wider">Delete</span>
+                                        <Pin className={cn("w-4 h-4 text-zinc-400 shrink-0", msg.pinned && "fill-zinc-400")} />
+                                        <span>{msg.pinned ? "Unpin Message" : "Pin Message"}</span>
                                     </button>
-                                )}
-                                {msgHasUrl && (
-                                    <button
-                                        onClick={async () => {
-                                            const url = extractFirstUrl(msg.content) || "";
-                                            setMaterialFormMsgId(msg.id);
-                                            setMaterialUrl(url);
-                                            setMaterialTags("");
-                                            setMaterialTitle("Loading title...");
-                                            try {
-                                                const res = await fetch(`/api/og-preview?url=${encodeURIComponent(url)}`);
-                                                const data = await res.json();
-                                                setMaterialTitle(data.title || "");
-                                            } catch { setMaterialTitle(""); }
-                                            setLongPressMsgId(null);
-                                        }}
-                                        className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors active:scale-95"
-                                    >
-                                        <BookmarkPlus className="w-5 h-5 text-cyan-400" />
-                                        <span className="text-[9px] font-bold text-cyan-400 uppercase tracking-wider">Save</span>
-                                    </button>
-                                )}
-                            </div>
-                            {/* Swipe down hint */}
-                            <div className="flex justify-center pb-4">
-                                <div className="w-10 h-1 rounded-full bg-zinc-700" />
+                                    {isOwn && (
+                                        <button
+                                            onClick={() => { startEdit(msg); setLongPressMsgId(null); }}
+                                            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left text-xs font-bold text-zinc-300 hover:text-white hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
+                                        >
+                                            <PencilLine className="w-4 h-4 text-zinc-400 shrink-0" />
+                                            <span>Edit Message</span>
+                                        </button>
+                                    )}
+                                    {msgHasUrl && (
+                                        <button
+                                            onClick={async () => {
+                                                const url = extractFirstUrl(msg.content) || "";
+                                                setMaterialFormMsgId(msg.id);
+                                                setMaterialUrl(url);
+                                                setMaterialTags("");
+                                                setMaterialTitle("Loading title...");
+                                                try {
+                                                    const res = await fetch(`/api/og-preview?url=${encodeURIComponent(url)}`);
+                                                    const data = await res.json();
+                                                    setMaterialTitle(data.title || "");
+                                                } catch { setMaterialTitle(""); }
+                                                setLongPressMsgId(null);
+                                            }}
+                                            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left text-xs font-bold text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/5 active:scale-95 transition-all cursor-pointer"
+                                        >
+                                            <BookmarkPlus className="w-4 h-4 text-cyan-400 shrink-0" />
+                                            <span>Save to Materials</span>
+                                        </button>
+                                    )}
+                                    {canDelete && (
+                                        <button
+                                            onClick={() => { handleDelete(msg.id); setLongPressMsgId(null); }}
+                                            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/5 active:scale-95 transition-all cursor-pointer"
+                                        >
+                                            <Trash2 className="w-4 h-4 text-red-400 shrink-0" />
+                                            <span>Delete Message</span>
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </>
@@ -754,7 +731,8 @@ const MessageItem = memo(function MessageItem({
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
-            className="flex items-start gap-3 group relative py-1.5 px-3 -mx-3 rounded-xl hover:bg-white/[0.02] transition-colors">
+            className="flex items-start gap-3 group relative py-1.5 px-3 -mx-3 rounded-xl hover:bg-white/[0.02] transition-colors select-none"
+            style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none" } as any}>
             <Avatar
                 onClick={() => router.push(`/profile?user=${msg.senderId}`)}
                 className="w-8 h-8 rounded-full shrink-0 border border-white/10 cursor-pointer hover:opacity-80 transition-opacity"
@@ -923,7 +901,8 @@ const MessageItem = memo(function MessageItem({
         </div>
     );
 }, (prev, next) => {
-    return prev.msg.id === next.msg.id
+    // Basic state check
+    const basicUnchanged = prev.msg.id === next.msg.id
         && prev.msg.content === next.msg.content
         && prev.msg.edited === next.msg.edited
         && prev.msg.deletedAt === next.msg.deletedAt
@@ -931,7 +910,28 @@ const MessageItem = memo(function MessageItem({
         && JSON.stringify(prev.msg.reactions) === JSON.stringify(next.msg.reactions)
         && prev.editingId === next.editingId
         && prev.materialFormMsgId === next.materialFormMsgId
-        && prev.editContent === next.editContent
         && prev.isHost === next.isHost
         && prev.user?.uid === next.user?.uid;
+
+    if (!basicUnchanged) return false;
+
+    // Only trigger re-render on edit content change if this item is currently being edited
+    const wasEditing = prev.editingId === prev.msg.id;
+    const isEditing = next.editingId === next.msg.id;
+    if ((wasEditing || isEditing) && prev.editContent !== next.editContent) {
+        return false;
+    }
+
+    // Only trigger re-render on material form state changes if this item has the material form open
+    const wasMaterialForm = prev.materialFormMsgId === prev.msg.id;
+    const isMaterialForm = next.materialFormMsgId === next.msg.id;
+    if (wasMaterialForm || isMaterialForm) {
+        if (prev.materialUrl !== next.materialUrl ||
+            prev.materialTitle !== next.materialTitle ||
+            prev.materialTags !== next.materialTags) {
+            return false;
+        }
+    }
+
+    return true;
 });
