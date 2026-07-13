@@ -57,3 +57,59 @@ export async function updateMaterial(
         return { success: false, error: err.message || "Failed to update material" };
     }
 }
+
+export async function downloadMaterial(
+    url: string,
+    fileName: string,
+    onProgress: (percent: number) => void,
+    signal: AbortSignal
+): Promise<void> {
+    const res = await fetch(url, { signal });
+    if (!res.ok) {
+        throw new Error(`Failed to download: ${res.statusText}`);
+    }
+    
+    const contentLength = res.headers.get("content-length");
+    const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
+    
+    if (!res.body) {
+        throw new Error("Response body is not readable");
+    }
+    
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let receivedBytes = 0;
+    
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+            break;
+        }
+        if (value) {
+            chunks.push(value);
+            receivedBytes += value.length;
+            if (totalBytes > 0) {
+                onProgress(Math.round((receivedBytes / totalBytes) * 100));
+            } else {
+                onProgress(-1); // Content-Length missing
+            }
+        }
+    }
+    
+    if (typeof window !== "undefined") {
+        const contentType = res.headers.get("content-type") || "";
+        const blob = new Blob(chunks as any[], { type: contentType });
+        const blobUrl = window.URL.createObjectURL(blob);
+        
+        try {
+            const a = document.createElement("a");
+            a.href = blobUrl;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        } finally {
+            window.URL.revokeObjectURL(blobUrl);
+        }
+    }
+}

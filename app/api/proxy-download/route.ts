@@ -36,15 +36,21 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        const fileBuffer = await response.arrayBuffer();
+        const contentLength = response.headers.get("Content-Length");
+        const safeFilename = filename.replace(/[^\x20-\x7E]/g, "_");
 
-        // Deliver the file with attachment content disposition
-        return new NextResponse(fileBuffer, {
-            headers: {
-                "Content-Type": contentType,
-                "Content-Disposition": `attachment; filename="${filename.replace(/"/g, '\\"')}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
-                "Cache-Control": "public, max-age=600",
-            },
+        const headers: Record<string, string> = {
+            "Content-Type": contentType,
+            "Content-Disposition": `attachment; filename="${safeFilename.replace(/"/g, '\\"')}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+            "Cache-Control": "public, max-age=600",
+        };
+        if (contentLength) {
+            headers["Content-Length"] = contentLength;
+        }
+
+        // Deliver the file as a stream
+        return new NextResponse(response.body, {
+            headers,
         });
     } catch (error: any) {
         console.error("Error proxying download:", error);

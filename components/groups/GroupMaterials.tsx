@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/components/AuthProvider";
 import { Material, ChatMessage } from "@/lib/groups";
-import { addMaterial, updateMaterial, MAX_MATERIALS } from "@/lib/materials";
+import { addMaterial, updateMaterial, MAX_MATERIALS, downloadMaterial } from "@/lib/materials";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { collection, query, orderBy, onSnapshot, deleteDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { X, Link, Image, FileText, Trash2, Plus, Upload, Download, Pencil, ExternalLink, Loader2 } from "lucide-react";
+import { X, Link, Image, FileText, Trash2, Plus, Upload, Download, Pencil, ExternalLink, Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -67,7 +67,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
     const [filter, setFilter] = useState<MaterialFilter>("all");
     const [showModal, setShowModal] = useState(false);
     const [modalType, setModalType] = useState<"link" | "image" | "file">("link");
-
+    
     // Form fields
     const [linkUrl, setLinkUrl] = useState("");
     const [title, setTitle] = useState("");
@@ -75,7 +75,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
     const [tags, setTags] = useState("");
     const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
     const [fetchingOg, setFetchingOg] = useState(false);
-
+    
     // File upload details
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -83,9 +83,39 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
 
     // Edit material state
     const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
+    
 
-    // Downloading ID state
-    const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+    // Pending upload banner state
+    const [pendingUpload, setPendingUpload] = useState<any | null>(null);
+
+    // Upload state (Phase R3-B)
+    interface UploadState {
+        fileName: string;
+        progress: number;
+        status: "uploading" | "paused" | "error" | "done";
+        error: string | null;
+        uploadId: string | null;
+        chunkIndex: number;
+    }
+    const [uploadState, setUploadState] = useState<UploadState | null>(null);
+    const [uploadSpeed, setUploadSpeed] = useState<number | null>(null);
+    const isPausedRef = useRef(false);
+    const uploadStateRef = useRef<UploadState | null>(null);
+    const xhrRef = useRef<XMLHttpRequest | null>(null);
+
+    useEffect(() => {
+        uploadStateRef.current = uploadState;
+    }, [uploadState]);
+
+    // Download state (Phase R3-C)
+    interface DownloadState {
+        status: "idle" | "downloading" | "error" | "done";
+        progress: number;
+        error: string | null;
+    }
+    const [downloadStates, setDownloadStates] = useState<Record<string, DownloadState>>({});
+    const abortControllersRef = useRef<Record<string, AbortController>>({});
 
     // Preview click states
     const [previewMaterial, setPreviewMaterial] = useState<Material | null>(null);
@@ -113,6 +143,12 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            xhrRef.current?.abort();
+        };
     }, []);
 
     useEffect(() => {
@@ -161,6 +197,12 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
     }, [materials, filter]);
 
     const handleCloseModal = () => {
+        if (uploadState && (uploadState.status === "uploading" || uploadState.status === "paused")) {
+            isPausedRef.current = true;
+            xhrRef.current?.abort();
+            setUploadState(null);
+            setUploading(false);
+        }
         if (previewUrl) {
             URL.revokeObjectURL(previewUrl);
         }
@@ -252,78 +294,351 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
         setTitle(file.name); // Autofill title
     };
 
+    const uploadFile = async (file: File, resumeData?: { uploadId: string, chunkIndex: number }) => {
+        if (!user) return;
+        isPausedRef.current = false;
+        
+        const isImage = modalType === "image";
+        const isPDF = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+        const resourceType = (isImage || isPDF) ? "image" : "raw";
+        
+        const CHUNK_SIZE = 6 * 1024 * 1024;
+        const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+        
+        const uploadId = resumeData?.uploadId || `upload_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        const startChunk = resumeData?.chunkIndex || 0;
+        
+        setUploadState({
+            fileName: file.name,
+            progress: Math.round((startChunk / totalChunks) * 100),
+            status: "uploading",
+            error: null,
+            uploadId: uploadId,
+            chunkIndex: startChunk
+        });
+        setUploading(true);
+        
+        const saveState = (chunkIdx: number) => {
+            const stateToSave = {
+                uploadId,
+                chunkIndex: chunkIdx,
+                fileName: file.name,
+                totalChunks,
+                resourceType,
+                title: title.trim() || file.name,
+                description: description.trim(),
+                tags: tags,
+                fileSize: file.size
+            };
+            localStorage.setItem(`dangdoro_upload_resume_${user.uid}`, JSON.stringify(stateToSave));
+        };
+        
+        saveState(startChunk);
+
+        for (let i = startChunk; i < totalChunks; i++) {
+            if (isPausedRef.current || !navigator.onLine) {
+                setUploadState(prev => prev ? { ...prev, status: "paused" } : null);
+                return;
+            }
+            
+            const start = i * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, file.size);
+            const chunk = file.slice(start, end, file.type);
+            
+            const formData = new FormData();
+            formData.append("file", chunk, file.name);
+            formData.append("resource_type", resourceType);
+            formData.append("uploadId", uploadId);
+            formData.append("contentRange", `bytes ${start}-${end - 1}/${file.size}`);
+            
+            const chunkStartTime = Date.now();
+            setUploadState(prev => prev ? { ...prev, status: "uploading", chunkIndex: i } : null);
+            
+            try {
+                const idToken = await user.getIdToken();
+                const startUploadedBytes = i * CHUNK_SIZE;
+                
+                const data = await new Promise<any>((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open("POST", "/api/upload");
+                    xhr.setRequestHeader("Authorization", `Bearer ${idToken}`);
+                    
+                    xhr.upload.onprogress = (event) => {
+                        if (event.lengthComputable) {
+                            const chunkUploadedBytes = event.loaded;
+                            const totalUploadedBytes = startUploadedBytes + chunkUploadedBytes;
+                            const totalPercent = Math.min(Math.round((totalUploadedBytes / file.size) * 100), 99);
+                            
+                            const elapsedSec = (Date.now() - chunkStartTime) / 1000;
+                            const speed = elapsedSec > 0 ? ((chunkUploadedBytes / (1024 * 1024)) / elapsedSec) : 0;
+                            setUploadSpeed(speed);
+                            
+                            setUploadState(prev => prev ? {
+                                ...prev,
+                                progress: totalPercent
+                            } : null);
+                        }
+                    };
+                    
+                    xhr.onload = () => {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            try {
+                                resolve(JSON.parse(xhr.responseText));
+                            } catch (e) {
+                                reject(new Error("Failed to parse response"));
+                            }
+                        } else {
+                            try {
+                                const errData = JSON.parse(xhr.responseText);
+                                reject(new Error(errData.error || "Chunk upload failed"));
+                            } catch {
+                                reject(new Error(`Chunk upload failed with status ${xhr.status}`));
+                            }
+                        }
+                    };
+                    
+                    xhr.onerror = () => reject(new Error("Network connection error"));
+                    xhr.onabort = () => reject(new Error("Upload cancelled"));
+                    
+                    xhrRef.current = xhr;
+                    xhr.send(formData);
+                });
+                
+                const nextProgress = Math.round(((i + 1) / totalChunks) * 100);
+                
+                if (i === totalChunks - 1 || data.done) {
+                    // Complete!
+                    setUploadState({
+                        fileName: file.name,
+                        progress: 100,
+                        status: "done",
+                        error: null,
+                        uploadId: null,
+                        chunkIndex: totalChunks
+                    });
+                    
+                    localStorage.removeItem(`dangdoro_upload_resume_${user.uid}`);
+                    
+                    const materialData: {
+                        addedBy: string;
+                        addedByName: string;
+                        url: string;
+                        title: string;
+                        description: string;
+                        tags: string[];
+                        type: "image" | "file";
+                        thumbnailUrl?: string;
+                        fileName?: string;
+                        fileSize?: number;
+                    } = {
+                        addedBy: user.uid,
+                        addedByName: user.displayName || "Anonymous",
+                        url: data.url,
+                        title: title.trim() || file.name,
+                        description: description.trim(),
+                        tags: tags.split(",").map(t => t.trim()).filter(Boolean),
+                        type: isImage ? "image" : "file",
+                        fileName: file.name,
+                        fileSize: file.size,
+                    };
+                    
+                    if (isImage) {
+                        const parts = data.url.split("/upload/");
+                        materialData.thumbnailUrl = `${parts[0]}/upload/w_300,q_auto/${parts[1]}`;
+                    }
+                    
+                    const result = await addMaterial(groupId, materialData);
+                    if (result.success) {
+                        toast.success(`${isImage ? "Image" : "File"} saved to Materials`);
+                        setTimeout(() => {
+                            handleCloseModal();
+                            setUploadState(null);
+                            setUploading(false);
+                        }, 1000);
+                    } else {
+                        toast.error(result.error || "Failed to save material to group");
+                        setUploadState(prev => prev ? { ...prev, status: "error", error: result.error || "Failed to save" } : null);
+                    }
+                    return;
+                } else {
+                    saveState(i + 1);
+                    setUploadState(prev => prev ? {
+                        ...prev,
+                        progress: nextProgress,
+                        chunkIndex: i + 1
+                    } : null);
+                }
+            } catch (err: any) {
+                console.error("Chunk upload error:", err);
+                if (!navigator.onLine) {
+                    isPausedRef.current = true;
+                    setUploadState(prev => prev ? { ...prev, status: "paused" } : null);
+                    toast.warning("Connection lost — upload paused");
+                } else {
+                    setUploadState(prev => prev ? { ...prev, status: "error", error: err.message || "Upload failed" } : null);
+                    toast.error(err.message || "Upload failed");
+                    setUploading(false);
+                }
+                return;
+            }
+        }
+    };
+
     const handleConfirmUpload = async () => {
-        if (!selectedFile || !user) return;
+        if (!selectedFile) return;
         if (!title.trim()) {
             toast.error("Title is required");
             return;
         }
+        await uploadFile(selectedFile);
+    };
 
-        setUploading(true);
+    const handleDownload = async (m: Material, retryCount = 0) => {
+        if (abortControllersRef.current[m.id]) {
+            abortControllersRef.current[m.id].abort();
+        }
+        
+        const controller = new AbortController();
+        abortControllersRef.current[m.id] = controller;
+        
+        setDownloadStates(prev => ({
+            ...prev,
+            [m.id]: { status: "downloading", progress: 0, error: null }
+        }));
+        
+        const proxyUrl = `/api/proxy-download?url=${encodeURIComponent(m.url)}&filename=${encodeURIComponent(m.fileName || m.title || "download")}`;
+        
         try {
-            const isImage = modalType === "image";
-            const isPDF = selectedFile.type === "application/pdf" || selectedFile.name.toLowerCase().endsWith(".pdf");
-            const resourceType = (isImage || isPDF) ? "image" : "raw";
-            const idToken = await user.getIdToken();
-            const formData = new FormData();
-            formData.append("file", selectedFile);
-            formData.append("resource_type", resourceType);
-
-            const res = await fetch("/api/upload", {
-                method: "POST",
-                headers: { Authorization: `Bearer ${idToken}` },
-                body: formData,
-            });
-
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.error || "Upload failed");
+            await downloadMaterial(
+                proxyUrl,
+                m.fileName || m.title || "download",
+                (percent) => {
+                    setDownloadStates(prev => ({
+                        ...prev,
+                        [m.id]: { status: "downloading", progress: percent, error: null }
+                    }));
+                },
+                controller.signal
+            );
+            
+            setDownloadStates(prev => ({
+                ...prev,
+                [m.id]: { status: "done", progress: 100, error: null }
+            }));
+            toast.success(`Downloaded ${m.title}`);
+            
+            setTimeout(() => {
+                setDownloadStates(prev => {
+                    const copy = { ...prev };
+                    delete copy[m.id];
+                    return copy;
+                });
+            }, 2000);
+            
+        } catch (err: any) {
+            if (err.name === "AbortError") {
+                setDownloadStates(prev => {
+                    const copy = { ...prev };
+                    delete copy[m.id];
+                    return copy;
+                });
+                return;
             }
-
-            const data = await res.json();
-
-            const materialData: {
-                addedBy: string;
-                addedByName: string;
-                url: string;
-                title: string;
-                description: string;
-                tags: string[];
-                type: "image" | "file";
-                thumbnailUrl?: string;
-                fileName?: string;
-                fileSize?: number;
-            } = {
-                addedBy: user.uid,
-                addedByName: user.displayName || "Anonymous",
-                url: data.url,
-                title: title.trim(),
-                description: description.trim(),
-                tags: tags.split(",").map(t => t.trim()).filter(Boolean),
-                type: isImage ? "image" : "file",
-                fileName: selectedFile.name,
-                fileSize: selectedFile.size,
-            };
-
-            if (isImage) {
-                const parts = data.url.split("/upload/");
-                materialData.thumbnailUrl = `${parts[0]}/upload/w_300,q_auto/${parts[1]}`;
-            }
-
-            const result = await addMaterial(groupId, materialData);
-            if (result.success) {
-                toast.success(`${isImage ? "Image" : "File"} saved to Materials`);
-                handleCloseModal();
+            
+            console.error(`Download failed for ${m.id}:`, err);
+            
+            if (retryCount < 3) {
+                const backoffTime = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+                setDownloadStates(prev => ({
+                    ...prev,
+                    [m.id]: { status: "downloading", progress: -2, error: `Retrying in ${backoffTime / 1000}s...` }
+                }));
+                
+                setTimeout(() => {
+                    handleDownload(m, retryCount + 1);
+                }, backoffTime);
             } else {
-                toast.error(result.error || "Failed to save");
+                const isOffline = !navigator.onLine;
+                const errMsg = isOffline ? "Connection lost" : (err.message || "Download failed");
+                setDownloadStates(prev => ({
+                    ...prev,
+                    [m.id]: { status: "error", progress: 0, error: errMsg }
+                }));
+                toast.error(errMsg);
             }
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : "Upload failed";
-            toast.error(msg);
         } finally {
-            setUploading(false);
+            delete abortControllersRef.current[m.id];
         }
     };
+
+    // Abort controller cleanups on unmount
+    useEffect(() => {
+        return () => {
+            Object.values(abortControllersRef.current).forEach(ac => ac.abort());
+        };
+    }, []);
+
+    // Check localStorage for pending uploads on mount/user load
+    useEffect(() => {
+        if (!user) return;
+        const stored = localStorage.getItem(`dangdoro_upload_resume_${user.uid}`);
+        if (stored) {
+            try {
+                const parsed = JSON.parse(stored);
+                setPendingUpload(parsed);
+            } catch (err) {
+                console.error("Failed to parse pending upload data:", err);
+            }
+        }
+    }, [user]);
+
+    // Handle online/offline connection status for uploads
+    useEffect(() => {
+        const handleOnline = () => {
+            if (uploadStateRef.current && uploadStateRef.current.status === "paused") {
+                toast.info("Resuming upload...");
+                if (selectedFile) {
+                    uploadFile(selectedFile, {
+                        uploadId: uploadStateRef.current.uploadId!,
+                        chunkIndex: uploadStateRef.current.chunkIndex
+                    });
+                }
+            }
+        };
+        
+        const handleOffline = () => {
+            if (uploadStateRef.current && uploadStateRef.current.status === "uploading") {
+                isPausedRef.current = true;
+                toast.warning("Connection lost — upload paused");
+                setUploadState(prev => prev ? { ...prev, status: "paused" } : null);
+            }
+        };
+
+        window.addEventListener("online", handleOnline);
+        window.addEventListener("offline", handleOffline);
+        return () => {
+            window.removeEventListener("online", handleOnline);
+            window.removeEventListener("offline", handleOffline);
+        };
+    }, [selectedFile, title, description, tags, modalType]);
+
+    // Auto-retry downloads when back online
+    useEffect(() => {
+        const handleOnlineRetry = () => {
+            Object.keys(downloadStates).forEach(materialId => {
+                const state = downloadStates[materialId];
+                if (state.status === "error" && (state.error === "Connection lost" || !navigator.onLine)) {
+                    const m = materials.find(item => item.id === materialId);
+                    if (m) {
+                        toast.info(`Connection restored. Retrying download for ${m.title}...`);
+                        handleDownload(m);
+                    }
+                }
+            });
+        };
+        window.addEventListener("online", handleOnlineRetry);
+        return () => window.removeEventListener("online", handleOnlineRetry);
+    }, [downloadStates, materials]);
 
     const handleDelete = async (materialId: string) => {
         try {
@@ -331,40 +646,6 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
             toast.success("Material deleted");
         } catch (err) {
             console.error("Failed to delete material:", err);
-        }
-    };
-
-    const handleDownload = async (m: Material) => {
-        setDownloadingId(m.id);
-        try {
-            // Fetch via server-side proxy-download to bypass CORS and force direct attachment headers
-            const proxyUrl = `/api/proxy-download?url=${encodeURIComponent(m.url)}&filename=${encodeURIComponent(m.fileName || m.title || "download")}`;
-            const res = await fetch(proxyUrl);
-            if (!res.ok) {
-                throw new Error(`Failed to fetch from proxy: ${res.statusText}`);
-            }
-            const blob = await res.blob();
-            const blobUrl = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = blobUrl;
-            a.download = m.fileName || m.title || 'download';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(blobUrl);
-            toast.success("Download completed");
-        } catch (err) {
-            console.warn("Proxy download failed, falling back to direct link:", err);
-            const a = document.createElement('a');
-            a.href = m.url;
-            a.target = "_blank";
-            a.download = m.fileName || m.title || 'download';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            toast.success("Opening download in new tab");
-        } finally {
-            setDownloadingId(null);
         }
     };
 
@@ -445,7 +726,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
     };
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-28 md:pb-10">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                     <div className="w-10 h-10 bg-zinc-900 border border-zinc-800 rounded-xl flex items-center justify-center">
@@ -460,20 +741,80 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                 </div>
                 <button
                     onClick={() => setShowModal(true)}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-white text-black font-black rounded-xl text-xs relative overflow-hidden hover:bg-zinc-100 transition-all cursor-pointer"
+                    className="fixed bottom-20 right-4 z-50 md:static flex items-center gap-2 px-4 py-2.5 bg-white text-black font-black rounded-xl text-xs hover:bg-zinc-100 transition-all cursor-pointer shadow-lg md:shadow-none"
                 >
                     <Plus className="w-3.5 h-3.5" />
                     Add Material
                 </button>
             </div>
 
-            <div className="flex gap-1 p-1 bg-zinc-950/40 rounded-xl w-fit border border-white/5">
+            {pendingUpload && (
+                <div className="p-4 bg-zinc-950/80 border border-amber-500/20 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500">
+                            <AlertCircle className="w-4 h-4" />
+                        </div>
+                        <div>
+                            <p className="text-xs font-bold text-white">Pending Upload Detected</p>
+                            <p className="text-[10px] text-zinc-500 mt-0.5">
+                                You have an incomplete upload: <span className="text-zinc-300 font-semibold">{pendingUpload.fileName}</span> ({formatFileSize(pendingUpload.fileSize)}).
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex gap-2 w-full sm:w-auto shrink-0">
+                        <button
+                            onClick={() => {
+                                const input = document.createElement("input");
+                                input.type = "file";
+                                input.accept = pendingUpload.resourceType === "image" ? "image/*" : ".pdf,.docx,.pptx,.xlsx,.txt,.md";
+                                input.onchange = (e: any) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    if (file.name !== pendingUpload.fileName || file.size !== pendingUpload.fileSize) {
+                                        toast.error("Selected file does not match the pending upload.");
+                                        return;
+                                    }
+                                    setPendingUpload(null);
+                                    setModalType(pendingUpload.resourceType);
+                                    setTitle(pendingUpload.title);
+                                    setDescription(pendingUpload.description);
+                                    setTags(pendingUpload.tags);
+                                    setSelectedFile(file);
+                                    setShowModal(true);
+                                    uploadFile(file, {
+                                        uploadId: pendingUpload.uploadId,
+                                        chunkIndex: pendingUpload.chunkIndex
+                                    });
+                                };
+                                input.click();
+                            }}
+                            className="flex-1 sm:flex-none px-3 py-1.5 bg-amber-500 text-black font-black uppercase rounded-lg text-[9px] hover:bg-amber-400 transition-colors cursor-pointer"
+                        >
+                            Resume Upload
+                        </button>
+                        <button
+                            onClick={() => {
+                                if (user) {
+                                    localStorage.removeItem(`dangdoro_upload_resume_${user.uid}`);
+                                }
+                                setPendingUpload(null);
+                                toast.info("Pending upload cleared");
+                            }}
+                            className="flex-1 sm:flex-none px-3 py-1.5 bg-zinc-900 border border-white/5 text-zinc-400 font-bold uppercase rounded-lg text-[9px] hover:bg-zinc-800 transition-colors cursor-pointer"
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            <div className="flex gap-1 p-1 bg-zinc-950/40 rounded-xl w-full md:w-fit overflow-x-auto no-scrollbar scrollbar-none border border-white/5 flex-nowrap shrink-0">
                 {(["all", "link", "image", "file"] as MaterialFilter[]).map(f => (
                     <button
                         key={f}
                         onClick={() => setFilter(f)}
                         className={cn(
-                            "relative px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-colors duration-200 cursor-pointer",
+                            "relative px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-colors duration-200 cursor-pointer flex-shrink-0",
                             filter === f ? "text-white" : "text-zinc-500 hover:text-zinc-300"
                         )}
                     >
@@ -502,180 +843,226 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
             ) : (
                 <motion.div
                     layout
-                    className="grid gap-4"
-                    style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}
+                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
                 >
                     <AnimatePresence mode="popLayout">
-                        {filtered.map(m => {
-                            const canDelete = user?.uid === m.addedBy || isHost;
-                            const canEdit = user?.uid === m.addedBy || isHost;
-                            return (
-                                <motion.div
-                                    key={m.id}
-                                    layout="position"
-                                    layoutId={m.id}
-                                    initial={{ opacity: 0, scale: 0.94, y: 12 }}
-                                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                                    exit={{ opacity: 0, scale: 0.92, y: -8, transition: { duration: 0.18, ease: "easeIn" } }}
-                                    transition={{
-                                        layout: { type: "spring", stiffness: 300, damping: 30 },
-                                        opacity: { duration: 0.22, ease: "easeOut" },
-                                        scale: { duration: 0.22, ease: "easeOut" },
-                                        y: { duration: 0.22, ease: "easeOut" },
-                                    }}
-                                    onClick={() => handleCardClick(m)}
-                                    className="group bg-zinc-900/60 border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition-colors relative flex flex-col h-[360px] max-h-[360px] w-full cursor-pointer"
-                                >
-                                    {/* Media / Thumbnail area */}
-                                    {m.type === "image" && (
-                                        <div className="w-full aspect-video bg-zinc-950 overflow-hidden shrink-0 relative border-b border-white/5">
+                    {filtered.map(m => {
+                        const canDelete = user?.uid === m.addedBy || isHost;
+                        const canEdit = user?.uid === m.addedBy || isHost;
+                        return (
+                            <motion.div
+                                key={m.id}
+                                layout="position"
+                                layoutId={m.id}
+                                initial={{ opacity: 0, scale: 0.94, y: 12 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.92, y: -8, transition: { duration: 0.18, ease: "easeIn" } }}
+                                transition={{
+                                    layout: { type: "spring", stiffness: 300, damping: 30 },
+                                    opacity: { duration: 0.22, ease: "easeOut" },
+                                    scale: { duration: 0.22, ease: "easeOut" },
+                                    y: { duration: 0.22, ease: "easeOut" },
+                                }}
+                                onClick={() => handleCardClick(m)}
+                                className="group bg-zinc-900/60 border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition-colors relative flex flex-col h-[360px] max-h-[360px] w-full cursor-pointer"
+                            >
+                                {/* Media / Thumbnail area */}
+                                {m.type === "image" && (
+                                    <div className="w-full aspect-video bg-zinc-950 overflow-hidden shrink-0 relative border-b border-white/5">
+                                        <img
+                                            src={m.thumbnailUrl || m.url}
+                                            alt={m.title}
+                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                        />
+                                    </div>
+                                )}
+                                {m.type === "file" && (
+                                    <div className="w-full aspect-video bg-zinc-950 flex items-center justify-center shrink-0 border-b border-white/5">
+                                        <div className="flex flex-col items-center gap-2 text-zinc-600">
+                                            <FileText className="w-10 h-10" />
+                                            <span className="text-[10px] font-black uppercase tracking-wider">{getFileExtension(m.url, m.fileName)}</span>
+                                        </div>
+                                    </div>
+                                )}
+                                {m.type === "link" && (
+                                    <div className="w-full aspect-video bg-gradient-to-br from-zinc-950 to-zinc-900 overflow-hidden shrink-0 relative border-b border-white/5 flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
+                                        {m.thumbnailUrl ? (
                                             <img
-                                                src={m.thumbnailUrl || m.url}
+                                                src={m.thumbnailUrl}
                                                 alt={m.title}
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                className="w-full h-full object-cover"
                                             />
-                                        </div>
-                                    )}
-                                    {m.type === "file" && (
-                                        <div className="w-full aspect-video bg-zinc-950 flex items-center justify-center shrink-0 border-b border-white/5">
-                                            <div className="flex flex-col items-center gap-2 text-zinc-600">
-                                                <FileText className="w-10 h-10" />
-                                                <span className="text-[10px] font-black uppercase tracking-wider">{getFileExtension(m.url, m.fileName)}</span>
+                                        ) : (
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-zinc-950/40 backdrop-blur-[2px]">
+                                                <div className="w-10 h-10 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mb-2 shadow-[0_0_15px_rgba(6,182,212,0.15)]">
+                                                    <Link className="w-4 h-4 text-cyan-400" />
+                                                </div>
+                                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center truncate max-w-full">
+                                                    {(() => {
+                                                        try {
+                                                            return new URL(m.url).hostname.replace("www.", "");
+                                                        } catch {
+                                                            return "LINK";
+                                                        }
+                                                    })()}
+                                                </span>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
+                                        {/* Subtle overlay grid lines */}
+                                        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />
+                                    </div>
+                                )}
+
+                                {/* Download Progress Bar (Phase R3-C) */}
+                                {downloadStates[m.id] && downloadStates[m.id].status === "downloading" && (
+                                    <div className="w-full h-1 bg-zinc-950 border-b border-white/5 relative overflow-hidden shrink-0 z-10">
+                                        {downloadStates[m.id].progress === -1 ? (
+                                            <div className="h-full w-full bg-cyan-500 animate-pulse" />
+                                        ) : downloadStates[m.id].progress === -2 ? (
+                                            <div className="h-full w-full bg-amber-500 animate-pulse flex items-center justify-center text-[7px] text-zinc-950 font-bold uppercase">
+                                                {downloadStates[m.id].error}
+                                            </div>
+                                        ) : (
+                                            <div 
+                                                className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all duration-300"
+                                                style={{ width: `${downloadStates[m.id].progress}%` }}
+                                            />
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Action Buttons overlay */}
+                                <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10 bg-zinc-950/80 backdrop-blur-sm p-1 rounded-lg border border-white/10">
                                     {m.type === "link" && (
-                                        <div className="w-full aspect-video bg-gradient-to-br from-zinc-950 to-zinc-900 overflow-hidden shrink-0 relative border-b border-white/5 flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
-                                            {m.thumbnailUrl ? (
-                                                <img
-                                                    src={m.thumbnailUrl}
-                                                    alt={m.title}
-                                                    className="w-full h-full object-cover"
-                                                />
-                                            ) : (
-                                                <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-zinc-950/40 backdrop-blur-[2px]">
-                                                    <div className="w-10 h-10 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mb-2 shadow-[0_0_15px_rgba(6,182,212,0.15)]">
-                                                        <Link className="w-4 h-4 text-cyan-400" />
-                                                    </div>
-                                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center truncate max-w-full">
-                                                        {(() => {
-                                                            try {
-                                                                return new URL(m.url).hostname.replace("www.", "");
-                                                            } catch {
-                                                                return "LINK";
-                                                            }
-                                                        })()}
-                                                    </span>
-                                                </div>
-                                            )}
-                                            {/* Subtle overlay grid lines */}
-                                            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />
-                                        </div>
+                                        <a
+                                            href={m.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
+                                            title="Open Link"
+                                        >
+                                            <ExternalLink className="w-3.5 h-3.5" />
+                                        </a>
                                     )}
-
-                                    {/* Action Buttons overlay */}
-                                    <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 bg-zinc-950/80 backdrop-blur-sm p-1 rounded-lg border border-white/10">
-                                        {m.type === "link" && (
-                                            <a
-                                                href={m.url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
-                                                title="Open Link"
-                                            >
-                                                <ExternalLink className="w-3.5 h-3.5" />
-                                            </a>
-                                        )}
-                                        {(m.type === "image" || m.type === "file") && (
+                                    {(m.type === "image" || m.type === "file") && (() => {
+                                        const isDownloading = downloadStates[m.id]?.status === "downloading";
+                                        const progress = downloadStates[m.id]?.progress ?? 0;
+                                        return isDownloading ? (
+                                            <div className="flex items-center gap-1.5 bg-zinc-900 border border-white/10 rounded-md px-1.5 py-0.5 h-6 shrink-0 select-none">
+                                                <span className="text-[8px] font-black text-cyan-400 min-w-[20px] text-right">
+                                                    {progress >= 0 ? `${progress}%` : "..."}
+                                                </span>
+                                                <div className="w-10 bg-zinc-800 rounded-full h-1 overflow-hidden shrink-0">
+                                                    {progress >= 0 ? (
+                                                        <div 
+                                                            className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all duration-300"
+                                                            style={{ width: `${progress}%` }}
+                                                        />
+                                                    ) : (
+                                                        <div className="h-full w-full bg-cyan-500 animate-pulse" />
+                                                    )}
+                                                </div>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        abortControllersRef.current[m.id]?.abort();
+                                                    }}
+                                                    className="p-0.5 text-zinc-400 hover:text-red-500 transition-colors rounded hover:bg-white/5 cursor-pointer shrink-0"
+                                                    title="Cancel Download"
+                                                >
+                                                    <X className="w-2.5 h-2.5" />
+                                                </button>
+                                            </div>
+                                        ) : (
                                             <button
-                                                onClick={(e) => { e.stopPropagation(); handleDownload(m); }}
-                                                className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDownload(m);
+                                                }}
+                                                className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center w-6 h-6 rounded-full hover:bg-white/5"
                                                 title="Download"
-                                                disabled={downloadingId === m.id}
                                             >
-                                                {downloadingId === m.id ? (
-                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                                ) : (
-                                                    <Download className="w-3.5 h-3.5" />
-                                                )}
+                                                <Download className="w-3.5 h-3.5" />
                                             </button>
+                                        );
+                                    })()}
+                                    {canEdit && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleEditClick(m); }}
+                                            className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                            title="Edit"
+                                        >
+                                            <Pencil className="w-3.5 h-3.5" />
+                                        </button>
+                                    )}
+                                    {canDelete && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}
+                                            className="p-1 text-zinc-400 hover:text-red-400 transition-colors cursor-pointer"
+                                            title="Delete"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Card Body */}
+                                <div className="p-4 flex flex-col flex-1 min-h-0 justify-between">
+                                    <div className="space-y-1.5 min-h-0 flex-1 flex flex-col justify-start">
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            {m.type === "link" && <Link className="w-3 h-3 text-cyan-400 shrink-0" />}
+                                            {m.type === "image" && <Image className="w-3 h-3 text-purple-400 shrink-0" />}
+                                            {m.type === "file" && <FileText className="w-3 h-3 text-amber-400 shrink-0" />}
+                                            <span className="text-[9px] font-black uppercase tracking-wider text-zinc-600">{m.type}</span>
+                                        </div>
+                                        
+                                        <div className="text-sm font-bold text-white group-hover:text-cyan-400 transition-colors line-clamp-2 whitespace-normal select-all shrink-0">
+                                            {m.title}
+                                        </div>
+
+                                        {m.description ? (
+                                            <div className="text-xs text-zinc-500 line-clamp-2 overflow-hidden flex-1 leading-normal">
+                                                <MarkdownRenderer content={m.description} />
+                                            </div>
+                                        ) : (
+                                            <div className="text-xs text-zinc-600 italic line-clamp-2 overflow-hidden flex-1">
+                                                No description provided.
+                                            </div>
                                         )}
-                                        {canEdit && (
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleEditClick(m); }}
-                                                className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                                                title="Edit"
-                                            >
-                                                <Pencil className="w-3.5 h-3.5" />
-                                            </button>
-                                        )}
-                                        {canDelete && (
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}
-                                                className="p-1 text-zinc-400 hover:text-red-400 transition-colors cursor-pointer"
-                                                title="Delete"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
+                                        
+                                        {m.type === "file" && (m.fileName || m.fileSize) && (
+                                            <div className="flex items-center gap-2 text-[10px] text-zinc-600 shrink-0 pt-0.5">
+                                                {m.fileName && <span className="truncate flex-1 min-w-0">{m.fileName}</span>}
+                                                {m.fileSize && <span className="shrink-0">{formatFileSize(m.fileSize)}</span>}
+                                            </div>
                                         )}
                                     </div>
 
-                                    {/* Card Body */}
-                                    <div className="p-4 flex flex-col flex-1 min-h-0 justify-between">
-                                        <div className="space-y-1.5 min-h-0 flex-1 flex flex-col justify-start">
-                                            <div className="flex items-center gap-1.5 shrink-0">
-                                                {m.type === "link" && <Link className="w-3 h-3 text-cyan-400 shrink-0" />}
-                                                {m.type === "image" && <Image className="w-3 h-3 text-purple-400 shrink-0" />}
-                                                {m.type === "file" && <FileText className="w-3 h-3 text-amber-400 shrink-0" />}
-                                                <span className="text-[9px] font-black uppercase tracking-wider text-zinc-600">{m.type}</span>
-                                            </div>
-
-                                            <div className="text-sm font-bold text-white group-hover:text-cyan-400 transition-colors truncate shrink-0">
-                                                {m.title}
-                                            </div>
-
-                                            {m.description ? (
-                                                <div className="text-xs text-zinc-500 line-clamp-2 overflow-hidden flex-1 leading-normal">
-                                                    <MarkdownRenderer content={m.description} />
-                                                </div>
-                                            ) : (
-                                                <div className="text-xs text-zinc-600 italic line-clamp-2 overflow-hidden flex-1">
-                                                    No description provided.
-                                                </div>
-                                            )}
-
-                                            {m.type === "file" && (m.fileName || m.fileSize) && (
-                                                <div className="flex items-center gap-2 text-[10px] text-zinc-600 shrink-0 pt-0.5">
-                                                    {m.fileName && <span className="truncate flex-1 min-w-0">{m.fileName}</span>}
-                                                    {m.fileSize && <span className="shrink-0">{formatFileSize(m.fileSize)}</span>}
-                                                </div>
-                                            )}
+                                    {/* Footer */}
+                                    <div className="flex items-center justify-between pt-2 border-t border-white/5 shrink-0 mt-2">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            <Avatar className="w-4 h-4 rounded-full border border-white/10 shrink-0">
+                                                <AvatarImage src={memberPhotoMap[m.addedBy]} />
+                                                <AvatarFallback className="text-[6px] bg-zinc-800">{m.addedByName?.[0]}</AvatarFallback>
+                                            </Avatar>
+                                            <span className="text-[10px] text-zinc-600 truncate max-w-[80px]">{m.addedByName}</span>
                                         </div>
-
-                                        {/* Footer */}
-                                        <div className="flex items-center justify-between pt-2 border-t border-white/5 shrink-0 mt-2">
-                                            <div className="flex items-center gap-1.5 min-w-0">
-                                                <Avatar className="w-4 h-4 rounded-full border border-white/10 shrink-0">
-                                                    <AvatarImage src={memberPhotoMap[m.addedBy]} />
-                                                    <AvatarFallback className="text-[6px] bg-zinc-800">{m.addedByName?.[0]}</AvatarFallback>
-                                                </Avatar>
-                                                <span className="text-[10px] text-zinc-600 truncate max-w-[80px]">{m.addedByName}</span>
+                                        {m.tags && m.tags.length > 0 && (
+                                            <div className="flex gap-1 shrink-0">
+                                                {m.tags.slice(0, 2).map(tag => (
+                                                    <span key={tag} className="px-1.5 py-0.5 rounded-full bg-white/5 text-[8px] font-bold text-zinc-500 uppercase tracking-wider">
+                                                        {tag}
+                                                    </span>
+                                                ))}
                                             </div>
-                                            {m.tags && m.tags.length > 0 && (
-                                                <div className="flex gap-1 shrink-0">
-                                                    {m.tags.slice(0, 2).map(tag => (
-                                                        <span key={tag} className="px-1.5 py-0.5 rounded-full bg-white/5 text-[8px] font-bold text-zinc-500 uppercase tracking-wider">
-                                                            {tag}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
+                                        )}
                                     </div>
-                                </motion.div>
-                            );
-                        })}
+                                </div>
+
+                            </motion.div>
+                        );
+                    })}
                     </AnimatePresence>
                 </motion.div>
             )}
@@ -686,7 +1073,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-zinc-950/90 backdrop-blur-sm"
+                        className="fixed inset-0 z-[120] flex items-center justify-center p-0 md:p-4 bg-zinc-950/90 backdrop-blur-sm"
                         onClick={handleCloseModal}
                     >
                         <motion.div
@@ -694,149 +1081,222 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.95, opacity: 0 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-zinc-900 border border-white/10 rounded-[10px] p-6 max-w-lg w-full shadow-2xl space-y-5"
+                            className="bg-zinc-900 border border-white/10 md:rounded-2xl max-w-lg w-full h-[100dvh] md:h-auto md:max-h-[85vh] rounded-none shadow-2xl flex flex-col overflow-hidden"
                         >
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-base font-black text-white">Add Material</h3>
-                                <button onClick={handleCloseModal} className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-500 transition-colors cursor-pointer">
+                            {/* Pinned Header */}
+                            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 shrink-0">
+                                <h3 className="text-sm font-black text-white uppercase tracking-wider">Add Material</h3>
+                                <button onClick={handleCloseModal} className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-500 hover:text-white transition-colors cursor-pointer">
                                     <X className="w-4 h-4" />
                                 </button>
                             </div>
 
-                            <div className="flex gap-2">
-                                {(["link", "image", "file"] as const).map(t => (
-                                    <button
-                                        key={t}
-                                        onClick={() => {
-                                            setModalType(t);
-                                            if (previewUrl) URL.revokeObjectURL(previewUrl);
-                                            setSelectedFile(null);
-                                            setPreviewUrl(null);
-                                            setTitle("");
-                                            setDescription("");
-                                            setTags("");
-                                        }}
-                                        className={cn(
-                                            "flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer border",
-                                            modalType === t
-                                                ? "bg-white/10 text-white border-white/20"
-                                                : "bg-zinc-950/60 text-zinc-500 border-white/5 hover:text-zinc-300"
-                                        )}
-                                    >
-                                        {t === "link" ? "Link" : t === "image" ? "Image" : "File"}
-                                    </button>
-                                ))}
-                            </div>
+                            {/* Scrollable Body */}
+                            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                                <div className="flex gap-2">
+                                    {(["link", "image", "file"] as const).map(t => (
+                                        <button
+                                            key={t}
+                                            onClick={() => {
+                                                setModalType(t);
+                                                if (previewUrl) URL.revokeObjectURL(previewUrl);
+                                                setSelectedFile(null);
+                                                setPreviewUrl(null);
+                                                setTitle("");
+                                                setDescription("");
+                                                setTags("");
+                                            }}
+                                            className={cn(
+                                                "flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer border",
+                                                modalType === t
+                                                    ? "bg-white/10 text-white border-white/20"
+                                                    : "bg-zinc-950/60 text-zinc-500 border-white/5 hover:text-zinc-300"
+                                            )}
+                                        >
+                                            {t === "link" ? "Link" : t === "image" ? "Image" : "File"}
+                                        </button>
+                                    ))}
+                                </div>
 
-                            {modalType === "link" && (
-                                <div className="space-y-3">
-                                    <div className="relative">
-                                        <input value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="URL *" className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all pr-10" />
-                                        {fetchingOg && (
-                                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                                <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                {modalType === "link" && (
+                                    <div className="space-y-4">
+                                        <div className="relative">
+                                            <input value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="URL *" className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all pr-10" />
+                                            {fetchingOg && (
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        
+                                        {thumbnailUrl && (
+                                            <div className="w-full h-32 rounded-lg overflow-hidden border border-white/10 bg-zinc-950 relative group">
+                                                <img src={thumbnailUrl} alt="Link cover" className="w-full h-full object-cover" />
+                                                <button 
+                                                    onClick={() => setThumbnailUrl(null)}
+                                                    className="absolute top-2 right-2 p-1 bg-black/60 hover:bg-black rounded-full text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title *" className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all" />
+                                        <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description (markdown)" rows={3} className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all resize-none" />
+                                        <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Tags (comma separated)" className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all" />
+                                    </div>
+                                )}
+
+                                {(modalType === "image" || modalType === "file") && (
+                                    <div className="space-y-4">
+                                        {!selectedFile ? (
+                                            <div className="space-y-4">
+                                                <p className="text-xs text-zinc-500">
+                                                    {modalType === "image" ? "Max 5MB. JPEG, PNG, GIF, WebP." : "Max 10MB. PDF, DOCX, PPTX, XLSX, TXT, MD."}
+                                                </p>
+                                                <label className="flex flex-col items-center gap-3 p-8 border-2 border-dashed border-white/10 rounded-xl hover:border-white/20 transition-colors cursor-pointer bg-zinc-950/60">
+                                                    <Upload className="w-8 h-8 text-zinc-500" />
+                                                    <span className="text-sm font-medium text-zinc-400">Click to select file</span>
+                                                    <input
+                                                        type="file"
+                                                        accept={modalType === "image" ? "image/*" : ".pdf,.docx,.pptx,.xlsx,.txt,.md"}
+                                                        onChange={handleFileSelect}
+                                                        className="hidden"
+                                                    />
+                                                </label>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                {modalType === "image" && previewUrl && (
+                                                    <div className="relative w-full aspect-video bg-zinc-950 rounded-xl overflow-hidden border border-white/10">
+                                                        <img src={previewUrl} alt="Upload preview" className="w-full h-full object-cover" />
+                                                        <button onClick={() => { setSelectedFile(null); setPreviewUrl(null); }} className="absolute top-2 right-2 p-1 bg-black/60 rounded-full text-white hover:bg-black/80 transition-colors">
+                                                            <X className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {modalType === "file" && (
+                                                    <div className="p-4 bg-zinc-950 border border-white/10 rounded-xl flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 bg-zinc-900 border border-zinc-800 rounded-lg flex items-center justify-center text-zinc-400 font-bold text-xs uppercase shrink-0">
+                                                                {getFileExtension(selectedFile.name)}
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <p className="text-sm font-bold text-white truncate max-w-[200px]">{selectedFile.name}</p>
+                                                                <p className="text-xs text-zinc-500">{formatFileSize(selectedFile.size)}</p>
+                                                            </div>
+                                                        </div>
+                                                        <button onClick={() => { setSelectedFile(null); }} className="p-1 hover:bg-white/5 rounded-lg text-zinc-400 hover:text-white transition-colors">
+                                                            <X className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 block">Title *</label>
+                                                        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title *" className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 block">Tags (comma separated)</label>
+                                                        <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="e.g. math, notes" className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 block">Description (markdown)</label>
+                                                        <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Provide context about this file..." rows={3} className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all resize-none" />
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
+                                )}
+                            </div>
 
-                                    {thumbnailUrl && (
-                                        <div className="w-full h-32 rounded-lg overflow-hidden border border-white/10 bg-zinc-950 relative group">
-                                            <img src={thumbnailUrl} alt="Link cover" className="w-full h-full object-cover" />
-                                            <button
-                                                onClick={() => setThumbnailUrl(null)}
-                                                className="absolute top-2 right-2 p-1 bg-black/60 hover:bg-black rounded-full text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                                            >
-                                                <X className="w-3.5 h-3.5" />
-                                            </button>
-                                        </div>
-                                    )}
-
-                                    <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title *" className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all" />
-                                    <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description (markdown)" rows={3} className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all resize-none" />
-                                    <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Tags (comma separated)" className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all" />
-                                    <button onClick={handleAddLink} disabled={!linkUrl.trim() || !title.trim() || fetchingOg} className="w-full py-3 bg-white text-black font-black rounded-lg text-xs hover:bg-zinc-100 transition-all disabled:opacity-50 cursor-pointer">
-                                        Save Link
-                                    </button>
-                                </div>
-                            )}
-
-                            {(modalType === "image" || modalType === "file") && (
-                                <div className="space-y-4">
-                                    {!selectedFile ? (
-                                        <div className="space-y-4">
-                                            <p className="text-xs text-zinc-500">
-                                                {modalType === "image" ? "Max 5MB. JPEG, PNG, GIF, WebP." : "Max 10MB. PDF, DOCX, PPTX, XLSX, TXT, MD."}
-                                            </p>
-                                            <label className="flex flex-col items-center gap-3 p-8 border-2 border-dashed border-white/10 rounded-xl hover:border-white/20 transition-colors cursor-pointer bg-zinc-950/60">
-                                                <Upload className="w-8 h-8 text-zinc-500" />
-                                                <span className="text-sm font-medium text-zinc-400">Click to select file</span>
-                                                <input
-                                                    type="file"
-                                                    accept={modalType === "image" ? "image/*" : ".pdf,.docx,.pptx,.xlsx,.txt,.md"}
-                                                    onChange={handleFileSelect}
-                                                    className="hidden"
-                                                />
-                                            </label>
-                                        </div>
+                            {/* Pinned Footer */}
+                            {(modalType === "link" || !!selectedFile) && (
+                                <div className="p-4 pb-20 md:pb-4 border-t border-white/5 bg-zinc-950/60 shrink-0">
+                                    {modalType === "link" ? (
+                                        <button onClick={handleAddLink} disabled={!linkUrl.trim() || !title.trim() || fetchingOg} className="w-full py-3 bg-white text-black font-black rounded-lg text-xs hover:bg-zinc-100 transition-all disabled:opacity-50 cursor-pointer">
+                                            Save Link
+                                        </button>
                                     ) : (
-                                        <div className="space-y-4">
-                                            {/* Preview block */}
-                                            {modalType === "image" && previewUrl && (
-                                                <div className="relative w-full aspect-video bg-zinc-950 rounded-xl overflow-hidden border border-white/10">
-                                                    <img src={previewUrl} alt="Upload preview" className="w-full h-full object-cover" />
-                                                    <button onClick={() => { setSelectedFile(null); setPreviewUrl(null); }} className="absolute top-2 right-2 p-1 bg-black/60 rounded-full text-white hover:bg-black/80 transition-colors">
-                                                        <X className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            )}
-
-                                            {modalType === "file" && (
-                                                <div className="p-4 bg-zinc-950 border border-white/10 rounded-xl flex items-center justify-between">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 bg-zinc-900 border border-zinc-800 rounded-lg flex items-center justify-center text-zinc-400 font-bold text-xs uppercase shrink-0">
-                                                            {getFileExtension(selectedFile.name)}
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <p className="text-sm font-bold text-white truncate max-w-[200px]">{selectedFile.name}</p>
-                                                            <p className="text-xs text-zinc-500">{formatFileSize(selectedFile.size)}</p>
-                                                        </div>
-                                                    </div>
-                                                    <button onClick={() => { setSelectedFile(null); }} className="p-1 hover:bg-white/5 rounded-lg text-zinc-400 hover:text-white transition-colors">
-                                                        <X className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            )}
-
-                                            {/* Title, tags and description fields */}
+                                        uploadState ? (
                                             <div className="space-y-3">
-                                                <div>
-                                                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 block">Title *</label>
-                                                    <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title *" className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all" />
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="font-bold text-zinc-400 truncate max-w-[200px]">{uploadState.fileName}</span>
+                                                    <span className="font-black text-white">{uploadState.progress}%</span>
                                                 </div>
-                                                <div>
-                                                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 block">Tags (comma separated)</label>
-                                                    <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="e.g. math, notes" className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all" />
+                                                
+                                                <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
+                                                    <div 
+                                                        className={cn(
+                                                            "h-full rounded-full transition-all duration-300",
+                                                            uploadState.status === "error" ? "bg-red-500" :
+                                                            uploadState.status === "paused" ? "bg-amber-500" :
+                                                            "bg-gradient-to-r from-cyan-500 to-blue-500"
+                                                        )}
+                                                        style={{ width: `${uploadState.progress}%` }}
+                                                    />
                                                 </div>
-                                                <div>
-                                                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 block">Description (markdown)</label>
-                                                    <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Provide context about this file..." rows={3} className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all resize-none" />
+                                                
+                                                <div className="flex justify-between items-center text-[10px]">
+                                                    <span className={cn(
+                                                        "font-bold uppercase tracking-wider",
+                                                        uploadState.status === "error" ? "text-red-400" :
+                                                        uploadState.status === "paused" ? "text-amber-400 animate-pulse" :
+                                                        "text-zinc-500"
+                                                    )}>
+                                                        {uploadState.status === "uploading" && (
+                                                            <>Uploading {uploadSpeed ? `(${uploadSpeed.toFixed(1)} MB/s)` : ""}</>
+                                                        )}
+                                                        {uploadState.status === "paused" && "Connection lost — tap to resume"}
+                                                        {uploadState.status === "error" && `Error: ${uploadState.error || "Upload failed"}`}
+                                                        {uploadState.status === "done" && "Done"}
+                                                    </span>
+                                                    
+                                                    {uploadState.status === "paused" && (
+                                                        <button
+                                                            onClick={() => {
+                                                                isPausedRef.current = false;
+                                                                if (selectedFile) {
+                                                                    uploadFile(selectedFile, {
+                                                                        uploadId: uploadState.uploadId!,
+                                                                        chunkIndex: uploadState.chunkIndex
+                                                                    });
+                                                                }
+                                                            }}
+                                                            className="px-2 py-1 bg-amber-500 text-black font-black uppercase rounded text-[8px] hover:bg-amber-400 transition-colors"
+                                                        >
+                                                            Resume
+                                                        </button>
+                                                    )}
                                                 </div>
-                                            </div>
 
+                                                <button
+                                                    onClick={() => {
+                                                        isPausedRef.current = true;
+                                                        xhrRef.current?.abort();
+                                                        setUploadState(null);
+                                                        setUploading(false);
+                                                        if (user) {
+                                                            localStorage.removeItem(`dangdoro_upload_resume_${user.uid}`);
+                                                        }
+                                                        toast.info("Upload cancelled");
+                                                    }}
+                                                    className="w-full py-2 bg-red-950/40 border border-red-900/30 text-red-400 font-bold rounded-lg text-xs hover:bg-red-900/20 transition-colors"
+                                                >
+                                                    Cancel Upload
+                                                </button>
+                                            </div>
+                                        ) : (
                                             <div className="flex gap-2">
                                                 <button
                                                     onClick={handleConfirmUpload}
                                                     disabled={uploading || !title.trim()}
                                                     className="flex-1 py-3 bg-white text-black font-black rounded-lg text-xs hover:bg-zinc-100 transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
                                                 >
-                                                    {uploading ? (
-                                                        <>
-                                                            <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                                                            Uploading...
-                                                        </>
-                                                    ) : (
-                                                        "Confirm Upload"
-                                                    )}
+                                                    Confirm Upload
                                                 </button>
                                                 <button
                                                     onClick={() => { setSelectedFile(null); if (previewUrl) URL.revokeObjectURL(previewUrl); setPreviewUrl(null); }}
@@ -846,7 +1306,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                                                     Change File
                                                 </button>
                                             </div>
-                                        </div>
+                                        )
                                     )}
                                 </div>
                             )}
@@ -861,7 +1321,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-zinc-950/90 backdrop-blur-sm"
+                        className="fixed inset-0 z-[120] flex items-center justify-center p-0 md:p-4 bg-zinc-950/90 backdrop-blur-sm"
                         onClick={handleCloseEditModal}
                     >
                         <motion.div
@@ -869,16 +1329,18 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.95, opacity: 0 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-zinc-900 border border-white/10 rounded-[10px] p-6 max-w-lg w-full shadow-2xl space-y-5"
+                            className="bg-zinc-900 border border-white/10 md:rounded-2xl max-w-lg w-full h-[100dvh] md:h-auto md:max-h-[85vh] rounded-none shadow-2xl flex flex-col overflow-hidden"
                         >
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-base font-black text-white">Edit Material</h3>
-                                <button onClick={handleCloseEditModal} className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-500 transition-colors cursor-pointer">
+                            {/* Pinned Header */}
+                            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 shrink-0">
+                                <h3 className="text-sm font-black text-white uppercase tracking-wider">Edit Material</h3>
+                                <button onClick={handleCloseEditModal} className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-500 hover:text-white transition-colors cursor-pointer">
                                     <X className="w-4 h-4" />
                                 </button>
                             </div>
 
-                            <div className="space-y-4">
+                            {/* Scrollable Body */}
+                            <div className="flex-1 overflow-y-auto p-6 space-y-5">
                                 {editingMaterial.type === "link" && (
                                     <div>
                                         <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 block">URL *</label>
@@ -900,7 +1362,10 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 block">Description (markdown)</label>
                                     <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description..." rows={3} className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all resize-none" />
                                 </div>
+                            </div>
 
+                            {/* Pinned Footer */}
+                            <div className="p-4 pb-20 md:pb-4 border-t border-white/5 bg-zinc-900/60 shrink-0">
                                 <button onClick={handleSaveChanges} disabled={!title.trim() || (editingMaterial.type === "link" && !linkUrl.trim())} className="w-full py-3 bg-white text-black font-black rounded-lg text-xs hover:bg-zinc-100 transition-all disabled:opacity-50 cursor-pointer">
                                     Save Changes
                                 </button>
@@ -922,7 +1387,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                         <button onClick={() => setPreviewMaterial(null)} className="absolute top-4 right-4 p-2 bg-zinc-900/80 rounded-xl text-zinc-400 hover:text-white transition-colors cursor-pointer z-10">
                             <X className="w-5 h-5" />
                         </button>
-
+                        
                         <motion.div
                             initial={{ scale: 0.95 }}
                             animate={{ scale: 1 }}
@@ -1024,14 +1489,20 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                                                 <p className="text-xs text-zinc-500 mt-1">{previewMaterial.fileSize ? formatFileSize(previewMaterial.fileSize) : ""}</p>
                                             </div>
                                             <button
-                                                onClick={() => handleDownload(previewMaterial)}
+                                                onClick={() => {
+                                                    const isDownloading = downloadStates[previewMaterial.id]?.status === "downloading";
+                                                    if (isDownloading) {
+                                                        abortControllersRef.current[previewMaterial.id]?.abort();
+                                                    } else {
+                                                        handleDownload(previewMaterial);
+                                                    }
+                                                }}
                                                 className="px-6 py-2.5 bg-white text-black font-black text-xs rounded-xl hover:bg-zinc-100 transition-colors flex items-center gap-2 mt-2 cursor-pointer"
-                                                disabled={downloadingId === previewMaterial.id}
                                             >
-                                                {downloadingId === previewMaterial.id ? (
+                                                {downloadStates[previewMaterial.id]?.status === "downloading" ? (
                                                     <>
-                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                                        Downloading...
+                                                        <X className="w-3.5 h-3.5 text-red-500 animate-pulse" />
+                                                        Cancel Download ({downloadStates[previewMaterial.id].progress >= 0 ? `${downloadStates[previewMaterial.id].progress}%` : "..."})
                                                     </>
                                                 ) : (
                                                     <>
@@ -1078,8 +1549,8 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                                             <span className={cn(
                                                 "text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border w-fit block",
                                                 previewMaterial.type === "link" ? "text-cyan-400 bg-cyan-950/30 border-cyan-900/30" :
-                                                    previewMaterial.type === "image" ? "text-purple-400 bg-purple-950/30 border-purple-900/30" :
-                                                        "text-amber-400 bg-amber-950/30 border-amber-900/30"
+                                                previewMaterial.type === "image" ? "text-purple-400 bg-purple-950/30 border-purple-900/30" :
+                                                "text-amber-400 bg-amber-950/30 border-amber-900/30"
                                             )}>
                                                 {previewMaterial.type}
                                             </span>
@@ -1196,14 +1667,20 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                                     <div className="border-t border-white/5 pt-4 flex flex-col gap-3">
                                         <div className="flex gap-2">
                                             <button
-                                                onClick={() => handleDownload(previewMaterial)}
+                                                onClick={() => {
+                                                    const isDownloading = downloadStates[previewMaterial.id]?.status === "downloading";
+                                                    if (isDownloading) {
+                                                        abortControllersRef.current[previewMaterial.id]?.abort();
+                                                    } else {
+                                                        handleDownload(previewMaterial);
+                                                    }
+                                                }}
                                                 className="w-full py-2 bg-white text-black font-black text-[10px] uppercase tracking-wider rounded-lg hover:bg-zinc-100 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                                                disabled={downloadingId === previewMaterial.id}
                                             >
-                                                {downloadingId === previewMaterial.id ? (
+                                                {downloadStates[previewMaterial.id]?.status === "downloading" ? (
                                                     <>
-                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                                        Downloading...
+                                                        <X className="w-3.5 h-3.5 text-red-500 animate-pulse" />
+                                                        Cancel ({downloadStates[previewMaterial.id].progress >= 0 ? `${downloadStates[previewMaterial.id].progress}%` : "..."})
                                                     </>
                                                 ) : (
                                                     <>
@@ -1219,8 +1696,8 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
 
 
 
-                            </div>
-                        </motion.div>
+                                </div>
+                            </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>
