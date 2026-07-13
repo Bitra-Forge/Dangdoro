@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ScrollText,
+  Radio,
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -23,6 +24,7 @@ const sidebarLinks = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/changelog", label: "Changelog", icon: FileText },
   { href: "/admin/users", label: "Users", icon: Users },
+  { href: "/admin/ticker", label: "Ticker", icon: Radio },
 ];
 
 export default function AdminLayout({
