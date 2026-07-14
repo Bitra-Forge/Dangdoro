@@ -102,6 +102,7 @@ export const GroupManagementView = memo(function GroupManagementView({
         startTour();
     };
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
+    const showTourButton = useTimerStore((s) => s.showTourButton);
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
 
@@ -606,7 +607,7 @@ export const GroupManagementView = memo(function GroupManagementView({
             )}
 
             {/* Floating Help/Tour Button */}
-            {isHostOrAdmin && (
+            {showTourButton && isHostOrAdmin && (
                 <div className="fixed bottom-8 md:bottom-6 left-6 z-50">
                     <button
                         onClick={handleRestartTour}

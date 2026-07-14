@@ -119,6 +119,8 @@ const DevAvatar = ({ name, avatar }: { name: string; avatar?: string }) => {
 
 export default function SettingsPage() {
     const { showDots, bgPalette, updateShowDots, updateBgPalette } = useBackgroundTheme(false);
+    const showTourButton = useTimerStore((s) => s.showTourButton);
+    const setShowTourButton = useTimerStore((s) => s.setShowTourButton);
 
     const NONE_SOLID_COLORS = [
         { name: "Sage", value: "#757c4f" },
@@ -662,6 +664,27 @@ export default function SettingsPage() {
                                             <div className={cn(
                                                 "absolute left-1 top-1 w-5 h-5 rounded-full bg-white transition-transform",
                                                 showDots ? "translate-x-5" : "translate-x-0"
+                                            )} />
+                                        </div>
+                                    </div>
+                                </button>
+
+                                <button
+                                    onClick={() => setShowTourButton(!showTourButton)}
+                                    className="w-full text-left p-6 transition-colors hover:bg-white/[0.01] border-t border-white/5"
+                                >
+                                    <div className="flex items-center justify-between gap-4">
+                                        <div>
+                                            <div className="text-zinc-200 font-medium">Tour Button</div>
+                                            <div className="text-[9px] text-zinc-500 uppercase tracking-wider mt-1">Show floating help/tour button on pages</div>
+                                        </div>
+                                        <div className={cn(
+                                            "relative w-12 h-7 rounded-full transition-colors flex-shrink-0",
+                                            showTourButton ? "bg-emerald-500" : "bg-zinc-700"
+                                        )}>
+                                            <div className={cn(
+                                                "absolute left-1 top-1 w-5 h-5 rounded-full bg-white transition-transform",
+                                                showTourButton ? "translate-x-5" : "translate-x-0"
                                             )} />
                                         </div>
                                     </div>

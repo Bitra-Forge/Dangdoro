@@ -99,6 +99,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
     const isGroupUnread = useChatNotificationStore(s => !!s.unreadGroups[groupId]);
 
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
+    const showTourButton = useTimerStore((s) => s.showTourButton);
     const timerStart = useTimerStore(s => s.start);
     const timerPause = useTimerStore(s => s.pause);
     const timerStop = useTimerStore(s => s.stop);
@@ -1271,7 +1272,7 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
             </AnimatePresence>
 
             {/* Floating Help/Tour Button */}
-            {isMember && activeTab === "workspace" && (
+            {showTourButton && isMember && activeTab === "workspace" && (
                 <div className="fixed bottom-8 md:bottom-6 left-6 z-50">
                     <button
                         onClick={handleRestartTour}

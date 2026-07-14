@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useMemo, Suspense, memo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTour, type TourStep } from "@/lib/use-tour";
+import { useTimerStore } from "@/lib/store";
 import { useAuth } from "@/components/AuthProvider";
 import { cn, getHighQualityAvatarUrl } from "@/lib/utils";
 import { onSnapshot, doc, getDoc } from "firebase/firestore";
@@ -352,6 +353,7 @@ const parseCompletedAt = (completedAt: any): Date | null => {
 // --- Page ---
 
 function ProfileContent() {
+    const showTourButton = useTimerStore((s) => s.showTourButton);
     const isTouchDevice = useTouchDevice();
     const searchParams = useSearchParams();
     const targetUserId = searchParams.get("user");
@@ -1812,7 +1814,8 @@ function ProfileContent() {
             </Dialog>
 
             {/* Floating Help/Tour Button */}
-            <div className="fixed bottom-8 md:bottom-6 left-6 z-50">
+            {showTourButton && (
+              <div className="fixed bottom-8 md:bottom-6 left-6 z-50">
                 <button
                     onClick={handleRestartTour}
                     className="h-11 w-11 sm:h-14 sm:w-14 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
@@ -1820,7 +1823,8 @@ function ProfileContent() {
                 >
                     <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
-            </div>
+              </div>
+            )}
         </BackgroundTheme>
     );
 }

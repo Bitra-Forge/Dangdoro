@@ -1467,6 +1467,7 @@ export default function TasksPage() {
         resetTour();
         startTour();
     };
+    const showTourButton = useTimerStore((state) => state.showTourButton);
 
     const { user, loading: authLoading } = useAuth();
     const [tasks, setTasks] = useState<any[]>([]);
@@ -2072,7 +2073,8 @@ export default function TasksPage() {
                 </div>
             )}
             {/* Floating Help/Tour Button */}
-            <div className="fixed bottom-8 md:bottom-6 left-6 z-50">
+            {showTourButton && (
+              <div className="fixed bottom-8 md:bottom-6 left-6 z-50">
                 <button
                     onClick={handleRestartTour}
                     className="h-11 w-11 sm:h-14 sm:w-14 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
@@ -2080,7 +2082,8 @@ export default function TasksPage() {
                 >
                     <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
-            </div>
+              </div>
+            )}
 
             {/* Toolbar is now rendered inside CanvasControls (child of TransformWrapper) */}
         </BackgroundTheme>

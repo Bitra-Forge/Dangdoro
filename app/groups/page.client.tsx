@@ -87,6 +87,7 @@ export default function GroupsPage() {
     const [privacy, setPrivacy] = useState<GroupPrivacy>("private-invite");
     const [showJoinCodeModal, setShowJoinCodeModal] = useState(false);
     const settingsGlassmorphism = useTimerStore(s => s.settingsGlassmorphism);
+    const showTourButton = useTimerStore((s) => s.showTourButton);
 
     const [hydratedProfiles, setHydratedProfiles] = useState<Record<string, any>>({});
     const lastActiveCountRef = useRef<Record<string, number>>({});
@@ -586,7 +587,8 @@ export default function GroupsPage() {
                 </AnimatePresence>
 
                 {/* Floating Help/Tour Button */}
-                <div className="fixed bottom-8 md:bottom-6 left-6 z-50">
+                {showTourButton && (
+                  <div className="fixed bottom-8 md:bottom-6 left-6 z-50">
                     <button
                         onClick={handleRestartTour}
                     className="h-11 w-11 sm:h-14 sm:w-14 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
@@ -594,7 +596,8 @@ export default function GroupsPage() {
                 >
                     <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
-                </div>
+                  </div>
+                )}
             </div>
         </BackgroundTheme>
     );

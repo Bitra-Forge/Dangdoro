@@ -77,6 +77,8 @@ interface TimerState {
   isNavFocusMode: boolean;
   setIsNavFocusMode: (enabled: boolean) => void;
   toggleNavFocusMode: () => void;
+  showTourButton: boolean;
+  setShowTourButton: (enabled: boolean) => void;
   activeSounds: Record<string, number>;
   lastActiveSounds: Record<string, number> | null;
   toggleSound: (soundId: string) => void;
@@ -468,6 +470,8 @@ export const useTimerStore = create<TimerState>()(
       isNavFocusMode: false,
       setIsNavFocusMode: (enabled: boolean) => set({ isNavFocusMode: enabled }),
       toggleNavFocusMode: () => set((state) => ({ isNavFocusMode: !state.isNavFocusMode })),
+      showTourButton: true,
+      setShowTourButton: (enabled: boolean) => set({ showTourButton: enabled }),
       activeSounds: {},
       lastActiveSounds: null,
       toggleSound: (soundId: string) => {
