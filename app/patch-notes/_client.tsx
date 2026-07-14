@@ -21,7 +21,7 @@ export function PatchNotesClient({ entries }: PatchNotesClientProps) {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         entries={entries}
-        className="sticky top-[57px] z-40 -mx-4 px-4 bg-[#0b0b0a]/92 backdrop-blur-2xl sm:mx-0 sm:px-0 sm:bg-transparent sm:backdrop-blur-none mb-12"
+        className="sticky top-[57px] z-40 -mx-4 bg-[#0b0b0a]/92 backdrop-blur-2xl sm:mx-0 sm:px-0 sm:bg-transparent sm:backdrop-blur-none mb-12"
       />
       <ChangelogTimeline entries={entries} activeTab={activeTab} />
     </>
