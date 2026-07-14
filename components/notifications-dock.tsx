@@ -191,6 +191,8 @@ export function NotificationsDock() {
   const isPatchNotesPage = pathname?.startsWith("/patch-notes") || pathname?.startsWith("/changelog");
   const isWelcomePage = pathname?.startsWith("/welcome");
 
+  const isHomePage = pathname === "/";
+
   if (isAdminPage || isPatchNotesPage || isWelcomePage) return null;
 
   return (
@@ -204,7 +206,7 @@ export function NotificationsDock() {
             : "opacity-0 -translate-y-1 pointer-events-none"
         )}
       >
-        {!isGroupPage && (
+        {isHomePage && !isGroupPage && (
           <Tooltip content="Support Dangdoro" side="bottom">
             <a
               href="https://ko-fi.com/morales002"
@@ -215,7 +217,6 @@ export function NotificationsDock() {
                 isGroupActive ? "hidden md:inline-flex" : "inline-flex"
               )}
             >
-              {/* Glass highlights */}
               <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/20 pointer-events-none group-hover:border-rose-500/30 transition-colors duration-300" />
               <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/10 pointer-events-none" />
 
@@ -224,8 +225,7 @@ export function NotificationsDock() {
           </Tooltip>
         )}
 
-        {!isGroupPage && (
-          /* Patch notes link */
+        {isHomePage && !isGroupPage && (
           <Tooltip content="What's New" side="bottom">
             <Link
               href="/patch-notes"
@@ -245,8 +245,7 @@ export function NotificationsDock() {
           </Tooltip>
         )}
 
-        {!isGroupPage && (
-          /* Floating Feedback Trigger Button */
+        {isHomePage && !isGroupPage && (
           <Tooltip content="Send Feedback" side="bottom">
             <button
               onClick={() => toggleFeedback("feedback")}
@@ -258,7 +257,6 @@ export function NotificationsDock() {
                 isGroupActive ? "hidden md:inline-flex" : "inline-flex"
               )}
             >
-              {/* Glass highlights */}
               <div className={cn(
                 "absolute inset-0 rounded-full border-t-[0.5px] pointer-events-none transition-colors duration-300",
                 isFeedbackOpen ? "border-white/40" : "border-white/20 group-hover:border-white/30"

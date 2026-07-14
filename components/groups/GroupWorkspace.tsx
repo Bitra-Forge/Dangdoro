@@ -1272,13 +1272,13 @@ export function GroupWorkspace({ groupId }: GroupWorkspaceProps) {
 
             {/* Floating Help/Tour Button */}
             {isMember && activeTab === "workspace" && (
-                <div className="fixed bottom-6 left-6 z-50">
+                <div className="fixed bottom-8 md:bottom-6 left-6 z-50">
                     <button
                         onClick={handleRestartTour}
-                        className="p-3 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
+                        className="h-9 w-9 sm:h-14 sm:w-14 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
                         title="Restart Page Tour"
                     >
-                        <HelpCircle className="w-5 h-5" />
+                        <HelpCircle className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
                     </button>
                 </div>
             )}

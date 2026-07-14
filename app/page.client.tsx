@@ -215,11 +215,11 @@ export default function Home() {
 
           <FloatingFocusAvatars />
 
-          {/* Group Focus Selector - Top Left (aligns with notifications menu height) */}
+          {/* Group Focus Selector - Top Left (same line as notifications) */}
           <div
             ref={topLeftRef}
             className={cn(
-              "fixed top-8 left-8 z-40 flex items-center gap-3 animate-in slide-in-from-left-4 fade-in duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)] transition-all",
+              "fixed top-4 md:top-8 left-4 md:left-8 z-[60] md:z-40 flex items-center gap-3 animate-in slide-in-from-left-4 fade-in duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)] transition-all",
               shouldShowTopLeft
                 ? "opacity-100 translate-y-0 pointer-events-auto"
                 : "opacity-0 -translate-y-1 pointer-events-none"
@@ -327,13 +327,13 @@ export default function Home() {
         </main>
 
         {/* Floating Help/Tour Button */}
-        <div className="fixed bottom-6 left-6 z-50">
+        <div className="fixed bottom-8 left-6 z-50">
           <button
             onClick={handleRestartTour}
-            className="p-3 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
+            className="h-11 w-11 sm:h-14 sm:w-14 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
             title="Restart Page Tour"
           >
-            <HelpCircle className="w-5 h-5" />
+            <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
       </div>

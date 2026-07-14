@@ -1812,13 +1812,13 @@ function ProfileContent() {
             </Dialog>
 
             {/* Floating Help/Tour Button */}
-            <div className="fixed bottom-6 left-6 z-50">
+            <div className="fixed bottom-8 md:bottom-6 left-6 z-50">
                 <button
                     onClick={handleRestartTour}
-                    className="p-3 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
+                    className="h-11 w-11 sm:h-14 sm:w-14 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
                     title="Restart Page Tour"
                 >
-                    <HelpCircle className="w-5 h-5" />
+                    <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
             </div>
         </BackgroundTheme>

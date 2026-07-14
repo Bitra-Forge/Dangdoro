@@ -42,7 +42,7 @@ export function Navigation() {
                                 key={link.label}
                                 href={link.href}
                                 className={cn(
-                                    "relative flex items-center py-1.5 sm:py-2 rounded-xl transition-all duration-300 group px-3 md:px-4 gap-0 md:gap-2",
+                                    "relative flex items-center py-1.5 sm:py-2 rounded-xl transition-all duration-300 group px-2.5 sm:px-3 md:px-4 gap-0 md:gap-2",
                                     "flex",
                                     isActive
                                         ? "bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)]"
@@ -50,7 +50,7 @@ export function Navigation() {
                                 )}
                             >
                                 <Icon className={cn(
-                                    "w-5 h-5 transition-transform duration-300",
+                                    "w-[18px] h-[18px] sm:w-5 sm:h-5 transition-transform duration-300",
                                     isActive ? "scale-110" : "group-hover:scale-110"
                                 )} />
                                 <span className={cn(
@@ -72,10 +72,10 @@ export function Navigation() {
                         id="nav-signin"
                         onClick={openAuthVault}
                         className={cn(
-                            "relative flex items-center py-1.5 sm:py-2 rounded-xl transition-all duration-300 group px-3 md:px-4 gap-0 md:gap-2 cursor-pointer text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
+                            "relative flex items-center py-1.5 sm:py-2 rounded-xl transition-all duration-300 group px-2.5 sm:px-3 md:px-4 gap-0 md:gap-2 cursor-pointer text-zinc-500 hover:text-zinc-200 hover:bg-white/5"
                         )}
                     >
-                        <LogIn className="w-5 h-5 transition-transform duration-300 group-hover:scale-110" />
+                        <LogIn className="w-[18px] h-[18px] sm:w-5 sm:h-5 transition-transform duration-300 group-hover:scale-110" />
                         <span className="text-xs font-bold tracking-wide transition-all duration-300 overflow-hidden hidden md:inline-block ml-1">
                             Sign In
                         </span>

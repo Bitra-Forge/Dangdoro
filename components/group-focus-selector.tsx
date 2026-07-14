@@ -164,7 +164,7 @@ export function GroupFocusSelector({ onOpenChange }: GroupFocusSelectorProps) {
         whileTap={{ scale: 0.99 }}
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-            "relative flex items-center gap-3 px-5 py-3 rounded-2xl border transition-[background-color,border-color,color,box-shadow] duration-200 overflow-hidden",
+            "relative flex items-center gap-2 md:gap-3 px-4 md:px-5 py-2 md:py-3 rounded-2xl border transition-[background-color,border-color,color,box-shadow] duration-200 overflow-hidden",
             "shadow-[0_8px_32px_rgba(0,0,0,0.4)]",
             isOpen ? "z-50" : "z-10",
           activeGroupId
