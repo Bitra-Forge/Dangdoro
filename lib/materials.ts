@@ -73,46 +73,27 @@ export async function downloadMaterial(
     const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
 
     if (!res.body) {
-        // No streaming body — fall back to direct anchor download
-        triggerAnchorDownload(url, fileName);
-        onProgress(100);
-        return;
+        throw new Error("Response body is not readable");
     }
 
     const reader = res.body.getReader();
     const chunks: Uint8Array[] = [];
     let receivedBytes = 0;
 
-    try {
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (signal.aborted) {
-                throw new DOMException("Download aborted", "AbortError");
-            }
-            if (value) {
-                chunks.push(value);
-                receivedBytes += value.length;
-                if (totalBytes > 0) {
-                    onProgress(Math.round((receivedBytes / totalBytes) * 100));
-                } else {
-                    onProgress(-1); // Content-Length missing — indeterminate
-                }
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+            break;
+        }
+        if (value) {
+            chunks.push(value);
+            receivedBytes += value.length;
+            if (totalBytes > 0) {
+                onProgress(Math.round((receivedBytes / totalBytes) * 100));
+            } else {
+                onProgress(-1); // Content-Length missing
             }
         }
-    } catch (err: any) {
-        // Release reader lock before re-throwing so retries can open a fresh stream
-        await reader.cancel().catch(() => {});
-        // If the stream itself errored (not an abort), fall back to anchor download
-        if (err.name !== "AbortError") {
-            triggerAnchorDownload(url, fileName);
-            onProgress(100);
-            return;
-        }
-        throw err;
-    } finally {
-        // Ensure reader is always released
-        await reader.cancel().catch(() => {});
     }
 
     if (typeof window !== "undefined") {
@@ -131,15 +112,4 @@ export async function downloadMaterial(
             window.URL.revokeObjectURL(blobUrl);
         }
     }
-}
-
-function triggerAnchorDownload(url: string, fileName: string): void {
-    if (typeof window === "undefined") return;
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
 }

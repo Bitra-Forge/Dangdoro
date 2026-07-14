@@ -67,7 +67,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
     const [filter, setFilter] = useState<MaterialFilter>("all");
     const [showModal, setShowModal] = useState(false);
     const [modalType, setModalType] = useState<"link" | "image" | "file">("link");
-    
+
     // Form fields
     const [linkUrl, setLinkUrl] = useState("");
     const [title, setTitle] = useState("");
@@ -75,7 +75,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
     const [tags, setTags] = useState("");
     const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
     const [fetchingOg, setFetchingOg] = useState(false);
-    
+
     // File upload details
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -83,7 +83,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
 
     // Edit material state
     const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
-    
+
 
 
     // Pending upload banner state
@@ -297,17 +297,17 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
     const uploadFile = async (file: File, resumeData?: { uploadId: string, chunkIndex: number }) => {
         if (!user) return;
         isPausedRef.current = false;
-        
+
         const isImage = modalType === "image";
         const isPDF = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
         const resourceType = (isImage || isPDF) ? "image" : "raw";
-        
+
         const CHUNK_SIZE = 6 * 1024 * 1024;
         const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-        
+
         const uploadId = resumeData?.uploadId || `upload_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
         const startChunk = resumeData?.chunkIndex || 0;
-        
+
         setUploadState({
             fileName: file.name,
             progress: Math.round((startChunk / totalChunks) * 100),
@@ -317,7 +317,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
             chunkIndex: startChunk
         });
         setUploading(true);
-        
+
         const saveState = (chunkIdx: number) => {
             const stateToSave = {
                 uploadId,
@@ -332,7 +332,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
             };
             localStorage.setItem(`dangdoro_upload_resume_${user.uid}`, JSON.stringify(stateToSave));
         };
-        
+
         saveState(startChunk);
 
         for (let i = startChunk; i < totalChunks; i++) {
@@ -340,46 +340,46 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                 setUploadState(prev => prev ? { ...prev, status: "paused" } : null);
                 return;
             }
-            
+
             const start = i * CHUNK_SIZE;
             const end = Math.min(start + CHUNK_SIZE, file.size);
             const chunk = file.slice(start, end, file.type);
-            
+
             const formData = new FormData();
             formData.append("file", chunk, file.name);
             formData.append("resource_type", resourceType);
             formData.append("uploadId", uploadId);
             formData.append("contentRange", `bytes ${start}-${end - 1}/${file.size}`);
-            
+
             const chunkStartTime = Date.now();
             setUploadState(prev => prev ? { ...prev, status: "uploading", chunkIndex: i } : null);
-            
+
             try {
                 const idToken = await user.getIdToken();
                 const startUploadedBytes = i * CHUNK_SIZE;
-                
+
                 const data = await new Promise<any>((resolve, reject) => {
                     const xhr = new XMLHttpRequest();
                     xhr.open("POST", "/api/upload");
                     xhr.setRequestHeader("Authorization", `Bearer ${idToken}`);
-                    
+
                     xhr.upload.onprogress = (event) => {
                         if (event.lengthComputable) {
                             const chunkUploadedBytes = event.loaded;
                             const totalUploadedBytes = startUploadedBytes + chunkUploadedBytes;
                             const totalPercent = Math.min(Math.round((totalUploadedBytes / file.size) * 100), 99);
-                            
+
                             const elapsedSec = (Date.now() - chunkStartTime) / 1000;
                             const speed = elapsedSec > 0 ? ((chunkUploadedBytes / (1024 * 1024)) / elapsedSec) : 0;
                             setUploadSpeed(speed);
-                            
+
                             setUploadState(prev => prev ? {
                                 ...prev,
                                 progress: totalPercent
                             } : null);
                         }
                     };
-                    
+
                     xhr.onload = () => {
                         if (xhr.status >= 200 && xhr.status < 300) {
                             try {
@@ -396,16 +396,16 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                             }
                         }
                     };
-                    
+
                     xhr.onerror = () => reject(new Error("Network connection error"));
                     xhr.onabort = () => reject(new Error("Upload cancelled"));
-                    
+
                     xhrRef.current = xhr;
                     xhr.send(formData);
                 });
-                
+
                 const nextProgress = Math.round(((i + 1) / totalChunks) * 100);
-                
+
                 if (i === totalChunks - 1 || data.done) {
                     // Complete!
                     setUploadState({
@@ -416,9 +416,9 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                         uploadId: null,
                         chunkIndex: totalChunks
                     });
-                    
+
                     localStorage.removeItem(`dangdoro_upload_resume_${user.uid}`);
-                    
+
                     const materialData: {
                         addedBy: string;
                         addedByName: string;
@@ -441,12 +441,12 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                         fileName: file.name,
                         fileSize: file.size,
                     };
-                    
+
                     if (isImage) {
                         const parts = data.url.split("/upload/");
                         materialData.thumbnailUrl = `${parts[0]}/upload/w_300,q_auto/${parts[1]}`;
                     }
-                    
+
                     const result = await addMaterial(groupId, materialData);
                     if (result.success) {
                         toast.success(`${isImage ? "Image" : "File"} saved to Materials`);
@@ -497,17 +497,17 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
         if (abortControllersRef.current[m.id]) {
             abortControllersRef.current[m.id].abort();
         }
-        
+
         const controller = new AbortController();
         abortControllersRef.current[m.id] = controller;
-        
+
         setDownloadStates(prev => ({
             ...prev,
             [m.id]: { status: "downloading", progress: 0, error: null }
         }));
-        
+
         const proxyUrl = `/api/proxy-download?url=${encodeURIComponent(m.url)}&filename=${encodeURIComponent(m.fileName || m.title || "download")}`;
-        
+
         try {
             await downloadMaterial(
                 proxyUrl,
@@ -520,13 +520,13 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                 },
                 controller.signal
             );
-            
+
             setDownloadStates(prev => ({
                 ...prev,
                 [m.id]: { status: "done", progress: 100, error: null }
             }));
             toast.success(`Downloaded ${m.title}`);
-            
+
             setTimeout(() => {
                 setDownloadStates(prev => {
                     const copy = { ...prev };
@@ -534,7 +534,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                     return copy;
                 });
             }, 2000);
-            
+
         } catch (err: any) {
             if (err.name === "AbortError") {
                 setDownloadStates(prev => {
@@ -544,16 +544,16 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                 });
                 return;
             }
-            
+
             console.error(`Download failed for ${m.id}:`, err);
-            
+
             if (retryCount < 3) {
                 const backoffTime = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
                 setDownloadStates(prev => ({
                     ...prev,
                     [m.id]: { status: "downloading", progress: -2, error: `Retrying in ${backoffTime / 1000}s...` }
                 }));
-                
+
                 setTimeout(() => {
                     handleDownload(m, retryCount + 1);
                 }, backoffTime);
@@ -605,7 +605,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                 }
             }
         };
-        
+
         const handleOffline = () => {
             if (uploadStateRef.current && uploadStateRef.current.status === "uploading") {
                 isPausedRef.current = true;
@@ -846,223 +846,223 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                     className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
                 >
                     <AnimatePresence mode="popLayout">
-                    {filtered.map(m => {
-                        const canDelete = user?.uid === m.addedBy || isHost;
-                        const canEdit = user?.uid === m.addedBy || isHost;
-                        return (
-                            <motion.div
-                                key={m.id}
-                                layout="position"
-                                layoutId={m.id}
-                                initial={{ opacity: 0, scale: 0.94, y: 12 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.92, y: -8, transition: { duration: 0.18, ease: "easeIn" } }}
-                                transition={{
-                                    layout: { type: "spring", stiffness: 300, damping: 30 },
-                                    opacity: { duration: 0.22, ease: "easeOut" },
-                                    scale: { duration: 0.22, ease: "easeOut" },
-                                    y: { duration: 0.22, ease: "easeOut" },
-                                }}
-                                onClick={() => handleCardClick(m)}
-                                className="group bg-zinc-900/60 border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition-colors relative flex flex-col h-[360px] max-h-[360px] w-full cursor-pointer"
-                            >
-                                {/* Media / Thumbnail area */}
-                                {m.type === "image" && (
-                                    <div className="w-full aspect-video bg-zinc-950 overflow-hidden shrink-0 relative border-b border-white/5">
-                                        <img
-                                            src={m.thumbnailUrl || m.url}
-                                            alt={m.title}
-                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                        />
-                                    </div>
-                                )}
-                                {m.type === "file" && (
-                                    <div className="w-full aspect-video bg-zinc-950 flex items-center justify-center shrink-0 border-b border-white/5">
-                                        <div className="flex flex-col items-center gap-2 text-zinc-600">
-                                            <FileText className="w-10 h-10" />
-                                            <span className="text-[10px] font-black uppercase tracking-wider">{getFileExtension(m.url, m.fileName)}</span>
-                                        </div>
-                                    </div>
-                                )}
-                                {m.type === "link" && (
-                                    <div className="w-full aspect-video bg-gradient-to-br from-zinc-950 to-zinc-900 overflow-hidden shrink-0 relative border-b border-white/5 flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
-                                        {m.thumbnailUrl ? (
+                        {filtered.map(m => {
+                            const canDelete = user?.uid === m.addedBy || isHost;
+                            const canEdit = user?.uid === m.addedBy || isHost;
+                            return (
+                                <motion.div
+                                    key={m.id}
+                                    layout="position"
+                                    layoutId={m.id}
+                                    initial={{ opacity: 0, scale: 0.94, y: 12 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.92, y: -8, transition: { duration: 0.18, ease: "easeIn" } }}
+                                    transition={{
+                                        layout: { type: "spring", stiffness: 300, damping: 30 },
+                                        opacity: { duration: 0.22, ease: "easeOut" },
+                                        scale: { duration: 0.22, ease: "easeOut" },
+                                        y: { duration: 0.22, ease: "easeOut" },
+                                    }}
+                                    onClick={() => handleCardClick(m)}
+                                    className="group bg-zinc-900/60 border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition-colors relative flex flex-col h-[360px] max-h-[360px] w-full cursor-pointer"
+                                >
+                                    {/* Media / Thumbnail area */}
+                                    {m.type === "image" && (
+                                        <div className="w-full aspect-video bg-zinc-950 overflow-hidden shrink-0 relative border-b border-white/5">
                                             <img
-                                                src={m.thumbnailUrl}
+                                                src={m.thumbnailUrl || m.url}
                                                 alt={m.title}
-                                                className="w-full h-full object-cover"
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                             />
-                                        ) : (
-                                            <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-zinc-950/40 backdrop-blur-[2px]">
-                                                <div className="w-10 h-10 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mb-2 shadow-[0_0_15px_rgba(6,182,212,0.15)]">
-                                                    <Link className="w-4 h-4 text-cyan-400" />
-                                                </div>
-                                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center truncate max-w-full">
-                                                    {(() => {
-                                                        try {
-                                                            return new URL(m.url).hostname.replace("www.", "");
-                                                        } catch {
-                                                            return "LINK";
-                                                        }
-                                                    })()}
-                                                </span>
-                                            </div>
-                                        )}
-                                        {/* Subtle overlay grid lines */}
-                                        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />
-                                    </div>
-                                )}
-
-                                {/* Download Progress Bar (Phase R3-C) */}
-                                {downloadStates[m.id] && downloadStates[m.id].status === "downloading" && (
-                                    <div className="w-full h-1 bg-zinc-950 border-b border-white/5 relative overflow-hidden shrink-0 z-10">
-                                        {downloadStates[m.id].progress === -1 ? (
-                                            <div className="h-full w-full bg-cyan-500 animate-pulse" />
-                                        ) : downloadStates[m.id].progress === -2 ? (
-                                            <div className="h-full w-full bg-amber-500 animate-pulse flex items-center justify-center text-[7px] text-zinc-950 font-bold uppercase">
-                                                {downloadStates[m.id].error}
-                                            </div>
-                                        ) : (
-                                            <div 
-                                                className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all duration-300"
-                                                style={{ width: `${downloadStates[m.id].progress}%` }}
-                                            />
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Action Buttons overlay */}
-                                <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10 bg-zinc-950/80 backdrop-blur-sm p-1 rounded-lg border border-white/10">
-                                    {m.type === "link" && (
-                                        <a
-                                            href={m.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            onClick={(e) => e.stopPropagation()}
-                                            className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
-                                            title="Open Link"
-                                        >
-                                            <ExternalLink className="w-3.5 h-3.5" />
-                                        </a>
+                                        </div>
                                     )}
-                                    {(m.type === "image" || m.type === "file") && (() => {
-                                        const isDownloading = downloadStates[m.id]?.status === "downloading";
-                                        const progress = downloadStates[m.id]?.progress ?? 0;
-                                        return isDownloading ? (
-                                            <div className="flex items-center gap-1.5 bg-zinc-900 border border-white/10 rounded-md px-1.5 py-0.5 h-6 shrink-0 select-none">
-                                                <span className="text-[8px] font-black text-cyan-400 min-w-[20px] text-right">
-                                                    {progress >= 0 ? `${progress}%` : "..."}
-                                                </span>
-                                                <div className="w-10 bg-zinc-800 rounded-full h-1 overflow-hidden shrink-0">
-                                                    {progress >= 0 ? (
-                                                        <div 
-                                                            className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all duration-300"
-                                                            style={{ width: `${progress}%` }}
-                                                        />
-                                                    ) : (
-                                                        <div className="h-full w-full bg-cyan-500 animate-pulse" />
-                                                    )}
+                                    {m.type === "file" && (
+                                        <div className="w-full aspect-video bg-zinc-950 flex items-center justify-center shrink-0 border-b border-white/5">
+                                            <div className="flex flex-col items-center gap-2 text-zinc-600">
+                                                <FileText className="w-10 h-10" />
+                                                <span className="text-[10px] font-black uppercase tracking-wider">{getFileExtension(m.url, m.fileName)}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {m.type === "link" && (
+                                        <div className="w-full aspect-video bg-gradient-to-br from-zinc-950 to-zinc-900 overflow-hidden shrink-0 relative border-b border-white/5 flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
+                                            {m.thumbnailUrl ? (
+                                                <img
+                                                    src={m.thumbnailUrl}
+                                                    alt={m.title}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-zinc-950/40 backdrop-blur-[2px]">
+                                                    <div className="w-10 h-10 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mb-2 shadow-[0_0_15px_rgba(6,182,212,0.15)]">
+                                                        <Link className="w-4 h-4 text-cyan-400" />
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center truncate max-w-full">
+                                                        {(() => {
+                                                            try {
+                                                                return new URL(m.url).hostname.replace("www.", "");
+                                                            } catch {
+                                                                return "LINK";
+                                                            }
+                                                        })()}
+                                                    </span>
                                                 </div>
+                                            )}
+                                            {/* Subtle overlay grid lines */}
+                                            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />
+                                        </div>
+                                    )}
+
+                                    {/* Download Progress Bar (Phase R3-C) */}
+                                    {downloadStates[m.id] && downloadStates[m.id].status === "downloading" && (
+                                        <div className="w-full h-1 bg-zinc-950 border-b border-white/5 relative overflow-hidden shrink-0 z-10">
+                                            {downloadStates[m.id].progress === -1 ? (
+                                                <div className="h-full w-full bg-cyan-500 animate-pulse" />
+                                            ) : downloadStates[m.id].progress === -2 ? (
+                                                <div className="h-full w-full bg-amber-500 animate-pulse flex items-center justify-center text-[7px] text-zinc-950 font-bold uppercase">
+                                                    {downloadStates[m.id].error}
+                                                </div>
+                                            ) : (
+                                                <div
+                                                    className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all duration-300"
+                                                    style={{ width: `${downloadStates[m.id].progress}%` }}
+                                                />
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Action Buttons overlay */}
+                                    <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10 bg-zinc-950/80 backdrop-blur-sm p-1 rounded-lg border border-white/10">
+                                        {m.type === "link" && (
+                                            <a
+                                                href={m.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
+                                                title="Open Link"
+                                            >
+                                                <ExternalLink className="w-3.5 h-3.5" />
+                                            </a>
+                                        )}
+                                        {(m.type === "image" || m.type === "file") && (() => {
+                                            const isDownloading = downloadStates[m.id]?.status === "downloading";
+                                            const progress = downloadStates[m.id]?.progress ?? 0;
+                                            return isDownloading ? (
+                                                <div className="flex items-center gap-1.5 bg-zinc-900 border border-white/10 rounded-md px-1.5 py-0.5 h-6 shrink-0 select-none">
+                                                    <span className="text-[8px] font-black text-cyan-400 min-w-[20px] text-right">
+                                                        {progress >= 0 ? `${progress}%` : "..."}
+                                                    </span>
+                                                    <div className="w-10 bg-zinc-800 rounded-full h-1 overflow-hidden shrink-0">
+                                                        {progress >= 0 ? (
+                                                            <div
+                                                                className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all duration-300"
+                                                                style={{ width: `${progress}%` }}
+                                                            />
+                                                        ) : (
+                                                            <div className="h-full w-full bg-cyan-500 animate-pulse" />
+                                                        )}
+                                                    </div>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            abortControllersRef.current[m.id]?.abort();
+                                                        }}
+                                                        className="p-0.5 text-zinc-400 hover:text-red-500 transition-colors rounded hover:bg-white/5 cursor-pointer shrink-0"
+                                                        title="Cancel Download"
+                                                    >
+                                                        <X className="w-2.5 h-2.5" />
+                                                    </button>
+                                                </div>
+                                            ) : (
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        abortControllersRef.current[m.id]?.abort();
+                                                        handleDownload(m);
                                                     }}
-                                                    className="p-0.5 text-zinc-400 hover:text-red-500 transition-colors rounded hover:bg-white/5 cursor-pointer shrink-0"
-                                                    title="Cancel Download"
+                                                    className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center w-6 h-6 rounded-full hover:bg-white/5"
+                                                    title="Download"
                                                 >
-                                                    <X className="w-2.5 h-2.5" />
+                                                    <Download className="w-3.5 h-3.5" />
                                                 </button>
-                                            </div>
-                                        ) : (
+                                            );
+                                        })()}
+                                        {canEdit && (
                                             <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDownload(m);
-                                                }}
-                                                className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center w-6 h-6 rounded-full hover:bg-white/5"
-                                                title="Download"
+                                                onClick={(e) => { e.stopPropagation(); handleEditClick(m); }}
+                                                className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                                title="Edit"
                                             >
-                                                <Download className="w-3.5 h-3.5" />
+                                                <Pencil className="w-3.5 h-3.5" />
                                             </button>
-                                        );
-                                    })()}
-                                    {canEdit && (
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleEditClick(m); }}
-                                            className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                                            title="Edit"
-                                        >
-                                            <Pencil className="w-3.5 h-3.5" />
-                                        </button>
-                                    )}
-                                    {canDelete && (
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}
-                                            className="p-1 text-zinc-400 hover:text-red-400 transition-colors cursor-pointer"
-                                            title="Delete"
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                    )}
-                                </div>
-
-                                {/* Card Body */}
-                                <div className="p-4 flex flex-col flex-1 min-h-0 justify-between">
-                                    <div className="space-y-1.5 min-h-0 flex-1 flex flex-col justify-start">
-                                        <div className="flex items-center gap-1.5 shrink-0">
-                                            {m.type === "link" && <Link className="w-3 h-3 text-cyan-400 shrink-0" />}
-                                            {m.type === "image" && <Image className="w-3 h-3 text-purple-400 shrink-0" />}
-                                            {m.type === "file" && <FileText className="w-3 h-3 text-amber-400 shrink-0" />}
-                                            <span className="text-[9px] font-black uppercase tracking-wider text-zinc-600">{m.type}</span>
-                                        </div>
-                                        
-                                        <div className="text-sm font-bold text-white group-hover:text-cyan-400 transition-colors line-clamp-2 whitespace-normal select-all shrink-0">
-                                            {m.title}
-                                        </div>
-
-                                        {m.description ? (
-                                            <div className="text-xs text-zinc-500 line-clamp-2 overflow-hidden flex-1 leading-normal">
-                                                <MarkdownRenderer content={m.description} />
-                                            </div>
-                                        ) : (
-                                            <div className="text-xs text-zinc-600 italic line-clamp-2 overflow-hidden flex-1">
-                                                No description provided.
-                                            </div>
                                         )}
-                                        
-                                        {m.type === "file" && (m.fileName || m.fileSize) && (
-                                            <div className="flex items-center gap-2 text-[10px] text-zinc-600 shrink-0 pt-0.5">
-                                                {m.fileName && <span className="truncate flex-1 min-w-0">{m.fileName}</span>}
-                                                {m.fileSize && <span className="shrink-0">{formatFileSize(m.fileSize)}</span>}
-                                            </div>
+                                        {canDelete && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}
+                                                className="p-1 text-zinc-400 hover:text-red-400 transition-colors cursor-pointer"
+                                                title="Delete"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
                                         )}
                                     </div>
 
-                                    {/* Footer */}
-                                    <div className="flex items-center justify-between pt-2 border-t border-white/5 shrink-0 mt-2">
-                                        <div className="flex items-center gap-1.5 min-w-0">
-                                            <Avatar className="w-4 h-4 rounded-full border border-white/10 shrink-0">
-                                                <AvatarImage src={memberPhotoMap[m.addedBy]} />
-                                                <AvatarFallback className="text-[6px] bg-zinc-800">{m.addedByName?.[0]}</AvatarFallback>
-                                            </Avatar>
-                                            <span className="text-[10px] text-zinc-600 truncate max-w-[80px]">{m.addedByName}</span>
-                                        </div>
-                                        {m.tags && m.tags.length > 0 && (
-                                            <div className="flex gap-1 shrink-0">
-                                                {m.tags.slice(0, 2).map(tag => (
-                                                    <span key={tag} className="px-1.5 py-0.5 rounded-full bg-white/5 text-[8px] font-bold text-zinc-500 uppercase tracking-wider">
-                                                        {tag}
-                                                    </span>
-                                                ))}
+                                    {/* Card Body */}
+                                    <div className="p-4 flex flex-col flex-1 min-h-0 justify-between">
+                                        <div className="space-y-1.5 min-h-0 flex-1 flex flex-col justify-start">
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                {m.type === "link" && <Link className="w-3 h-3 text-cyan-400 shrink-0" />}
+                                                {m.type === "image" && <Image className="w-3 h-3 text-purple-400 shrink-0" />}
+                                                {m.type === "file" && <FileText className="w-3 h-3 text-amber-400 shrink-0" />}
+                                                <span className="text-[9px] font-black uppercase tracking-wider text-zinc-600">{m.type}</span>
                                             </div>
-                                        )}
-                                    </div>
-                                </div>
 
-                            </motion.div>
-                        );
-                    })}
+                                            <div className="text-sm font-bold text-white group-hover:text-cyan-400 transition-colors line-clamp-2 whitespace-normal select-all shrink-0">
+                                                {m.title}
+                                            </div>
+
+                                            {m.description ? (
+                                                <div className="text-xs text-zinc-500 line-clamp-2 overflow-hidden flex-1 leading-normal">
+                                                    <MarkdownRenderer content={m.description} />
+                                                </div>
+                                            ) : (
+                                                <div className="text-xs text-zinc-600 italic line-clamp-2 overflow-hidden flex-1">
+                                                    No description provided.
+                                                </div>
+                                            )}
+
+                                            {m.type === "file" && (m.fileName || m.fileSize) && (
+                                                <div className="flex items-center gap-2 text-[10px] text-zinc-600 shrink-0 pt-0.5">
+                                                    {m.fileName && <span className="truncate flex-1 min-w-0">{m.fileName}</span>}
+                                                    {m.fileSize && <span className="shrink-0">{formatFileSize(m.fileSize)}</span>}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Footer */}
+                                        <div className="flex items-center justify-between pt-2 border-t border-white/5 shrink-0 mt-2">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <Avatar className="w-4 h-4 rounded-full border border-white/10 shrink-0">
+                                                    <AvatarImage src={memberPhotoMap[m.addedBy]} />
+                                                    <AvatarFallback className="text-[6px] bg-zinc-800">{m.addedByName?.[0]}</AvatarFallback>
+                                                </Avatar>
+                                                <span className="text-[10px] text-zinc-600 truncate max-w-[80px]">{m.addedByName}</span>
+                                            </div>
+                                            {m.tags && m.tags.length > 0 && (
+                                                <div className="flex gap-1 shrink-0">
+                                                    {m.tags.slice(0, 2).map(tag => (
+                                                        <span key={tag} className="px-1.5 py-0.5 rounded-full bg-white/5 text-[8px] font-bold text-zinc-500 uppercase tracking-wider">
+                                                            {tag}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                </motion.div>
+                            );
+                        })}
                     </AnimatePresence>
                 </motion.div>
             )}
@@ -1128,11 +1128,11 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                                                 </div>
                                             )}
                                         </div>
-                                        
+
                                         {thumbnailUrl && (
                                             <div className="w-full h-32 rounded-lg overflow-hidden border border-white/10 bg-zinc-950 relative group">
                                                 <img src={thumbnailUrl} alt="Link cover" className="w-full h-full object-cover" />
-                                                <button 
+                                                <button
                                                     onClick={() => setThumbnailUrl(null)}
                                                     className="absolute top-2 right-2 p-1 bg-black/60 hover:bg-black rounded-full text-zinc-400 hover:text-white transition-colors cursor-pointer"
                                                 >
@@ -1227,25 +1227,25 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                                                     <span className="font-bold text-zinc-400 truncate max-w-[200px]">{uploadState.fileName}</span>
                                                     <span className="font-black text-white">{uploadState.progress}%</span>
                                                 </div>
-                                                
+
                                                 <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
-                                                    <div 
+                                                    <div
                                                         className={cn(
                                                             "h-full rounded-full transition-all duration-300",
                                                             uploadState.status === "error" ? "bg-red-500" :
-                                                            uploadState.status === "paused" ? "bg-amber-500" :
-                                                            "bg-gradient-to-r from-cyan-500 to-blue-500"
+                                                                uploadState.status === "paused" ? "bg-amber-500" :
+                                                                    "bg-gradient-to-r from-cyan-500 to-blue-500"
                                                         )}
                                                         style={{ width: `${uploadState.progress}%` }}
                                                     />
                                                 </div>
-                                                
+
                                                 <div className="flex justify-between items-center text-[10px]">
                                                     <span className={cn(
                                                         "font-bold uppercase tracking-wider",
                                                         uploadState.status === "error" ? "text-red-400" :
-                                                        uploadState.status === "paused" ? "text-amber-400 animate-pulse" :
-                                                        "text-zinc-500"
+                                                            uploadState.status === "paused" ? "text-amber-400 animate-pulse" :
+                                                                "text-zinc-500"
                                                     )}>
                                                         {uploadState.status === "uploading" && (
                                                             <>Uploading {uploadSpeed ? `(${uploadSpeed.toFixed(1)} MB/s)` : ""}</>
@@ -1254,7 +1254,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                                                         {uploadState.status === "error" && `Error: ${uploadState.error || "Upload failed"}`}
                                                         {uploadState.status === "done" && "Done"}
                                                     </span>
-                                                    
+
                                                     {uploadState.status === "paused" && (
                                                         <button
                                                             onClick={() => {
@@ -1381,22 +1381,35 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm"
+                        className="fixed inset-0 z-[130] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/90 backdrop-blur-sm"
                         onClick={() => setPreviewMaterial(null)}
                     >
-                        <button onClick={() => setPreviewMaterial(null)} className="absolute top-4 right-4 p-2 bg-zinc-900/80 rounded-xl text-zinc-400 hover:text-white transition-colors cursor-pointer z-10">
+                        {/* Desktop-only close button */}
+                        <button onClick={() => setPreviewMaterial(null)} className="hidden md:flex absolute top-4 right-4 p-2 bg-zinc-900/80 rounded-xl text-zinc-400 hover:text-white transition-colors cursor-pointer z-10">
                             <X className="w-5 h-5" />
                         </button>
-                        
+
                         <motion.div
-                            initial={{ scale: 0.95 }}
-                            animate={{ scale: 1 }}
-                            exit={{ scale: 0.95 }}
+                            initial={{ y: "100%", scale: 1 }}
+                            animate={{ y: 0, scale: 1 }}
+                            exit={{ y: "100%", scale: 1 }}
+                            style={{ originY: 1 }}
+                            transition={{ type: "spring", stiffness: 320, damping: 32, mass: 0.9 }}
+                            className="max-w-4xl w-full bg-zinc-900 border border-white/10 rounded-t-[24px] md:rounded-[20px] shadow-2xl flex flex-col h-[94dvh] md:h-auto md:max-h-[90vh] overflow-hidden"
                             onClick={(e) => e.stopPropagation()}
-                            className="max-w-4xl w-full bg-zinc-900 border border-white/10 rounded-[20px] overflow-hidden shadow-2xl flex flex-col md:flex-row max-h-[90vh]"
                         >
+                            {/* Mobile drag handle + close row */}
+                            <div className="md:hidden flex items-center justify-between px-5 pt-3 pb-1 shrink-0">
+                                <div className="w-10 h-1 rounded-full bg-zinc-700 mx-auto" />
+                                <button onClick={() => setPreviewMaterial(null)} className="absolute right-4 top-3 p-2 text-zinc-400 hover:text-white transition-colors cursor-pointer">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            {/* Scrollable panels wrapper */}
+                            <div className="flex-1 min-h-0 overflow-y-auto md:overflow-hidden flex flex-col md:flex-row">
                             {/* Left Side: Media preview */}
-                            <div className="flex-1 bg-zinc-950 flex items-center justify-center min-h-[300px] md:min-h-[500px] overflow-hidden">
+                            <div className="flex-shrink-0 md:flex-1 bg-zinc-950 flex items-center justify-center min-h-[220px] md:min-h-[500px] md:overflow-hidden">
                                 {previewMaterial.type === "image" && (
                                     <img src={previewMaterial.url} alt={previewMaterial.title} className="max-w-full max-h-[70vh] object-contain" />
                                 )}
@@ -1468,13 +1481,30 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
 
                                     if (isPdf) {
                                         return (
-                                            <div className="w-full h-full min-h-[500px] flex flex-col p-4 bg-zinc-950">
-                                                <iframe
-                                                    src={`/api/proxy-pdf?url=${encodeURIComponent(previewMaterial.url)}`}
-                                                    className="w-full h-full min-h-[460px] border-0 rounded-xl bg-zinc-900"
-                                                    title="PDF Preview"
-                                                />
-                                            </div>
+                                            <>
+                                                {/* Desktop: full iframe PDF preview */}
+                                                <div className="hidden md:flex w-full h-full min-h-[500px] flex-col p-4 bg-zinc-950">
+                                                    <iframe
+                                                        src={`/api/proxy-pdf?url=${encodeURIComponent(previewMaterial.url)}`}
+                                                        className="w-full h-full min-h-[460px] border-0 rounded-xl bg-zinc-900"
+                                                        title="PDF Preview"
+                                                    />
+                                                </div>
+                                                {/* Mobile: clean PDF icon — download button is in the pinned bar */}
+                                                <div className="md:hidden flex flex-col items-center gap-3 py-10 px-6 w-full">
+                                                    <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col items-center justify-center gap-1 shadow-xl">
+                                                        <span className="text-2xl">📄</span>
+                                                        <span className="text-[9px] font-black text-red-400 uppercase tracking-wider">PDF</span>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <p className="text-sm font-bold text-white break-all px-4">{previewMaterial.fileName || previewMaterial.title}</p>
+                                                        {previewMaterial.fileSize && (
+                                                            <p className="text-xs text-zinc-500 mt-1">{formatFileSize(previewMaterial.fileSize)}</p>
+                                                        )}
+                                                    </div>
+
+                                                </div>
+                                            </>
                                         );
                                     }
 
@@ -1488,6 +1518,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                                                 <p className="text-sm font-bold text-white max-w-[300px] truncate">{previewMaterial.fileName || previewMaterial.title}</p>
                                                 <p className="text-xs text-zinc-500 mt-1">{previewMaterial.fileSize ? formatFileSize(previewMaterial.fileSize) : ""}</p>
                                             </div>
+                                            {/* Desktop-only download button in fallback view */}
                                             <button
                                                 onClick={() => {
                                                     const isDownloading = downloadStates[previewMaterial.id]?.status === "downloading";
@@ -1497,7 +1528,7 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                                                         handleDownload(previewMaterial);
                                                     }
                                                 }}
-                                                className="px-6 py-2.5 bg-white text-black font-black text-xs rounded-xl hover:bg-zinc-100 transition-colors flex items-center gap-2 mt-2 cursor-pointer"
+                                                className="hidden md:flex px-6 py-2.5 bg-white text-black font-black text-xs rounded-xl hover:bg-zinc-100 transition-colors items-center gap-2 mt-2 cursor-pointer"
                                             >
                                                 {downloadStates[previewMaterial.id]?.status === "downloading" ? (
                                                     <>
@@ -1541,47 +1572,45 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                             </div>
 
                             {/* Right Side: Metadata Panel */}
-                            <div className="w-full md:w-80 border-t md:border-t-0 md:border-l border-white/10 p-6 flex flex-col justify-between max-h-[500px] md:max-h-none overflow-y-auto">
+                            <div className="w-full md:w-80 border-t md:border-t-0 md:border-l border-white/10 p-6 flex flex-col justify-between md:max-h-none md:overflow-y-auto relative">
+                                {/* Edit/Delete Icons — absolutely positioned top-right */}
+                                {(user?.uid === previewMaterial.addedBy || isHost) && (
+                                    <div className="absolute top-4 right-4 flex items-center gap-1 bg-zinc-950/60 p-1 rounded-xl border border-white/10 z-10">
+                                        <button
+                                            onClick={() => {
+                                                handleEditClick(previewMaterial);
+                                                setPreviewMaterial(null);
+                                            }}
+                                            className="p-1.5 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                            title="Edit"
+                                        >
+                                            <Pencil className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                handleDelete(previewMaterial.id);
+                                                setPreviewMaterial(null);
+                                            }}
+                                            className="p-1.5 text-zinc-400 hover:text-red-400 transition-colors cursor-pointer"
+                                            title="Delete"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                )}
+
                                 <div className="space-y-6">
                                     {/* Title / Type Header */}
-                                    <div className="flex justify-between items-start gap-4">
-                                        <div className="space-y-1 flex-1">
-                                            <span className={cn(
-                                                "text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border w-fit block",
-                                                previewMaterial.type === "link" ? "text-cyan-400 bg-cyan-950/30 border-cyan-900/30" :
+                                    <div className="pr-16">
+                                        <span className={cn(
+                                            "text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border w-fit block",
+                                            previewMaterial.type === "link" ? "text-cyan-400 bg-cyan-950/30 border-cyan-900/30" :
                                                 previewMaterial.type === "image" ? "text-purple-400 bg-purple-950/30 border-purple-900/30" :
-                                                "text-amber-400 bg-amber-950/30 border-amber-900/30"
-                                            )}>
-                                                {previewMaterial.type}
-                                            </span>
-                                            <h3 className="text-base font-black text-white leading-tight tracking-tight pt-1 select-all">{previewMaterial.title}</h3>
-                                        </div>
-
-                                        {/* Edit/Delete Icons at the top of the card/modal */}
-                                        {(user?.uid === previewMaterial.addedBy || isHost) && (
-                                            <div className="flex items-center gap-1 bg-zinc-950/60 p-1 rounded-xl border border-white/10 shrink-0">
-                                                <button
-                                                    onClick={() => {
-                                                        handleEditClick(previewMaterial);
-                                                        setPreviewMaterial(null);
-                                                    }}
-                                                    className="p-1.5 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                                                    title="Edit"
-                                                >
-                                                    <Pencil className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button
-                                                    onClick={() => {
-                                                        handleDelete(previewMaterial.id);
-                                                        setPreviewMaterial(null);
-                                                    }}
-                                                    className="p-1.5 text-zinc-400 hover:text-red-400 transition-colors cursor-pointer"
-                                                    title="Delete"
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
-                                            </div>
-                                        )}
+                                                    "text-amber-400 bg-amber-950/30 border-amber-900/30"
+                                        )}>
+                                            {previewMaterial.type}
+                                        </span>
+                                        <h3 className="text-base font-black text-white leading-tight tracking-tight pt-1 select-all break-words">{previewMaterial.title}</h3>
                                     </div>
 
                                     {/* Details Grid */}
@@ -1648,56 +1677,104 @@ export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }
                                     )}
                                 </div>
 
-                                {/* Action Buttons */}
+                                {/* Desktop-only action buttons */}
                                 {previewMaterial.type === "link" ? (
-                                    <div className="border-t border-white/5 pt-4 flex flex-col gap-3">
-                                        <div className="flex gap-2">
-                                            <a
-                                                href={previewMaterial.url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="w-full py-2 bg-white text-black font-black text-[10px] uppercase tracking-wider rounded-lg hover:bg-zinc-100 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                                            >
-                                                <ExternalLink className="w-3.5 h-3.5" />
-                                                Open Link
-                                            </a>
-                                        </div>
+                                    <div className="hidden md:flex border-t border-white/5 pt-4 flex-col gap-3">
+                                        <a
+                                            href={previewMaterial.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="w-full py-2 bg-white text-black font-black text-[10px] uppercase tracking-wider rounded-lg hover:bg-zinc-100 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                                        >
+                                            <ExternalLink className="w-3.5 h-3.5" />
+                                            Open Link
+                                        </a>
                                     </div>
                                 ) : (
-                                    <div className="border-t border-white/5 pt-4 flex flex-col gap-3">
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={() => {
-                                                    const isDownloading = downloadStates[previewMaterial.id]?.status === "downloading";
-                                                    if (isDownloading) {
-                                                        abortControllersRef.current[previewMaterial.id]?.abort();
-                                                    } else {
-                                                        handleDownload(previewMaterial);
-                                                    }
-                                                }}
-                                                className="w-full py-2 bg-white text-black font-black text-[10px] uppercase tracking-wider rounded-lg hover:bg-zinc-100 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                                            >
-                                                {downloadStates[previewMaterial.id]?.status === "downloading" ? (
-                                                    <>
-                                                        <X className="w-3.5 h-3.5 text-red-500 animate-pulse" />
-                                                        Cancel ({downloadStates[previewMaterial.id].progress >= 0 ? `${downloadStates[previewMaterial.id].progress}%` : "..."})
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Download className="w-3.5 h-3.5" />
-                                                        Download
-                                                    </>
-                                                )}
-                                            </button>
-                                        </div>
+                                    <div className="hidden md:flex border-t border-white/5 pt-4 flex-col gap-3">
+                                        <button
+                                            onClick={() => {
+                                                const isDownloading = downloadStates[previewMaterial.id]?.status === "downloading";
+                                                if (isDownloading) {
+                                                    abortControllersRef.current[previewMaterial.id]?.abort();
+                                                } else {
+                                                    handleDownload(previewMaterial);
+                                                }
+                                            }}
+                                            className="w-full py-2 bg-white text-black font-black text-[10px] uppercase tracking-wider rounded-lg hover:bg-zinc-100 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                                        >
+                                            {downloadStates[previewMaterial.id]?.status === "downloading" ? (
+                                                <>
+                                                    <X className="w-3.5 h-3.5 text-red-500 animate-pulse" />
+                                                    Cancel ({downloadStates[previewMaterial.id].progress >= 0 ? `${downloadStates[previewMaterial.id].progress}%` : "..."})
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Download className="w-3.5 h-3.5" />
+                                                    Download
+                                                </>
+                                            )}
+                                        </button>
                                     </div>
                                 )}
 
+                            </div>
+                            {/* END scrollable panels wrapper */}
+                            </div>
 
+                            {/* Mobile-only pinned action bar — above nav bar */}
+                            <div className="md:hidden shrink-0 px-4 pt-3 pb-20 bg-zinc-900 border-t border-white/10 space-y-2">
+                                {previewMaterial.type === "link" ? (
+                                    <a
+                                        href={previewMaterial.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="w-full py-3.5 bg-white text-black font-black text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                                    >
+                                        <ExternalLink className="w-4 h-4" />
+                                        Open Link
+                                    </a>
+                                ) : (
+                                    <>
+                                        {/* Primary: Download */}
+                                        <button
+                                            onClick={() => {
+                                                const isDownloading = downloadStates[previewMaterial.id]?.status === "downloading";
+                                                if (isDownloading) {
+                                                    abortControllersRef.current[previewMaterial.id]?.abort();
+                                                } else {
+                                                    handleDownload(previewMaterial);
+                                                }
+                                            }}
+                                            className="w-full py-3.5 bg-white text-black font-black text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 cursor-pointer hover:bg-zinc-100 transition-colors"
+                                        >
+                                            {downloadStates[previewMaterial.id]?.status === "downloading" ? (
+                                                <>
+                                                    <X className="w-4 h-4 text-red-500 animate-pulse" />
+                                                    Cancel ({downloadStates[previewMaterial.id].progress >= 0 ? `${downloadStates[previewMaterial.id].progress}%` : "..."})
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Download className="w-4 h-4" />
+                                                    Download
+                                                </>
+                                            )}
+                                        </button>
+                                        {/* Secondary: Preview in new tab */}
+                                        <a
+                                            href={previewMaterial.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="w-full py-3 bg-zinc-800 border border-white/10 text-zinc-300 font-bold text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 cursor-pointer hover:bg-zinc-700 transition-colors"
+                                        >
+                                            <ExternalLink className="w-4 h-4" />
+                                            Preview in Browser
+                                        </a>
+                                    </>
+                                )}
+                            </div>
 
-
-                                </div>
-                            </motion.div>
+                        </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>
