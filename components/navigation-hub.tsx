@@ -22,6 +22,19 @@ export function NavigationHub() {
   const setIsNavFocusMode = useTimerStore((state) => state.setIsNavFocusMode);
   const [isNavVisible, setIsNavVisible] = useState(true);
   const [isInputFocused, setIsInputFocused] = useState(false);
+  const [visitedChecked, setVisitedChecked] = useState(false);
+  const [isFirstTimeVisitor, setIsFirstTimeVisitor] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const visited = localStorage.getItem("dangdoro_visited");
+      if (!visited) {
+        setIsFirstTimeVisitor(true);
+      }
+      setVisitedChecked(true);
+    }
+  }, []);
+
   const hideNavTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -147,7 +160,7 @@ export function NavigationHub() {
     };
   }, [isFocusMode, clearHideNavTimeout, scheduleHideNav]);
 
-  if (isAdminPage || pathname?.startsWith("/welcome")) return null;
+  if (isAdminPage || pathname?.startsWith("/welcome") || !visitedChecked || (isHomePage && isFirstTimeVisitor)) return null;
 
   const forceHide = isInputFocused || (typeof document !== "undefined" && document.body.classList.contains("hide-navigation-bar"));
 

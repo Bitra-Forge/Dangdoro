@@ -24,6 +24,19 @@ export function NotificationsDock() {
   const isGroupPage = pathname?.startsWith("/groups");
   const isAdminPage = pathname?.startsWith("/admin");
   const [isVisible, setIsVisible] = useState(false);
+  const [visitedChecked, setVisitedChecked] = useState(false);
+  const [isFirstTimeVisitor, setIsFirstTimeVisitor] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const visited = localStorage.getItem("dangdoro_visited");
+      if (!visited) {
+        setIsFirstTimeVisitor(true);
+      }
+      setVisitedChecked(true);
+    }
+  }, []);
+
   const dockRef = useRef<HTMLDivElement | null>(null);
   const feedbackRef = useRef<HTMLDivElement | null>(null);
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -193,7 +206,7 @@ export function NotificationsDock() {
 
   const isHomePage = pathname === "/";
 
-  if (isAdminPage || isPatchNotesPage || isWelcomePage) return null;
+  if (isAdminPage || isPatchNotesPage || isWelcomePage || !visitedChecked || (isHomePage && isFirstTimeVisitor)) return null;
 
   return (
     <>

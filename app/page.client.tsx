@@ -12,9 +12,23 @@ import { GroupFocusSelector } from "@/components/group-focus-selector";
 import { FloatingFocusAvatars, InlinePausedDock } from "@/components/floating-focus-avatars";
 import { useTour, type TourStep } from "@/lib/use-tour";
 import { useAuth } from "@/components/AuthProvider";
+import { useRouter } from "next/navigation";
 
 export default function Home() {
+  const router = useRouter();
+  const [checkingVisited, setCheckingVisited] = useState(true);
   const { user, loading: authLoading } = useAuth();
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hasVisited = localStorage.getItem("dangdoro_visited");
+      if (!hasVisited) {
+        router.replace("/welcome");
+        return;
+      }
+      setCheckingVisited(false);
+    }
+  }, [router]);
 
   const tourSteps: TourStep[] = useMemo(() => {
     const steps: TourStep[] = [
@@ -81,7 +95,7 @@ export default function Home() {
     pageName: "home",
     steps: tourSteps,
     isGuest: !user || user.isAnonymous,
-    disabled: authLoading
+    disabled: authLoading || checkingVisited,
   });
 
   const handleRestartTour = () => {
@@ -195,6 +209,10 @@ export default function Home() {
   };
 
   const p = priorityStyles[activeTaskPriority ?? "natural"] ?? priorityStyles.natural;
+
+  if (checkingVisited) {
+    return <div className="min-h-screen bg-zinc-950" />;
+  }
 
   return (
     <BackgroundTheme showSettings={false} isHomePage={true}>
