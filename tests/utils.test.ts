@@ -5,6 +5,8 @@ import {
   generateInviteToken,
   getGoalTypeLabel,
   toMillis,
+  deriveTaskProgressAndStatus,
+  SharedSubtask,
 } from "@/lib/groups";
 
 describe("fmtMinutes", () => {
@@ -97,5 +99,36 @@ describe("toMillis", () => {
   it("converts Firestore-like timestamps with seconds", () => {
     const fake = { seconds: 100, nanoseconds: 0 };
     expect(toMillis(fake)).toBe(100000);
+  });
+});
+
+describe("deriveTaskProgressAndStatus", () => {
+  it("returns defaults for empty subtasks", () => {
+    const result = deriveTaskProgressAndStatus(undefined, "todo");
+    expect(result.subtaskCount).toBe(0);
+    expect(result.progress).toBe(0);
+    expect(result.status).toBe("todo");
+  });
+
+  it("calculates progress based on completed status", () => {
+    const subtasks: SharedSubtask[] = [
+      { id: "1", title: "Subtask 1", completed: true, status: "done" },
+      { id: "2", title: "Subtask 2", completed: false, status: "in-progress" },
+      { id: "3", title: "Subtask 3", completed: false, status: "todo" },
+    ];
+    const result = deriveTaskProgressAndStatus(subtasks, "todo");
+    expect(result.subtaskCount).toBe(3);
+    expect(result.completedSubtaskCount).toBe(1);
+    expect(result.progress).toBe(33);
+    expect(result.status).toBe("in-progress");
+  });
+
+  it("moves status to done when all completed", () => {
+    const subtasks: SharedSubtask[] = [
+      { id: "1", title: "Subtask 1", completed: true, status: "done" },
+      { id: "2", title: "Subtask 2", completed: true, status: "done" },
+    ];
+    const result = deriveTaskProgressAndStatus(subtasks, "todo");
+    expect(result.status).toBe("done");
   });
 });

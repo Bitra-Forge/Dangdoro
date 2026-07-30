@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, createContext, useContext } from "react";
+import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pan-pinch";
 import { useRouter } from "next/navigation";
 import {
     ClipboardList, Plus, Trash2, CheckCircle2, Circle,
     ChevronDown, ChevronRight, Pencil, Check, X, GripVertical,
     Play, Clock, Maximize2, Palette, Settings, Sparkles, Users,
-    ArrowUpDown
+    ArrowUpDown, Hand, HelpCircle, MousePointer, ZoomIn, ZoomOut
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
@@ -29,6 +30,8 @@ import { AnimatedDotGrid as AnimatedDotGridComponent } from "@/components/animat
 import { useBackgroundTheme } from "@/lib/use-background-theme";
 import { BackgroundTheme } from "@/components/background-theme";
 import { TaskAgent } from "@/components/task-agent";
+import { useTour, type TourStep } from "@/lib/use-tour";
+import { usePlannerStore } from "@/lib/stores/planner-store";
 
 // ─── Priority config ──────────────────────────────────────────────────────────
 const PRIORITIES: { value: TaskPriority; label: string; border: string; dot: string; text: string }[] = [
@@ -101,7 +104,67 @@ function TaskRow({ task, onDragStart }: { task: any; onDragStart: (e: React.Poin
     const [editTitle, setEditTitle] = useState(task.title);
     const [editDur, setEditDur] = useState(task.durationMinutes?.toString() ?? "");
     const [editNotes, setEditNotes] = useState(task.notes ?? "");
+    const [isLongPressing, setIsLongPressing] = useState(false);
     const p = getPriority(task.priority ?? "natural");
+    const { onTouchDragStart, onTouchDragMove, onTouchDragEnd } = useContext(TouchDragContext);
+    const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+    const dragStartPos = useRef<{ x: number; y: number } | null>(null);
+    const isLongPressDragging = useRef(false);
+    const LONG_PRESS_DURATION = 500;
+    const LONG_PRESS_MOVE_THRESHOLD = 10;
+
+    const clearLongPress = () => {
+        if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current);
+            longPressTimer.current = null;
+        }
+    };
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        if (task.completed || isEditing) return;
+        // Don't stop propagation for multi-touch (pinch-to-zoom must reach canvas handlers)
+        if (e.touches.length >= 2) return;
+        e.stopPropagation();
+        dragStartPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        isLongPressDragging.current = false;
+        longPressTimer.current = setTimeout(() => {
+            isLongPressDragging.current = true;
+            setIsLongPressing(true);
+            onTouchDragStart?.(task, e.touches[0].clientX, e.touches[0].clientY);
+        }, LONG_PRESS_DURATION);
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        // Don't interfere with pinch-to-zoom
+        if (e.touches.length >= 2) return;
+        if (!dragStartPos.current) return;
+        e.stopPropagation();
+        const dx = e.touches[0].clientX - dragStartPos.current.x;
+        const dy = e.touches[0].clientY - dragStartPos.current.y;
+        if (!isLongPressDragging.current) {
+            if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_THRESHOLD) {
+                clearLongPress();
+                dragStartPos.current = null;
+            }
+        } else {
+            e.preventDefault();
+            onTouchDragMove?.(e.touches[0].clientX, e.touches[0].clientY);
+        }
+    };
+
+    const handleTouchEnd = (e: React.TouchEvent) => {
+        // Don't interfere with pinch-to-zoom release
+        if (e.touches.length >= 2) return;
+        e.stopPropagation();
+        clearLongPress();
+        if (isLongPressDragging.current) {
+            e.preventDefault();
+            onTouchDragEnd?.();
+        }
+        isLongPressDragging.current = false;
+        setIsLongPressing(false);
+        dragStartPos.current = null;
+    };
 
     const handleStart = () => {
         const duration = task.durationMinutes ? task.durationMinutes * 60 : 25 * 60;
@@ -152,11 +215,15 @@ function TaskRow({ task, onDragStart }: { task: any; onDragStart: (e: React.Poin
     return (
         <div
             onDoubleClick={() => !task.completed && setIsEditing(true)}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
             className={cn(
-                "group/row flex flex-col gap-0.5 rounded-r-xl px-2 py-2 transition-all duration-200 select-none border-l-2",
+                "task-row group/row flex flex-col gap-0.5 rounded-r-xl px-2 py-2 transition-all duration-200 select-none border-l-2",
                 p.border,
                 "hover:bg-white/[0.03]",
-                !task.completed && "cursor-pointer"
+                !task.completed && "cursor-pointer",
+                isLongPressing && "scale-[1.05] opacity-90"
             )}
         >
             <div className="flex items-center gap-2">
@@ -270,7 +337,7 @@ function TaskRow({ task, onDragStart }: { task: any; onDragStart: (e: React.Poin
 
 function GroupCard({
     group, tasks, userId, isDragOver, onTaskDragStart, cardRef,
-    overTaskId, overTaskPosition
+    overTaskId, overTaskPosition, isMobileMode, zoom = 1
 }: {
     group: { id: string; name: string; positionX: number; positionY: number; width?: number; height?: number; color?: string; sortBy?: string };
     tasks: any[]; userId: string; isDragOver: boolean;
@@ -278,6 +345,8 @@ function GroupCard({
     cardRef: (el: HTMLDivElement | null) => void;
     overTaskId: string | null;
     overTaskPosition: "before" | "after" | null;
+    isMobileMode?: boolean;
+    zoom?: number;
 }) {
     const [collapsed, setCollapsed] = useState(false);
     const [newTask, setNewTask] = useState("");
@@ -317,9 +386,13 @@ function GroupCard({
 
     const posRef = useRef({ x: group.positionX, y: group.positionY });
     const dimRef = useRef({ w: clampW(group.width ?? 300), h: clampH(group.height ?? 400) });
-    const dragOffset = useRef({ x: 0, y: 0 });
+    const startPointer = useRef({ x: 0, y: 0 });
+    const startPos = useRef({ x: 0, y: 0 });
+    const startDim = useRef({ w: 0, h: 0 });
     const cardEl = useRef<HTMLDivElement | null>(null);
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const zoomRef = useRef(zoom)
+    useEffect(() => { zoomRef.current = zoom }, [zoom])
 
     useEffect(() => {
         posRef.current = { x: group.positionX, y: group.positionY };
@@ -369,14 +442,18 @@ function GroupCard({
     // Draggable header logic
     const onHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
         if ((e.target as HTMLElement).closest("button, input")) return;
+        e.stopPropagation(); // Stop propagation to prevent TransformWrapper panning
         e.currentTarget.setPointerCapture(e.pointerId);
-        dragOffset.current = { x: e.clientX - posRef.current.x, y: e.clientY - posRef.current.y };
+        startPointer.current = { x: e.clientX, y: e.clientY };
+        startPos.current = { x: posRef.current.x, y: posRef.current.y };
         setIsDraggingCard(true);
     };
     const onHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
         if (!isDraggingCard) return;
-        const x = Math.max(0, e.clientX - dragOffset.current.x);
-        const y = Math.max(0, e.clientY - dragOffset.current.y);
+        const deltaX = (e.clientX - startPointer.current.x) / zoomRef.current;
+        const deltaY = (e.clientY - startPointer.current.y) / zoomRef.current;
+        const x = startPos.current.x + deltaX;
+        const y = startPos.current.y + deltaY;
         posRef.current = { x, y };
         if (cardEl.current) { cardEl.current.style.left = `${x}px`; cardEl.current.style.top = `${y}px`; }
     };
@@ -391,20 +468,25 @@ function GroupCard({
 
     // Resizing logic
     const onResizePointerDown = (e: React.PointerEvent) => {
+        if (isMobileMode) return;
         e.stopPropagation();
         e.currentTarget.setPointerCapture(e.pointerId);
+        startPointer.current = { x: e.clientX, y: e.clientY };
+        startDim.current = { w: dimRef.current.w, h: dimRef.current.h };
         setIsResizing(true);
     };
     const onResizePointerMove = (e: React.PointerEvent) => {
-        if (!isResizing || !cardEl.current) return;
-        const newW = clampW(e.clientX - posRef.current.x);
-        const newH = clampH(e.clientY - posRef.current.y);
+        if (isMobileMode || !isResizing || !cardEl.current) return;
+        const deltaX = (e.clientX - startPointer.current.x) / zoomRef.current;
+        const deltaY = (e.clientY - startPointer.current.y) / zoomRef.current;
+        const newW = clampW(startDim.current.w + deltaX);
+        const newH = clampH(startDim.current.h + deltaY);
         dimRef.current = { w: newW, h: newH };
         cardEl.current.style.width = `${newW}px`;
         if (!collapsed) cardEl.current.style.height = `${newH}px`;
     };
     const onResizePointerUp = () => {
-        if (!isResizing) return;
+        if (isMobileMode || !isResizing) return;
         setIsResizing(false);
         if (saveTimer.current) clearTimeout(saveTimer.current);
         saveTimer.current = setTimeout(() => {
@@ -447,6 +529,7 @@ function GroupCard({
     return (
         <div
             ref={(el) => { cardEl.current = el; cardRef(el); }}
+            data-group-card="true"
             data-group-id={group.id}
             data-group-color={group.color ?? "zinc"}
             style={{
@@ -458,8 +541,8 @@ function GroupCard({
                 willChange: "left,top,width,height"
             }}
             className={cn(
-                "bg-zinc-900/70 backdrop-blur-2xl border rounded-2xl shadow-2xl transition-[box-shadow,border-color,transform] duration-200 flex flex-col",
-                isDraggingCard || isResizing
+                "task-group-card bg-zinc-900/95 border rounded-2xl shadow-2xl transition-[box-shadow,border-color,transform] duration-200 flex flex-col",
+                (isDraggingCard || isResizing)
                     ? cn(groupColor.border, groupColor.glow, "scale-[1.01] z-50")
                     : isDragOver
                         ? cn(groupColor.border, groupColor.glow, "scale-[1.005] z-30")
@@ -471,7 +554,8 @@ function GroupCard({
                 onPointerDown={onHeaderPointerDown}
                 onPointerMove={onHeaderPointerMove}
                 onPointerUp={onHeaderPointerUp}
-                className="flex items-center gap-2 px-3 py-2.5 border-b border-white/5 select-none cursor-grab active:cursor-grabbing flex-shrink-0"
+                style={{ touchAction: "none" }}
+                className="drag-header flex items-center gap-2 px-3 py-2.5 border-b border-white/5 select-none flex-shrink-0 cursor-grab active:cursor-grabbing"
             >
                 <button onClick={() => setCollapsed(v => !v)} className="text-zinc-600 hover:text-white transition-colors">
                     {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -606,7 +690,7 @@ function GroupCard({
                             <Pencil className="w-3.5 h-3.5" />
                         </button>
                     </Tooltip>
-                    
+
                     <Tooltip content="Delete group">
                         <button onClick={handleDelete} className="text-zinc-500 hover:text-red-400 transition-colors p-1.5 hover:bg-white/5 rounded-lg flex items-center justify-center flex-shrink-0">
                             <Trash2 className="w-3.5 h-3.5" />
@@ -617,7 +701,7 @@ function GroupCard({
 
             {/* Scrollable Body */}
             {!collapsed && (
-                <div className="flex-1 min-h-0 overflow-y-auto p-2.5" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                <div data-scroll-container className="flex-1 min-h-0 overflow-y-auto p-2.5 data-scroll-container" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                     <form onSubmit={handleAddTask} className="flex flex-col gap-2 mb-4 bg-white/5 p-2 rounded-xl border border-white/5">
                         <div className="flex items-center gap-1.5">
                             <input value={newTask} onChange={e => setNewTask(e.target.value)} placeholder="Task title…"
@@ -703,26 +787,30 @@ function GroupCard({
             )}
 
             {/* Resize Handle */}
-            <Tooltip content="Resize Group">
-                <div
-                    onPointerDown={onResizePointerDown}
-                    onPointerMove={onResizePointerMove}
-                    onPointerUp={onResizePointerUp}
-                    className="absolute bottom-1 right-1 cursor-nwse-resize p-1 text-white/5 hover:text-emerald-500/40 transition-colors"
-                >
-                    <Maximize2 className="w-3 h-3 rotate-90" />
-                </div>
-            </Tooltip>
+            {!isMobileMode && (
+                <Tooltip content="Resize Group">
+                    <div
+                        onPointerDown={onResizePointerDown}
+                        onPointerMove={onResizePointerMove}
+                        onPointerUp={onResizePointerUp}
+                        className="absolute bottom-1 right-1 cursor-nwse-resize p-1 text-white/5 hover:text-emerald-500/40 transition-colors"
+                    >
+                        <Maximize2 className="w-3 h-3 rotate-90" />
+                    </div>
+                </Tooltip>
+            )}
         </div>
     );
 }
 
 // ─── Assigned Tasks Card ─────────────────────────────────────────────────────
 function AssignedTasksCard({
-    tasks, userId, isDragOver, onTaskDragStart,
+    tasks, userId, isDragOver, onTaskDragStart, isMobileMode, zoom = 1,
 }: {
     tasks: any[]; userId: string; isDragOver: boolean;
     onTaskDragStart: (e: React.PointerEvent, task: any) => void;
+    isMobileMode?: boolean;
+    zoom?: number;
 }) {
     const [collapsed, setCollapsed] = useState(false);
     const [groupNames, setGroupNames] = useState<Record<string, string>>({});
@@ -778,9 +866,20 @@ function AssignedTasksCard({
 
     const posRef = useRef(loadSavedPosition());
     const dimRef = useRef(loadSavedDimensions());
-    const dragOffset = useRef({ x: 0, y: 0 });
+    const startPointer = useRef({ x: 0, y: 0 });
+    const startPos = useRef({ x: 0, y: 0 });
+    const startDim = useRef({ w: 0, h: 0 });
     const cardEl = useRef<HTMLDivElement | null>(null);
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        if (cardEl.current) {
+            cardEl.current.style.left = `${posRef.current.x}px`;
+            cardEl.current.style.top = `${posRef.current.y}px`;
+            cardEl.current.style.width = `${dimRef.current.w}px`;
+            cardEl.current.style.height = collapsed ? "auto" : `${dimRef.current.h}px`;
+        }
+    }, [collapsed]);
 
     const saveDimensions = () => {
         if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -871,14 +970,18 @@ function AssignedTasksCard({
 
     const onHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
         if ((e.target as HTMLElement).closest("button")) return;
+        e.stopPropagation(); // Stop propagation to prevent TransformWrapper panning
         e.currentTarget.setPointerCapture(e.pointerId);
-        dragOffset.current = { x: e.clientX - posRef.current.x, y: e.clientY - posRef.current.y };
+        startPointer.current = { x: e.clientX, y: e.clientY };
+        startPos.current = { x: posRef.current.x, y: posRef.current.y };
         setIsDraggingCard(true);
     };
     const onHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
         if (!isDraggingCard) return;
-        const x = Math.max(0, e.clientX - dragOffset.current.x);
-        const y = Math.max(0, e.clientY - dragOffset.current.y);
+        const deltaX = (e.clientX - startPointer.current.x) / zoom;
+        const deltaY = (e.clientY - startPointer.current.y) / zoom;
+        const x = startPos.current.x + deltaX;
+        const y = startPos.current.y + deltaY;
         posRef.current = { x, y };
         if (cardEl.current) { cardEl.current.style.left = `${x}px`; cardEl.current.style.top = `${y}px`; }
     };
@@ -889,20 +992,25 @@ function AssignedTasksCard({
     };
 
     const onResizePointerDown = (e: React.PointerEvent) => {
+        if (isMobileMode) return;
         e.stopPropagation();
         e.currentTarget.setPointerCapture(e.pointerId);
+        startPointer.current = { x: e.clientX, y: e.clientY };
+        startDim.current = { w: dimRef.current.w, h: dimRef.current.h };
         setIsResizing(true);
     };
     const onResizePointerMove = (e: React.PointerEvent) => {
-        if (!isResizing || !cardEl.current) return;
-        const newW = Math.min(600, Math.max(280, e.clientX - posRef.current.x));
-        const newH = Math.min(800, Math.max(200, e.clientY - posRef.current.y));
+        if (isMobileMode || !isResizing || !cardEl.current) return;
+        const deltaX = (e.clientX - startPointer.current.x) / zoom;
+        const deltaY = (e.clientY - startPointer.current.y) / zoom;
+        const newW = Math.min(600, Math.max(280, startDim.current.w + deltaX));
+        const newH = Math.min(800, Math.max(200, startDim.current.h + deltaY));
         dimRef.current = { w: newW, h: newH };
         cardEl.current.style.width = `${newW}px`;
         if (!collapsed) cardEl.current.style.height = `${newH}px`;
     };
     const onResizePointerUp = () => {
-        if (!isResizing) return;
+        if (isMobileMode || !isResizing) return;
         setIsResizing(false);
         saveDimensions();
     };
@@ -921,7 +1029,7 @@ function AssignedTasksCard({
                 zIndex: isDraggingCard || isResizing ? 50 : 10
             }}
             className={cn(
-                "bg-zinc-900/70 backdrop-blur-2xl border rounded-2xl shadow-2xl flex flex-col transition-[box-shadow,border-color] duration-200",
+                "bg-zinc-900/95 border rounded-2xl shadow-2xl flex flex-col transition-[box-shadow,border-color] duration-200",
                 (isDraggingCard || isResizing)
                     ? cn(assignedGroupColor.border, assignedGroupColor.glow, "scale-[1.01]")
                     : isDragOver
@@ -934,7 +1042,8 @@ function AssignedTasksCard({
                 onPointerDown={onHeaderPointerDown}
                 onPointerMove={onHeaderPointerMove}
                 onPointerUp={onHeaderPointerUp}
-                className="flex items-center gap-2 px-3 py-2.5 border-b border-white/5 select-none cursor-grab active:cursor-grabbing flex-shrink-0"
+                style={{ touchAction: "none" }}
+                className="drag-header flex items-center gap-2 px-3 py-2.5 border-b border-white/5 select-none flex-shrink-0 cursor-grab active:cursor-grabbing"
             >
                 <button onClick={() => setCollapsed(v => !v)} className="text-zinc-600 hover:text-white transition-colors">
                     {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -1050,7 +1159,7 @@ function AssignedTasksCard({
 
             {/* Scrollable Body */}
             {!collapsed && (
-                <div className="flex-1 min-h-0 overflow-y-auto p-2.5 rounded-b-2xl" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                <div data-scroll-container className="flex-1 min-h-0 overflow-y-auto p-2.5 rounded-b-2xl data-scroll-container" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                     <div className="space-y-0.5">
                         {tasks.length === 0 ? (
                             <p className="text-[10px] text-zinc-700 uppercase tracking-widest font-bold text-center py-8">No assigned tasks</p>
@@ -1092,16 +1201,18 @@ function AssignedTasksCard({
             )}
 
             {/* Resize Handle */}
-            <Tooltip content="Resize">
-                <div
-                    onPointerDown={onResizePointerDown}
-                    onPointerMove={onResizePointerMove}
-                    onPointerUp={onResizePointerUp}
-                    className={cn("absolute bottom-1 right-1 cursor-nwse-resize p-1 text-white/5 transition-colors", isResizing ? assignedGroupColor.resizeActive : assignedGroupColor.resizeHover)}
-                >
-                    <Maximize2 className="w-3 h-3 rotate-90" />
-                </div>
-            </Tooltip>
+            {!isMobileMode && (
+                <Tooltip content="Resize">
+                    <div
+                        onPointerDown={onResizePointerDown}
+                        onPointerMove={onResizePointerMove}
+                        onPointerUp={onResizePointerUp}
+                        className={cn("absolute bottom-1 right-1 cursor-nwse-resize p-1 text-white/5 transition-colors", isResizing ? assignedGroupColor.resizeActive : assignedGroupColor.resizeHover)}
+                    >
+                        <Maximize2 className="w-3 h-3 rotate-90" />
+                    </div>
+                </Tooltip>
+            )}
         </div>
     );
 }
@@ -1220,8 +1331,144 @@ function AssignedTaskRow({
     );
 }
 
+
+// ─── Touch Drag Context (for mobile long-press drag) ─────────────────────
+type TouchDragContextType = {
+    onTouchDragStart?: (task: any, clientX: number, clientY: number) => void;
+    onTouchDragMove?: (clientX: number, clientY: number) => void;
+    onTouchDragEnd?: () => void;
+};
+const TouchDragContext = createContext<TouchDragContextType>({});
+
+// ─── CanvasControls ────────────────────────────────────────────────────────────
+// Must be a child of TransformWrapper so it can call useControls()
+function CanvasControls({
+    isMobileMode,
+    toolMode,
+    setToolMode,
+    zoom,
+}: {
+    isMobileMode: boolean;
+    toolMode: "default" | "hand";
+    setToolMode: React.Dispatch<React.SetStateAction<"default" | "hand">>;
+    zoom: number;
+}) {
+    const { zoomIn, zoomOut, setTransform } = useControls();
+
+    const handleResetZoom = () => {
+        const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+        const defaultScale = isMobile ? 0.5 : 1;
+        const defaultX = isMobile ? 16 : 0;
+        const defaultY = isMobile ? 80 : 0;
+        setTransform(defaultX, defaultY, defaultScale, 200, "easeOut");
+    };
+
+    return (
+        <>
+            {/* Desktop toolbar: top-right vertical stack */}
+            {!isMobileMode && (
+                <div id="canvas-controls" className="canvas-controls fixed z-50 flex flex-col items-center gap-2 top-24 right-4 sm:right-8">
+                    <div className="flex items-center gap-1">
+                        <Tooltip content="Select tool" side="left">
+                            <button onClick={() => setToolMode("default")}
+                                className={cn("p-1.5 rounded-lg transition-colors", toolMode === "default" ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>
+                                <MousePointer className="w-4 h-4" />
+                            </button>
+                        </Tooltip>
+                        <Tooltip content="Hand tool (H or hold Space)" side="left">
+                            <button onClick={() => setToolMode(t => t === "hand" ? "default" : "hand")}
+                                className={cn("p-1.5 rounded-lg transition-colors", toolMode === "hand" ? "bg-white/10 text-white" : "text-zinc-500 hover:text-zinc-200")}>
+                                <Hand className="w-4 h-4" />
+                            </button>
+                        </Tooltip>
+                    </div>
+                    <button onClick={() => zoomOut(0.1)} className="text-zinc-400 hover:text-white transition-colors p-1">
+                        <ZoomOut className="w-5 h-5" />
+                    </button>
+                    <Tooltip content="Reset zoom (Ctrl+0)" side="left">
+                        <button onClick={handleResetZoom}
+                            className="text-xs font-black text-zinc-400 min-w-[3.5rem] text-center select-none hover:text-white transition-colors py-1">
+                            {Math.round(zoom * 100)}%
+                        </button>
+                    </Tooltip>
+                    <button onClick={() => zoomIn(0.1)} className="text-zinc-400 hover:text-white transition-colors p-1">
+                        <ZoomIn className="w-5 h-5" />
+                    </button>
+                </div>
+            )}
+
+            {/* Mobile zoom controls: top-left pill (notification dock is at top-right) */}
+            {isMobileMode && (
+                <div id="canvas-controls" className="canvas-controls fixed z-50 top-4 left-4 flex items-center gap-1 bg-zinc-900/80 backdrop-blur-md border border-white/10 rounded-2xl px-2 py-1.5 shadow-xl">
+                    <Tooltip content="Zoom out" side="bottom">
+                        <button onClick={() => zoomOut(0.1)}
+                            className="p-1.5 text-zinc-400 hover:text-white transition-colors rounded-xl hover:bg-white/10 active:scale-90">
+                            <ZoomOut className="w-4 h-4" />
+                        </button>
+                    </Tooltip>
+                    <Tooltip content="Reset zoom" side="bottom">
+                        <button onClick={handleResetZoom}
+                            className="text-[11px] font-black text-zinc-400 min-w-[2.75rem] text-center select-none hover:text-white transition-colors py-1 hover:bg-white/10 rounded-xl">
+                            {Math.round(zoom * 100)}%
+                        </button>
+                    </Tooltip>
+                    <Tooltip content="Zoom in" side="bottom">
+                        <button onClick={() => zoomIn(0.1)}
+                            className="p-1.5 text-zinc-400 hover:text-white transition-colors rounded-xl hover:bg-white/10 active:scale-90">
+                            <ZoomIn className="w-4 h-4" />
+                        </button>
+                    </Tooltip>
+                </div>
+            )}
+        </>
+    );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function TasksPage() {
+    const tourSteps: TourStep[] = [
+        {
+            popover: {
+                title: "Hey there! Welcome to Tasks",
+                description: "This is your workspace board. Think of it as your command center where you can organize tasks, prioritize what matters, and lay out your boards.",
+            },
+        },
+        {
+            element: "#btn-new-group",
+            popover: {
+                title: "Create a new board",
+                description: "Click here to add a new custom group. You can use boards to group tasks by project, category, or whatever workflow works best for you.",
+                side: "left",
+                align: "center",
+            },
+        },
+        {
+            element: "#btn-planner",
+            popover: {
+                title: "Meet your AI Planner",
+                description: "Not sure where to start? Let the AI Task Agent draft your checklist, break down big tasks, and structure your day in seconds.",
+                side: "left",
+                align: "center",
+            },
+        },
+        {
+            element: "#canvas-controls",
+            popover: {
+                title: "Canvas & Shortcuts",
+                description: "Pan around the board using the Hand tool, and zoom with +/- or your mouse wheel.<br/><br/><b>Shortcuts:</b><br/>• Hold <b>Space</b> to pan/drag the canvas<br/>• Press <b>H</b> to toggle tools<br/>• Press <b>Ctrl + 0</b> to reset zoom",
+                side: "left",
+                align: "center",
+            },
+        },
+    ];
+
+    const { resetTour, startTour } = useTour({ pageName: "tasks", steps: tourSteps });
+    const handleRestartTour = () => {
+        resetTour();
+        startTour();
+    };
+    const showTourButton = useTimerStore((state) => state.showTourButton);
+
     const { user, loading: authLoading } = useAuth();
     const [tasks, setTasks] = useState<any[]>([]);
     const [groups, setGroups] = useState<any[]>([]);
@@ -1230,7 +1477,12 @@ export default function TasksPage() {
     const [isCreatingGroup, setIsCreatingGroup] = useState(false);
     const [newGroupName, setNewGroupName] = useState("");
     const [showAgent, setShowAgent] = useState(false);
+    const sessionActive = usePlannerStore((s) => s.sessionActive);
     const [isMobileMode, setIsMobileMode] = useState(false);
+
+    useEffect(() => {
+        if (sessionActive) setShowAgent(true);
+    }, [sessionActive]);
 
     useEffect(() => {
         const checkMobile = () => setIsMobileMode(window.innerWidth < 1024);
@@ -1239,7 +1491,48 @@ export default function TasksPage() {
         return () => window.removeEventListener("resize", checkMobile);
     }, []);
 
+    // ─── react-zoom-pan-pinch state ───────────────────────────────────────────
+    // Persisted zoom/pan used as initialState for TransformWrapper
+    const savedZoom = (() => {
+        try { const s = localStorage.getItem("tasks-zoom"); if (s) return +s; } catch {}
+        return typeof window !== 'undefined' && window.innerWidth < 768 ? 0.5 : 1;
+    })();
+    const savedPan = (() => {
+        try { const s = localStorage.getItem("tasks-pan"); if (s) return JSON.parse(s); } catch {}
+        return typeof window !== 'undefined' && window.innerWidth < 768
+            ? { x: 16, y: 80 } : { x: 0, y: 0 };
+    })();
 
+    // Current zoom mirrored from library state (used for GroupCard drag math)
+    const [zoom, setZoom] = useState(savedZoom);
+
+    type ToolMode = "default" | "hand"
+    const [toolMode, setToolMode] = useState<ToolMode>("default")
+
+    // Simple ref to capture the library's resetTransform method (set via onInit)
+    const resetTransformRef = useRef<(() => void) | null>(null);
+
+    // Keyboard: Space/H for tool mode, Ctrl+0 to reset via transformRef
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.target instanceof HTMLElement && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) return
+            if (e.code === "Space") { e.preventDefault(); setToolMode("hand") }
+            if (e.code === "KeyH") setToolMode(t => t === "hand" ? "default" : "hand")
+            if (e.code === "Digit0" && e.ctrlKey) {
+                e.preventDefault()
+                resetTransformRef.current?.()
+            }
+        }
+        const onKeyUp = (e: KeyboardEvent) => {
+            if (e.code === "Space") setToolMode("default")
+        }
+        window.addEventListener("keydown", onKeyDown)
+        window.addEventListener("keyup", onKeyUp)
+        return () => {
+            window.removeEventListener("keydown", onKeyDown)
+            window.removeEventListener("keyup", onKeyUp)
+        }
+    }, [])
 
     // Use the custom hook for background theme
     const { showDots, bgPalette } = useBackgroundTheme();
@@ -1294,6 +1587,8 @@ export default function TasksPage() {
         };
     }, [user, authLoading]);
 
+    // mouse pan is now handled by TransformWrapper (panning.disabled based on toolMode)
+
     // Helper to get task's group color
     const getTaskGroupColor = useCallback((task: any) => {
         const group = groups.find(g => g.id === task.groupId);
@@ -1306,6 +1601,39 @@ export default function TasksPage() {
         setDragTaskColor(getTaskGroupColor(task));
         setClonePos({ x: e.clientX, y: e.clientY });
     }, [getTaskGroupColor]);
+
+    const handleTouchDragStart = useCallback((task: any, clientX: number, clientY: number) => {
+        setDraggingTask(task);
+        setDragTaskColor(getTaskGroupColor(task));
+        setClonePos({ x: clientX, y: clientY });
+    }, [getTaskGroupColor]);
+
+    const handleTouchDragMove = useCallback((clientX: number, clientY: number) => {
+        if (!draggingTask) return;
+        setClonePos({ x: clientX, y: clientY });
+        const el = document.elementFromPoint(clientX, clientY);
+        const groupCardEl = el?.closest("[data-group-id]");
+        const foundGroupId = groupCardEl?.getAttribute("data-group-id") || null;
+        setOverGroupId(foundGroupId);
+        const taskRowEl = el?.closest("[data-task-id]");
+        const foundTaskId = taskRowEl?.getAttribute("data-task-id") || null;
+        setOverTaskId(foundTaskId);
+        if (taskRowEl && foundTaskId) {
+            const rect = taskRowEl.getBoundingClientRect();
+            const relativeY = clientY - rect.top;
+            setOverTaskPosition(relativeY < rect.height / 2 ? "before" : "after");
+        } else {
+            setOverTaskPosition(null);
+        }
+        const isOverEmpty = !foundGroupId;
+        setOverTrash(isOverEmpty);
+        if (isOverEmpty && !deleteTimerRef.current) {
+            deleteTimerRef.current = setTimeout(() => { setDeleteReady(true); }, 600);
+        } else if (!isOverEmpty) {
+            if (deleteTimerRef.current) { clearTimeout(deleteTimerRef.current); deleteTimerRef.current = null; }
+            setDeleteReady(false);
+        }
+    }, [draggingTask]);
 
     const onCanvasPointerMove = useCallback((e: React.PointerEvent) => {
         if (!draggingTask) return;
@@ -1455,9 +1783,12 @@ export default function TasksPage() {
 
     const handleApplyAgentGroups = async (agentGroups: { name: string; color: string; tasks: { title: string; priority: "urgent" | "high" | "normal" | "natural"; durationMinutes: number | null; notes: string }[] }[]) => {
         if (!user) return;
-        for (const g of agentGroups) {
-            const offset = (groups.length + 1) * 28;
-            const gid = await addGroup(user.uid, g.name, 360 + offset, 120 + offset, 300, 400, g.color);
+        const baseOffset = groups.length;
+        for (let i = 0; i < agentGroups.length; i++) {
+            const g = agentGroups[i];
+            const x = 360 + (baseOffset + i) * 340;
+            const y = 120;
+            const gid = await addGroup(user.uid, g.name, x, y, 300, 400, g.color);
             if (gid) {
                 for (const t of g.tasks) {
                     await addTask(user.uid, t.title, gid, t.priority, 1, t.durationMinutes, t.notes);
@@ -1485,30 +1816,7 @@ export default function TasksPage() {
         );
     }
 
-    if (isMobileMode) {
-        return (
-            <BackgroundTheme>
-                <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center">
-                    <div className="relative p-8 rounded-3xl bg-zinc-900/60 backdrop-blur-2xl border border-white/10 max-w-sm shadow-2xl flex flex-col items-center gap-4 animate-in fade-in zoom-in duration-300">
-                        <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400">
-                            <ClipboardList className="w-8 h-8" />
-                        </div>
-                        <h2 className="text-lg font-black uppercase tracking-wider text-white">Desktop Only</h2>
-                        <p className="text-xs font-semibold leading-relaxed text-zinc-400">
-                            Dangdoro's interactive tasks board is designed for larger viewports. Please expand your browser window or switch to a desktop device to manage your tasks.
-                        </p>
-                        <Button 
-                            variant="outline" 
-                            onClick={() => window.location.href = "/"}
-                            className="w-full mt-2 py-5 rounded-2xl border-white/10 hover:bg-white/5 font-black uppercase tracking-wider text-xs text-white"
-                        >
-                            Return to Timer
-                        </Button>
-                    </div>
-                </div>
-            </BackgroundTheme>
-        );
-    }
+
     if (!user) {
         return (
             <BackgroundTheme showSettings={true}>
@@ -1521,146 +1829,217 @@ export default function TasksPage() {
 
     const tasksByGroup = (gid: string) => tasks.filter(t => t.groupId === gid);
 
+    const canvasContent = (
+        <>
+            {groups.map(g => (
+                <GroupCard key={g.id} group={g} tasks={tasksByGroup(g.id)}
+                    userId={user.uid} isDragOver={overGroupId === g.id}
+                    onTaskDragStart={onTaskDragStart} cardRef={el => { groupRefs.current[g.id] = el; }}
+                    overTaskId={overTaskId}
+                    overTaskPosition={overTaskPosition}
+                    zoom={zoom}
+                />
+            ))}
+
+            {/* Assigned Tasks Group */}
+            {assignedTasks.length > 0 && (
+                <AssignedTasksCard
+                    tasks={assignedTasks}
+                    userId={user.uid}
+                    isDragOver={false}
+                    onTaskDragStart={onTaskDragStart}
+                    zoom={zoom}
+                />
+            )}
+        </>
+    );
+
     return (
-        <BackgroundTheme>
-            <div
-                className="relative min-h-screen w-full overflow-hidden"
-                onPointerMove={draggingTask ? onCanvasPointerMove : undefined}
-                onPointerUp={draggingTask ? onCanvasPointerUp : undefined}
-            >
-
-
-                {groups.map(g => (
-                    <GroupCard key={g.id} group={g} tasks={tasksByGroup(g.id)}
-                        userId={user.uid} isDragOver={overGroupId === g.id}
-                        onTaskDragStart={onTaskDragStart} cardRef={el => { groupRefs.current[g.id] = el; }}
-                        overTaskId={overTaskId}
-                        overTaskPosition={overTaskPosition}
+        <BackgroundTheme showSettings={true}>
+            {/* Canvas area – pan/pinch/zoom managed by react-zoom-pan-pinch */}
+            <TouchDragContext.Provider value={{
+                onTouchDragStart: handleTouchDragStart,
+                onTouchDragMove: handleTouchDragMove,
+                onTouchDragEnd: onCanvasPointerUp,
+            }}>
+                <TransformWrapper
+                    initialScale={savedZoom}
+                    initialPositionX={savedPan.x}
+                    initialPositionY={savedPan.y}
+                    minScale={0.1}
+                    maxScale={5}
+                    limitToBounds={false}
+                    centerZoomedOut={false}
+                    panning={{
+                        disabled: !isMobileMode && toolMode !== "hand",
+                        velocityDisabled: true,
+                        excluded: ["data-scroll-container", "drag-header", "resize-handle", "task-row", "canvas-controls"]
+                    }}
+                    pinch={{ step: 5 }}
+                    wheel={{
+                        step: 0.0001,
+                        excluded: ["data-scroll-container", "drag-header", "resize-handle", "task-row", "canvas-controls"]
+                    }}
+                    doubleClick={{ disabled: true }}
+                    onInit={(ref) => {
+                        resetTransformRef.current = () => {
+                            const isMobile = window.innerWidth < 768;
+                            const defaultScale = isMobile ? 0.5 : 1;
+                            const defaultX = isMobile ? 16 : 0;
+                            const defaultY = isMobile ? 80 : 0;
+                            ref.setTransform(defaultX, defaultY, defaultScale, 200, "easeOut");
+                        };
+                    }}
+                    onTransform={(ref) => {
+                        setZoom(ref.state.scale);
+                        try {
+                            localStorage.setItem("tasks-zoom", String(ref.state.scale));
+                            localStorage.setItem("tasks-pan", JSON.stringify({ x: ref.state.positionX, y: ref.state.positionY }));
+                        } catch {}
+                    }}
+                >
+                    {/* CanvasControls gets access to useControls() for keyboard shortcuts & zoom buttons */}
+                    <CanvasControls
+                        isMobileMode={isMobileMode}
+                        toolMode={toolMode}
+                        setToolMode={setToolMode}
+                        zoom={zoom}
                     />
-                ))}
+                    <TransformComponent
+                        wrapperStyle={{
+                            width: '100%',
+                            height: '100dvh',
+                            overflow: 'hidden',
+                            cursor: !isMobileMode
+                                ? toolMode === "hand" ? 'grab' : 'default'
+                                : 'default',
+                        }}
+                        contentStyle={{
+                            position: 'absolute',
+                            inset: 0,
+                            pointerEvents: (toolMode === "hand" && !isMobileMode) ? 'none' : undefined,
+                        }}
+                    >
+                        <div
+                            style={{ position: 'absolute', inset: 0 }}
+                            onPointerMove={draggingTask ? onCanvasPointerMove : undefined}
+                            onPointerUp={draggingTask ? onCanvasPointerUp : undefined}
+                        >
+                            {canvasContent}
+                        </div>
+                    </TransformComponent>
+                </TransformWrapper>
+            </TouchDragContext.Provider>
 
-                {/* Assigned Tasks Group */}
-                {assignedTasks.length > 0 && (
-                    <AssignedTasksCard
-                        tasks={assignedTasks}
-                        userId={user.uid}
-                        isDragOver={false}
-                        onTaskDragStart={onTaskDragStart}
-                    />
+            {/* FAB */}
+            <div className="fixed bottom-24 right-4 md:bottom-8 md:right-8 z-30 flex flex-col items-end gap-3">
+                {isCreatingGroup && (
+                    <form onSubmit={handleCreateGroup} className="flex items-center gap-2 animate-in slide-in-from-bottom-4 fade-in duration-200 max-w-[100vw]">
+                        <input autoFocus value={newGroupName} onChange={e => setNewGroupName(e.target.value)}
+                            onKeyDown={e => e.key === "Escape" && setIsCreatingGroup(false)} placeholder="Group name…"
+                            className="bg-zinc-900/90 backdrop-blur-xl border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white font-bold outline-none focus:border-emerald-500/40 transition-colors w-40 xs:w-48" />
+                        <button type="submit" className="p-2.5 rounded-xl bg-emerald-500 text-black hover:bg-emerald-400 transition-colors"><Check className="w-4 h-4" /></button>
+                        <button type="button" onClick={() => setIsCreatingGroup(false)} className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-400 hover:text-white transition-colors"><X className="w-4 h-4" /></button>
+                    </form>
                 )}
+                <button id="btn-planner" onClick={() => setShowAgent(v => !v)}
+                    className="flex items-center gap-2 px-5 py-3 bg-white/5 border border-white/10 text-zinc-400 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all backdrop-blur-xl shadow-lg">
+                    <Sparkles className="w-4 h-4" /> Planner
+                </button>
+                <button id="btn-new-group" onClick={() => setIsCreatingGroup(v => !v)}
+                    className="flex items-center gap-2 px-5 py-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-emerald-500/20 transition-all backdrop-blur-xl shadow-lg">
+                    <Plus className="w-4 h-4" /> New Group
+                </button>
+            </div>
 
-                {/* FAB */}
-                <div className="fixed bottom-8 right-8 z-30 flex flex-col items-end gap-3">
-                    {isCreatingGroup && (
-                        <form onSubmit={handleCreateGroup} className="flex items-center gap-2 animate-in slide-in-from-bottom-4 fade-in duration-200">
-                            <input autoFocus value={newGroupName} onChange={e => setNewGroupName(e.target.value)}
-                                onKeyDown={e => e.key === "Escape" && setIsCreatingGroup(false)} placeholder="Group name…"
-                                className="bg-zinc-900/90 backdrop-blur-xl border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white font-bold outline-none focus:border-emerald-500/40 transition-colors w-48" />
-                            <button type="submit" className="p-2.5 rounded-xl bg-emerald-500 text-black hover:bg-emerald-400 transition-colors"><Check className="w-4 h-4" /></button>
-                            <button type="button" onClick={() => setIsCreatingGroup(false)} className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-400 hover:text-white transition-colors"><X className="w-4 h-4" /></button>
-                        </form>
-                    )}
-                    <button onClick={() => setShowAgent(v => !v)}
-                        className="flex items-center gap-2 px-5 py-3 bg-white/5 border border-white/10 text-zinc-400 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-white/10 hover:text-white transition-all backdrop-blur-xl shadow-lg">
-                        <Sparkles className="w-4 h-4" /> Planner
-                    </button>
-                    <button onClick={() => setIsCreatingGroup(v => !v)}
-                        className="flex items-center gap-2 px-5 py-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-emerald-500/20 transition-all backdrop-blur-xl shadow-lg">
-                        <Plus className="w-4 h-4" /> New Group
-                    </button>
-                </div>
+            {/* AI Task Agent */}
+            {showAgent && <TaskAgent onApply={handleApplyAgentGroups} onClose={() => setShowAgent(false)} />}
 
-                {/* AI Task Agent */}
-                {showAgent && <TaskAgent onApply={handleApplyAgentGroups} onClose={() => setShowAgent(false)} />}
-
-                {/* Drag clone */}
-                {draggingTask && (() => {
-                    const colorConfig = getGroupColor(dragTaskColor);
-                    const showDeleteWarning = overTrash && !overGroupId;
-                    return (
-                        <div
-                            style={{
-                                position: "fixed",
-                                left: clonePos.x + 12,
-                                top: clonePos.y + 12,
-                                pointerEvents: "none",
-                                zIndex: 99,
-                                animation: showDeleteWarning ? "shake 0.3s ease-in-out infinite" : undefined,
-                                boxShadow: deleteReady
-                                    ? "0 0 22px 5px rgba(239,68,68,0.55), 0 12px 28px rgba(0,0,0,0.5)"
-                                    : `0 0 18px 3px ${colorConfig.shadow}, 0 12px 28px rgba(0,0,0,0.5)`,
-                                transform: "rotate(3.5deg) scale(1.04)",
-                                transformOrigin: "top left",
-                                transition: "transform 0.15s ease-out"
-                            }}
-                            className={cn(
-                                "rounded-xl px-3.5 py-2.5 backdrop-blur-xl border transition-colors flex flex-col gap-1 min-w-[200px] max-w-[285px]",
-                                deleteReady ? "border-red-500/60 bg-red-950/80" : colorConfig.border,
-                                !deleteReady && "bg-zinc-900/95"
+            {/* Drag clone */}
+            {draggingTask && (() => {
+                const colorConfig = getGroupColor(dragTaskColor);
+                const showDeleteWarning = overTrash && !overGroupId;
+                return (
+                    <div
+                        style={{
+                            position: "fixed",
+                            left: clonePos.x + 12,
+                            top: clonePos.y + 12,
+                            pointerEvents: "none",
+                            zIndex: 99,
+                            animation: showDeleteWarning ? "shake 0.3s ease-in-out infinite" : undefined,
+                            boxShadow: deleteReady
+                                ? "0 0 22px 5px rgba(239,68,68,0.55), 0 12px 28px rgba(0,0,0,0.5)"
+                                : `0 0 18px 3px ${colorConfig.shadow}, 0 12px 28px rgba(0,0,0,0.5)`,
+                            transform: "rotate(3.5deg) scale(1.04)",
+                            transformOrigin: "top left",
+                            transition: "transform 0.15s ease-out"
+                        }}
+                        className={cn(
+                            "rounded-xl px-3.5 py-2.5 backdrop-blur-xl border transition-colors flex flex-col gap-1 min-w-[200px] max-w-[285px]",
+                            deleteReady ? "border-red-500/60 bg-red-950/80" : colorConfig.border,
+                            !deleteReady && "bg-zinc-900/95"
+                        )}
+                    >
+                        <div className="flex items-center gap-2">
+                            {deleteReady ? (
+                                <Trash2 className="w-3.5 h-3.5 text-red-400 animate-bounce" />
+                            ) : (
+                                <span className={cn("w-2 h-2 rounded-full", getPriority(draggingTask.priority).dot)} />
                             )}
-                        >
-                            <div className="flex items-center gap-2">
-                                {deleteReady ? (
-                                    <Trash2 className="w-3.5 h-3.5 text-red-400 animate-bounce" />
-                                ) : (
-                                    <span className={cn("w-2 h-2 rounded-full", getPriority(draggingTask.priority).dot)} />
+                            <span className={cn("text-xs font-bold truncate", deleteReady ? "text-red-300" : "text-white")}>
+                                {deleteReady ? "Release to delete" : draggingTask.title}
+                            </span>
+                        </div>
+                        {!deleteReady && (draggingTask.durationMinutes || draggingTask.notes) && (
+                            <div className="flex items-center gap-2 mt-0.5 text-[9px] text-zinc-400 font-semibold uppercase tracking-wider">
+                                {draggingTask.durationMinutes && (
+                                    <span className="flex items-center gap-1 bg-white/5 rounded px-1 py-0.5">
+                                        <Clock className="w-2.5 h-2.5" />{draggingTask.durationMinutes}m
+                                    </span>
                                 )}
-                                <span className={cn("text-xs font-bold truncate", deleteReady ? "text-red-300" : "text-white")}>
-                                    {deleteReady ? "Release to delete" : draggingTask.title}
-                                </span>
+                                {draggingTask.notes && (
+                                    <span className="flex items-center gap-1 bg-white/5 rounded px-1 py-0.5 max-w-[120px] truncate">
+                                        {draggingTask.notes}
+                                    </span>
+                                )}
                             </div>
-                            {!deleteReady && (draggingTask.durationMinutes || draggingTask.notes) && (
-                                <div className="flex items-center gap-2 mt-0.5 text-[9px] text-zinc-400 font-semibold uppercase tracking-wider">
-                                    {draggingTask.durationMinutes && (
-                                        <span className="flex items-center gap-1 bg-white/5 rounded px-1 py-0.5">
-                                            <Clock className="w-2.5 h-2.5" />{draggingTask.durationMinutes}m
-                                        </span>
-                                    )}
-                                    {draggingTask.notes && (
-                                        <span className="flex items-center gap-1 bg-white/5 rounded px-1 py-0.5 max-w-[120px] truncate">
-                                            {draggingTask.notes}
-                                        </span>
-                                    )}
-                                </div>
-                            )}
-                            {showDeleteWarning && !deleteReady && (
-                                <div className="text-[9px] text-red-400/80 font-bold mt-1 uppercase tracking-widest animate-pulse">Hold to delete...</div>
-                            )}
-                        </div>
-                    );
-                })()}
+                        )}
+                        {showDeleteWarning && !deleteReady && (
+                            <div className="text-[9px] text-red-400/80 font-bold mt-1 uppercase tracking-widest animate-pulse">Hold to delete...</div>
+                        )}
+                    </div>
+                );
+            })()}
 
-                {/* Delete animation */}
-                {deletingTask && (() => {
-                    const colorConfig = getGroupColor(deletingTask.color);
-                    return (
-                        <div
-                            style={{
-                                position: "fixed",
-                                left: deletingTask.pos.x + 10,
-                                top: deletingTask.pos.y + 10,
-                                pointerEvents: "none",
-                                zIndex: 99,
-                                animation: "deleteTask 0.4s ease-out forwards",
-                                boxShadow: `0 0 30px ${colorConfig.shadow}`
-                            }}
-                            className={cn(
-                                "rounded-xl px-3 py-2 backdrop-blur-xl border",
-                                colorConfig.border,
-                                "bg-zinc-800/90"
-                            )}
-                        >
-                            <span className="text-xs font-bold text-white">{deletingTask.title}</span>
-                        </div>
-                    );
-                })()}
+            {/* Delete animation */}
+            {deletingTask && (() => {
+                const colorConfig = getGroupColor(deletingTask.color);
+                return (
+                    <div
+                        style={{
+                            position: "fixed",
+                            left: deletingTask.pos.x + 10,
+                            top: deletingTask.pos.y + 10,
+                            pointerEvents: "none",
+                            zIndex: 99,
+                            animation: "deleteTask 0.4s ease-out forwards",
+                            boxShadow: `0 0 30px ${colorConfig.shadow}`
+                        }}
+                        className={cn(
+                            "rounded-xl px-3 py-2 backdrop-blur-xl border",
+                            colorConfig.border,
+                            "bg-zinc-800/90"
+                        )}
+                    >
+                        <span className="text-xs font-bold text-white">{deletingTask.title}</span>
+                    </div>
+                );
+            })()}
 
-                {/* CSS Animations & Hide Scrollbar */}
-                <style jsx global>{`
-                /* Hide scrollbar for all group card scrollable areas */
-                .overflow-y-auto::-webkit-scrollbar {
-                    display: none;
-                }
+            {/* CSS Animations */}
+            <style jsx global>{`
+                
                 @keyframes shake {
                     0%, 100% { transform: translateX(0); }
                     25% { transform: translateX(-2px) rotate(-1deg); }
@@ -1682,18 +2061,31 @@ export default function TasksPage() {
                 }
             `}</style>
 
-                {/* Guest nudge */}
-                {user.isAnonymous && (
-                    <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2.5 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-700 whitespace-nowrap">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Your tasks are saved on this device. Sign in or register to keep them everywhere.</p>
-                        <Button variant="ghost" onClick={() => window.location.href = "/profile"}
-                            className="text-emerald-500 hover:text-emerald-400 font-black uppercase tracking-widest text-[10px] h-auto p-0 flex-shrink-0">
-                            Sign In | Register
-                        </Button>
-                    </div>
-                )}
-            </div>
+            {/* Guest nudge */}
+            {user.isAnonymous && (
+                <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 px-4 py-2.5 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-700 whitespace-normal sm:whitespace-nowrap max-w-[calc(100vw-2rem)] sm:max-w-none flex-wrap sm:flex-nowrap justify-center">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest text-center sm:text-left">Your tasks are saved on this device. Sign in or register to keep them everywhere.</p>
+                    <Button variant="ghost" onClick={() => window.location.href = "/profile"}
+                        className="text-emerald-500 hover:text-emerald-400 font-black uppercase tracking-widest text-[10px] h-auto p-0 flex-shrink-0">
+                        Sign In | Register
+                    </Button>
+                </div>
+            )}
+            {/* Floating Help/Tour Button */}
+            {showTourButton && (
+              <div className="fixed bottom-8 md:bottom-6 left-4 z-50">
+                <button
+                    onClick={handleRestartTour}
+                    className="h-11 w-11 sm:h-14 sm:w-14 rounded-full bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all backdrop-blur-md shadow-2xl flex items-center justify-center cursor-pointer"
+                    title="Restart Page Tour"
+                >
+                    <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
+              </div>
+            )}
+
+            {/* Toolbar is now rendered inside CanvasControls (child of TransformWrapper) */}
         </BackgroundTheme>
     );
 }

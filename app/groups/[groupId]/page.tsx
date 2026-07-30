@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, Suspense } from "react";
 import { GroupWorkspace } from "@/components/groups/GroupWorkspace";
 import { BackgroundTheme } from "@/components/background-theme";
 import { AuthRequired } from "@/components/auth-required";
@@ -26,7 +26,9 @@ export default function GroupDetailPage({ params }: { params: Promise<{ groupId:
         <BackgroundTheme showSettings={false}>
             <div className={cn("relative min-h-screen flex flex-col overflow-x-hidden group-page-radius", "font-sans")} style={{ "--font-sans": "var(--font-space-grotesk)" } as React.CSSProperties}>
                 <main className="relative z-10 flex flex-col w-full flex-1">
-                    <GroupWorkspace groupId={groupId} />
+                    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" /></div>}>
+                        <GroupWorkspace groupId={groupId} />
+                    </Suspense>
                 </main>
             </div>
         </BackgroundTheme>

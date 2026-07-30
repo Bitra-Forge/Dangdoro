@@ -137,6 +137,51 @@ service cloud.firestore {
           get(/databases/$(database)/documents/focusGroups/$(groupId)).data
         );
       }
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && isGroupMember(
+          get(/databases/$(database)/documents/focusGroups/$(groupId)).data
+        );
+        allow create: if isSignedIn() && isGroupMember(
+          get(/databases/$(database)/documents/focusGroups/$(groupId)).data
+        ) && request.resource.data.senderId == request.auth.uid;
+        allow update: if isSignedIn() && (
+          (
+            isGroupMember(get(/databases/$(database)/documents/focusGroups/$(groupId)).data) &&
+            request.resource.data.diff(resource.data)
+              .affectedKeys().hasOnly(['reactions', 'pinned', 'pinnedBy'])
+          ) ||
+          resource.data.senderId == request.auth.uid ||
+          isGroupHost(get(/databases/$(database)/documents/focusGroups/$(groupId)).data)
+        );
+        allow delete: if isSignedIn() && (
+          resource.data.senderId == request.auth.uid ||
+          isGroupHost(get(/databases/$(database)/documents/focusGroups/$(groupId)).data)
+        );
+      }
+
+      match /materials/{materialId} {
+        allow read: if isSignedIn() && isGroupMember(
+          get(/databases/$(database)/documents/focusGroups/$(groupId)).data
+        );
+        allow create: if isSignedIn() && isGroupMember(
+          get(/databases/$(database)/documents/focusGroups/$(groupId)).data
+        );
+        allow update: if isSignedIn() && (
+          resource.data.addedBy == request.auth.uid ||
+          isGroupHost(get(/databases/$(database)/documents/focusGroups/$(groupId)).data)
+        );
+        allow delete: if isSignedIn() && (
+          resource.data.addedBy == request.auth.uid ||
+          isGroupHost(get(/databases/$(database)/documents/focusGroups/$(groupId)).data)
+        );
+      }
+
+      match /presence/{userId} {
+        allow read: if isSignedIn();
+        allow create, update: if isSignedIn() && request.auth.uid == userId;
+        allow delete: if isSignedIn() && request.auth.uid == userId;
+      }
     }
 
     // Helper: only allow admins to update name, description, settings, and member/invite fields
@@ -174,6 +219,22 @@ service cloud.firestore {
     function onlyUpdatingInviteFields() {
       let allowed = ['members', 'pendingInvites', 'memberStats', 'memberCount'].toSet();
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+    }
+
+    // ─── Sticky Notes (quick notes persisted per-user) ──────────
+    match /stickyNotes/{noteId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // ─── Quick Tasks (quick tasks persisted per-user) ───────────
+    match /quickTasks/{taskId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
     // ─── Live Sessions (presence) ────────────────────────────────
@@ -223,7 +284,13 @@ service cloud.firestore {
     }
 
     // ─── Leaderboard Cache ───────────────────────────────────────
-    match /cache/leaderboard {
+    match /cache/{document} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // ─── Leaderboard History ─────────────────────────────────────
+    match /leaderboard_history/{weekId} {
       allow read: if isSignedIn();
       allow write: if false;
     }

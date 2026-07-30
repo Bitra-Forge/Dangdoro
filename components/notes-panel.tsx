@@ -189,7 +189,7 @@ export function NotesPanel() {
           transition={{ type: "spring", stiffness: 360, damping: 34, mass: 0.7 }}
           className="fixed left-1/2 -translate-x-1/2 bottom-40 sm:bottom-28 w-[92vw] sm:w-full max-w-[420px] transform origin-bottom z-[60]"
         >
-          <div className="bg-[#13161C]/95 backdrop-blur-3xl border border-white/[0.06] rounded-[28px] shadow-[0_30px_60px_rgba(0,0,0,0.8)] flex flex-col p-6 gap-6 overflow-hidden h-[530px]">
+          <div className="bg-[#13161C]/95 backdrop-blur-3xl border border-white/[0.06] rounded-[28px] shadow-[0_30px_60px_rgba(0,0,0,0.8)] flex flex-col p-6 gap-6 overflow-hidden h-[530px] max-h-[calc(100dvh-12rem)] sm:max-h-[calc(100dvh-10rem)]">
             {/* Header */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -268,7 +268,7 @@ export function NotesPanel() {
                 onInput={handleEditorInput}
                 onMouseUp={saveSelection}
                 onKeyUp={saveSelection}
-                className="w-full h-full bg-transparent border-none outline-none text-zinc-200 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden font-[family-name:var(--font-jetbrains)] text-sm leading-relaxed"
+                className="w-full h-full bg-transparent border-none outline-none text-zinc-200 overflow-y-auto scrollbar-none font-[family-name:var(--font-jetbrains)] text-sm leading-relaxed"
               />
             </div>
 

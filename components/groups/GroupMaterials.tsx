@@ -1,0 +1,1783 @@
+"use client";
+
+import { useState, useEffect, useMemo, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@/components/AuthProvider";
+import { Material, ChatMessage } from "@/lib/groups";
+import { addMaterial, updateMaterial, MAX_MATERIALS, downloadMaterial } from "@/lib/materials";
+import { MarkdownRenderer } from "@/components/MarkdownRenderer";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { collection, query, orderBy, onSnapshot, deleteDoc, doc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { X, Link, Image, FileText, Trash2, Plus, Upload, Download, Pencil, ExternalLink, Loader2, AlertCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+
+interface GroupMaterialsProps {
+    groupId: string;
+    isHost?: boolean;
+    groupName?: string;
+    groupMembers?: any[];
+}
+
+type MaterialFilter = "all" | "link" | "image" | "file";
+
+const FILE_ICONS: Record<string, string> = {
+    pdf: "PDF",
+    docx: "DOC",
+    pptx: "PPT",
+    xlsx: "XLS",
+    txt: "TXT",
+    md: "MD",
+};
+
+function getFileExtension(url: string, fileName?: string | null): string {
+    const name = fileName || url;
+    const ext = name.split(".").pop()?.toLowerCase() || "";
+    return ext.toUpperCase();
+}
+
+function formatFileSize(bytes: number | null): string {
+    if (!bytes) return "";
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+function getInlinePdfUrl(url: string): string {
+    if (url.includes("cloudinary.com") && url.includes("/raw/upload/")) {
+        return url.replace("/raw/upload/", "/image/upload/");
+    }
+    return url;
+}
+
+export function GroupMaterials({ groupId, isHost, groupName, groupMembers = [] }: GroupMaterialsProps) {
+    const { user } = useAuth();
+    const memberPhotoMap = useMemo(() => {
+        const map: Record<string, string> = {};
+        groupMembers.forEach(m => {
+            if (m.uid && m.photoURL) {
+                map[m.uid] = m.photoURL;
+            }
+        });
+        return map;
+    }, [groupMembers]);
+
+    const [materials, setMaterials] = useState<Material[]>([]);
+    const [filter, setFilter] = useState<MaterialFilter>("all");
+    const [showModal, setShowModal] = useState(false);
+    const [modalType, setModalType] = useState<"link" | "image" | "file">("link");
+
+    // Form fields
+    const [linkUrl, setLinkUrl] = useState("");
+    const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
+    const [tags, setTags] = useState("");
+    const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+    const [fetchingOg, setFetchingOg] = useState(false);
+
+    // File upload details
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [uploading, setUploading] = useState(false);
+
+    // Edit material state
+    const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
+
+
+
+    // Pending upload banner state
+    const [pendingUpload, setPendingUpload] = useState<any | null>(null);
+
+    // Upload state (Phase R3-B)
+    interface UploadState {
+        fileName: string;
+        progress: number;
+        status: "uploading" | "paused" | "error" | "done";
+        error: string | null;
+        uploadId: string | null;
+        chunkIndex: number;
+    }
+    const [uploadState, setUploadState] = useState<UploadState | null>(null);
+    const [uploadSpeed, setUploadSpeed] = useState<number | null>(null);
+    const isPausedRef = useRef(false);
+    const uploadStateRef = useRef<UploadState | null>(null);
+    const xhrRef = useRef<XMLHttpRequest | null>(null);
+
+    useEffect(() => {
+        uploadStateRef.current = uploadState;
+    }, [uploadState]);
+
+    // Download state (Phase R3-C)
+    interface DownloadState {
+        status: "idle" | "downloading" | "error" | "done";
+        progress: number;
+        error: string | null;
+    }
+    const [downloadStates, setDownloadStates] = useState<Record<string, DownloadState>>({});
+    const abortControllersRef = useRef<Record<string, AbortController>>({});
+
+    // Preview click states
+    const [previewMaterial, setPreviewMaterial] = useState<Material | null>(null);
+    const [previewOgData, setPreviewOgData] = useState<{ title: string | null; description: string | null; image: string | null } | null>(null);
+    const [previewOgLoading, setPreviewOgLoading] = useState(false);
+    const [previewTxtContent, setPreviewTxtContent] = useState<string | null>(null);
+    const [previewTxtLoading, setPreviewTxtLoading] = useState(false);
+
+
+    useEffect(() => {
+        const materialsRef = collection(db, `focusGroups/${groupId}/materials`);
+        const q = query(materialsRef, orderBy("createdAt", "desc"));
+        const unsub = onSnapshot(q, (snapshot) => {
+            const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Material));
+            setMaterials(items);
+        });
+        return unsub;
+    }, [groupId]);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
+                setPreviewMaterial(null);
+            }
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            xhrRef.current?.abort();
+        };
+    }, []);
+
+    useEffect(() => {
+        if (modalType !== "link") return;
+        const trimmed = linkUrl.trim();
+        if (!trimmed) {
+            setThumbnailUrl(null);
+            return;
+        }
+        try {
+            new URL(trimmed);
+        } catch {
+            return;
+        }
+
+        const fetchOg = async () => {
+            setFetchingOg(true);
+            try {
+                const res = await fetch(`/api/og-preview?url=${encodeURIComponent(trimmed)}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.title && !title) {
+                        setTitle(data.title);
+                    }
+                    if (data.description && !description) {
+                        setDescription(data.description);
+                    }
+                    if (data.image) {
+                        setThumbnailUrl(data.image);
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to fetch og preview:", err);
+            } finally {
+                setFetchingOg(false);
+            }
+        };
+
+        const debounceTimer = setTimeout(fetchOg, 500);
+        return () => clearTimeout(debounceTimer);
+    }, [linkUrl, modalType]);
+
+    const filtered = useMemo(() => {
+        if (filter === "all") return materials;
+        return materials.filter(m => m.type === filter);
+    }, [materials, filter]);
+
+    const handleCloseModal = () => {
+        if (uploadState && (uploadState.status === "uploading" || uploadState.status === "paused")) {
+            isPausedRef.current = true;
+            xhrRef.current?.abort();
+            setUploadState(null);
+            setUploading(false);
+        }
+        if (previewUrl) {
+            URL.revokeObjectURL(previewUrl);
+        }
+        setShowModal(false);
+        setSelectedFile(null);
+        setPreviewUrl(null);
+        setTitle("");
+        setDescription("");
+        setTags("");
+        setLinkUrl("");
+        setThumbnailUrl(null);
+        setFetchingOg(false);
+    };
+
+    const handleCloseEditModal = () => {
+        setEditingMaterial(null);
+        setTitle("");
+        setDescription("");
+        setTags("");
+        setLinkUrl("");
+        setThumbnailUrl(null);
+        setFetchingOg(false);
+    };
+
+    const handleAddLink = async () => {
+        if (!user || !linkUrl.trim()) return;
+        if (!title.trim()) {
+            toast.error("Title is required");
+            return;
+        }
+        const result = await addMaterial(groupId, {
+            addedBy: user.uid,
+            addedByName: user.displayName || "Anonymous",
+            url: linkUrl.trim(),
+            title: title.trim(),
+            description: description.trim(),
+            tags: tags.split(",").map(t => t.trim()).filter(Boolean),
+            type: "link",
+            thumbnailUrl: thumbnailUrl || undefined
+        });
+        if (result.success) {
+            toast.success("Link saved to Materials");
+            handleCloseModal();
+        } else {
+            toast.error(result.error || "Failed to save link");
+        }
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const isImage = modalType === "image";
+        const allowedRaw = [
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "text/plain",
+            "text/markdown",
+        ];
+
+        if (isImage) {
+            if (!file.type.startsWith("image/")) {
+                toast.error("Please select an image file");
+                return;
+            }
+            if (file.size > 5 * 1024 * 1024) {
+                toast.error("Image must be under 5MB");
+                return;
+            }
+            const url = URL.createObjectURL(file);
+            setPreviewUrl(url);
+        } else {
+            const ext = file.name.split(".").pop()?.toLowerCase();
+            const allowedExts = ["pdf", "docx", "pptx", "xlsx", "txt", "md"];
+            const isAllowedType = allowedRaw.includes(file.type) || (ext && allowedExts.includes(ext));
+            if (!isAllowedType) {
+                toast.error("File type not allowed. Allowed: PDF, DOCX, PPTX, XLSX, TXT, MD");
+                return;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                toast.error("File must be under 10MB");
+                return;
+            }
+        }
+
+        setSelectedFile(file);
+        setTitle(file.name); // Autofill title
+    };
+
+    const uploadFile = async (file: File, resumeData?: { uploadId: string, chunkIndex: number }) => {
+        if (!user) return;
+        isPausedRef.current = false;
+
+        const isImage = modalType === "image";
+        const isPDF = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+        const resourceType = (isImage || isPDF) ? "image" : "raw";
+
+        const CHUNK_SIZE = 6 * 1024 * 1024;
+        const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
+        const uploadId = resumeData?.uploadId || `upload_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        const startChunk = resumeData?.chunkIndex || 0;
+
+        setUploadState({
+            fileName: file.name,
+            progress: Math.round((startChunk / totalChunks) * 100),
+            status: "uploading",
+            error: null,
+            uploadId: uploadId,
+            chunkIndex: startChunk
+        });
+        setUploading(true);
+
+        const saveState = (chunkIdx: number) => {
+            const stateToSave = {
+                uploadId,
+                chunkIndex: chunkIdx,
+                fileName: file.name,
+                totalChunks,
+                resourceType,
+                title: title.trim() || file.name,
+                description: description.trim(),
+                tags: tags,
+                fileSize: file.size
+            };
+            localStorage.setItem(`dangdoro_upload_resume_${user.uid}`, JSON.stringify(stateToSave));
+        };
+
+        saveState(startChunk);
+
+        for (let i = startChunk; i < totalChunks; i++) {
+            if (isPausedRef.current || !navigator.onLine) {
+                setUploadState(prev => prev ? { ...prev, status: "paused" } : null);
+                return;
+            }
+
+            const start = i * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, file.size);
+            const chunk = file.slice(start, end, file.type);
+
+            const formData = new FormData();
+            formData.append("file", chunk, file.name);
+            formData.append("resource_type", resourceType);
+            formData.append("uploadId", uploadId);
+            formData.append("contentRange", `bytes ${start}-${end - 1}/${file.size}`);
+
+            const chunkStartTime = Date.now();
+            setUploadState(prev => prev ? { ...prev, status: "uploading", chunkIndex: i } : null);
+
+            try {
+                const idToken = await user.getIdToken();
+                const startUploadedBytes = i * CHUNK_SIZE;
+
+                const data = await new Promise<any>((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open("POST", "/api/upload");
+                    xhr.setRequestHeader("Authorization", `Bearer ${idToken}`);
+
+                    xhr.upload.onprogress = (event) => {
+                        if (event.lengthComputable) {
+                            const chunkUploadedBytes = event.loaded;
+                            const totalUploadedBytes = startUploadedBytes + chunkUploadedBytes;
+                            const totalPercent = Math.min(Math.round((totalUploadedBytes / file.size) * 100), 99);
+
+                            const elapsedSec = (Date.now() - chunkStartTime) / 1000;
+                            const speed = elapsedSec > 0 ? ((chunkUploadedBytes / (1024 * 1024)) / elapsedSec) : 0;
+                            setUploadSpeed(speed);
+
+                            setUploadState(prev => prev ? {
+                                ...prev,
+                                progress: totalPercent
+                            } : null);
+                        }
+                    };
+
+                    xhr.onload = () => {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            try {
+                                resolve(JSON.parse(xhr.responseText));
+                            } catch (e) {
+                                reject(new Error("Failed to parse response"));
+                            }
+                        } else {
+                            try {
+                                const errData = JSON.parse(xhr.responseText);
+                                reject(new Error(errData.error || "Chunk upload failed"));
+                            } catch {
+                                reject(new Error(`Chunk upload failed with status ${xhr.status}`));
+                            }
+                        }
+                    };
+
+                    xhr.onerror = () => reject(new Error("Network connection error"));
+                    xhr.onabort = () => reject(new Error("Upload cancelled"));
+
+                    xhrRef.current = xhr;
+                    xhr.send(formData);
+                });
+
+                const nextProgress = Math.round(((i + 1) / totalChunks) * 100);
+
+                if (i === totalChunks - 1 || data.done) {
+                    // Complete!
+                    setUploadState({
+                        fileName: file.name,
+                        progress: 100,
+                        status: "done",
+                        error: null,
+                        uploadId: null,
+                        chunkIndex: totalChunks
+                    });
+
+                    localStorage.removeItem(`dangdoro_upload_resume_${user.uid}`);
+
+                    const materialData: {
+                        addedBy: string;
+                        addedByName: string;
+                        url: string;
+                        title: string;
+                        description: string;
+                        tags: string[];
+                        type: "image" | "file";
+                        thumbnailUrl?: string;
+                        fileName?: string;
+                        fileSize?: number;
+                    } = {
+                        addedBy: user.uid,
+                        addedByName: user.displayName || "Anonymous",
+                        url: data.url,
+                        title: title.trim() || file.name,
+                        description: description.trim(),
+                        tags: tags.split(",").map(t => t.trim()).filter(Boolean),
+                        type: isImage ? "image" : "file",
+                        fileName: file.name,
+                        fileSize: file.size,
+                    };
+
+                    if (isImage) {
+                        const parts = data.url.split("/upload/");
+                        materialData.thumbnailUrl = `${parts[0]}/upload/w_300,q_auto/${parts[1]}`;
+                    }
+
+                    const result = await addMaterial(groupId, materialData);
+                    if (result.success) {
+                        toast.success(`${isImage ? "Image" : "File"} saved to Materials`);
+                        setTimeout(() => {
+                            handleCloseModal();
+                            setUploadState(null);
+                            setUploading(false);
+                        }, 1000);
+                    } else {
+                        toast.error(result.error || "Failed to save material to group");
+                        setUploadState(prev => prev ? { ...prev, status: "error", error: result.error || "Failed to save" } : null);
+                    }
+                    return;
+                } else {
+                    saveState(i + 1);
+                    setUploadState(prev => prev ? {
+                        ...prev,
+                        progress: nextProgress,
+                        chunkIndex: i + 1
+                    } : null);
+                }
+            } catch (err: any) {
+                console.error("Chunk upload error:", err);
+                if (!navigator.onLine) {
+                    isPausedRef.current = true;
+                    setUploadState(prev => prev ? { ...prev, status: "paused" } : null);
+                    toast.warning("Connection lost — upload paused");
+                } else {
+                    setUploadState(prev => prev ? { ...prev, status: "error", error: err.message || "Upload failed" } : null);
+                    toast.error(err.message || "Upload failed");
+                    setUploading(false);
+                }
+                return;
+            }
+        }
+    };
+
+    const handleConfirmUpload = async () => {
+        if (!selectedFile) return;
+        if (!title.trim()) {
+            toast.error("Title is required");
+            return;
+        }
+        await uploadFile(selectedFile);
+    };
+
+    const handleDownload = async (m: Material, retryCount = 0) => {
+        if (abortControllersRef.current[m.id]) {
+            abortControllersRef.current[m.id].abort();
+        }
+
+        const controller = new AbortController();
+        abortControllersRef.current[m.id] = controller;
+
+        setDownloadStates(prev => ({
+            ...prev,
+            [m.id]: { status: "downloading", progress: 0, error: null }
+        }));
+
+        const proxyUrl = `/api/proxy-download?url=${encodeURIComponent(m.url)}&filename=${encodeURIComponent(m.fileName || m.title || "download")}`;
+
+        try {
+            await downloadMaterial(
+                proxyUrl,
+                m.fileName || m.title || "download",
+                (percent) => {
+                    setDownloadStates(prev => ({
+                        ...prev,
+                        [m.id]: { status: "downloading", progress: percent, error: null }
+                    }));
+                },
+                controller.signal
+            );
+
+            setDownloadStates(prev => ({
+                ...prev,
+                [m.id]: { status: "done", progress: 100, error: null }
+            }));
+            toast.success(`Downloaded ${m.title}`);
+
+            setTimeout(() => {
+                setDownloadStates(prev => {
+                    const copy = { ...prev };
+                    delete copy[m.id];
+                    return copy;
+                });
+            }, 2000);
+
+        } catch (err: any) {
+            if (err.name === "AbortError") {
+                setDownloadStates(prev => {
+                    const copy = { ...prev };
+                    delete copy[m.id];
+                    return copy;
+                });
+                return;
+            }
+
+            console.error(`Download failed for ${m.id}:`, err);
+
+            if (retryCount < 3) {
+                const backoffTime = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+                setDownloadStates(prev => ({
+                    ...prev,
+                    [m.id]: { status: "downloading", progress: -2, error: `Retrying in ${backoffTime / 1000}s...` }
+                }));
+
+                setTimeout(() => {
+                    handleDownload(m, retryCount + 1);
+                }, backoffTime);
+            } else {
+                const isOffline = !navigator.onLine;
+                const errMsg = isOffline ? "Connection lost" : (err.message || "Download failed");
+                setDownloadStates(prev => ({
+                    ...prev,
+                    [m.id]: { status: "error", progress: 0, error: errMsg }
+                }));
+                toast.error(errMsg);
+            }
+        } finally {
+            delete abortControllersRef.current[m.id];
+        }
+    };
+
+    // Abort controller cleanups on unmount
+    useEffect(() => {
+        return () => {
+            Object.values(abortControllersRef.current).forEach(ac => ac.abort());
+        };
+    }, []);
+
+    // Check localStorage for pending uploads on mount/user load
+    useEffect(() => {
+        if (!user) return;
+        const stored = localStorage.getItem(`dangdoro_upload_resume_${user.uid}`);
+        if (stored) {
+            try {
+                const parsed = JSON.parse(stored);
+                setPendingUpload(parsed);
+            } catch (err) {
+                console.error("Failed to parse pending upload data:", err);
+            }
+        }
+    }, [user]);
+
+    // Handle online/offline connection status for uploads
+    useEffect(() => {
+        const handleOnline = () => {
+            if (uploadStateRef.current && uploadStateRef.current.status === "paused") {
+                toast.info("Resuming upload...");
+                if (selectedFile) {
+                    uploadFile(selectedFile, {
+                        uploadId: uploadStateRef.current.uploadId!,
+                        chunkIndex: uploadStateRef.current.chunkIndex
+                    });
+                }
+            }
+        };
+
+        const handleOffline = () => {
+            if (uploadStateRef.current && uploadStateRef.current.status === "uploading") {
+                isPausedRef.current = true;
+                toast.warning("Connection lost — upload paused");
+                setUploadState(prev => prev ? { ...prev, status: "paused" } : null);
+            }
+        };
+
+        window.addEventListener("online", handleOnline);
+        window.addEventListener("offline", handleOffline);
+        return () => {
+            window.removeEventListener("online", handleOnline);
+            window.removeEventListener("offline", handleOffline);
+        };
+    }, [selectedFile, title, description, tags, modalType]);
+
+    // Auto-retry downloads when back online
+    useEffect(() => {
+        const handleOnlineRetry = () => {
+            Object.keys(downloadStates).forEach(materialId => {
+                const state = downloadStates[materialId];
+                if (state.status === "error" && (state.error === "Connection lost" || !navigator.onLine)) {
+                    const m = materials.find(item => item.id === materialId);
+                    if (m) {
+                        toast.info(`Connection restored. Retrying download for ${m.title}...`);
+                        handleDownload(m);
+                    }
+                }
+            });
+        };
+        window.addEventListener("online", handleOnlineRetry);
+        return () => window.removeEventListener("online", handleOnlineRetry);
+    }, [downloadStates, materials]);
+
+    const handleDelete = async (materialId: string) => {
+        try {
+            await deleteDoc(doc(db, `focusGroups/${groupId}/materials`, materialId));
+            toast.success("Material deleted");
+        } catch (err) {
+            console.error("Failed to delete material:", err);
+        }
+    };
+
+    const handleEditClick = (m: Material) => {
+        setEditingMaterial(m);
+        setTitle(m.title);
+        setDescription(m.description || "");
+        setTags(m.tags ? m.tags.join(", ") : "");
+        setLinkUrl(m.url || "");
+    };
+
+    const handleSaveChanges = async () => {
+        if (!editingMaterial || !user) return;
+        if (!title.trim()) {
+            toast.error("Title is required");
+            return;
+        }
+        if (editingMaterial.type === "link" && !linkUrl.trim()) {
+            toast.error("URL is required");
+            return;
+        }
+
+        const updates: Partial<Pick<Material, "title" | "description" | "tags" | "url">> = {
+            title: title.trim(),
+            description: description.trim(),
+            tags: tags.split(",").map(t => t.trim()).filter(Boolean),
+        };
+
+        if (editingMaterial.type === "link") {
+            updates.url = linkUrl.trim();
+        }
+
+        const result = await updateMaterial(groupId, editingMaterial.id, updates);
+        if (result.success) {
+            toast.success("Material updated successfully");
+            handleCloseEditModal();
+        } else {
+            toast.error(result.error || "Failed to update material");
+        }
+    };
+
+    const handleCardClick = async (m: Material) => {
+        setPreviewMaterial(m);
+        const ext = getFileExtension(m.url, m.fileName);
+        const isTextOrCode = ["TXT", "JS", "JSX", "TS", "TSX", "HTML", "CSS", "JSON", "PY", "GO", "RS", "JAVA", "CPP", "C", "SH", "YAML", "YML", "XML", "INI", "CONF", "SQL"].includes(ext);
+        const isMarkdown = ["MD", "MARKDOWN"].includes(ext);
+
+        if (m.type === "link") {
+            setPreviewOgLoading(true);
+            setPreviewOgData(null);
+            try {
+                const res = await fetch(`/api/og-preview?url=${encodeURIComponent(m.url)}`);
+                const data = await res.json();
+                setPreviewOgData(data);
+            } catch (err) {
+                console.error("OG Preview failed:", err);
+            } finally {
+                setPreviewOgLoading(false);
+            }
+        } else if (m.type === "file" && (isTextOrCode || isMarkdown)) {
+            setPreviewTxtLoading(true);
+            setPreviewTxtContent(null);
+            try {
+                const proxyUrl = `/api/proxy-text?url=${encodeURIComponent(m.url)}`;
+                const res = await fetch(proxyUrl);
+                if (!res.ok) {
+                    throw new Error(`Failed to fetch from text proxy: ${res.statusText}`);
+                }
+                const txt = await res.text();
+                setPreviewTxtContent(txt);
+            } catch (err) {
+                console.error("Content fetch failed:", err);
+                setPreviewTxtContent("Failed to load text content.");
+            } finally {
+                setPreviewTxtLoading(false);
+            }
+        }
+    };
+
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-28 md:pb-10">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-zinc-900 border border-zinc-800 rounded-xl flex items-center justify-center">
+                        <Link className="w-4 h-4 text-zinc-400" />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-black text-white tracking-tighter">
+                            Materials ({materials.length}/{MAX_MATERIALS})
+                        </h3>
+                        <p className="text-zinc-500 text-[10px] font-bold mt-0.5">Links, images, and files shared with the unit.</p>
+                    </div>
+                </div>
+                <button
+                    onClick={() => setShowModal(true)}
+                    className="fixed bottom-20 right-4 z-50 md:static flex items-center gap-2 px-4 py-2.5 bg-white text-black font-black rounded-xl text-xs hover:bg-zinc-100 transition-all cursor-pointer shadow-lg md:shadow-none"
+                >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add Material
+                </button>
+            </div>
+
+            {pendingUpload && (
+                <div className="p-4 bg-zinc-950/80 border border-amber-500/20 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500">
+                            <AlertCircle className="w-4 h-4" />
+                        </div>
+                        <div>
+                            <p className="text-xs font-bold text-white">Pending Upload Detected</p>
+                            <p className="text-[10px] text-zinc-500 mt-0.5">
+                                You have an incomplete upload: <span className="text-zinc-300 font-semibold">{pendingUpload.fileName}</span> ({formatFileSize(pendingUpload.fileSize)}).
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex gap-2 w-full sm:w-auto shrink-0">
+                        <button
+                            onClick={() => {
+                                const input = document.createElement("input");
+                                input.type = "file";
+                                input.accept = pendingUpload.resourceType === "image" ? "image/*" : ".pdf,.docx,.pptx,.xlsx,.txt,.md";
+                                input.onchange = (e: any) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    if (file.name !== pendingUpload.fileName || file.size !== pendingUpload.fileSize) {
+                                        toast.error("Selected file does not match the pending upload.");
+                                        return;
+                                    }
+                                    setPendingUpload(null);
+                                    setModalType(pendingUpload.resourceType);
+                                    setTitle(pendingUpload.title);
+                                    setDescription(pendingUpload.description);
+                                    setTags(pendingUpload.tags);
+                                    setSelectedFile(file);
+                                    setShowModal(true);
+                                    uploadFile(file, {
+                                        uploadId: pendingUpload.uploadId,
+                                        chunkIndex: pendingUpload.chunkIndex
+                                    });
+                                };
+                                input.click();
+                            }}
+                            className="flex-1 sm:flex-none px-3 py-1.5 bg-amber-500 text-black font-black uppercase rounded-lg text-[9px] hover:bg-amber-400 transition-colors cursor-pointer"
+                        >
+                            Resume Upload
+                        </button>
+                        <button
+                            onClick={() => {
+                                if (user) {
+                                    localStorage.removeItem(`dangdoro_upload_resume_${user.uid}`);
+                                }
+                                setPendingUpload(null);
+                                toast.info("Pending upload cleared");
+                            }}
+                            className="flex-1 sm:flex-none px-3 py-1.5 bg-zinc-900 border border-white/5 text-zinc-400 font-bold uppercase rounded-lg text-[9px] hover:bg-zinc-800 transition-colors cursor-pointer"
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            <div className="flex gap-1 p-1 bg-zinc-950/40 rounded-xl w-full md:w-fit overflow-x-auto no-scrollbar scrollbar-none border border-white/5 flex-nowrap shrink-0">
+                {(["all", "link", "image", "file"] as MaterialFilter[]).map(f => (
+                    <button
+                        key={f}
+                        onClick={() => setFilter(f)}
+                        className={cn(
+                            "relative px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-colors duration-200 cursor-pointer flex-shrink-0",
+                            filter === f ? "text-white" : "text-zinc-500 hover:text-zinc-300"
+                        )}
+                    >
+                        {filter === f && (
+                            <motion.div
+                                layoutId={`material-filter-${groupId}`}
+                                className="absolute inset-0 bg-white/10 rounded-lg border border-white/10"
+                                transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.8 }}
+                            />
+                        )}
+                        <span className="relative z-10">{f === "all" ? "All" : f === "link" ? "Links" : f === "image" ? "Images" : "Files"}</span>
+                    </button>
+                ))}
+            </div>
+
+            {filtered.length === 0 ? (
+                <div className="p-12 text-center bg-zinc-900/20 border border-white/5 border-dashed rounded-[2rem] space-y-4">
+                    <div className="w-14 h-14 rounded-full bg-zinc-800/40 flex items-center justify-center mx-auto text-zinc-600">
+                        <Link className="w-6 h-6" />
+                    </div>
+                    <p className="text-sm text-zinc-500 font-medium">No materials yet.</p>
+                    <button onClick={() => setShowModal(true)} className="text-xs font-bold text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer">
+                        Add the first one
+                    </button>
+                </div>
+            ) : (
+                <motion.div
+                    layout
+                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                >
+                    <AnimatePresence mode="popLayout">
+                        {filtered.map(m => {
+                            const canDelete = user?.uid === m.addedBy || isHost;
+                            const canEdit = user?.uid === m.addedBy || isHost;
+                            return (
+                                <motion.div
+                                    key={m.id}
+                                    layout="position"
+                                    layoutId={m.id}
+                                    initial={{ opacity: 0, scale: 0.94, y: 12 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.92, y: -8, transition: { duration: 0.18, ease: "easeIn" } }}
+                                    transition={{
+                                        layout: { type: "spring", stiffness: 300, damping: 30 },
+                                        opacity: { duration: 0.22, ease: "easeOut" },
+                                        scale: { duration: 0.22, ease: "easeOut" },
+                                        y: { duration: 0.22, ease: "easeOut" },
+                                    }}
+                                    onClick={() => handleCardClick(m)}
+                                    className="group bg-zinc-900/60 border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition-colors relative flex flex-col h-[360px] max-h-[360px] w-full cursor-pointer"
+                                >
+                                    {/* Media / Thumbnail area */}
+                                    {m.type === "image" && (
+                                        <div className="w-full aspect-video bg-zinc-950 overflow-hidden shrink-0 relative border-b border-white/5">
+                                            <img
+                                                src={m.thumbnailUrl || m.url}
+                                                alt={m.title}
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                            />
+                                        </div>
+                                    )}
+                                    {m.type === "file" && (
+                                        <div className="w-full aspect-video bg-zinc-950 flex items-center justify-center shrink-0 border-b border-white/5">
+                                            <div className="flex flex-col items-center gap-2 text-zinc-600">
+                                                <FileText className="w-10 h-10" />
+                                                <span className="text-[10px] font-black uppercase tracking-wider">{getFileExtension(m.url, m.fileName)}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {m.type === "link" && (
+                                        <div className="w-full aspect-video bg-gradient-to-br from-zinc-950 to-zinc-900 overflow-hidden shrink-0 relative border-b border-white/5 flex items-center justify-center group-hover:scale-105 transition-transform duration-500">
+                                            {m.thumbnailUrl ? (
+                                                <img
+                                                    src={m.thumbnailUrl}
+                                                    alt={m.title}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-zinc-950/40 backdrop-blur-[2px]">
+                                                    <div className="w-10 h-10 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mb-2 shadow-[0_0_15px_rgba(6,182,212,0.15)]">
+                                                        <Link className="w-4 h-4 text-cyan-400" />
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center truncate max-w-full">
+                                                        {(() => {
+                                                            try {
+                                                                return new URL(m.url).hostname.replace("www.", "");
+                                                            } catch {
+                                                                return "LINK";
+                                                            }
+                                                        })()}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {/* Subtle overlay grid lines */}
+                                            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />
+                                        </div>
+                                    )}
+
+                                    {/* Download Progress Bar (Phase R3-C) */}
+                                    {downloadStates[m.id] && downloadStates[m.id].status === "downloading" && (
+                                        <div className="w-full h-1 bg-zinc-950 border-b border-white/5 relative overflow-hidden shrink-0 z-10">
+                                            {downloadStates[m.id].progress === -1 ? (
+                                                <div className="h-full w-full bg-cyan-500 animate-pulse" />
+                                            ) : downloadStates[m.id].progress === -2 ? (
+                                                <div className="h-full w-full bg-amber-500 animate-pulse flex items-center justify-center text-[7px] text-zinc-950 font-bold uppercase">
+                                                    {downloadStates[m.id].error}
+                                                </div>
+                                            ) : (
+                                                <div
+                                                    className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all duration-300"
+                                                    style={{ width: `${downloadStates[m.id].progress}%` }}
+                                                />
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Action Buttons overlay */}
+                                    <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10 bg-zinc-950/80 backdrop-blur-sm p-1 rounded-lg border border-white/10">
+                                        {m.type === "link" && (
+                                            <a
+                                                href={m.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
+                                                title="Open Link"
+                                            >
+                                                <ExternalLink className="w-3.5 h-3.5" />
+                                            </a>
+                                        )}
+                                        {(m.type === "image" || m.type === "file") && (() => {
+                                            const isDownloading = downloadStates[m.id]?.status === "downloading";
+                                            const progress = downloadStates[m.id]?.progress ?? 0;
+                                            return isDownloading ? (
+                                                <div className="flex items-center gap-1.5 bg-zinc-900 border border-white/10 rounded-md px-1.5 py-0.5 h-6 shrink-0 select-none">
+                                                    <span className="text-[8px] font-black text-cyan-400 min-w-[20px] text-right">
+                                                        {progress >= 0 ? `${progress}%` : "..."}
+                                                    </span>
+                                                    <div className="w-10 bg-zinc-800 rounded-full h-1 overflow-hidden shrink-0">
+                                                        {progress >= 0 ? (
+                                                            <div
+                                                                className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 transition-all duration-300"
+                                                                style={{ width: `${progress}%` }}
+                                                            />
+                                                        ) : (
+                                                            <div className="h-full w-full bg-cyan-500 animate-pulse" />
+                                                        )}
+                                                    </div>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            abortControllersRef.current[m.id]?.abort();
+                                                        }}
+                                                        className="p-0.5 text-zinc-400 hover:text-red-500 transition-colors rounded hover:bg-white/5 cursor-pointer shrink-0"
+                                                        title="Cancel Download"
+                                                    >
+                                                        <X className="w-2.5 h-2.5" />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleDownload(m);
+                                                    }}
+                                                    className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center w-6 h-6 rounded-full hover:bg-white/5"
+                                                    title="Download"
+                                                >
+                                                    <Download className="w-3.5 h-3.5" />
+                                                </button>
+                                            );
+                                        })()}
+                                        {canEdit && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleEditClick(m); }}
+                                                className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                                title="Edit"
+                                            >
+                                                <Pencil className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
+                                        {canDelete && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDelete(m.id); }}
+                                                className="p-1 text-zinc-400 hover:text-red-400 transition-colors cursor-pointer"
+                                                title="Delete"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Card Body */}
+                                    <div className="p-4 flex flex-col flex-1 min-h-0 justify-between">
+                                        <div className="space-y-1.5 min-h-0 flex-1 flex flex-col justify-start">
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                {m.type === "link" && <Link className="w-3 h-3 text-cyan-400 shrink-0" />}
+                                                {m.type === "image" && <Image className="w-3 h-3 text-purple-400 shrink-0" />}
+                                                {m.type === "file" && <FileText className="w-3 h-3 text-amber-400 shrink-0" />}
+                                                <span className="text-[9px] font-black uppercase tracking-wider text-zinc-600">{m.type}</span>
+                                            </div>
+
+                                            <div className="text-sm font-bold text-white group-hover:text-cyan-400 transition-colors line-clamp-2 whitespace-normal select-all shrink-0">
+                                                {m.title}
+                                            </div>
+
+                                            {m.description ? (
+                                                <div className="text-xs text-zinc-500 line-clamp-2 overflow-hidden flex-1 leading-normal">
+                                                    <MarkdownRenderer content={m.description} />
+                                                </div>
+                                            ) : (
+                                                <div className="text-xs text-zinc-600 italic line-clamp-2 overflow-hidden flex-1">
+                                                    No description provided.
+                                                </div>
+                                            )}
+
+                                            {m.type === "file" && (m.fileName || m.fileSize) && (
+                                                <div className="flex items-center gap-2 text-[10px] text-zinc-600 shrink-0 pt-0.5">
+                                                    {m.fileName && <span className="truncate flex-1 min-w-0">{m.fileName}</span>}
+                                                    {m.fileSize && <span className="shrink-0">{formatFileSize(m.fileSize)}</span>}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Footer */}
+                                        <div className="flex items-center justify-between pt-2 border-t border-white/5 shrink-0 mt-2">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <Avatar className="w-4 h-4 rounded-full border border-white/10 shrink-0">
+                                                    <AvatarImage src={memberPhotoMap[m.addedBy]} />
+                                                    <AvatarFallback className="text-[6px] bg-zinc-800">{m.addedByName?.[0]}</AvatarFallback>
+                                                </Avatar>
+                                                <span className="text-[10px] text-zinc-600 truncate max-w-[80px]">{m.addedByName}</span>
+                                            </div>
+                                            {m.tags && m.tags.length > 0 && (
+                                                <div className="flex gap-1 shrink-0">
+                                                    {m.tags.slice(0, 2).map(tag => (
+                                                        <span key={tag} className="px-1.5 py-0.5 rounded-full bg-white/5 text-[8px] font-bold text-zinc-500 uppercase tracking-wider">
+                                                            {tag}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                </motion.div>
+                            );
+                        })}
+                    </AnimatePresence>
+                </motion.div>
+            )}
+
+            <AnimatePresence>
+                {showModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[120] flex items-center justify-center p-0 md:p-4 bg-zinc-950/90 backdrop-blur-sm"
+                        onClick={handleCloseModal}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-zinc-900 border border-white/10 md:rounded-2xl max-w-lg w-full h-[100dvh] md:h-auto md:max-h-[85vh] rounded-none shadow-2xl flex flex-col overflow-hidden"
+                        >
+                            {/* Pinned Header */}
+                            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 shrink-0">
+                                <h3 className="text-sm font-black text-white uppercase tracking-wider">Add Material</h3>
+                                <button onClick={handleCloseModal} className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-500 hover:text-white transition-colors cursor-pointer">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            {/* Scrollable Body */}
+                            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                                <div className="flex gap-2">
+                                    {(["link", "image", "file"] as const).map(t => (
+                                        <button
+                                            key={t}
+                                            onClick={() => {
+                                                setModalType(t);
+                                                if (previewUrl) URL.revokeObjectURL(previewUrl);
+                                                setSelectedFile(null);
+                                                setPreviewUrl(null);
+                                                setTitle("");
+                                                setDescription("");
+                                                setTags("");
+                                            }}
+                                            className={cn(
+                                                "flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer border",
+                                                modalType === t
+                                                    ? "bg-white/10 text-white border-white/20"
+                                                    : "bg-zinc-950/60 text-zinc-500 border-white/5 hover:text-zinc-300"
+                                            )}
+                                        >
+                                            {t === "link" ? "Link" : t === "image" ? "Image" : "File"}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {modalType === "link" && (
+                                    <div className="space-y-4">
+                                        <div className="relative">
+                                            <input value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="URL *" className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all pr-10" />
+                                            {fetchingOg && (
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {thumbnailUrl && (
+                                            <div className="w-full h-32 rounded-lg overflow-hidden border border-white/10 bg-zinc-950 relative group">
+                                                <img src={thumbnailUrl} alt="Link cover" className="w-full h-full object-cover" />
+                                                <button
+                                                    onClick={() => setThumbnailUrl(null)}
+                                                    className="absolute top-2 right-2 p-1 bg-black/60 hover:bg-black rounded-full text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title *" className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all" />
+                                        <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description (markdown)" rows={3} className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all resize-none" />
+                                        <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Tags (comma separated)" className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all" />
+                                    </div>
+                                )}
+
+                                {(modalType === "image" || modalType === "file") && (
+                                    <div className="space-y-4">
+                                        {!selectedFile ? (
+                                            <div className="space-y-4">
+                                                <p className="text-xs text-zinc-500">
+                                                    {modalType === "image" ? "Max 5MB. JPEG, PNG, GIF, WebP." : "Max 10MB. PDF, DOCX, PPTX, XLSX, TXT, MD."}
+                                                </p>
+                                                <label className="flex flex-col items-center gap-3 p-8 border-2 border-dashed border-white/10 rounded-xl hover:border-white/20 transition-colors cursor-pointer bg-zinc-950/60">
+                                                    <Upload className="w-8 h-8 text-zinc-500" />
+                                                    <span className="text-sm font-medium text-zinc-400">Click to select file</span>
+                                                    <input
+                                                        type="file"
+                                                        accept={modalType === "image" ? "image/*" : ".pdf,.docx,.pptx,.xlsx,.txt,.md"}
+                                                        onChange={handleFileSelect}
+                                                        className="hidden"
+                                                    />
+                                                </label>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                {modalType === "image" && previewUrl && (
+                                                    <div className="relative w-full aspect-video bg-zinc-950 rounded-xl overflow-hidden border border-white/10">
+                                                        <img src={previewUrl} alt="Upload preview" className="w-full h-full object-cover" />
+                                                        <button onClick={() => { setSelectedFile(null); setPreviewUrl(null); }} className="absolute top-2 right-2 p-1 bg-black/60 rounded-full text-white hover:bg-black/80 transition-colors">
+                                                            <X className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {modalType === "file" && (
+                                                    <div className="p-4 bg-zinc-950 border border-white/10 rounded-xl flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 bg-zinc-900 border border-zinc-800 rounded-lg flex items-center justify-center text-zinc-400 font-bold text-xs uppercase shrink-0">
+                                                                {getFileExtension(selectedFile.name)}
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <p className="text-sm font-bold text-white truncate max-w-[200px]">{selectedFile.name}</p>
+                                                                <p className="text-xs text-zinc-500">{formatFileSize(selectedFile.size)}</p>
+                                                            </div>
+                                                        </div>
+                                                        <button onClick={() => { setSelectedFile(null); }} className="p-1 hover:bg-white/5 rounded-lg text-zinc-400 hover:text-white transition-colors">
+                                                            <X className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                <div className="space-y-3">
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 block">Title *</label>
+                                                        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title *" className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 block">Tags (comma separated)</label>
+                                                        <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="e.g. math, notes" className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 block">Description (markdown)</label>
+                                                        <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Provide context about this file..." rows={3} className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all resize-none" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Pinned Footer */}
+                            {(modalType === "link" || !!selectedFile) && (
+                                <div className="p-4 pb-20 md:pb-4 border-t border-white/5 bg-zinc-950/60 shrink-0">
+                                    {modalType === "link" ? (
+                                        <button onClick={handleAddLink} disabled={!linkUrl.trim() || !title.trim() || fetchingOg} className="w-full py-3 bg-white text-black font-black rounded-lg text-xs hover:bg-zinc-100 transition-all disabled:opacity-50 cursor-pointer">
+                                            Save Link
+                                        </button>
+                                    ) : (
+                                        uploadState ? (
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="font-bold text-zinc-400 truncate max-w-[200px]">{uploadState.fileName}</span>
+                                                    <span className="font-black text-white">{uploadState.progress}%</span>
+                                                </div>
+
+                                                <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
+                                                    <div
+                                                        className={cn(
+                                                            "h-full rounded-full transition-all duration-300",
+                                                            uploadState.status === "error" ? "bg-red-500" :
+                                                                uploadState.status === "paused" ? "bg-amber-500" :
+                                                                    "bg-gradient-to-r from-cyan-500 to-blue-500"
+                                                        )}
+                                                        style={{ width: `${uploadState.progress}%` }}
+                                                    />
+                                                </div>
+
+                                                <div className="flex justify-between items-center text-[10px]">
+                                                    <span className={cn(
+                                                        "font-bold uppercase tracking-wider",
+                                                        uploadState.status === "error" ? "text-red-400" :
+                                                            uploadState.status === "paused" ? "text-amber-400 animate-pulse" :
+                                                                "text-zinc-500"
+                                                    )}>
+                                                        {uploadState.status === "uploading" && (
+                                                            <>Uploading {uploadSpeed ? `(${uploadSpeed.toFixed(1)} MB/s)` : ""}</>
+                                                        )}
+                                                        {uploadState.status === "paused" && "Connection lost — tap to resume"}
+                                                        {uploadState.status === "error" && `Error: ${uploadState.error || "Upload failed"}`}
+                                                        {uploadState.status === "done" && "Done"}
+                                                    </span>
+
+                                                    {uploadState.status === "paused" && (
+                                                        <button
+                                                            onClick={() => {
+                                                                isPausedRef.current = false;
+                                                                if (selectedFile) {
+                                                                    uploadFile(selectedFile, {
+                                                                        uploadId: uploadState.uploadId!,
+                                                                        chunkIndex: uploadState.chunkIndex
+                                                                    });
+                                                                }
+                                                            }}
+                                                            className="px-2 py-1 bg-amber-500 text-black font-black uppercase rounded text-[8px] hover:bg-amber-400 transition-colors"
+                                                        >
+                                                            Resume
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                <button
+                                                    onClick={() => {
+                                                        isPausedRef.current = true;
+                                                        xhrRef.current?.abort();
+                                                        setUploadState(null);
+                                                        setUploading(false);
+                                                        if (user) {
+                                                            localStorage.removeItem(`dangdoro_upload_resume_${user.uid}`);
+                                                        }
+                                                        toast.info("Upload cancelled");
+                                                    }}
+                                                    className="w-full py-2 bg-red-950/40 border border-red-900/30 text-red-400 font-bold rounded-lg text-xs hover:bg-red-900/20 transition-colors"
+                                                >
+                                                    Cancel Upload
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={handleConfirmUpload}
+                                                    disabled={uploading || !title.trim()}
+                                                    className="flex-1 py-3 bg-white text-black font-black rounded-lg text-xs hover:bg-zinc-100 transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                                                >
+                                                    Confirm Upload
+                                                </button>
+                                                <button
+                                                    onClick={() => { setSelectedFile(null); if (previewUrl) URL.revokeObjectURL(previewUrl); setPreviewUrl(null); }}
+                                                    disabled={uploading}
+                                                    className="px-4 py-3 bg-zinc-800 text-zinc-300 font-bold rounded-lg text-xs hover:bg-zinc-700 transition-colors disabled:opacity-50"
+                                                >
+                                                    Change File
+                                                </button>
+                                            </div>
+                                        )
+                                    )}
+                                </div>
+                            )}
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {editingMaterial && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[120] flex items-center justify-center p-0 md:p-4 bg-zinc-950/90 backdrop-blur-sm"
+                        onClick={handleCloseEditModal}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-zinc-900 border border-white/10 md:rounded-2xl max-w-lg w-full h-[100dvh] md:h-auto md:max-h-[85vh] rounded-none shadow-2xl flex flex-col overflow-hidden"
+                        >
+                            {/* Pinned Header */}
+                            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 shrink-0">
+                                <h3 className="text-sm font-black text-white uppercase tracking-wider">Edit Material</h3>
+                                <button onClick={handleCloseEditModal} className="p-1.5 hover:bg-white/10 rounded-lg text-zinc-500 hover:text-white transition-colors cursor-pointer">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            {/* Scrollable Body */}
+                            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                                {editingMaterial.type === "link" && (
+                                    <div>
+                                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 block">URL *</label>
+                                        <input value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="URL *" className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all" />
+                                    </div>
+                                )}
+
+                                <div>
+                                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 block">Title *</label>
+                                    <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title *" className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all" />
+                                </div>
+
+                                <div>
+                                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 block">Tags (comma separated)</label>
+                                    <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="e.g. math, notes" className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all" />
+                                </div>
+
+                                <div>
+                                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 block">Description (markdown)</label>
+                                    <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description..." rows={3} className="w-full bg-zinc-950 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-white/20 transition-all resize-none" />
+                                </div>
+                            </div>
+
+                            {/* Pinned Footer */}
+                            <div className="p-4 pb-20 md:pb-4 border-t border-white/5 bg-zinc-900/60 shrink-0">
+                                <button onClick={handleSaveChanges} disabled={!title.trim() || (editingMaterial.type === "link" && !linkUrl.trim())} className="w-full py-3 bg-white text-black font-black rounded-lg text-xs hover:bg-zinc-100 transition-all disabled:opacity-50 cursor-pointer">
+                                    Save Changes
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {previewMaterial && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[130] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/90 backdrop-blur-sm"
+                        onClick={() => setPreviewMaterial(null)}
+                    >
+                        {/* Desktop-only close button */}
+                        <button onClick={() => setPreviewMaterial(null)} className="hidden md:flex absolute top-4 right-4 p-2 bg-zinc-900/80 rounded-xl text-zinc-400 hover:text-white transition-colors cursor-pointer z-10">
+                            <X className="w-5 h-5" />
+                        </button>
+
+                        <motion.div
+                            initial={{ y: "100%", scale: 1 }}
+                            animate={{ y: 0, scale: 1 }}
+                            exit={{ y: "100%", scale: 1 }}
+                            style={{ originY: 1 }}
+                            transition={{ type: "spring", stiffness: 320, damping: 32, mass: 0.9 }}
+                            className="max-w-4xl w-full bg-zinc-900 border border-white/10 rounded-t-[24px] md:rounded-[20px] shadow-2xl flex flex-col h-[94dvh] md:h-auto md:max-h-[90vh] overflow-hidden"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {/* Mobile drag handle + close row */}
+                            <div className="md:hidden flex items-center justify-between px-5 pt-3 pb-1 shrink-0">
+                                <div className="w-10 h-1 rounded-full bg-zinc-700 mx-auto" />
+                                <button onClick={() => setPreviewMaterial(null)} className="absolute right-4 top-3 p-2 text-zinc-400 hover:text-white transition-colors cursor-pointer">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            {/* Scrollable panels wrapper */}
+                            <div className="flex-1 min-h-0 overflow-y-auto md:overflow-hidden flex flex-col md:flex-row">
+                            {/* Left Side: Media preview */}
+                            <div className="flex-shrink-0 md:flex-1 bg-zinc-950 flex items-center justify-center min-h-[220px] md:min-h-[500px] md:overflow-hidden">
+                                {previewMaterial.type === "image" && (
+                                    <img src={previewMaterial.url} alt={previewMaterial.title} className="max-w-full max-h-[70vh] object-contain" />
+                                )}
+
+                                {previewMaterial.type === "file" && (() => {
+                                    const ext = getFileExtension(previewMaterial.url, previewMaterial.fileName);
+                                    const isTextOrCode = ["TXT", "JS", "JSX", "TS", "TSX", "HTML", "CSS", "JSON", "PY", "GO", "RS", "JAVA", "CPP", "C", "SH", "YAML", "YML", "XML", "INI", "CONF", "SQL"].includes(ext);
+                                    const isMarkdown = ["MD", "MARKDOWN"].includes(ext);
+                                    const isAudio = ["MP3", "WAV", "OGG", "M4A", "AAC"].includes(ext);
+                                    const isVideo = ["MP4", "WEBM", "OGV", "MOV"].includes(ext);
+                                    const isPdf = ext === "PDF";
+
+                                    if (isMarkdown) {
+                                        return (
+                                            <div className="w-full h-full p-6 overflow-y-auto max-h-[70vh] flex flex-col select-text bg-zinc-950">
+                                                <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2">MARKDOWN PREVIEW</h4>
+                                                {previewTxtLoading ? (
+                                                    <div className="flex-1 flex items-center justify-center py-12">
+                                                        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-sm text-zinc-300 prose prose-invert max-w-none bg-zinc-900/40 p-4 rounded-xl border border-white/5 flex-1 overflow-auto max-h-[400px]">
+                                                        <MarkdownRenderer content={previewTxtContent || ""} />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    }
+
+                                    if (isTextOrCode) {
+                                        return (
+                                            <div className="w-full h-full p-6 overflow-y-auto max-h-[70vh] flex flex-col select-text bg-zinc-950">
+                                                <h4 className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2">{ext} FILE CONTENT</h4>
+                                                {previewTxtLoading ? (
+                                                    <div className="flex-1 flex items-center justify-center py-12">
+                                                        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                    </div>
+                                                ) : (
+                                                    <pre className="text-xs font-mono text-zinc-300 whitespace-pre-wrap bg-zinc-900 p-4 rounded-xl border border-white/5 flex-1 overflow-auto max-h-[400px] leading-relaxed">
+                                                        {previewTxtContent}
+                                                    </pre>
+                                                )}
+                                            </div>
+                                        );
+                                    }
+
+                                    if (isAudio) {
+                                        return (
+                                            <div className="flex flex-col items-center gap-6 py-12 px-6 w-full max-w-sm">
+                                                <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-2xl flex items-center justify-center text-zinc-400 font-bold text-3xl shadow-xl">
+                                                    🎧
+                                                </div>
+                                                <div className="text-center w-full">
+                                                    <p className="text-sm font-bold text-white truncate">{previewMaterial.fileName || previewMaterial.title}</p>
+                                                    <p className="text-xs text-zinc-500 mt-1">{previewMaterial.fileSize ? formatFileSize(previewMaterial.fileSize) : ""}</p>
+                                                </div>
+                                                <audio controls src={previewMaterial.url} className="w-full mt-2" />
+                                            </div>
+                                        );
+                                    }
+
+                                    if (isVideo) {
+                                        return (
+                                            <div className="w-full h-full min-h-[350px] md:min-h-[500px] flex flex-col p-4 bg-zinc-950 justify-center">
+                                                <video controls src={previewMaterial.url} className="max-w-full max-h-[70vh] rounded-xl border border-white/5 shadow-2xl" />
+                                            </div>
+                                        );
+                                    }
+
+                                    if (isPdf) {
+                                        return (
+                                            <>
+                                                {/* Desktop: full iframe PDF preview */}
+                                                <div className="hidden md:flex w-full h-full min-h-[500px] flex-col p-4 bg-zinc-950">
+                                                    <iframe
+                                                        src={`/api/proxy-pdf?url=${encodeURIComponent(previewMaterial.url)}`}
+                                                        className="w-full h-full min-h-[460px] border-0 rounded-xl bg-zinc-900"
+                                                        title="PDF Preview"
+                                                    />
+                                                </div>
+                                                {/* Mobile: clean PDF icon — download button is in the pinned bar */}
+                                                <div className="md:hidden flex flex-col items-center gap-3 py-10 px-6 w-full">
+                                                    <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col items-center justify-center gap-1 shadow-xl">
+                                                        <span className="text-2xl">📄</span>
+                                                        <span className="text-[9px] font-black text-red-400 uppercase tracking-wider">PDF</span>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <p className="text-sm font-bold text-white break-all px-4">{previewMaterial.fileName || previewMaterial.title}</p>
+                                                        {previewMaterial.fileSize && (
+                                                            <p className="text-xs text-zinc-500 mt-1">{formatFileSize(previewMaterial.fileSize)}</p>
+                                                        )}
+                                                    </div>
+
+                                                </div>
+                                            </>
+                                        );
+                                    }
+
+                                    // Default fallback
+                                    return (
+                                        <div className="flex flex-col items-center gap-4 py-12">
+                                            <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-2xl flex items-center justify-center text-zinc-500 font-bold text-lg uppercase shadow-xl">
+                                                {ext}
+                                            </div>
+                                            <div className="text-center">
+                                                <p className="text-sm font-bold text-white max-w-[300px] truncate">{previewMaterial.fileName || previewMaterial.title}</p>
+                                                <p className="text-xs text-zinc-500 mt-1">{previewMaterial.fileSize ? formatFileSize(previewMaterial.fileSize) : ""}</p>
+                                            </div>
+                                            {/* Desktop-only download button in fallback view */}
+                                            <button
+                                                onClick={() => {
+                                                    const isDownloading = downloadStates[previewMaterial.id]?.status === "downloading";
+                                                    if (isDownloading) {
+                                                        abortControllersRef.current[previewMaterial.id]?.abort();
+                                                    } else {
+                                                        handleDownload(previewMaterial);
+                                                    }
+                                                }}
+                                                className="hidden md:flex px-6 py-2.5 bg-white text-black font-black text-xs rounded-xl hover:bg-zinc-100 transition-colors items-center gap-2 mt-2 cursor-pointer"
+                                            >
+                                                {downloadStates[previewMaterial.id]?.status === "downloading" ? (
+                                                    <>
+                                                        <X className="w-3.5 h-3.5 text-red-500 animate-pulse" />
+                                                        Cancel Download ({downloadStates[previewMaterial.id].progress >= 0 ? `${downloadStates[previewMaterial.id].progress}%` : "..."})
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Download className="w-3.5 h-3.5" />
+                                                        Download File
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    );
+                                })()}
+
+                                {previewMaterial.type === "link" && (
+                                    <div className="w-full p-6 flex flex-col justify-center items-center">
+                                        {previewOgLoading ? (
+                                            <div className="py-12">
+                                                <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                            </div>
+                                        ) : (
+                                            <div className="w-full max-w-md bg-zinc-900 border border-white/10 rounded-xl overflow-hidden shadow-lg flex flex-col">
+                                                {(previewOgData?.image || previewMaterial.thumbnailUrl) && (
+                                                    <div className="w-full aspect-video bg-zinc-950 overflow-hidden border-b border-white/5">
+                                                        <img src={(previewOgData?.image || previewMaterial.thumbnailUrl) || undefined} alt="OG Preview" className="w-full h-full object-cover" />
+                                                    </div>
+                                                )}
+                                                <div className="p-4 space-y-2">
+                                                    <span className="text-[8px] font-black uppercase tracking-wider text-cyan-400 px-1.5 py-0.5 rounded-full bg-cyan-950/50 border border-cyan-900/30">LINK PREVIEW</span>
+                                                    <h4 className="text-sm font-bold text-white mt-1 leading-snug">{previewOgData?.title || previewMaterial.title || previewMaterial.url}</h4>
+                                                    <p className="text-xs text-zinc-400 line-clamp-3 leading-relaxed">{previewOgData?.description || previewMaterial.description || "No link description parsed."}</p>
+
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Right Side: Metadata Panel */}
+                            <div className="w-full md:w-80 border-t md:border-t-0 md:border-l border-white/10 p-6 flex flex-col justify-between md:max-h-none md:overflow-y-auto relative">
+                                {/* Edit/Delete Icons — absolutely positioned top-right */}
+                                {(user?.uid === previewMaterial.addedBy || isHost) && (
+                                    <div className="absolute top-4 right-4 flex items-center gap-1 bg-zinc-950/60 p-1 rounded-xl border border-white/10 z-10">
+                                        <button
+                                            onClick={() => {
+                                                handleEditClick(previewMaterial);
+                                                setPreviewMaterial(null);
+                                            }}
+                                            className="p-1.5 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                                            title="Edit"
+                                        >
+                                            <Pencil className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                handleDelete(previewMaterial.id);
+                                                setPreviewMaterial(null);
+                                            }}
+                                            className="p-1.5 text-zinc-400 hover:text-red-400 transition-colors cursor-pointer"
+                                            title="Delete"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                )}
+
+                                <div className="space-y-6">
+                                    {/* Title / Type Header */}
+                                    <div className="pr-16">
+                                        <span className={cn(
+                                            "text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border w-fit block",
+                                            previewMaterial.type === "link" ? "text-cyan-400 bg-cyan-950/30 border-cyan-900/30" :
+                                                previewMaterial.type === "image" ? "text-purple-400 bg-purple-950/30 border-purple-900/30" :
+                                                    "text-amber-400 bg-amber-950/30 border-amber-900/30"
+                                        )}>
+                                            {previewMaterial.type}
+                                        </span>
+                                        <h3 className="text-base font-black text-white leading-tight tracking-tight pt-1 select-all break-words">{previewMaterial.title}</h3>
+                                    </div>
+
+                                    {/* Details Grid */}
+                                    <div className="space-y-3 border-t border-white/5 pt-4 text-xs">
+                                        <div className="flex justify-between items-start gap-4">
+                                            <span className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider shrink-0 mt-0.5">Name</span>
+                                            <span className="text-zinc-300 font-medium text-right select-all break-all">{previewMaterial.fileName || previewMaterial.title}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center gap-4">
+                                            <span className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider shrink-0">Type</span>
+                                            <span className="text-zinc-300 font-medium capitalize">{previewMaterial.type === "file" ? `${getFileExtension(previewMaterial.url, previewMaterial.fileName)} File` : previewMaterial.type}</span>
+                                        </div>
+                                        {previewMaterial.fileSize && (
+                                            <div className="flex justify-between items-center gap-4">
+                                                <span className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider shrink-0">Size</span>
+                                                <span className="text-zinc-300 font-medium">{formatFileSize(previewMaterial.fileSize)}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between items-center gap-4">
+                                            <span className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider shrink-0">Added By</span>
+                                            <div className="flex items-center gap-1.5 font-semibold text-white">
+                                                <Avatar className="w-4 h-4 rounded-full border border-white/10 shrink-0">
+                                                    <AvatarImage src={memberPhotoMap[previewMaterial.addedBy]} />
+                                                    <AvatarFallback className="text-[6px] bg-zinc-800">{previewMaterial.addedByName?.[0]}</AvatarFallback>
+                                                </Avatar>
+                                                <span className="max-w-[120px] truncate font-bold">{previewMaterial.addedByName}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-between items-center gap-4">
+                                            <span className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider shrink-0">Added At</span>
+                                            <span className="text-zinc-300 font-medium text-right">
+                                                {previewMaterial.createdAt ? (
+                                                    new Date((previewMaterial.createdAt as any).toDate ? (previewMaterial.createdAt as any).toDate() : (previewMaterial.createdAt as any)).toLocaleDateString(undefined, {
+                                                        month: "short",
+                                                        day: "numeric",
+                                                        year: "numeric",
+                                                        hour: "2-digit",
+                                                        minute: "2-digit"
+                                                    })
+                                                ) : "N/A"}
+                                            </span>
+                                        </div>
+                                        {previewMaterial.tags && previewMaterial.tags.length > 0 && (
+                                            <div className="flex justify-between items-start gap-4 border-t border-white/5 pt-3">
+                                                <span className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider shrink-0 mt-0.5">Tags</span>
+                                                <div className="flex flex-wrap gap-1 justify-end max-w-[160px]">
+                                                    {previewMaterial.tags.map(tag => (
+                                                        <span key={tag} className="px-2 py-0.5 rounded-full bg-white/5 border border-white/5 text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                                                            {tag}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {previewMaterial.description && (
+                                        <div className="text-xs text-zinc-400 leading-relaxed border-t border-white/5 pt-4">
+                                            <div className="text-zinc-500 font-bold uppercase text-[9px] tracking-wider mb-1.5">Description</div>
+                                            <div className="bg-zinc-950/40 p-3 rounded-lg border border-white/5 select-text overflow-y-auto max-h-[120px]">
+                                                <MarkdownRenderer content={previewMaterial.description} />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Desktop-only action buttons */}
+                                {previewMaterial.type === "link" ? (
+                                    <div className="hidden md:flex border-t border-white/5 pt-4 flex-col gap-3">
+                                        <a
+                                            href={previewMaterial.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="w-full py-2 bg-white text-black font-black text-[10px] uppercase tracking-wider rounded-lg hover:bg-zinc-100 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                                        >
+                                            <ExternalLink className="w-3.5 h-3.5" />
+                                            Open Link
+                                        </a>
+                                    </div>
+                                ) : (
+                                    <div className="hidden md:flex border-t border-white/5 pt-4 flex-col gap-3">
+                                        <button
+                                            onClick={() => {
+                                                const isDownloading = downloadStates[previewMaterial.id]?.status === "downloading";
+                                                if (isDownloading) {
+                                                    abortControllersRef.current[previewMaterial.id]?.abort();
+                                                } else {
+                                                    handleDownload(previewMaterial);
+                                                }
+                                            }}
+                                            className="w-full py-2 bg-white text-black font-black text-[10px] uppercase tracking-wider rounded-lg hover:bg-zinc-100 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                                        >
+                                            {downloadStates[previewMaterial.id]?.status === "downloading" ? (
+                                                <>
+                                                    <X className="w-3.5 h-3.5 text-red-500 animate-pulse" />
+                                                    Cancel ({downloadStates[previewMaterial.id].progress >= 0 ? `${downloadStates[previewMaterial.id].progress}%` : "..."})
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Download className="w-3.5 h-3.5" />
+                                                    Download
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                )}
+
+                            </div>
+                            {/* END scrollable panels wrapper */}
+                            </div>
+
+                            {/* Mobile-only pinned action bar — above nav bar */}
+                            <div className="md:hidden shrink-0 px-4 pt-3 pb-20 bg-zinc-900 border-t border-white/10 space-y-2">
+                                {previewMaterial.type === "link" ? (
+                                    <a
+                                        href={previewMaterial.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="w-full py-3.5 bg-white text-black font-black text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                                    >
+                                        <ExternalLink className="w-4 h-4" />
+                                        Open Link
+                                    </a>
+                                ) : (
+                                    <>
+                                        {/* Primary: Download */}
+                                        <button
+                                            onClick={() => {
+                                                const isDownloading = downloadStates[previewMaterial.id]?.status === "downloading";
+                                                if (isDownloading) {
+                                                    abortControllersRef.current[previewMaterial.id]?.abort();
+                                                } else {
+                                                    handleDownload(previewMaterial);
+                                                }
+                                            }}
+                                            className="w-full py-3.5 bg-white text-black font-black text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 cursor-pointer hover:bg-zinc-100 transition-colors"
+                                        >
+                                            {downloadStates[previewMaterial.id]?.status === "downloading" ? (
+                                                <>
+                                                    <X className="w-4 h-4 text-red-500 animate-pulse" />
+                                                    Cancel ({downloadStates[previewMaterial.id].progress >= 0 ? `${downloadStates[previewMaterial.id].progress}%` : "..."})
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Download className="w-4 h-4" />
+                                                    Download
+                                                </>
+                                            )}
+                                        </button>
+                                        {/* Secondary: Preview in new tab */}
+                                        <a
+                                            href={previewMaterial.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="w-full py-3 bg-zinc-800 border border-white/10 text-zinc-300 font-bold text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 cursor-pointer hover:bg-zinc-700 transition-colors"
+                                        >
+                                            <ExternalLink className="w-4 h-4" />
+                                            Preview in Browser
+                                        </a>
+                                    </>
+                                )}
+                            </div>
+
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+}

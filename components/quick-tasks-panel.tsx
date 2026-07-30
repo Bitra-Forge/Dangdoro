@@ -88,23 +88,23 @@ export function QuickTasksPanel() {
   };
 
   return (
-    <AnimatePresence>
+    <AnimatePresence initial={false}>
       {isOpen && (
         <motion.div
           key="quick-tasks-panel"
           ref={panelRef}
-          initial={{ opacity: 1, scale: 0.96, y: 10 }}
+          initial={{ opacity: 1, scale: 0.94, y: 14 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ 
             opacity: 0, 
-            scale: 0.96, 
-            y: 10,
+            scale: 0.94, 
+            y: 14,
             transition: { duration: 0.15, ease: "easeIn" }
           }}
-          transition={{ type: "spring", stiffness: 360, damping: 34, mass: 0.7 }}
+          transition={{ type: "spring", stiffness: 380, damping: 36, mass: 0.7 }}
           className="fixed left-1/2 -translate-x-1/2 bottom-40 sm:bottom-28 w-[92vw] sm:w-full max-w-[420px] transform origin-bottom z-[61]"
         >
-          <div className="bg-[#13161C]/95 backdrop-blur-3xl border border-white/[0.06] rounded-[28px] shadow-[0_30px_60px_rgba(0,0,0,0.8)] flex flex-col p-6 gap-6 overflow-hidden h-[530px]">
+          <div className="bg-[#13161C]/95 backdrop-blur-3xl border border-white/[0.06] rounded-[28px] shadow-[0_30px_60px_rgba(0,0,0,0.8)] flex flex-col p-6 gap-6 overflow-hidden h-[530px] max-h-[calc(100dvh-12rem)] sm:max-h-[calc(100dvh-10rem)]">
             {/* Header */}
             <div className="flex items-center justify-between">
               <div className="flex flex-col">
@@ -192,7 +192,7 @@ export function QuickTasksPanel() {
             </div>
 
             {/* Task List */}
-            <div className="flex-1 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden flex flex-col gap-3 py-1 min-h-0">
+            <div className="flex-1 overflow-y-auto scrollbar-none flex flex-col gap-3 py-1 min-h-0">
               {tasks.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full py-8 text-zinc-600 bg-white/[0.01] border border-white/[0.03] rounded-xl p-4">
                   <ListTodo className="w-8 h-8 mb-2 opacity-20" />

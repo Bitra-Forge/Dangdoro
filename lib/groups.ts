@@ -24,6 +24,15 @@ export interface UserProfileData {
     lastActive?: Timestamp | FirebaseTimestampLike | null;
 }
 
+export interface SharedSubtask {
+    id: string;
+    title: string;
+    completed: boolean;
+    position?: number;
+    status?: "todo" | "in-progress" | "done";
+    completedBy?: string; // uid of who marked it done
+}
+
 export interface SharedTask {
     id: string;
     title: string;
@@ -35,6 +44,10 @@ export interface SharedTask {
     createdAt: Timestamp | FirebaseTimestampLike;
     updatedAt?: Timestamp | FirebaseTimestampLike;
     position?: number;
+    subtasks?: SharedSubtask[];
+    subtaskCount?: number;
+    completedSubtaskCount?: number;
+    progress?: number;
 }
 
 export interface ObjectiveTemplateDraft {
@@ -82,6 +95,10 @@ export interface FocusGroup {
         goalType?: GoalType;
         customDays?: number;
         maxMembers: number;
+        autoResetEnabled?: boolean;
+        autoResetPeriod?: "1day" | "week" | "month" | "custom-days";
+        customDaysValue?: number;
+        nextResetAt?: Timestamp | FirebaseTimestampLike | null;
     };
 }
 
@@ -97,6 +114,38 @@ export interface LiveSession {
     photoURL?: string;
     userName?: string;
     userPhoto?: string;
+}
+
+export interface ChatMessage {
+    id: string;
+    senderId: string;
+    senderName: string;
+    senderPhoto: string;
+    content: string;
+    type: "text";
+    replyTo: { messageId: string; senderName: string; preview: string } | null;
+    reactions: Record<string, string[]>;
+    edited: boolean;
+    editedAt: Timestamp | null;
+    deletedAt: Timestamp | null;
+    pinned: boolean;
+    pinnedBy: string | null;
+    createdAt: Timestamp;
+}
+
+export interface Material {
+    id: string;
+    addedBy: string;
+    addedByName: string;
+    type: "link" | "image" | "file";
+    url: string;
+    thumbnailUrl: string | null;
+    fileName: string | null;
+    fileSize: number | null;
+    title: string;
+    description: string;
+    tags: string[];
+    createdAt: Timestamp;
 }
 
 export function generateInviteToken() {
@@ -225,5 +274,71 @@ export function getGoalTypeLabel(goalType?: GoalType): string {
         default: return "Weekly";
     }
 }
+
+export function computeNextResetAt(
+    period: string,
+    customDays: number,
+    fromDate: Date = new Date()
+): Date {
+    const next = new Date(fromDate);
+    if (period === "1day") {
+        next.setDate(next.getDate() + 1);
+    } else if (period === "week") {
+        next.setDate(next.getDate() + 7);
+    } else if (period === "month") {
+        next.setMonth(next.getMonth() + 1);
+    } else if (period === "custom-days") {
+        const days = Math.max(1, customDays || 1);
+        next.setDate(next.getDate() + days);
+    } else {
+        next.setDate(next.getDate() + 7);
+    }
+    return next;
+}
+
+export interface TaskProgressDerivationResult {
+    subtasks: SharedSubtask[];
+    subtaskCount: number;
+    completedSubtaskCount: number;
+    progress: number;
+    status: "todo" | "in-progress" | "in-review" | "done";
+}
+
+export function deriveTaskProgressAndStatus(
+    subtasks: SharedSubtask[] | undefined,
+    currentStatus: "todo" | "in-progress" | "in-review" | "done"
+): TaskProgressDerivationResult {
+    if (!subtasks || subtasks.length === 0) {
+        return {
+            subtasks: [],
+            subtaskCount: 0,
+            completedSubtaskCount: 0,
+            progress: 0,
+            status: currentStatus,
+        };
+    }
+
+    const subtaskCount = subtasks.length;
+    const completedSubtaskCount = subtasks.filter(s => s.completed).length;
+    const progress = Math.round((completedSubtaskCount / subtaskCount) * 100);
+
+    let status = currentStatus;
+    if (completedSubtaskCount === subtaskCount) {
+        status = "done";
+    } else if (completedSubtaskCount > 0 && currentStatus === "todo") {
+        status = "in-progress";
+    } else if (completedSubtaskCount < subtaskCount && currentStatus === "done") {
+        status = "in-progress";
+    }
+
+    return {
+        subtasks,
+        subtaskCount,
+        completedSubtaskCount,
+        progress,
+        status,
+    };
+}
+
 
 

@@ -77,6 +77,8 @@ interface TimerState {
   isNavFocusMode: boolean;
   setIsNavFocusMode: (enabled: boolean) => void;
   toggleNavFocusMode: () => void;
+  showTourButton: boolean;
+  setShowTourButton: (enabled: boolean) => void;
   activeSounds: Record<string, number>;
   lastActiveSounds: Record<string, number> | null;
   toggleSound: (soundId: string) => void;
@@ -268,7 +270,7 @@ export const useTimerStore = create<TimerState>()(
 
         const shouldAutoStart = nextMode === "break" || nextMode === "long-break"
           ? settingsAutoStartBreak
-          : settingsAutoStartFocus;
+          : (mode === "long-break" ? false : settingsAutoStartFocus);
 
         const updates: TimerUpdate = {
           mode: nextMode,
@@ -468,6 +470,8 @@ export const useTimerStore = create<TimerState>()(
       isNavFocusMode: false,
       setIsNavFocusMode: (enabled: boolean) => set({ isNavFocusMode: enabled }),
       toggleNavFocusMode: () => set((state) => ({ isNavFocusMode: !state.isNavFocusMode })),
+      showTourButton: true,
+      setShowTourButton: (enabled: boolean) => set({ showTourButton: enabled }),
       activeSounds: {},
       lastActiveSounds: null,
       toggleSound: (soundId: string) => {
@@ -502,6 +506,24 @@ export const useTimerStore = create<TimerState>()(
     }),
     {
       name: "dangdoro-timer-storage",
+      partialize: (state) => {
+        // Exclude transient UI panel states — they should always reset to closed on page load.
+        // Without this, leaving the site with a panel open would cause it to re-appear "open"
+        // on the next visit (visually open but sounds won't actually play due to autoplay policy).
+        const { isSoundPanelOpen, isBgPanelOpen, ...persisted } = state;
+        void isSoundPanelOpen;
+        void isBgPanelOpen;
+        return persisted;
+      },
+      onRehydrateStorage: () => (state) => {
+        // After loading from localStorage, if sounds were active they can't auto-play
+        // (browser autoplay policy requires a user gesture). Move them to lastActiveSounds
+        // so icons don't appear highlighted/active — the user gets a Restore button instead.
+        if (state && Object.keys(state.activeSounds).length > 0) {
+          state.lastActiveSounds = state.activeSounds;
+          state.activeSounds = {};
+        }
+      },
     }
   )
 );

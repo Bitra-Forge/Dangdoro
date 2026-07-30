@@ -71,7 +71,7 @@ export function SoundPanel() {
     >
       <div className="bg-zinc-900/80 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-2xl relative overflow-visible h-full flex flex-col">
         {/* Scrollable area - labels are now inside and will scroll away */}
-        <div className="max-h-[340px] overflow-y-auto overflow-x-hidden px-12 -mx-12 pt-6 pb-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <div className="max-h-[min(340px,calc(100dvh-12rem))] overflow-y-auto overflow-x-hidden px-12 -mx-12 pt-6 pb-6 scrollbar-none">
           <div className="px-6">
             <div className="flex items-center justify-between mb-8">
               <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-white/30 pointer-events-none select-none">

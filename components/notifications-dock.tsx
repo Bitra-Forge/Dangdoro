@@ -5,7 +5,8 @@ import { NotificationsMenu } from "@/components/notifications-menu";
 import { useTimerStore } from "@/lib/store";
 import { useDockPopoverStore } from "@/lib/dock-popover-store";
 import { cn } from "@/lib/utils";
-import { Heart, Send, X } from "lucide-react";
+import { Heart, Send, X, ScrollText } from "lucide-react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/components/AuthProvider";
@@ -17,9 +18,25 @@ import { Tooltip } from "@/components/ui/tooltip";
 export function NotificationsDock() {
   const { user } = useAuth();
   const isNavFocusMode = useTimerStore((state) => state.isNavFocusMode);
+  const activeGroupId = useTimerStore((state) => state.activeGroupId);
+  const isGroupActive = !!activeGroupId;
   const pathname = usePathname();
   const isGroupPage = pathname?.startsWith("/groups");
+  const isAdminPage = pathname?.startsWith("/admin");
   const [isVisible, setIsVisible] = useState(false);
+  const [visitedChecked, setVisitedChecked] = useState(false);
+  const [isFirstTimeVisitor, setIsFirstTimeVisitor] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const visited = localStorage.getItem("dangdoro_visited");
+      if (!visited) {
+        setIsFirstTimeVisitor(true);
+      }
+      setVisitedChecked(true);
+    }
+  }, []);
+
   const dockRef = useRef<HTMLDivElement | null>(null);
   const feedbackRef = useRef<HTMLDivElement | null>(null);
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -29,6 +46,36 @@ export function NotificationsDock() {
   const isFeedbackOpen = useDockPopoverStore((s) => s.active === "feedback");
   const toggleFeedback = useDockPopoverStore((s) => s.toggle);
   const closeFeedback = useDockPopoverStore((s) => s.close);
+  const [hasNewChangelog, setHasNewChangelog] = useState(false);
+  const [latestChangelogId, setLatestChangelogId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/changelog")
+      .then((res) => res.json())
+      .then((data) => {
+        if (active && data.entries && data.entries.length > 0) {
+          const latestId = data.entries[0].id;
+          setLatestChangelogId(latestId);
+          const lastSeenId = localStorage.getItem("last_seen_changelog_id");
+          if (lastSeenId !== latestId) {
+            setHasNewChangelog(true);
+          }
+        }
+      })
+      .catch((err) => console.error("Error checking changelog:", err));
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleOpenPatchNotes = () => {
+    setHasNewChangelog(false);
+    if (latestChangelogId) {
+      localStorage.setItem("last_seen_changelog_id", latestChangelogId);
+    }
+  };
   const [feedbackCategory, setFeedbackCategory] = useState("General");
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [sendingFeedback, setSendingFeedback] = useState(false);
@@ -154,26 +201,35 @@ export function NotificationsDock() {
     };
   }, [isNavFocusMode]);
 
+  const isPatchNotesPage = pathname?.startsWith("/patch-notes") || pathname?.startsWith("/changelog");
+  const isWelcomePage = pathname?.startsWith("/welcome");
+
+  const isHomePage = pathname === "/";
+
+  if (isAdminPage || isPatchNotesPage || isWelcomePage || !visitedChecked || (isHomePage && isFirstTimeVisitor)) return null;
+
   return (
     <>
       <div
         ref={dockRef}
         className={cn(
-          "fixed top-8 right-2 sm:right-8 z-[100] flex items-center gap-3 transition-all",
+          "fixed top-4 sm:top-8 right-4 sm:right-8 z-[100] flex items-center gap-3 transition-all",
           shouldShow || isFeedbackOpen
             ? "opacity-100 translate-y-0 pointer-events-auto"
             : "opacity-0 -translate-y-1 pointer-events-none"
         )}
       >
-        {!isGroupPage && (
+        {isHomePage && !isGroupPage && (
           <Tooltip content="Support Dangdoro" side="bottom">
             <a
               href="https://ko-fi.com/morales002"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center p-2.5 rounded-full bg-zinc-900/80 text-zinc-400 hover:text-rose-400 backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-visible hover:bg-rose-500/10 group"
+              className={cn(
+                "items-center justify-center p-2.5 rounded-full bg-zinc-900/80 text-zinc-400 hover:text-rose-400 backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-visible hover:bg-rose-500/10 group",
+                isGroupActive ? "hidden md:inline-flex" : "inline-flex"
+              )}
             >
-              {/* Glass highlights */}
               <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/20 pointer-events-none group-hover:border-rose-500/30 transition-colors duration-300" />
               <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/10 pointer-events-none" />
 
@@ -182,19 +238,38 @@ export function NotificationsDock() {
           </Tooltip>
         )}
 
-        {!isGroupPage && (
-          /* Floating Feedback Trigger Button */
+        {isHomePage && !isGroupPage && (
+          <Tooltip content="What's New" side="bottom">
+            <Link
+              href="/patch-notes"
+              onClick={handleOpenPatchNotes}
+              className={cn(
+                "items-center justify-center p-2.5 rounded-full bg-zinc-900/80 backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-visible group text-zinc-400 hover:text-white hover:bg-zinc-800/50",
+                isGroupActive ? "hidden md:inline-flex" : "inline-flex"
+              )}
+            >
+              <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/20 pointer-events-none group-hover:border-white/30 transition-colors duration-300" />
+              <div className="absolute inset-0 rounded-full border-b-[0.5px] border-white/10 pointer-events-none" />
+              <ScrollText className="w-4 h-4 transition-transform group-hover:scale-110 duration-300 relative z-10" />
+              {hasNewChangelog && (
+                <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-white shadow-[0_0_6px_rgba(255,255,255,0.9)] z-20" />
+              )}
+            </Link>
+          </Tooltip>
+        )}
+
+        {isHomePage && !isGroupPage && (
           <Tooltip content="Send Feedback" side="bottom">
             <button
               onClick={() => toggleFeedback("feedback")}
               className={cn(
-                "p-2.5 rounded-full bg-zinc-900/80 backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-visible group",
+                "items-center justify-center p-2.5 rounded-full bg-zinc-900/80 backdrop-blur-sm transition-all duration-300 cursor-pointer relative overflow-visible group",
                 isFeedbackOpen
                   ? "bg-white/15 text-white shadow-[inset_0_0_10px_rgba(255,255,255,0.1)]"
-                  : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
+                  : "text-zinc-400 hover:text-white hover:bg-zinc-800/50",
+                isGroupActive ? "hidden md:inline-flex" : "inline-flex"
               )}
             >
-              {/* Glass highlights */}
               <div className={cn(
                 "absolute inset-0 rounded-full border-t-[0.5px] pointer-events-none transition-colors duration-300",
                 isFeedbackOpen ? "border-white/40" : "border-white/20 group-hover:border-white/30"
@@ -206,6 +281,7 @@ export function NotificationsDock() {
                 alt="Feedback"
                 width={16}
                 height={16}
+                priority
                 className={cn(
                   "w-4 h-4 object-contain transition-all duration-300 filter group-hover:scale-110 relative z-10",
                   isFeedbackOpen ? "invert" : "invert opacity-60 group-hover:opacity-100"
@@ -234,30 +310,35 @@ export function NotificationsDock() {
                 damping: 28,
                 max: 0.8
               }}
-              className="fixed top-22 right-2 sm:right-8 w-[480px] max-w-[calc(100vw-16px)] sm:max-w-[calc(100vw-64px)] z-[100] overflow-visible"
+              className="fixed bottom-0 left-0 right-0 w-full z-[100] sm:fixed sm:bottom-auto sm:left-auto sm:top-[88px] sm:right-8 sm:w-96 overflow-visible"
             >
               {/* Glassmorphic container */}
-              <div className="relative bg-zinc-950 border border-white/[0.08] rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.08)] overflow-hidden p-6">
+              <div className="relative bg-zinc-950 border-t border-white/[0.08] rounded-t-3xl sm:border sm:rounded-[2rem] shadow-[0_30px_80px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.08)] overflow-hidden p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:pb-6">
 
                 {/* Accent border glow */}
-                <div className="absolute -inset-px bg-gradient-to-r from-white/10 to-transparent rounded-[2rem] pointer-events-none" />
+                <div className="absolute -inset-px bg-gradient-to-r from-white/10 to-transparent rounded-t-3xl sm:rounded-[2rem] pointer-events-none" />
 
                 <div className="relative z-10">
                   {/* Form Header */}
-                  <div className="flex items-center gap-3.5 mb-5">
-                    <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center border border-white/15 shadow-inner shrink-0">
-                      <Image
-                        src={feedbackImg}
-                        alt="Feedback"
-                        width={16}
-                        height={16}
-                        className="w-4 h-4 object-contain filter invert"
-                      />
+                  <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center border border-white/15 shadow-inner shrink-0">
+                        <Image
+                          src={feedbackImg}
+                          alt="Feedback"
+                          width={16}
+                          height={16}
+                          className="w-4 h-4 object-contain filter invert"
+                        />
+                      </div>
+                      <div className="flex flex-col text-left">
+                        <span className="ubuntu-bold text-zinc-100 text-sm font-bold tracking-wide">Send Feedback</span>
+                        <span className="ubuntu-regular text-[9px] text-zinc-500 uppercase tracking-widest mt-0.5">We'd love to hear from you</span>
+                      </div>
                     </div>
-                    <div className="flex flex-col text-left">
-                      <span className="ubuntu-bold text-zinc-100 text-sm font-bold tracking-wide">Send Feedback</span>
-                      <span className="ubuntu-regular text-[9px] text-zinc-500 uppercase tracking-widest mt-0.5">We'd love to hear from you</span>
-                    </div>
+                    <button type="button" onClick={() => closeFeedback("feedback")} className="p-1 rounded-lg text-zinc-500 hover:text-white transition-colors sm:hidden">
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
 
                   {/* Form Body */}
@@ -318,6 +399,8 @@ export function NotificationsDock() {
           </>
         )}
       </AnimatePresence>
+
+
     </>
   );
 }

@@ -87,7 +87,7 @@ export function InviteModal({ group, user, friends, onClose }: any) {
                     <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-xl text-zinc-500 transition-all"><X className="w-4 h-4" /></button>
                 </div>
 
-                <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
                     {/* Invite Link section */}
                     {(group.privacy === "private-invite" || group.privacy === "public") && (
                         <div className="space-y-3">
@@ -156,7 +156,7 @@ export function InviteModal({ group, user, friends, onClose }: any) {
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
                                     <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search friends..." className="w-full bg-zinc-950 border border-white/5 rounded-xl pl-10 pr-4 py-3 text-sm text-white outline-none focus:border-white/15 transition-all" />
                                 </div>
-                                <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                                <div className="space-y-2 max-h-48 overflow-y-auto">
                                     {filtered.map((f: any) => {
                                         const isSelected = selectedFriends.includes(f.friendId);
                                         const isPending = group.pendingInvites?.includes(f.friendId);

@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Pause, Play, StopCircle } from "lucide-react";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, query, collection, where, limit } from "firebase/firestore";
+import { toast } from "sonner";
 import { db } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { useTimerStore } from "@/lib/store";
+import { useAuth } from "@/components/AuthProvider";
 
 interface FocusGroupNameDoc {
   name?: string;
@@ -22,6 +24,7 @@ function fmtElapsedFromMs(ms: number) {
 }
 
 export function GroupSessionMiniBar() {
+  const { user } = useAuth();
   const activeGroupId = useTimerStore((s) => s.activeGroupId);
   const isActive = useTimerStore((s) => s.isActive);
   const isPaused = useTimerStore((s) => s.isPaused);
@@ -34,13 +37,63 @@ export function GroupSessionMiniBar() {
   const setActiveGroupId = useTimerStore((s) => s.setActiveGroupId);
 
   const [groupName, setGroupName] = useState("Group session");
+  const [hostId, setHostId] = useState<string | null>(null);
   useEffect(() => {
     if (!activeGroupId) return;
     return onSnapshot(doc(db, "focusGroups", activeGroupId), (snap) => {
-      const data = snap.data() as FocusGroupNameDoc | undefined;
-      setGroupName(data?.name || "Group session");
+      if (snap.exists()) {
+        const data = snap.data();
+        setGroupName(data.name || "Group session");
+        setHostId(data.hostId || null);
+      }
     });
   }, [activeGroupId]);
+
+  const wasHostActiveRef = useRef(false);
+  useEffect(() => {
+    if (!activeGroupId || !hostId || !user || hostId === user.uid || !isActive) {
+      wasHostActiveRef.current = false;
+      return;
+    }
+
+    const q = query(
+      collection(db, "liveSessions"),
+      where("groupId", "==", activeGroupId),
+      where("userId", "==", hostId),
+      limit(1)
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      const hostIsActive = !snap.empty;
+      if (hostIsActive) {
+        wasHostActiveRef.current = true;
+      } else if (wasHostActiveRef.current) {
+        wasHostActiveRef.current = false;
+        
+        // Host ended the session
+        const stopSession = async () => {
+          const { mode, initialFocusTime, timeLeft, sessionStartTime } = useTimerStore.getState();
+          stopTimer();
+          const elapsedSeconds = mode === "focus" ? Math.max(0, initialFocusTime - timeLeft) : 0;
+          const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+
+          if (mode === "focus" && elapsedMinutes >= 1) {
+            try {
+              const { accumulateFocusTime } = await import("@/lib/focus-accumulator");
+              await accumulateFocusTime(user.uid, elapsedMinutes, activeGroupId, sessionStartTime);
+            } catch (err) {
+              console.error("Failed to save focus time on host session end:", err);
+            }
+          }
+          setActiveGroupId(null);
+          toast.info("The host has ended the focus session.");
+        };
+        stopSession();
+      }
+    });
+
+    return unsub;
+  }, [activeGroupId, hostId, user, isActive, stopTimer, setActiveGroupId]);
 
   const elapsed = useMemo(() => {
     if (mode !== "focus") return isActive ? "Running" : "Paused";
@@ -51,10 +104,10 @@ export function GroupSessionMiniBar() {
 
   const isPausedState = !isActive && isPaused;
 
-  if (!activeGroupId) return null;
+  if (!activeGroupId || (!isActive && !isPaused)) return null;
 
   return (
-    <div className="fixed right-5 bottom-24 z-[95] w-[260px] pointer-events-none">
+    <div className="fixed right-5 bottom-24 z-[95] w-[calc(100vw-2.5rem)] max-w-[260px] pointer-events-none">
       <div className="pointer-events-auto rounded-2xl border border-white/10 bg-zinc-950/90 backdrop-blur-xl shadow-2xl px-4 py-4">
         {/* Top Section: Centered */}
         <div className="flex flex-col items-center justify-center mb-4">
@@ -90,8 +143,25 @@ export function GroupSessionMiniBar() {
           </button>
           
           <button
-            onClick={() => {
+            onClick={async () => {
+              const { mode, initialFocusTime, timeLeft, sessionStartTime } = useTimerStore.getState();
               stopTimer();
+              const elapsedSeconds = mode === "focus" ? Math.max(0, initialFocusTime - timeLeft) : 0;
+              const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+
+              if (mode === "focus" && elapsedMinutes >= 1 && user) {
+                try {
+                  const { accumulateFocusTime } = await import("@/lib/focus-accumulator");
+                  if (hostId === user.uid) {
+                    await accumulateFocusTime(user.uid, elapsedMinutes, activeGroupId, sessionStartTime);
+                  } else {
+                    // Accumulate focus time for non-hosts on manual stop
+                    await accumulateFocusTime(user.uid, elapsedMinutes, activeGroupId, sessionStartTime);
+                  }
+                } catch (err) {
+                  console.error("Failed to save focus time from mini bar:", err);
+                }
+              }
               setActiveGroupId(null);
             }}
             className={cn(

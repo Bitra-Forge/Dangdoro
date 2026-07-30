@@ -42,7 +42,8 @@ async function getCandidateModels(): Promise<string[]> {
   return candidates;
 }
 
-function cleanJsonResponse(text: string) {
+function cleanJsonResponse(text: string | null | undefined) {
+  if (!text) return { error: "Empty response from AI model" };
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return { error: "No valid response format found" };
@@ -89,7 +90,10 @@ async function tryGeminiFallback(messages: any[]) {
       const lastMessage = messages[messages.length - 1];
       const result = await chat.sendMessage(SYSTEM_PROMPT + "\n\nUser: " + lastMessage.content);
       const text = result.response.text();
-      return cleanJsonResponse(text);
+      const parsed = cleanJsonResponse(text);
+      if (parsed?.groups || parsed?.message) return parsed;
+      console.warn(`Gemini model ${modelName} returned unparseable content, trying next...`);
+      continue;
     } catch (err) {
       console.error(`Gemini fallback failed for ${modelName}:`, err);
       continue;
@@ -156,7 +160,7 @@ export async function POST(req: Request) {
             headers: {
               "Authorization": `Bearer ${openRouterKey}`,
               "Content-Type": "application/json",
-              "HTTP-Referer": "https://dangdoro.app",
+              "HTTP-Referer": "https://www.dangdoro.com",
               "X-Title": "Dangdoro",
             },
             body: JSON.stringify({
@@ -173,8 +177,16 @@ export async function POST(req: Request) {
 
           if (response.ok) {
             const data = await response.json();
-            const content = data.choices[0].message.content;
-            return Response.json({ response: cleanJsonResponse(content) });
+            const content = data.choices?.[0]?.message?.content;
+            const parsed = cleanJsonResponse(content);
+            
+            // Only return if we got a valid task plan or message — not a parse error
+            if (parsed?.groups || parsed?.message) {
+              return Response.json({ response: parsed });
+            }
+            
+            console.warn(`OpenRouter model ${modelId} returned unparseable content, trying next model...`);
+            continue;
           }
           
           const errText = await response.text();

@@ -11,8 +11,8 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const players = await runLeaderboardUpdate();
-    return NextResponse.json({ success: true, count: players.length });
+    const { allTimePlayers } = await runLeaderboardUpdate();
+    return NextResponse.json({ success: true, count: allTimePlayers.length });
   } catch (error: any) {
     console.error("❌ [Leaderboard API] Update failed:", error);
     return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
@@ -20,5 +20,12 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  return GET(req);
+  try {
+    console.log("⏳ [Leaderboard API] Client-triggered rebuild...");
+    const { allTimePlayers } = await runLeaderboardUpdate();
+    return NextResponse.json({ success: true, count: allTimePlayers.length });
+  } catch (error: any) {
+    console.error("❌ [Leaderboard API] Update failed:", error);
+    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
+  }
 }

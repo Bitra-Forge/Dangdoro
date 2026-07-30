@@ -271,8 +271,14 @@ export function NotificationsMenu() {
             </button>
 
             {isOpen && mounted ? createPortal(
-                <div ref={popoverRef} className="fixed top-22 right-2 w-[480px] max-w-[calc(100vw-16px)] z-[100] bg-zinc-950 border border-white/10 rounded-[2rem] shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300 sm:fixed sm:top-22 sm:right-8 sm:w-80 sm:max-w-none sm:rounded-[15px] sm:bg-zinc-900/95 sm:backdrop-blur-xl">
-                    <div className="max-h-[400px] overflow-y-auto">
+                <div ref={popoverRef} className="fixed z-[100] bg-zinc-950/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300 top-[72px] left-4 right-4 sm:left-auto sm:right-8 sm:w-80 sm:top-[88px]">
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 sm:hidden">
+                        <span className="text-xs font-black uppercase tracking-widest text-zinc-400">Notifications</span>
+                        <button onClick={() => closeMenu("notifications")} className="p-1 rounded-lg text-zinc-500 hover:text-white transition-colors">
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                    <div className="max-h-[60vh] sm:max-h-[400px] overflow-y-auto">
                         {requests.length === 0 && groupInvites.length === 0 && objectiveAssignments.length === 0 && friendRequestAccepted.length === 0 ? (
                             <div className="p-8 flex flex-col items-center justify-center text-center opacity-40">
                                 <Bell className="w-8 h-8 mb-3 opacity-20" />

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { useTimerStore } from "@/lib/store";
 import Image from "next/image";
-import { cn } from "@/lib/utils";
+import { cn, formatTime } from "@/lib/utils";
 import { onSnapshot, doc, collection, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Play, Pause, GripHorizontal, X, Flame, Users as UsersIcon } from "lucide-react";
@@ -41,18 +41,6 @@ const MODE_COLORS: Record<string, { gradient: string; bg: string; text: string }
 // ============================================================================
 // Utilities
 // ============================================================================
-
-const formatTime = (seconds: number): string => {
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-
-  const pad = (n: number) => n.toString().padStart(2, "0");
-
-  return hrs > 0 
-    ? `${pad(hrs)}:${pad(mins)}:${pad(secs)}` 
-    : `${pad(mins)}:${pad(secs)}`;
-};
 
 const isDocumentPiPSupported = (): boolean => {
   return typeof window !== "undefined" && "documentPictureInPicture" in window;
@@ -479,6 +467,14 @@ export function TimerPiPWidget() {
   const activeGroupId = useTimerStore((s) => s.activeGroupId);
   const [activeMembers, setActiveMembers] = useState<any[]>([]);
   const [groupData, setGroupData] = useState<any>(null);
+  const [now, setNow] = useState(Date.now());
+
+  // 10-second ticker to trigger staleness updates
+  useEffect(() => {
+    if (activeMembers.length === 0) return;
+    const interval = setInterval(() => setNow(Date.now()), 10000);
+    return () => clearInterval(interval);
+  }, [activeMembers.length]);
 
   // Sync group data if active
   useEffect(() => {
@@ -505,7 +501,23 @@ export function TimerPiPWidget() {
     };
   }, [activeGroupId]);
 
-  const synergy = activeMembers.length > 0 ? Math.min(100, activeMembers.length * 25) : 0;
+  const toMillis = (ts: any): number => {
+    if (!ts) return 0;
+    if (typeof ts.toMillis === "function") return ts.toMillis();
+    if (typeof ts.seconds === "number") return ts.seconds * 1000;
+    return 0;
+  };
+
+  const visibleActiveMembers = useMemo(() => {
+    const STALE_MS = 3 * 60 * 1000;
+    return activeMembers.filter((m) => {
+      const hb = toMillis(m.lastHeartbeat) || toMillis(m.startedAt);
+      if (!hb) return true;
+      return now - hb <= STALE_MS;
+    });
+  }, [activeMembers, now]);
+
+  const synergy = visibleActiveMembers.length > 0 ? Math.min(100, visibleActiveMembers.length * 25) : 0;
   const synergyColor = synergy > 70 ? "text-[#E8821A]" : synergy > 30 ? "text-amber-400" : "text-sky-400";
 
   // Hooks
@@ -639,10 +651,10 @@ export function TimerPiPWidget() {
             </Link>
 
             {/* Group Presence Row */}
-            {activeMembers.length > 0 && (
+            {visibleActiveMembers.length > 0 && (
               <div className="flex items-center justify-center gap-1 mb-4">
                 <div className="flex -space-x-1.5">
-                  {activeMembers.slice(0, 4).map((m, i) => (
+                  {visibleActiveMembers.slice(0, 4).map((m, i) => (
                     <div key={i} className="relative">
                       <div className="w-5 h-5 rounded-full border border-zinc-950 overflow-hidden bg-zinc-800">
                         {m.userPhoto ? (
@@ -656,14 +668,14 @@ export function TimerPiPWidget() {
                       <div className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 bg-orange-500 rounded-full border border-zinc-950" />
                     </div>
                   ))}
-                  {activeMembers.length > 4 && (
+                  {visibleActiveMembers.length > 4 && (
                     <div className="w-5 h-5 rounded-full bg-zinc-800 border border-zinc-950 flex items-center justify-center text-[7px] font-bold text-zinc-500">
-                      +{activeMembers.length - 4}
+                      +{visibleActiveMembers.length - 4}
                     </div>
                   )}
                 </div>
                 <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest ml-1">
-                  {activeMembers.length} Live
+                  {visibleActiveMembers.length} Live
                 </span>
               </div>
             )}
