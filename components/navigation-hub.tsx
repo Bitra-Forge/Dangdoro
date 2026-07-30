@@ -28,12 +28,10 @@ export function NavigationHub() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const visited = localStorage.getItem("dangdoro_visited");
-      if (!visited) {
-        setIsFirstTimeVisitor(true);
-      }
+      setIsFirstTimeVisitor(!visited);
       setVisitedChecked(true);
     }
-  }, []);
+  }, [pathname]);
 
   const hideNavTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
