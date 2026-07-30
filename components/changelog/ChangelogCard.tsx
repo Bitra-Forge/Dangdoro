@@ -225,8 +225,8 @@ export function ChangelogCard({
                 src={mediaUrl}
                 alt={item.title}
                 fill
+                unoptimized
                 className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.025]"
-                sizes="(max-width: 768px) 100vw, 672px"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
             </div>

@@ -18,7 +18,7 @@ interface Stats {
   totalTimeHours: number;
   totalSessions: number;
   newUsersToday: number;
-  newSignedInUsersToday: number;
+  newSignedInUsersToday: number | null;
   onlineUsers: number;
 }
 
@@ -156,7 +156,7 @@ export default function AdminOverviewPage() {
     },
     {
       label: "Signed In Today",
-      value: stats ? `+${stats.newSignedInUsersToday}` : null,
+      value: stats ? (stats.newSignedInUsersToday !== null && stats.newSignedInUsersToday !== undefined ? `+${stats.newSignedInUsersToday}` : "—") : null,
       icon: LogIn,
       color: "text-violet-400",
       glowColor: "rgba(167,139,250,0.15)",
