@@ -25,6 +25,11 @@ import { User, updateProfile } from "firebase/auth";
 import { trackSessionEvent } from "@/lib/session-telemetry";
 import { FirebaseTimestampLike, FocusGroup, UserProfileData } from "./groups";
 import { getCurrentWeekId } from "./utils";
+// SYS-B-2: System A writer for failure branches (same localStorage key,
+// correct { minutes, groupId, startedAt } format). Cycle with
+// focus-accumulator is safe: both modules only call each other at
+// runtime inside functions, never at module-init time.
+import { setPendingFocus } from "@/lib/focus-accumulator";
 
 const LIVE_SESSION_STALE_MS = 3 * 60 * 1000;
 
@@ -250,54 +255,6 @@ export const syncUserProfile = async (user: User) => {
     }
 };
 
-const savePendingFocusToLocal = (userId: string, durationMinutes: number) => {
-    if (typeof window === "undefined") return;
-    try {
-        const key = `dangdoro_pending_focus_${userId}`;
-        const currentWeekId = getCurrentWeekId();
-        const existing = localStorage.getItem(key);
-        let minutes = durationMinutes;
-        if (existing) {
-            try {
-                const parsed = JSON.parse(existing);
-                if (parsed && parsed.weekId === currentWeekId && typeof parsed.minutes === "number") {
-                    minutes += parsed.minutes;
-                }
-            } catch {}
-        }
-        localStorage.setItem(key, JSON.stringify({ minutes, weekId: currentWeekId }));
-    } catch (err) {
-        console.error("Failed to save pending focus to localStorage:", err);
-    }
-};
-
-export const retryPendingFocusTimeLocal = async (userId: string) => {
-    if (typeof window === "undefined") return;
-    const key = `dangdoro_pending_focus_${userId}`;
-    const raw = localStorage.getItem(key);
-    if (!raw) return;
-
-    try {
-        const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed.minutes !== "number" || parsed.minutes <= 0) {
-            localStorage.removeItem(key);
-            return;
-        }
-
-        const userRef = doc(db, "users", userId);
-        await updateDoc(userRef, {
-            totalMinutes: increment(parsed.minutes),
-            lastActive: serverTimestamp()
-        });
-
-        // Clear the key only after confirmed successful write
-        localStorage.removeItem(key);
-        console.log(`[FailedWriteRecovery] Successfully retried and recovered pending focus: ${parsed.minutes} mins`);
-    } catch (error) {
-        console.error("[FailedWriteRecovery] Failed to retry pending focus time:", error);
-    }
-};
-
 /**
  * FIX 1/3 shared helper — checks whether a session with the same
  * user + exact startedAt + duration (+ group context) already exists.
@@ -418,7 +375,11 @@ export const savePomodoroSession = async (
                 });
             } catch (error) {
                 console.error("Failed to save session document:", error);
-                savePendingFocusToLocal(userId, durationMinutes);
+                setPendingFocus(userId, {
+                    minutes: durationMinutes,
+                    groupId: groupId ?? null,
+                    startedAt: startedAtTimestamp ? startedAtTimestamp.toMillis() : null,
+                });
                 return false;
             }
 
@@ -434,7 +395,11 @@ export const savePomodoroSession = async (
                 });
             } catch (error) {
                 console.error("Failed to update user focus stats:", error);
-                savePendingFocusToLocal(userId, durationMinutes);
+                setPendingFocus(userId, {
+                    minutes: durationMinutes,
+                    groupId: groupId ?? null,
+                    startedAt: startedAtTimestamp ? startedAtTimestamp.toMillis() : null,
+                });
                 return false;
             }
 
@@ -452,7 +417,11 @@ export const savePomodoroSession = async (
                     });
                 } catch (error) {
                     console.error("Failed to update group focus stats:", error);
-                    savePendingFocusToLocal(userId, durationMinutes);
+                    setPendingFocus(userId, {
+                        minutes: durationMinutes,
+                        groupId: groupId ?? null,
+                        startedAt: startedAtTimestamp ? startedAtTimestamp.toMillis() : null,
+                    });
                     return false;
                 }
             }
@@ -645,7 +614,11 @@ export const savePartialPomodoroSession = async (
             });
         } catch (error) {
             console.error("Failed to save partial session document:", error);
-            savePendingFocusToLocal(userId, durationMinutes);
+            setPendingFocus(userId, {
+                minutes: durationMinutes,
+                groupId: groupId ?? null,
+                startedAt: startedAtTimestamp ? startedAtTimestamp.toMillis() : null,
+            });
             return false;
         }
 
@@ -660,7 +633,11 @@ export const savePartialPomodoroSession = async (
             });
         } catch (error) {
             console.error("Failed to update user focus stats (partial):", error);
-            savePendingFocusToLocal(userId, durationMinutes);
+            setPendingFocus(userId, {
+                minutes: durationMinutes,
+                groupId: groupId ?? null,
+                startedAt: startedAtTimestamp ? startedAtTimestamp.toMillis() : null,
+            });
             return false;
         }
 
@@ -674,7 +651,11 @@ export const savePartialPomodoroSession = async (
                 });
             } catch (error) {
                 console.error("Failed to update group focus stats (partial):", error);
-                savePendingFocusToLocal(userId, durationMinutes);
+                setPendingFocus(userId, {
+                    minutes: durationMinutes,
+                    groupId: groupId ?? null,
+                    startedAt: startedAtTimestamp ? startedAtTimestamp.toMillis() : null,
+                });
                 return false;
             }
         }
