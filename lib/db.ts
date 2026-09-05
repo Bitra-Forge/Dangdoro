@@ -28,6 +28,11 @@ import { getCurrentWeekId } from "./utils";
 
 const LIVE_SESSION_STALE_MS = 3 * 60 * 1000;
 
+// FIX 2 — In-flight save debounce (module-level, survives re-renders within
+// the same tab session). Keyed on user + exact start + duration so distinct
+// sessions never collide. savePartialPomodoroSession untouched.
+const inFlightSaves = new Set<string>();
+
 
 export interface TaskGroup {
     id: string;
@@ -294,6 +299,50 @@ export const retryPendingFocusTimeLocal = async (userId: string) => {
 };
 
 /**
+ * FIX 1/3 shared helper — checks whether a session with the same
+ * user + exact startedAt + duration (+ group context) already exists.
+ * Window-scoped query (needs sessions userId ASC + startedAt ASC composite
+ * index — see firestore.indexes.json); exact match filtered in memory.
+ * Never throws — returns false on error so callers fail open toward writing.
+ */
+export async function sessionExists(
+    userId: string,
+    startedAt: Timestamp,
+    durationMinutes: number,
+    groupId: string | null = null
+): Promise<boolean> {
+    try {
+        const startedAtMs = startedAt.toMillis();
+        const fiveMinutesAgo = Timestamp.fromMillis(startedAtMs - 5 * 60 * 1000);
+        const twoMinutesAfter = Timestamp.fromMillis(startedAtMs + 2 * 60 * 1000);
+        const existingQuery = await getDocs(
+            query(
+                collection(db, "sessions"),
+                where("userId", "==", userId),
+                where("startedAt", ">=", fiveMinutesAgo),
+                where("startedAt", "<=", twoMinutesAfter)
+            )
+        );
+        return existingQuery.docs.some((d) => {
+            const data = d.data() as { duration?: number; groupId?: string | null; startedAt?: Timestamp | null };
+            const docStartedAtMs = data.startedAt instanceof Timestamp
+                ? data.startedAt.toMillis()
+                : typeof data.startedAt === "number"
+                    ? data.startedAt
+                    : null;
+            return (
+                docStartedAtMs === startedAtMs &&
+                data.duration === durationMinutes &&
+                (data.groupId ?? null) === (groupId ?? null)
+            );
+        });
+    } catch (e) {
+        console.warn("[Session] sessionExists check failed, treating as not-exists:", e);
+        return false;
+    }
+}
+
+/**
  * Saves a completed Pomodoro session and increments the user's focus stats.
  */
 export const savePomodoroSession = async (
@@ -311,72 +360,117 @@ export const savePomodoroSession = async (
             });
         }
 
-        const startedAtTimestamp = startedAt 
+        const startedAtTimestamp = startedAt
             ? (startedAt instanceof Date ? Timestamp.fromDate(startedAt) : Timestamp.fromMillis(startedAt))
             : null;
 
-        try {
-            await addDoc(collection(db, "sessions"), {
-                userId,
-                groupId,
-                duration: durationMinutes,
-                type: "work",
-                startedAt: startedAtTimestamp,
-                endedAt: serverTimestamp(),
-                status: "completed",
-                completedAt: serverTimestamp(),
-                weekId: getCurrentWeekId(),
-            });
-        } catch (error) {
-            console.error("Failed to save session document:", error);
-            savePendingFocusToLocal(userId, durationMinutes);
-            return false;
-        }
-
-        invalidateSessionHistoryCache(userId);
-        import("./friendship").then(m => m.invalidateFriendshipCaches(userId)).catch(() => {});
-
-        const userRef = doc(db, "users", userId);
-        try {
-            await updateDoc(userRef, {
-                totalPomodoros: increment(1),
-                totalMinutes: increment(durationMinutes),
-                lastActive: serverTimestamp()
-            });
-        } catch (error) {
-            console.error("Failed to update user focus stats:", error);
-            savePendingFocusToLocal(userId, durationMinutes);
-            return false;
-        }
-
-        // Clear profile cache so leaderboards/friends re-fetch fresh totalMinutes
-        userProfileCache.delete(userId);
-        saveMapToSession("dangdoro_profile_cache", userProfileCache);
-
-        if (groupId) {
-            const groupRef = doc(db, "focusGroups", groupId);
-            try {
-                await updateDoc(groupRef, {
-                    [`memberStats.${userId}.totalMinutes`]: increment(durationMinutes),
-                    [`memberStats.${userId}.lastActive`]: serverTimestamp(),
-                    totalMinutes: increment(durationMinutes)
-                });
-            } catch (error) {
-                console.error("Failed to update group focus stats:", error);
-                savePendingFocusToLocal(userId, durationMinutes);
-                return false;
+        // FIX 1 — Session save idempotency guard (fail-open, via shared helper).
+        // Skipped when startedAt is null to avoid false-positive matches.
+        // Returns true on duplicate so callers clear pending state (no retry loop).
+        if (startedAtTimestamp) {
+            const duplicate = await sessionExists(userId, startedAtTimestamp, durationMinutes, groupId);
+            // STEP 6 — production duplicate early-warning log (append-only, no behavior change).
+            if (process.env.NODE_ENV === "production") {
+                console.log(JSON.stringify({
+                    event: "session_save",
+                    userId,
+                    durationMinutes,
+                    startedAt: startedAtTimestamp.toMillis(),
+                    isDuplicate: duplicate,
+                    timestamp: new Date().toISOString(),
+                }));
+            }
+            if (duplicate) {
+                console.warn("[Session] Duplicate detected — skipping write");
+                return true;
             }
         }
 
-        groupLeaderboardCache.clear();
-        saveMapToSession("dangdoro_group_leaderboard_cache", groupLeaderboardCache);
-
-        try {
-            triggerLeaderboardRebuild();
-        } catch (err) {
-            console.error("Failed to trigger leaderboard rebuild:", err);
+        // FIX 2 — in-flight debounce (b). Placed AFTER the idempotency guard:
+        // already-written duplicates exit at (a); only genuinely new,
+        // currently-executing writes are caught here.
+        // Skipped when startedAt is null (same null-skip as FIX 1) — a key of
+        // just userId+duration would false-block legitimate back-to-back saves.
+        // groupId intentionally excluded from the key (FIX 1 already filters on
+        // it; including it would let the same moment race past the debounce).
+        const saveKey = startedAtTimestamp
+            ? `${userId}_${startedAtTimestamp.toMillis()}_${durationMinutes}`
+            : null;
+        if (saveKey) {
+            if (inFlightSaves.has(saveKey)) {
+                console.warn("[Session] Save already in flight — skipping", saveKey);
+                return true;
+            }
+            inFlightSaves.add(saveKey);
         }
-        return true;
+        try {
+            try {
+                await addDoc(collection(db, "sessions"), {
+                    userId,
+                    groupId,
+                    duration: durationMinutes,
+                    type: "work",
+                    startedAt: startedAtTimestamp,
+                    endedAt: serverTimestamp(),
+                    status: "completed",
+                    completedAt: serverTimestamp(),
+                    weekId: getCurrentWeekId(),
+                });
+            } catch (error) {
+                console.error("Failed to save session document:", error);
+                savePendingFocusToLocal(userId, durationMinutes);
+                return false;
+            }
+
+            invalidateSessionHistoryCache(userId);
+            import("./friendship").then(m => m.invalidateFriendshipCaches(userId)).catch(() => {});
+
+            const userRef = doc(db, "users", userId);
+            try {
+                await updateDoc(userRef, {
+                    totalPomodoros: increment(1),
+                    totalMinutes: increment(durationMinutes),
+                    lastActive: serverTimestamp()
+                });
+            } catch (error) {
+                console.error("Failed to update user focus stats:", error);
+                savePendingFocusToLocal(userId, durationMinutes);
+                return false;
+            }
+
+            // Clear profile cache so leaderboards/friends re-fetch fresh totalMinutes
+            userProfileCache.delete(userId);
+            saveMapToSession("dangdoro_profile_cache", userProfileCache);
+
+            if (groupId) {
+                const groupRef = doc(db, "focusGroups", groupId);
+                try {
+                    await updateDoc(groupRef, {
+                        [`memberStats.${userId}.totalMinutes`]: increment(durationMinutes),
+                        [`memberStats.${userId}.lastActive`]: serverTimestamp(),
+                        totalMinutes: increment(durationMinutes)
+                    });
+                } catch (error) {
+                    console.error("Failed to update group focus stats:", error);
+                    savePendingFocusToLocal(userId, durationMinutes);
+                    return false;
+                }
+            }
+
+            groupLeaderboardCache.clear();
+            saveMapToSession("dangdoro_group_leaderboard_cache", groupLeaderboardCache);
+
+            try {
+                triggerLeaderboardRebuild();
+            } catch (err) {
+                console.error("Failed to trigger leaderboard rebuild:", err);
+            }
+            return true;
+        } finally {
+            if (saveKey) {
+                inFlightSaves.delete(saveKey);
+            }
+        }
     } catch (error) {
         console.error("Error saving session:", error);
         return false;

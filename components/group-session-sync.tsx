@@ -208,10 +208,14 @@ export function GroupSessionSync() {
           }
         } else if (activeLiveSessionId && !timerIsActive && !isPaused) {
           // Timer stopped (either manually or naturally) — end live session
-          // saveFocusTime() will skip if completedNaturallyRef is set
-          await saveFocusTime();
-          await endLiveSession(activeLiveSessionId);
+          // saveFocusTime() will skip if completedNaturallyRef is set.
+          // FIX 4: capture + clear BEFORE awaiting — a remount during the
+          // awaits re-runs this effect with null and returns early instead
+          // of firing a second save.
+          const stoppingId = activeLiveSessionId;
           setLiveSessionId(null);
+          await saveFocusTime();
+          await endLiveSession(stoppingId);
         } else if (activeLiveSessionId && activeGroupId) {
           // Update status based on pause/focus state
           const newStatus = isPaused ? "paused" : "focusing";
@@ -225,9 +229,11 @@ export function GroupSessionSync() {
           }
           await updateLiveSessionStatus(activeLiveSessionId, newStatus, startedAtUpdate);
         } else if (!activeGroupId && activeLiveSessionId) {
-          await saveFocusTime();
-          await endLiveSession(activeLiveSessionId);
+          // FIX 4: capture + clear BEFORE awaiting (same reason as above).
+          const stoppingId = activeLiveSessionId;
           setLiveSessionId(null);
+          await saveFocusTime();
+          await endLiveSession(stoppingId);
         } else {
           return;
         }

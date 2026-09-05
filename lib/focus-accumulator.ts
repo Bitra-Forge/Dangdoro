@@ -1,4 +1,5 @@
-import { savePartialPomodoroSession, savePomodoroSession } from "@/lib/db";
+import { savePartialPomodoroSession, savePomodoroSession, sessionExists } from "@/lib/db";
+import { Timestamp } from "firebase/firestore";
 
 const STORAGE_KEY_PREFIX = "dangdoro_pending_focus_";
 const LAST_WRITE_KEY_PREFIX = "dangdoro_last_write_";
@@ -149,6 +150,34 @@ export async function retryPendingFocusTime(userId: string): Promise<boolean> {
     return false;
   }
 
+  // FIX 3 (b) — pending WITH startedAt: check existence first.
+  // A retry must never increment totalPomodoros — both branches write via
+  // savePartialPomodoroSession; the pre-check already prevents duplicates.
+  if (pending.startedAt) {
+    const startedAtTs = Timestamp.fromMillis(pending.startedAt);
+    const alreadyWritten = await sessionExists(userId, startedAtTs, pending.minutes, pending.groupId);
+    if (alreadyWritten) {
+      console.log("[Retry] Original write confirmed — clearing pending");
+      setPendingFocus(userId, null);
+      return false;
+    }
+    try {
+      const success = await savePartialPomodoroSession(userId, pending.minutes, pending.groupId, pending.startedAt);
+      if (success) {
+        setPendingFocus(userId, null);
+        setLastWriteTime(userId, Date.now());
+        if (process.env.NODE_ENV !== "production") {
+          console.log(`Successfully retried pending focus time for ${userId}`);
+        }
+        return true;
+      }
+    } catch (e) {
+      console.error("Failed to retry pending focus time:", e);
+    }
+    return false;
+  }
+
+  // FIX 3 (c) — pending WITHOUT startedAt: no check possible, write as before.
   if (process.env.NODE_ENV !== "production") {
     console.log(`Retrying pending focus time for ${userId}: ${pending.minutes}min`);
   }
