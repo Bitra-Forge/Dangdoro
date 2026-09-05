@@ -181,6 +181,23 @@ export async function GET(req: Request) {
       }
     }
 
+    // Trigger leaderboard rebuild after corrections (fix path only — never on dry run)
+    if (fix) {
+      try {
+        const rebuildUrl = process.env.NEXT_PUBLIC_APP_URL
+          ? `${process.env.NEXT_PUBLIC_APP_URL}/api/update-leaderboard`
+          : "http://localhost:3000/api/update-leaderboard"
+
+        await fetch(rebuildUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        })
+        console.log("[Audit] Leaderboard rebuild triggered after corrections")
+      } catch (e) {
+        console.warn("[Audit] Leaderboard rebuild failed — run manually:", e)
+      }
+    }
+
     return NextResponse.json({
       success: true,
       dryRun,
