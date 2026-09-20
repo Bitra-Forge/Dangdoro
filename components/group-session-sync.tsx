@@ -25,6 +25,9 @@ export function GroupSessionSync() {
   const mode = useTimerStore((s) => s.mode);
 
   const pendingMinutesRef = useRef(0);
+  // FIX-PARTIAL-B — minutes already handed to accumulateFocusTime this session.
+  // saveFocusTime() only adds the delta (ref − baseline), never the full elapsed again.
+  const lastAccumulatedMinutesRef = useRef(0);
   const hostIdRef = useRef<string | null>(null);
   const prevGroupIdRef = useRef<string | null>(null);
 
@@ -121,6 +124,7 @@ export function GroupSessionSync() {
         // TimerTicker already called flushFocusTime(isSessionEnd=true) — don't write again.
         completedNaturallyRef.current = true;
         pendingMinutesRef.current = 0;
+        lastAccumulatedMinutesRef.current = 0;
       }
       return;
     }
@@ -131,6 +135,10 @@ export function GroupSessionSync() {
     if (mode === "focus" && activeGroupId && timeLeft < initialFocusTime && timeLeft > 0) {
       const elapsedSeconds = Math.max(0, initialFocusTime - timeLeft);
       pendingMinutesRef.current = Math.floor(elapsedSeconds / 60);
+      // FIX-PARTIAL-B — new session started (elapsed wrapped below baseline): drop the stale baseline.
+      if (pendingMinutesRef.current < lastAccumulatedMinutesRef.current) {
+        lastAccumulatedMinutesRef.current = 0;
+      }
     }
   }, [timeLeft, initialFocusTime, mode, activeGroupId, isValidated]);
 
@@ -149,10 +157,12 @@ export function GroupSessionSync() {
     const currentMode = useTimerStore.getState().mode;
     if (currentMode === "break" || currentMode === "long-break") {
       pendingMinutesRef.current = 0; // Clear pending minutes since it was a natural completion
+      lastAccumulatedMinutesRef.current = 0;
       return;
     }
 
-    const duration = pendingMinutesRef.current;
+    // FIX-PARTIAL-B — only minutes elapsed since the last accumulation, never the full total again.
+    const duration = pendingMinutesRef.current - lastAccumulatedMinutesRef.current;
     const targetGroupId = activeGroupId || prevGroupIdRef.current;
     const isNonHost = hostIdRef.current !== null && user && hostIdRef.current !== user.uid;
 
@@ -160,6 +170,7 @@ export function GroupSessionSync() {
       pendingMinutesRef.current = 0; // Clear immediately to prevent double-saving
       try {
         await accumulateFocusTime(user.uid, duration, targetGroupId);
+        lastAccumulatedMinutesRef.current += duration;
       } catch (err) {
         console.error("Failed to save partial group session:", err);
       }

@@ -600,6 +600,45 @@ export const savePartialPomodoroSession = async (
             ? (startedAt instanceof Date ? Timestamp.fromDate(startedAt) : Timestamp.fromMillis(startedAt))
             : null;
 
+        // FIX-PARTIAL-A — idempotency guard (same pattern as FIX 1 in savePomodoroSession).
+        // Skipped when startedAt is null to avoid false-positive matches.
+        // Returns true on duplicate so callers clear pending state (no retry loop).
+        let duplicate = false;
+        if (startedAtTimestamp) {
+            duplicate = await sessionExists(userId, startedAtTimestamp, durationMinutes, groupId);
+            if (duplicate) {
+                console.warn("[PartialSession] Duplicate — skipping write");
+                return true;
+            }
+        }
+
+        // STEP 6 — production early-warning log for partial sessions (append-only, no behavior change).
+        if (process.env.NODE_ENV === "production") {
+            console.log(JSON.stringify({
+                event: "partial_session_save",
+                userId,
+                durationMinutes,
+                startedAt: startedAtTimestamp?.toMillis() ?? null,
+                isDuplicate: duplicate ?? false,
+                timestamp: new Date().toISOString(),
+            }));
+        }
+
+        // FIX-PARTIAL-A — in-flight debounce using the shared module-level Set.
+        // "partial_" prefix prevents key collision with savePomodoroSession
+        // saves that share the same startedAt and duration.
+        // Skipped when startedAt is null (same null-skip as the guard above).
+        const saveKey = startedAtTimestamp
+            ? `partial_${userId}_${startedAtTimestamp.toMillis()}_${durationMinutes}`
+            : null;
+        if (saveKey) {
+            if (inFlightSaves.has(saveKey)) {
+                console.warn("[PartialSession] Already in flight — skipping", saveKey);
+                return true;
+            }
+            inFlightSaves.add(saveKey);
+        }
+        try { // FIX-PARTIAL-A: wraps entire write body — lock released in finally below
         try {
             await addDoc(collection(db, "sessions"), {
                 userId,
@@ -666,6 +705,9 @@ export const savePartialPomodoroSession = async (
             console.error("Failed to trigger leaderboard rebuild:", err);
         }
         return true;
+        } finally {
+            if (saveKey) inFlightSaves.delete(saveKey);
+        }
     } catch (error) {
         console.error("Error saving partial session:", error);
         return false;
