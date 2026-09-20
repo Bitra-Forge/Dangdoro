@@ -38,21 +38,33 @@ jobs:
             exit 1
           fi
 
-          DUPLICATES=$(echo "$RESPONSE" | jq -r '.totalDuplicatesDetected')
           AFFECTED_USERS=$(echo "$RESPONSE" | jq -r '.affectedUsersCount')
+          HIGH_SEVERITY=$(echo "$RESPONSE" | jq -r '.highSeverityDuplicates')
+          LOW_SEVERITY=$(echo "$RESPONSE" | jq -r '.lowSeverityDuplicates')
 
           echo "=========================================="
           echo "Audit Scan Results:"
           echo "  - Total Users Scanned: $(echo "$RESPONSE" | jq -r '.totalUsersScanned')"
-          echo "  - Duplicate Sessions Detected: $DUPLICATES"
+          echo "  - High-severity duplicates: $HIGH_SEVERITY  <- hard fail if > 0"
+          echo "  - Low-severity flags: $LOW_SEVERITY  <- warning only"
           echo "  - Affected Users: $AFFECTED_USERS"
           echo "=========================================="
 
-          if [ "$DUPLICATES" -gt 0 ]; then
-            echo "⚠️ Alert: Duplicates detected in the database!"
-            echo "$RESPONSE" | jq -c '.affectedUsers[]'
+          # Always print all duplicates regardless of severity — nothing hidden
+          echo "$RESPONSE" | jq -c '.affectedUsers[]'
+
+          if [ "$HIGH_SEVERITY" -gt 0 ]; then
+            echo "🚨 High-confidence duplicates detected — action required:"
+            echo "$RESPONSE" | jq -r '.affectedUsers[].corrections[] | select(.severity == "high") | .message'
             # Fail the action to trigger an email notification
             exit 1
           else
-            echo "✅ Success: Database has clean data integrity. No duplicates found."
+            echo "✅ No high-severity duplicates — audit passed"
+            if [ "$LOW_SEVERITY" -gt 0 ]; then
+              echo "⚠️ Low-confidence flags (review but not failing):"
+              echo "$RESPONSE" | jq -r '.affectedUsers[].corrections[] | select(.severity == "low") | .message'
+              echo "⚠️  $LOW_SEVERITY low-confidence flags remain (previously reviewed)"
+            else
+              echo "✅ Success: Database has clean data integrity. No duplicates found."
+            fi
           fi

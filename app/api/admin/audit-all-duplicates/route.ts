@@ -44,10 +44,12 @@ export async function GET(req: Request) {
       duplicatesFound: number;
       before: { totalMinutes: number; totalPomodoros: number };
       after: { totalMinutes: number; totalPomodoros: number };
-      corrections: string[];
+      corrections: Array<{ message: string; severity: "high" | "low" }>;
     }> = [];
 
     let totalDuplicatesRemoved = 0;
+    let totalHighSeverity = 0;
+    let totalLowSeverity = 0;
 
     for (const userDoc of usersSnap.docs) {
       const userId = userDoc.id;
@@ -71,7 +73,7 @@ export async function GET(req: Request) {
         .sort((a, b) => a.completedAtMs - b.completedAtMs);
 
       const toDelete = new Set<string>();
-      const corrections: string[] = [];
+      const corrections: Array<{ message: string; severity: "high" | "low" }> = [];
 
       // Loop through and evaluate duplicates
       for (let i = 0; i < sessions.length; i++) {
@@ -90,7 +92,7 @@ export async function GET(req: Request) {
           // Rule 1: Strict duplicates (same duration, same group, within 2 min)
           if (a.duration === b.duration && timeDiff <= SHORT_WINDOW_MS) {
             toDelete.add(b.id);
-            corrections.push(`Strict Duplicate: ${b.duration}m at ${new Date(b.completedAtMs).toISOString()} (matched ${a.id})`);
+            corrections.push({ message: `Strict Duplicate: ${b.duration}m at ${new Date(b.completedAtMs).toISOString()} (matched ${a.id})`, severity: "high" });
             continue;
           }
 
@@ -98,11 +100,11 @@ export async function GET(req: Request) {
           if (timeDiff <= SHORT_WINDOW_MS) {
             if (b.duration === a.duration * 2 && a.duration > 0) {
               toDelete.add(b.id);
-              corrections.push(`Double-Count Inflated: ${b.duration}m (should be ${a.duration}m matching ${a.id})`);
+              corrections.push({ message: `Double-Count Inflated: ${b.duration}m (should be ${a.duration}m matching ${a.id})`, severity: "high" });
               continue;
             } else if (a.duration === b.duration * 2 && b.duration > 0) {
               toDelete.add(a.id);
-              corrections.push(`Double-Count Inflated: ${a.duration}m (should be ${b.duration}m matching ${b.id})`);
+              corrections.push({ message: `Double-Count Inflated: ${a.duration}m (should be ${b.duration}m matching ${b.id})`, severity: "high" });
               continue;
             }
           }
@@ -110,7 +112,7 @@ export async function GET(req: Request) {
           // Rule 3: Pattern B (Retry re-write: same duration, same group, within 15 min)
           if (a.duration === b.duration && timeDiff <= RETRY_WINDOW_MS) {
             toDelete.add(b.id);
-            corrections.push(`Retry Re-write: ${b.duration}m (duplicate of ${a.id} within 15m)`);
+            corrections.push({ message: `Retry Re-write: ${b.duration}m (duplicate of ${a.id} within 15m)`, severity: "low" });
             continue;
           }
         }
@@ -118,6 +120,10 @@ export async function GET(req: Request) {
 
       if (toDelete.size > 0) {
         totalDuplicatesRemoved += toDelete.size;
+        for (const c of corrections) {
+          if (c.severity === "high") totalHighSeverity++;
+          else totalLowSeverity++;
+        }
 
         // Calculate new stats
         const realSessions = sessions.filter(s => !toDelete.has(s.id));
@@ -203,6 +209,8 @@ export async function GET(req: Request) {
       dryRun,
       totalUsersScanned: usersSnap.size,
       totalDuplicatesDetected: totalDuplicatesRemoved,
+      highSeverityDuplicates: totalHighSeverity,
+      lowSeverityDuplicates: totalLowSeverity,
       affectedUsersCount: results.length,
       affectedUsers: results,
     });
